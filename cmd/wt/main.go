@@ -336,8 +336,8 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
 	}
 
-	// Run post-create hook
-	hook, hookName, err := hooks.SelectHook(cfg.Hooks, cmd.Hook, cmd.NoHook, result.AlreadyExists)
+	// Run post-create hook (always run for open, ignore run_on_exists config)
+	hook, hookName, err := hooks.SelectHook(cfg.Hooks, cmd.Hook, cmd.NoHook, false)
 	if err != nil {
 		return err
 	}

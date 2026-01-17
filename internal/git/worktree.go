@@ -344,7 +344,7 @@ func OpenWorktree(basePath, branch, worktreeFmt string) (*CreateWorktreeResult, 
 		return nil, err
 	}
 	if wtPath != "" {
-		return nil, fmt.Errorf("branch %q is already checked out at %s", branch, wtPath)
+		return &CreateWorktreeResult{Path: wtPath, AlreadyExists: true}, nil
 	}
 
 	// Get repo name from origin URL
