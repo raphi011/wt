@@ -62,6 +62,7 @@ func Run(hook *config.Hook, ctx Context) error {
 
 	// Execute via shell for complex commands (pipes, &&, etc.)
 	shellCmd := exec.Command("sh", "-c", cmd)
+	shellCmd.Dir = ctx.Path
 	shellCmd.Stdout = os.Stdout
 	shellCmd.Stderr = os.Stderr
 	shellCmd.Stdin = os.Stdin

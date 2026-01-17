@@ -187,6 +187,7 @@ worktree_format = "{git-origin}-{branch-name}"
 # description = "Install deps and open editor"
 # run_on_exists = false  # don't run if worktree already existed
 #
+# Hooks run with working directory set to the worktree path.
 # Available placeholders:
 #   {path}      - absolute worktree path
 #   {branch}    - branch name
