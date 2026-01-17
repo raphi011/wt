@@ -181,6 +181,38 @@ func CleanPRCache(cache PRCache, worktrees []git.Worktree) PRCache {
 	return cleaned
 }
 
+// GetPRBranch fetches the head branch name for a PR number using gh CLI
+func GetPRBranch(repoURL string, number int) (string, error) {
+	cmd := exec.Command("gh", "pr", "view",
+		fmt.Sprintf("%d", number),
+		"-R", repoURL,
+		"--json", "headRefName")
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg != "" {
+			return "", fmt.Errorf("gh command failed: %s", errMsg)
+		}
+		return "", fmt.Errorf("gh command failed: %w", err)
+	}
+
+	var result struct {
+		HeadRefName string `json:"headRefName"`
+	}
+	if err := json.Unmarshal(output, &result); err != nil {
+		return "", fmt.Errorf("failed to parse gh output: %w", err)
+	}
+
+	if result.HeadRefName == "" {
+		return "", fmt.Errorf("PR #%d has no head branch", number)
+	}
+
+	return result.HeadRefName, nil
+}
+
 // NeedsFetch returns worktrees that need PR info fetched (not cached or stale)
 func NeedsFetch(cache PRCache, worktrees []git.Worktree, forceRefresh bool) []git.Worktree {
 	var toFetch []git.Worktree

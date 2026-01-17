@@ -106,7 +106,17 @@ type CreateWorktreeResult struct {
 // CreateWorktree creates a new git worktree at basePath/<formatted-name>
 // The worktreeFmt parameter uses placeholders like {git-origin}, {branch-name}, {folder-name}
 // Returns the result including whether the worktree already existed
+// Returns an error if the branch already exists (use OpenWorktree instead)
 func CreateWorktree(basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
+	// Check if branch already exists
+	exists, err := BranchExists(branch)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, fmt.Errorf("branch %q already exists (use 'wt open' to checkout existing branch)", branch)
+	}
+
 	// Get repo name from origin URL
 	gitOrigin, err := GetRepoName()
 	if err != nil {
@@ -145,21 +155,90 @@ func CreateWorktree(basePath, branch, worktreeFmt string) (*CreateWorktreeResult
 		return &CreateWorktreeResult{Path: worktreePath, AlreadyExists: true}, nil
 	}
 
-	// Try to create with new branch first
+	// Create worktree with new branch
 	cmd := exec.Command("git", "worktree", "add", worktreePath, "-b", branch)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		// Try existing branch
-		cmd = exec.Command("git", "worktree", "add", worktreePath, branch)
-		cmd.Stderr = &stderr
-		if err := cmd.Run(); err != nil {
-			errMsg := strings.TrimSpace(stderr.String())
-			if errMsg != "" {
-				return nil, fmt.Errorf("failed to create worktree: %s", errMsg)
-			}
-			return nil, fmt.Errorf("failed to create worktree: %w", err)
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg != "" {
+			return nil, fmt.Errorf("failed to create worktree: %s", errMsg)
 		}
+		return nil, fmt.Errorf("failed to create worktree: %w", err)
+	}
+
+	return &CreateWorktreeResult{Path: worktreePath, AlreadyExists: false}, nil
+}
+
+// OpenWorktree creates a worktree for an existing local branch
+// Returns error if branch doesn't exist or is already checked out
+func OpenWorktree(basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
+	// Check if branch exists
+	exists, err := BranchExists(branch)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("branch %q does not exist (use 'wt create' to create a new branch)", branch)
+	}
+
+	// Check if branch is already checked out in another worktree
+	wtPath, err := GetBranchWorktree(branch)
+	if err != nil {
+		return nil, err
+	}
+	if wtPath != "" {
+		return nil, fmt.Errorf("branch %q is already checked out at %s", branch, wtPath)
+	}
+
+	// Get repo name from origin URL
+	gitOrigin, err := GetRepoName()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get folder name from disk
+	folderName, err := GetRepoFolderName()
+	if err != nil {
+		return nil, err
+	}
+
+	// Resolve base path
+	absBasePath, err := filepath.Abs(basePath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if base path exists
+	if _, err := os.Stat(absBasePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("directory does not exist: %s", absBasePath)
+	}
+
+	// Format worktree name using the template
+	worktreeName := format.FormatWorktreeName(worktreeFmt, format.FormatParams{
+		GitOrigin:  gitOrigin,
+		BranchName: branch,
+		FolderName: folderName,
+	})
+
+	// Create worktree path: <basePath>/<formatted-name>
+	worktreePath := filepath.Join(absBasePath, worktreeName)
+
+	// Check if already exists
+	if _, err := os.Stat(worktreePath); err == nil {
+		return &CreateWorktreeResult{Path: worktreePath, AlreadyExists: true}, nil
+	}
+
+	// Create worktree for existing branch (no -b flag)
+	cmd := exec.Command("git", "worktree", "add", worktreePath, branch)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg != "" {
+			return nil, fmt.Errorf("failed to create worktree: %s", errMsg)
+		}
+		return nil, fmt.Errorf("failed to create worktree: %w", err)
 	}
 
 	return &CreateWorktreeResult{Path: worktreePath, AlreadyExists: false}, nil
