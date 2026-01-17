@@ -1,21 +1,35 @@
 package github
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/raphaelgruber/wt/internal/git"
 )
 
+// CacheMaxAge is the maximum age of cached PR info before it's considered stale
+const CacheMaxAge = 24 * time.Hour
+
 // PRInfo represents GitHub PR information
 type PRInfo struct {
-	Number int    `json:"number"`
-	State  string `json:"state"` // OPEN, MERGED, CLOSED
-	URL    string `json:"url"`
+	Number   int       `json:"number"`
+	State    string    `json:"state"` // OPEN, MERGED, CLOSED
+	URL      string    `json:"url"`
+	CachedAt time.Time `json:"cached_at"`
+}
+
+// IsStale returns true if the cache entry is older than CacheMaxAge
+func (p *PRInfo) IsStale() bool {
+	if p.CachedAt.IsZero() {
+		return true
+	}
+	return time.Since(p.CachedAt) > CacheMaxAge
 }
 
 // GetPRForBranch fetches PR info for a branch using gh CLI
@@ -27,13 +41,23 @@ func GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 		"--json", "number,state,url",
 		"--limit", "1")
 
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	output, err := cmd.Output()
 	if err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg != "" {
+			return nil, fmt.Errorf("gh command failed: %s", errMsg)
+		}
 		return nil, fmt.Errorf("gh command failed: %w", err)
 	}
 
 	// Parse JSON array
-	var prs []PRInfo
+	var prs []struct {
+		Number int    `json:"number"`
+		State  string `json:"state"`
+		URL    string `json:"url"`
+	}
 	if err := json.Unmarshal(output, &prs); err != nil {
 		return nil, fmt.Errorf("failed to parse gh output: %w", err)
 	}
@@ -42,58 +66,25 @@ func GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 		return nil, nil // No PR found
 	}
 
-	return &prs[0], nil
-}
-
-// PRInfoWithHead extends PRInfo with head branch name
-type PRInfoWithHead struct {
-	PRInfo
-	HeadRefName string `json:"headRefName"`
-}
-
-// GetAllPRsForRepo fetches PRs for a repository, optionally filtered by creation date
-func GetAllPRsForRepo(repoURL string, oldestDate string) (map[string]*PRInfo, error) {
-	args := []string{"pr", "list",
-		"-R", repoURL,
-		"--state", "all",
-		"--json", "number,state,url,headRefName",
-		"--limit", "200"}
-
-	// Add date filter if provided
-	if oldestDate != "" {
-		args = append(args, "--search", fmt.Sprintf("created:>=%s", oldestDate))
-	}
-
-	cmd := exec.Command("gh", args...)
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("gh command failed: %w", err)
-	}
-
-	// Parse JSON array
-	var prs []PRInfoWithHead
-	if err := json.Unmarshal(output, &prs); err != nil {
-		return nil, fmt.Errorf("failed to parse gh output: %w", err)
-	}
-
-	// Build map of branch -> PR info
-	result := make(map[string]*PRInfo)
-	for _, pr := range prs {
-		result[pr.HeadRefName] = &PRInfo{
-			Number: pr.Number,
-			State:  pr.State,
-			URL:    pr.URL,
-		}
-	}
-
-	return result, nil
+	return &PRInfo{
+		Number:   prs[0].Number,
+		State:    prs[0].State,
+		URL:      prs[0].URL,
+		CachedAt: time.Now(),
+	}, nil
 }
 
 // GetOriginURL gets the origin URL for a repository
 func GetOriginURL(repoPath string) (string, error) {
 	cmd := exec.Command("git", "-C", repoPath, "remote", "get-url", "origin")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	output, err := cmd.Output()
 	if err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg != "" {
+			return "", fmt.Errorf("failed to get origin URL: %s", errMsg)
+		}
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
@@ -111,15 +102,6 @@ func FormatPRIcon(state string) string {
 	default:
 		return ""
 	}
-}
-
-// FormatPRDisplay formats PR info for display
-func FormatPRDisplay(pr *PRInfo) string {
-	if pr == nil {
-		return ""
-	}
-	icon := FormatPRIcon(pr.State)
-	return fmt.Sprintf("%s #%d", icon, pr.Number)
 }
 
 // PRCache maps origin URL -> branch -> PR info
@@ -145,19 +127,27 @@ func LoadPRCache(scanDir string) (PRCache, error) {
 	return cache, nil
 }
 
-// SavePRCache saves the PR cache to disk
+// SavePRCache saves the PR cache to disk atomically
 func SavePRCache(scanDir string, cache PRCache) error {
 	cachePath := filepath.Join(scanDir, ".wt-cache.json")
+	tempPath := cachePath + ".tmp"
 
 	data, err := json.MarshalIndent(cache, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(cachePath, data, 0644)
+	// Write to temp file first
+	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+		return err
+	}
+
+	// Atomic rename
+	return os.Rename(tempPath, cachePath)
 }
 
 // CleanPRCache removes cache entries for origins/branches that no longer exist
+// Also removes stale entries older than CacheMaxAge
 func CleanPRCache(cache PRCache, worktrees []git.Worktree) PRCache {
 	// Build set of existing origin+branch combinations
 	existing := make(map[string]map[string]bool)
@@ -172,13 +162,16 @@ func CleanPRCache(cache PRCache, worktrees []git.Worktree) PRCache {
 		existing[originURL][wt.Branch] = true
 	}
 
-	// Create new cache with only existing entries
+	// Create new cache with only existing entries that aren't stale
 	cleaned := make(PRCache)
 	for origin, branches := range cache {
 		if existingBranches, ok := existing[origin]; ok {
-			cleaned[origin] = make(map[string]*PRInfo)
 			for branch, pr := range branches {
-				if existingBranches[branch] {
+				if existingBranches[branch] && pr != nil {
+					// Keep if exists and not stale (stale entries will be refreshed)
+					if cleaned[origin] == nil {
+						cleaned[origin] = make(map[string]*PRInfo)
+					}
 					cleaned[origin][branch] = pr
 				}
 			}
@@ -186,4 +179,32 @@ func CleanPRCache(cache PRCache, worktrees []git.Worktree) PRCache {
 	}
 
 	return cleaned
+}
+
+// NeedsFetch returns worktrees that need PR info fetched (not cached or stale)
+func NeedsFetch(cache PRCache, worktrees []git.Worktree, forceRefresh bool) []git.Worktree {
+	var toFetch []git.Worktree
+	for _, wt := range worktrees {
+		originURL, _ := GetOriginURL(wt.MainRepo)
+		if originURL == "" {
+			continue
+		}
+
+		if forceRefresh {
+			toFetch = append(toFetch, wt)
+			continue
+		}
+
+		originCache, ok := cache[originURL]
+		if !ok {
+			toFetch = append(toFetch, wt)
+			continue
+		}
+
+		pr := originCache[wt.Branch]
+		if pr == nil || pr.IsStale() {
+			toFetch = append(toFetch, wt)
+		}
+	}
+	return toFetch
 }
