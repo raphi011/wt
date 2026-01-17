@@ -1,7 +1,9 @@
 package git
 
 import (
+	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -10,8 +12,13 @@ import (
 // GetRepoName extracts the repository name from the origin URL
 func GetRepoName() (string, error) {
 	cmd := exec.Command("git", "remote", "get-url", "origin")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	output, err := cmd.Output()
 	if err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("not in a git repository or no origin remote: %s", strings.TrimSpace(stderr.String()))
+		}
 		return "", fmt.Errorf("not in a git repository or no origin remote")
 	}
 
@@ -29,38 +36,110 @@ func GetRepoName() (string, error) {
 	return parts[len(parts)-1], nil
 }
 
-// GetCurrentBranch returns the current branch name
-func GetCurrentBranch(path string) (string, error) {
-	cmd := exec.Command("git", "-C", path, "branch", "--show-current")
+// GetRepoFolderName returns the actual folder name of the git repo on disk
+// Uses git rev-parse --show-toplevel to get the root directory
+func GetRepoFolderName() (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	output, err := cmd.Output()
 	if err != nil {
-		return "", err
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("not in a git repository: %s", strings.TrimSpace(stderr.String()))
+		}
+		return "", fmt.Errorf("not in a git repository")
 	}
-	return strings.TrimSpace(string(output)), nil
+
+	repoPath := strings.TrimSpace(string(output))
+	return filepath.Base(repoPath), nil
 }
 
-// IsBranchMerged checks if a branch is merged into origin/master
-func IsBranchMerged(repoPath, branch string) (bool, error) {
-	cmd := exec.Command("git", "-C", repoPath, "branch", "--merged", "origin/master")
+// GetDefaultBranch returns the default branch name for the remote (e.g., "main" or "master")
+func GetDefaultBranch(repoPath string) string {
+	// Try to get default branch from remote HEAD
+	cmd := exec.Command("git", "-C", repoPath, "symbolic-ref", "refs/remotes/origin/HEAD")
+	output, err := cmd.Output()
+	if err == nil {
+		// Output is like "refs/remotes/origin/main"
+		ref := strings.TrimSpace(string(output))
+		if parts := strings.Split(ref, "/"); len(parts) > 0 {
+			return parts[len(parts)-1]
+		}
+	}
+
+	// Fallback: check if origin/main exists
+	cmd = exec.Command("git", "-C", repoPath, "rev-parse", "--verify", "origin/main")
+	if cmd.Run() == nil {
+		return "main"
+	}
+
+	// Fallback: check if origin/master exists
+	cmd = exec.Command("git", "-C", repoPath, "rev-parse", "--verify", "origin/master")
+	if cmd.Run() == nil {
+		return "master"
+	}
+
+	// Last resort default
+	return "main"
+}
+
+// GetCurrentBranch returns the current branch name
+// Returns "(detached)" for detached HEAD state
+func GetCurrentBranch(path string) (string, error) {
+	cmd := exec.Command("git", "-C", path, "branch", "--show-current")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	output, err := cmd.Output()
 	if err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("failed to get branch: %s", strings.TrimSpace(stderr.String()))
+		}
+		return "", err
+	}
+	branch := strings.TrimSpace(string(output))
+	if branch == "" {
+		return "(detached)", nil
+	}
+	return branch, nil
+}
+
+// IsBranchMerged checks if a branch is merged into the default branch (main/master)
+func IsBranchMerged(repoPath, branch string) (bool, error) {
+	defaultBranch := GetDefaultBranch(repoPath)
+	cmd := exec.Command("git", "-C", repoPath, "branch", "--merged", "origin/"+defaultBranch)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		if stderr.Len() > 0 {
+			return false, fmt.Errorf("failed to check merge status: %s", strings.TrimSpace(stderr.String()))
+		}
 		return false, err
 	}
 
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
-		if strings.TrimSpace(line) == branch || strings.TrimSpace(line) == "* "+branch {
+		trimmed := strings.TrimSpace(line)
+		// Handle both "branch" and "* branch" formats
+		trimmed = strings.TrimPrefix(trimmed, "* ")
+		if trimmed == branch {
 			return true, nil
 		}
 	}
 	return false, nil
 }
 
-// GetCommitCount returns number of commits ahead of origin/master
+// GetCommitCount returns number of commits ahead of the default branch
 func GetCommitCount(repoPath, branch string) (int, error) {
-	cmd := exec.Command("git", "-C", repoPath, "rev-list", "--count", fmt.Sprintf("origin/master..%s", branch))
+	defaultBranch := GetDefaultBranch(repoPath)
+	cmd := exec.Command("git", "-C", repoPath, "rev-list", "--count", fmt.Sprintf("origin/%s..%s", defaultBranch, branch))
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	output, err := cmd.Output()
 	if err != nil {
+		if stderr.Len() > 0 {
+			return 0, fmt.Errorf("failed to count commits: %s", strings.TrimSpace(stderr.String()))
+		}
 		return 0, err
 	}
 
@@ -72,31 +151,70 @@ func GetCommitCount(repoPath, branch string) (int, error) {
 // GetLastCommitRelative returns relative time of last commit
 func GetLastCommitRelative(path string) (string, error) {
 	cmd := exec.Command("git", "-C", path, "log", "-1", "--format=%cr")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	output, err := cmd.Output()
 	if err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("failed to get last commit: %s", strings.TrimSpace(stderr.String()))
+		}
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
 }
 
-// GetDiffStats returns additions and deletions for uncommitted changes
-func GetDiffStats(path string) (additions, deletions int, err error) {
-	// Check if there are any changes
-	statusCmd := exec.Command("git", "-C", path, "status", "--porcelain")
-	statusOutput, err := statusCmd.Output()
+// HasUntrackedFiles checks if the worktree has untracked files
+func HasUntrackedFiles(path string) bool {
+	cmd := exec.Command("git", "-C", path, "status", "--porcelain")
+	output, err := cmd.Output()
 	if err != nil {
-		return 0, 0, err
+		return false
 	}
 
-	if len(strings.TrimSpace(string(statusOutput))) == 0 {
-		return 0, 0, nil
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "??") {
+			return true
+		}
+	}
+	return false
+}
+
+// GetDiffStats returns additions and deletions for uncommitted changes
+// Also returns true for hasUntracked if there are untracked files
+func GetDiffStats(path string) (additions, deletions int, hasUntracked bool, err error) {
+	// Check if there are any changes (including untracked)
+	statusCmd := exec.Command("git", "-C", path, "status", "--porcelain")
+	var stderr bytes.Buffer
+	statusCmd.Stderr = &stderr
+	statusOutput, err := statusCmd.Output()
+	if err != nil {
+		if stderr.Len() > 0 {
+			return 0, 0, false, fmt.Errorf("failed to get status: %s", strings.TrimSpace(stderr.String()))
+		}
+		return 0, 0, false, err
+	}
+
+	statusStr := strings.TrimSpace(string(statusOutput))
+	if statusStr == "" {
+		return 0, 0, false, nil
+	}
+
+	// Check for untracked files
+	for _, line := range strings.Split(statusStr, "\n") {
+		if strings.HasPrefix(line, "??") {
+			hasUntracked = true
+			break
+		}
 	}
 
 	// Get diff stats (both staged and unstaged)
 	cmd := exec.Command("git", "-C", path, "diff", "HEAD", "--numstat")
+	cmd.Stderr = &stderr
 	output, err := cmd.Output()
 	if err != nil {
-		return 0, 0, nil // No error if no diff
+		// diff HEAD fails on initial commits, still return untracked status
+		return 0, 0, hasUntracked, nil
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
@@ -115,21 +233,30 @@ func GetDiffStats(path string) (additions, deletions int, err error) {
 		}
 	}
 
-	return additions, deletions, nil
+	return additions, deletions, hasUntracked, nil
 }
 
-// FetchOriginMaster fetches origin/master branch
-func FetchOriginMaster(repoPath string) error {
-	cmd := exec.Command("git", "-C", repoPath, "fetch", "origin", "master", "--quiet")
-	return cmd.Run()
+// FetchDefaultBranch fetches the default branch (main/master) from origin
+func FetchDefaultBranch(repoPath string) error {
+	defaultBranch := GetDefaultBranch(repoPath)
+	cmd := exec.Command("git", "-C", repoPath, "fetch", "origin", defaultBranch, "--quiet")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return fmt.Errorf("failed to fetch origin/%s: %s", defaultBranch, strings.TrimSpace(stderr.String()))
+		}
+		return err
+	}
+	return nil
 }
 
 // GetMainRepoPath extracts main repo path from .git file in worktree
 func GetMainRepoPath(worktreePath string) (string, error) {
 	gitFile := filepath.Join(worktreePath, ".git")
-	content, err := exec.Command("cat", gitFile).Output()
+	content, err := os.ReadFile(gitFile)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read .git file: %w", err)
 	}
 
 	// Parse: "gitdir: /path/to/repo/.git/worktrees/name"

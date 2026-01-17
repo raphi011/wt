@@ -1,24 +1,29 @@
 package git
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+
+	"github.com/raphaelgruber/wt/internal/format"
 )
 
 // Worktree represents a git worktree with its status
 type Worktree struct {
-	Path        string
-	Branch      string
-	MainRepo    string
-	RepoName    string
-	IsMerged    bool
-	CommitCount int
-	Additions   int
-	Deletions   int
-	IsDirty     bool
-	LastCommit  string
+	Path         string `json:"path"`
+	Branch       string `json:"branch"`
+	MainRepo     string `json:"main_repo"`
+	RepoName     string `json:"repo_name"`
+	IsMerged     bool   `json:"is_merged"`
+	CommitCount  int    `json:"commit_count"`
+	Additions    int    `json:"additions"`
+	Deletions    int    `json:"deletions"`
+	IsDirty      bool   `json:"is_dirty"`
+	HasUntracked bool   `json:"has_untracked"`
+	LastCommit   string `json:"last_commit"`
 }
 
 // ListWorktrees scans a directory for git worktrees
@@ -67,68 +72,97 @@ func ListWorktrees(scanDir string) ([]Worktree, error) {
 			commitCount, _ = GetCommitCount(mainRepo, branch)
 		}
 
-		// Get diff stats
-		additions, deletions, _ := GetDiffStats(path)
-		isDirty := additions > 0 || deletions > 0
+		// Get diff stats (includes untracked file detection)
+		additions, deletions, hasUntracked, _ := GetDiffStats(path)
+		isDirty := additions > 0 || deletions > 0 || hasUntracked
 
 		// Get last commit time
 		lastCommit, _ := GetLastCommitRelative(path)
 
 		worktrees = append(worktrees, Worktree{
-			Path:        path,
-			Branch:      branch,
-			MainRepo:    mainRepo,
-			RepoName:    repoName,
-			IsMerged:    isMerged,
-			CommitCount: commitCount,
-			Additions:   additions,
-			Deletions:   deletions,
-			IsDirty:     isDirty,
-			LastCommit:  lastCommit,
+			Path:         path,
+			Branch:       branch,
+			MainRepo:     mainRepo,
+			RepoName:     repoName,
+			IsMerged:     isMerged,
+			CommitCount:  commitCount,
+			Additions:    additions,
+			Deletions:    deletions,
+			IsDirty:      isDirty,
+			HasUntracked: hasUntracked,
+			LastCommit:   lastCommit,
 		})
 	}
 
 	return worktrees, nil
 }
 
-// CreateWorktree creates a new git worktree at basePath/<repo>-<branch>
-func CreateWorktree(basePath, branch string) (string, error) {
-	// Get repo name
-	repoName, err := GetRepoName()
+// CreateWorktreeResult contains the result of creating a worktree
+type CreateWorktreeResult struct {
+	Path          string
+	AlreadyExists bool
+}
+
+// CreateWorktree creates a new git worktree at basePath/<formatted-name>
+// The worktreeFmt parameter uses placeholders like {git-origin}, {branch-name}, {folder-name}
+// Returns the result including whether the worktree already existed
+func CreateWorktree(basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
+	// Get repo name from origin URL
+	gitOrigin, err := GetRepoName()
 	if err != nil {
-		return "", err
+		return nil, err
+	}
+
+	// Get folder name from disk
+	folderName, err := GetRepoFolderName()
+	if err != nil {
+		return nil, err
 	}
 
 	// Resolve base path
 	absBasePath, err := filepath.Abs(basePath)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Check if base path exists
 	if _, err := os.Stat(absBasePath); os.IsNotExist(err) {
-		return "", fmt.Errorf("directory does not exist: %s", absBasePath)
+		return nil, fmt.Errorf("directory does not exist: %s", absBasePath)
 	}
 
-	// Create worktree path: <basePath>/<repo>-<branch>
-	worktreePath := filepath.Join(absBasePath, fmt.Sprintf("%s-%s", repoName, branch))
+	// Format worktree name using the template
+	worktreeName := format.FormatWorktreeName(worktreeFmt, format.FormatParams{
+		GitOrigin:  gitOrigin,
+		BranchName: branch,
+		FolderName: folderName,
+	})
+
+	// Create worktree path: <basePath>/<formatted-name>
+	worktreePath := filepath.Join(absBasePath, worktreeName)
 
 	// Check if already exists
 	if _, err := os.Stat(worktreePath); err == nil {
-		return worktreePath, nil // Already exists
+		return &CreateWorktreeResult{Path: worktreePath, AlreadyExists: true}, nil
 	}
 
 	// Try to create with new branch first
 	cmd := exec.Command("git", "worktree", "add", worktreePath, "-b", branch)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		// Try existing branch
 		cmd = exec.Command("git", "worktree", "add", worktreePath, branch)
+		cmd.Stderr = &stderr
 		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("failed to create worktree: %w", err)
+			errMsg := strings.TrimSpace(stderr.String())
+			if errMsg != "" {
+				return nil, fmt.Errorf("failed to create worktree: %s", errMsg)
+			}
+			return nil, fmt.Errorf("failed to create worktree: %w", err)
 		}
 	}
 
-	return worktreePath, nil
+	return &CreateWorktreeResult{Path: worktreePath, AlreadyExists: false}, nil
 }
 
 // RemoveWorktree removes a git worktree
@@ -148,31 +182,6 @@ func PruneWorktrees(repoPath string) error {
 	return cmd.Run()
 }
 
-// IsValidWorktree checks if a directory is a valid git worktree
-func IsValidWorktree(path string) bool {
-	gitFile := filepath.Join(path, ".git")
-	info, err := os.Stat(gitFile)
-	if err != nil {
-		return false
-	}
-
-	// Worktrees have .git as a file, not directory
-	if info.IsDir() {
-		return false
-	}
-
-	// Verify main repo exists
-	mainRepo, err := GetMainRepoPath(path)
-	if err != nil {
-		return false
-	}
-
-	if _, err := os.Stat(mainRepo); err != nil {
-		return false
-	}
-
-	return true
-}
 
 // GroupWorktreesByRepo groups worktrees by their main repository
 func GroupWorktreesByRepo(worktrees []Worktree) map[string][]Worktree {
