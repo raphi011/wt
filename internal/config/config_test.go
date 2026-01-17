@@ -6,8 +6,8 @@ import (
 
 func TestDefault(t *testing.T) {
 	cfg := Default()
-	if cfg.DefaultPath != "." {
-		t.Errorf("expected default path '.', got %q", cfg.DefaultPath)
+	if cfg.DefaultPath != "" {
+		t.Errorf("expected default path '', got %q", cfg.DefaultPath)
 	}
 }
 
@@ -19,8 +19,33 @@ func TestLoadNonexistent(t *testing.T) {
 		// Only fail if there's a parsing error, not if file doesn't exist
 		t.Logf("Load returned error (may be expected): %v", err)
 	}
-	if cfg.DefaultPath == "" {
-		t.Error("DefaultPath should not be empty")
+	// Empty DefaultPath is valid (means not configured)
+	_ = cfg
+}
+
+func TestValidateDefaultPath(t *testing.T) {
+	tests := []struct {
+		path    string
+		wantErr bool
+	}{
+		{"", false},                     // empty is allowed
+		{"~/Git/worktrees", false},      // tilde path
+		{"~", false},                    // just tilde
+		{"/absolute/path", false},       // absolute path
+		{".", true},                     // relative - not allowed
+		{"..", true},                    // relative - not allowed
+		{"relative/path", true},         // relative - not allowed
+		{"./foo", true},                 // relative - not allowed
+		{"../foo", true},                // relative - not allowed
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			err := ValidateDefaultPath(tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateDefaultPath(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
+			}
+		})
 	}
 }
 

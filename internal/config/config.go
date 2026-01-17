@@ -35,9 +35,26 @@ const DefaultWorktreeFormat = "{git-origin}-{branch-name}"
 // Default returns the default configuration
 func Default() Config {
 	return Config{
-		DefaultPath:    ".",
+		DefaultPath:    "",
 		WorktreeFormat: DefaultWorktreeFormat,
 	}
+}
+
+// ValidateDefaultPath checks that the path is absolute or starts with ~
+// Returns error if path is relative (like "." or "..")
+func ValidateDefaultPath(path string) error {
+	if path == "" {
+		return nil // Empty is allowed (means not configured)
+	}
+	// Allow ~ paths
+	if len(path) >= 1 && path[0] == '~' {
+		return nil
+	}
+	// Must be absolute
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("default_path must be absolute or start with ~, got: %q", path)
+	}
+	return nil
 }
 
 // configPath returns the path to the config file
@@ -84,10 +101,12 @@ func Load() (Config, error) {
 		Hooks:          parseHooksConfig(raw.Hooks),
 	}
 
-	// Use defaults for empty values
-	if cfg.DefaultPath == "" {
-		cfg.DefaultPath = "."
+	// Validate default_path (must be absolute or start with ~)
+	if err := ValidateDefaultPath(cfg.DefaultPath); err != nil {
+		return Default(), err
 	}
+
+	// Use defaults for empty values
 	if cfg.WorktreeFormat == "" {
 		cfg.WorktreeFormat = DefaultWorktreeFormat
 	}
@@ -135,9 +154,10 @@ func parseHooksConfig(raw map[string]interface{}) HooksConfig {
 
 const defaultConfig = `# wt configuration
 
-# Base directory for new worktrees
-# Options: ".", "..", or absolute path like "~/Git/worktrees"
-default_path = "."
+# Base directory for new worktrees (required for default behavior)
+# Must be an absolute path or start with ~ (no relative paths like "." or "..")
+# Examples: "/Users/you/Git/worktrees" or "~/Git/worktrees"
+# default_path = "~/Git/worktrees"
 
 # Worktree folder naming format
 # Available placeholders:
