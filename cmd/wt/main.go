@@ -33,6 +33,20 @@ Examples:
   wt create branch -d ~/worktrees    # Create in specific directory`
 }
 
+type OpenCmd struct {
+	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"existing local branch name"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (default: from config or '.')"`
+	Hook   string `arg:"--hook" help:"run named hook instead of default"`
+	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
+}
+
+func (OpenCmd) Description() string {
+	return `Open a worktree for an existing local branch
+Examples:
+  wt open feature-branch           # Use default directory
+  wt open feature-branch -d ..     # Create next to current repo`
+}
+
 type CleanCmd struct {
 	Path      string `arg:"positional,env:WT_DEFAULT_PATH" placeholder:"DIRECTORY" help:"directory to scan (default: from config or '.')"`
 	DryRun    bool   `arg:"-n,--dry-run" help:"preview without removing"`
@@ -86,10 +100,34 @@ func (ConfigCmd) Description() string {
 	return "Manage wt configuration"
 }
 
+type PrOpenCmd struct {
+	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR number"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (default: from config or '.')"`
+	Hook   string `arg:"--hook" help:"run named hook instead of default"`
+	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
+}
+
+func (PrOpenCmd) Description() string {
+	return `Create a worktree for a GitHub PR
+Examples:
+  wt pr open 123              # Use default directory
+  wt pr open 123 -d ~/Git     # Create in specific directory`
+}
+
+type PrCmd struct {
+	Open *PrOpenCmd `arg:"subcommand:open" help:"checkout PR as new worktree"`
+}
+
+func (PrCmd) Description() string {
+	return "Work with GitHub pull requests"
+}
+
 type Args struct {
 	Create     *CreateCmd     `arg:"subcommand:create" help:"create a new worktree"`
+	Open       *OpenCmd       `arg:"subcommand:open" help:"open worktree for existing branch"`
 	Clean      *CleanCmd      `arg:"subcommand:clean" help:"cleanup merged worktrees"`
 	List       *ListCmd       `arg:"subcommand:list" help:"list worktrees"`
+	Pr         *PrCmd         `arg:"subcommand:pr" help:"work with GitHub PRs"`
 	Config     *ConfigCmd     `arg:"subcommand:config" help:"manage configuration"`
 	Completion *CompletionCmd `arg:"subcommand:completion" help:"generate completion script"`
 }
@@ -129,16 +167,27 @@ func main() {
 	if args.Create != nil && args.Create.Dir == "" {
 		args.Create.Dir = cfg.DefaultPath
 	}
+	if args.Open != nil && args.Open.Dir == "" {
+		args.Open.Dir = cfg.DefaultPath
+	}
 	if args.Clean != nil && args.Clean.Path == "" {
 		args.Clean.Path = cfg.DefaultPath
 	}
 	if args.List != nil && args.List.Path == "" {
 		args.List.Path = cfg.DefaultPath
 	}
+	if args.Pr != nil && args.Pr.Open != nil && args.Pr.Open.Dir == "" {
+		args.Pr.Open.Dir = cfg.DefaultPath
+	}
 
 	switch {
 	case args.Create != nil:
 		if err := runCreate(args.Create, cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case args.Open != nil:
+		if err := runOpen(args.Open, cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -154,6 +203,11 @@ func main() {
 		}
 	case args.Completion != nil:
 		if err := runCompletion(args.Completion); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case args.Pr != nil:
+		if err := runPr(args.Pr, cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -179,6 +233,63 @@ func runCreate(cmd *CreateCmd, cfg config.Config) error {
 	fmt.Printf("Creating worktree for branch %s in %s\n", cmd.Branch, absPath)
 
 	result, err := git.CreateWorktree(basePath, cmd.Branch, cfg.WorktreeFormat)
+	if err != nil {
+		return err
+	}
+
+	if result.AlreadyExists {
+		fmt.Printf("→ Worktree already exists at: %s\n", result.Path)
+	} else {
+		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
+	}
+
+	// Run post-create hook
+	hook, hookName, err := hooks.SelectHook(cfg.Hooks, cmd.Hook, cmd.NoHook, result.AlreadyExists)
+	if err != nil {
+		return err
+	}
+
+	if hook != nil {
+		// Get context for placeholder substitution
+		repoName, _ := git.GetRepoName()
+		folderName, _ := git.GetRepoFolderName()
+		mainRepo, _ := git.GetMainRepoPath(result.Path)
+		if mainRepo == "" {
+			// Fallback for newly created worktrees
+			mainRepo, _ = filepath.Abs(".")
+		}
+
+		ctx := hooks.Context{
+			Path:     result.Path,
+			Branch:   cmd.Branch,
+			Repo:     repoName,
+			Folder:   folderName,
+			MainRepo: mainRepo,
+		}
+
+		fmt.Printf("Running hook '%s'...\n", hookName)
+		if err := hooks.Run(hook, ctx); err != nil {
+			return fmt.Errorf("hook %q failed: %w", hookName, err)
+		}
+		if hook.Description != "" {
+			fmt.Printf("  ✓ %s\n", hook.Description)
+		}
+	}
+
+	return nil
+}
+
+func runOpen(cmd *OpenCmd, cfg config.Config) error {
+	// Validate worktree format
+	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
+		return fmt.Errorf("invalid worktree_format in config: %w", err)
+	}
+
+	basePath := expandPath(cmd.Dir)
+	absPath, _ := filepath.Abs(basePath)
+	fmt.Printf("Opening worktree for branch %s in %s\n", cmd.Branch, absPath)
+
+	result, err := git.OpenWorktree(basePath, cmd.Branch, cfg.WorktreeFormat)
 	if err != nil {
 		return err
 	}
@@ -477,6 +588,85 @@ func runList(cmd *ListCmd) error {
 	return nil
 }
 
+func runPr(cmd *PrCmd, cfg config.Config) error {
+	switch {
+	case cmd.Open != nil:
+		return runPrOpen(cmd.Open, cfg)
+	default:
+		return fmt.Errorf("no subcommand specified (try: wt pr open)")
+	}
+}
+
+func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
+	// Validate worktree format
+	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
+		return fmt.Errorf("invalid worktree_format in config: %w", err)
+	}
+
+	// Get origin URL from current repo
+	originURL, err := github.GetOriginURL(".")
+	if err != nil {
+		return fmt.Errorf("failed to get origin URL: %w", err)
+	}
+
+	// Fetch PR branch name
+	fmt.Printf("Fetching PR #%d...\n", cmd.Number)
+	branch, err := github.GetPRBranch(originURL, cmd.Number)
+	if err != nil {
+		return fmt.Errorf("failed to get PR branch: %w", err)
+	}
+
+	basePath := expandPath(cmd.Dir)
+	absPath, _ := filepath.Abs(basePath)
+	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
+
+	result, err := git.CreateWorktree(basePath, branch, cfg.WorktreeFormat)
+	if err != nil {
+		return err
+	}
+
+	if result.AlreadyExists {
+		fmt.Printf("→ Worktree already exists at: %s\n", result.Path)
+	} else {
+		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
+	}
+
+	// Run post-create hook
+	hook, hookName, err := hooks.SelectHook(cfg.Hooks, cmd.Hook, cmd.NoHook, result.AlreadyExists)
+	if err != nil {
+		return err
+	}
+
+	if hook != nil {
+		// Get context for placeholder substitution
+		repoName, _ := git.GetRepoName()
+		folderName, _ := git.GetRepoFolderName()
+		mainRepo, _ := git.GetMainRepoPath(result.Path)
+		if mainRepo == "" {
+			// Fallback for newly created worktrees
+			mainRepo, _ = filepath.Abs(".")
+		}
+
+		ctx := hooks.Context{
+			Path:     result.Path,
+			Branch:   branch,
+			Repo:     repoName,
+			Folder:   folderName,
+			MainRepo: mainRepo,
+		}
+
+		fmt.Printf("Running hook '%s'...\n", hookName)
+		if err := hooks.Run(hook, ctx); err != nil {
+			return fmt.Errorf("hook %q failed: %w", hookName, err)
+		}
+		if hook.Description != "" {
+			fmt.Printf("  ✓ %s\n", hook.Description)
+		}
+	}
+
+	return nil
+}
+
 func runCompletion(cmd *CompletionCmd) error {
 	switch cmd.Shell {
 	case "fish":
@@ -575,17 +765,25 @@ const fishCompletions = `# wt completions - supports fish autosuggestions and ta
 complete -c wt -f
 
 # Subcommands (shown in completions and autosuggestions)
-complete -c wt -n "not __fish_seen_subcommand_from create clean list config completion" -a "create" -d "Create new worktree"
-complete -c wt -n "not __fish_seen_subcommand_from create clean list config completion" -a "clean" -d "Cleanup merged worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from create clean list config completion" -a "list" -d "List worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from create clean list config completion" -a "config" -d "Manage configuration"
-complete -c wt -n "not __fish_seen_subcommand_from create clean list config completion" -a "completion" -d "Generate completion script"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "create" -d "Create new worktree"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "open" -d "Open worktree for existing branch"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "clean" -d "Cleanup merged worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "list" -d "List worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "pr" -d "Work with GitHub PRs"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "config" -d "Manage configuration"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "completion" -d "Generate completion script"
 
 # create: branch name (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from create; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
 complete -c wt -n "__fish_seen_subcommand_from create" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
 complete -c wt -n "__fish_seen_subcommand_from create" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from create" -l no-hook -d "Skip post-create hook"
+
+# open: local branch name (positional), then flags
+complete -c wt -n "__fish_seen_subcommand_from open; and not __fish_seen_argument" -a "(git branch --format='%(refname:short)' 2>/dev/null)" -d "Local branch"
+complete -c wt -n "__fish_seen_subcommand_from open" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
+complete -c wt -n "__fish_seen_subcommand_from open" -l hook -d "Run named hook instead of default"
+complete -c wt -n "__fish_seen_subcommand_from open" -l no-hook -d "Skip post-create hook"
 
 # clean: suggest common paths + directories
 complete -c wt -n "__fish_seen_subcommand_from clean; and not __fish_seen_argument -s n -l dry-run -l refresh-pr" -a "~/Git/worktrees" -d "Default worktrees directory"
@@ -599,6 +797,13 @@ complete -c wt -n "__fish_seen_subcommand_from list; and not __fish_seen_argumen
 complete -c wt -n "__fish_seen_subcommand_from list; and not __fish_seen_argument -l json" -a "." -d "Current directory"
 complete -c wt -n "__fish_seen_subcommand_from list" -a "(__fish_complete_directories)"
 complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
+
+# pr: subcommands
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open" -a "open" -d "Checkout PR as new worktree"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -a "(gh pr list --json number,title --jq '.[] | \"\\(.number)\t\\(.title)\"' 2>/dev/null)" -d "PR number"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -l hook -d "Run named hook instead of default"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -l no-hook -d "Skip post-create hook"
 
 # config: subcommands
 complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init hooks" -a "init" -d "Create default config file"
