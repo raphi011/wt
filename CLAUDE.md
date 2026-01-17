@@ -76,6 +76,10 @@ Completions provide context-aware suggestions for paths, branches, and flags.
 - **UI**: `github.com/charmbracelet/bubbles/table` - Table component
 - **External**: Requires `git` and `gh` CLI in PATH
 
+### Development Guidelines
+
+**Keep completions/config in sync** - When CLI commands, flags, or subcommands change, always update the shell completion script (`wt completion fish`) and any config generation commands to match.
+
 ### Testing Locally
 
 The tool must be run from within a git repository for `wt create` to work (needs origin URL). For testing:
