@@ -115,11 +115,12 @@ func (s *Spinner) UpdateMessage(message string) {
 	}
 	s.mu.Unlock()
 
-	// Non-blocking send
+	// Non-blocking send - intentionally drops messages if channel is full
+	// to avoid blocking the main operation for UI updates
 	select {
 	case s.msgChan <- message:
 	default:
-		// Channel full, skip update
+		// Channel full, skip update (acceptable for UI)
 	}
 }
 

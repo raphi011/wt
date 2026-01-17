@@ -267,9 +267,22 @@ func GetMainRepoPath(worktreePath string) (string, error) {
 
 	gitdir := strings.TrimPrefix(line, "gitdir: ")
 
-	// Remove /.git/worktrees/xxx to get main repo path
-	repoPath := strings.Split(gitdir, "/.git/worktrees/")[0]
-	return repoPath, nil
+	// Walk up from gitdir to find the .git directory, then get its parent
+	// gitdir is like: /path/to/repo/.git/worktrees/name
+	// We want: /path/to/repo
+	dir := gitdir
+	for {
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached root without finding .git
+			return "", fmt.Errorf("could not find main repo path from gitdir: %s", gitdir)
+		}
+		if filepath.Base(dir) == ".git" {
+			// Found .git directory, parent is the repo path
+			return parent, nil
+		}
+		dir = parent
+	}
 }
 
 // BranchExists checks if a local branch exists
@@ -281,6 +294,21 @@ func BranchExists(branch string) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+// GetShortCommitHash returns the short (7 char) commit hash for HEAD in a worktree
+func GetShortCommitHash(path string) (string, error) {
+	cmd := exec.Command("git", "-C", path, "rev-parse", "--short", "HEAD")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("failed to get commit hash: %s", strings.TrimSpace(stderr.String()))
+		}
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 // GetBranchWorktree returns the worktree path if branch is checked out, empty string if not

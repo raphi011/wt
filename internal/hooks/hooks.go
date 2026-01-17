@@ -9,6 +9,15 @@ import (
 	"github.com/raphaelgruber/wt/internal/config"
 )
 
+// shellQuote escapes a string for safe use in shell commands.
+// It wraps the value in single quotes and escapes any embedded single quotes.
+func shellQuote(s string) string {
+	// Single quotes preserve everything literally except single quotes themselves.
+	// To include a single quote, we end the quoted string, add an escaped quote, and restart.
+	// e.g., "it's" becomes 'it'\''s'
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
 // Context holds the values for placeholder substitution
 type Context struct {
 	Path     string // absolute worktree path
@@ -60,14 +69,15 @@ func Run(hook *config.Hook, ctx Context) error {
 	return shellCmd.Run()
 }
 
-// SubstitutePlaceholders replaces {placeholder} with values from Context
+// SubstitutePlaceholders replaces {placeholder} with shell-quoted values from Context.
+// Values are properly escaped to prevent command injection.
 func SubstitutePlaceholders(command string, ctx Context) string {
 	replacements := map[string]string{
-		"{path}":      ctx.Path,
-		"{branch}":    ctx.Branch,
-		"{repo}":      ctx.Repo,
-		"{folder}":    ctx.Folder,
-		"{main-repo}": ctx.MainRepo,
+		"{path}":      shellQuote(ctx.Path),
+		"{branch}":    shellQuote(ctx.Branch),
+		"{repo}":      shellQuote(ctx.Repo),
+		"{folder}":    shellQuote(ctx.Folder),
+		"{main-repo}": shellQuote(ctx.MainRepo),
 	}
 
 	result := command

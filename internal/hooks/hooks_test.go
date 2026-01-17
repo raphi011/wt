@@ -23,17 +23,17 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		{
 			name:     "single placeholder",
 			command:  "code {path}",
-			expected: "code /home/user/worktrees/repo-branch",
+			expected: "code '/home/user/worktrees/repo-branch'",
 		},
 		{
 			name:     "multiple placeholders",
 			command:  "cd {path} && echo {branch}",
-			expected: "cd /home/user/worktrees/repo-branch && echo feature-branch",
+			expected: "cd '/home/user/worktrees/repo-branch' && echo 'feature-branch'",
 		},
 		{
 			name:     "all placeholders",
 			command:  "{path} {branch} {repo} {folder} {main-repo}",
-			expected: "/home/user/worktrees/repo-branch feature-branch myrepo repo /home/user/repo",
+			expected: "'/home/user/worktrees/repo-branch' 'feature-branch' 'myrepo' 'repo' '/home/user/repo'",
 		},
 		{
 			name:     "no placeholders",
@@ -43,13 +43,56 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		{
 			name:     "repeated placeholder",
 			command:  "{path} and {path}",
-			expected: "/home/user/worktrees/repo-branch and /home/user/worktrees/repo-branch",
+			expected: "'/home/user/worktrees/repo-branch' and '/home/user/worktrees/repo-branch'",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := SubstitutePlaceholders(tt.command, ctx)
+			if result != tt.expected {
+				t.Errorf("SubstitutePlaceholders(%q) = %q, want %q", tt.command, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestSubstitutePlaceholders_ShellEscaping(t *testing.T) {
+	tests := []struct {
+		name     string
+		ctx      Context
+		command  string
+		expected string
+	}{
+		{
+			name: "path with spaces",
+			ctx: Context{
+				Path: "/home/user/my documents/worktree",
+			},
+			command:  "code {path}",
+			expected: "code '/home/user/my documents/worktree'",
+		},
+		{
+			name: "branch with special chars",
+			ctx: Context{
+				Branch: "feature/test-branch",
+			},
+			command:  "echo {branch}",
+			expected: "echo 'feature/test-branch'",
+		},
+		{
+			name: "value with single quotes",
+			ctx: Context{
+				Path: "/home/user/it's a path",
+			},
+			command:  "code {path}",
+			expected: "code '/home/user/it'\\''s a path'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := SubstitutePlaceholders(tt.command, tt.ctx)
 			if result != tt.expected {
 				t.Errorf("SubstitutePlaceholders(%q) = %q, want %q", tt.command, result, tt.expected)
 			}
