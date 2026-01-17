@@ -21,7 +21,7 @@ import (
 
 type CreateCmd struct {
 	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"branch name"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (from config or -d flag)"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (default: cwd)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
@@ -29,13 +29,13 @@ type CreateCmd struct {
 func (CreateCmd) Description() string {
 	return `Create a new git worktree at <dir>/<repo>-<branch>
 Examples:
-  wt create feature-branch              # Use default directory from config
-  wt create branch -d ~/Git/worktrees   # Create in specific directory`
+  wt create feature-branch              # Create in current directory
+  wt create feature-branch -d ~/Git     # Create in specific directory`
 }
 
 type OpenCmd struct {
 	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"existing local branch name"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (from config or -d flag)"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (default: cwd)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
@@ -43,12 +43,12 @@ type OpenCmd struct {
 func (OpenCmd) Description() string {
 	return `Open a worktree for an existing local branch
 Examples:
-  wt open feature-branch              # Use default directory from config
+  wt open feature-branch              # Create in current directory
   wt open feature-branch -d ~/Git     # Create in specific directory`
 }
 
 type CleanCmd struct {
-	Path      string `arg:"positional,env:WT_DEFAULT_PATH" placeholder:"DIRECTORY" help:"directory to scan (from config or positional arg)"`
+	Dir       string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"directory to scan (default: cwd)"`
 	DryRun    bool   `arg:"-n,--dry-run" help:"preview without removing"`
 	RefreshPR bool   `arg:"--refresh-pr" help:"force refresh PR cache"`
 	Empty     bool   `arg:"-e,--empty" help:"also remove worktrees with 0 commits ahead and clean working directory"`
@@ -57,16 +57,22 @@ type CleanCmd struct {
 func (CleanCmd) Description() string {
 	return `Cleanup merged git worktrees with PR status display.
 Removes worktrees where the branch is merged AND working directory is clean.
-With --empty, also removes worktrees with 0 commits ahead and clean working directory.`
+With --empty, also removes worktrees with 0 commits ahead and clean working directory.
+Examples:
+  wt clean                      # Scan current directory
+  wt clean -d ~/Git/worktrees   # Scan specific directory`
 }
 
 type ListCmd struct {
-	Path string `arg:"positional,env:WT_DEFAULT_PATH" placeholder:"DIRECTORY" help:"directory to scan (from config or positional arg)"`
+	Dir  string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"directory to scan (default: cwd)"`
 	JSON bool   `arg:"--json" help:"output as JSON"`
 }
 
 func (ListCmd) Description() string {
-	return "List all git worktrees with their status"
+	return `List all git worktrees with their status
+Examples:
+  wt list                      # List in current directory
+  wt list -d ~/Git/worktrees   # List from specific directory`
 }
 
 type CompletionCmd struct {
@@ -105,7 +111,7 @@ func (ConfigCmd) Description() string {
 type PrOpenCmd struct {
 	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR number"`
 	Repo   string `arg:"positional" placeholder:"REPO" help:"repository (org/repo or name)"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (from config or -d flag)"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (default: cwd)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
@@ -113,9 +119,9 @@ type PrOpenCmd struct {
 func (PrOpenCmd) Description() string {
 	return `Create a worktree for a GitHub PR
 Examples:
-  wt pr open 123                  # Use current repo
-  wt pr open 123 myrepo           # Find "myrepo" in default_path
-  wt pr open 123 org/repo         # Find locally or clone to default_path
+  wt pr open 123                  # Use current repo, create in cwd
+  wt pr open 123 myrepo           # Find "myrepo" in cwd
+  wt pr open 123 org/repo         # Find locally or clone to cwd
   wt pr open 123 -d ~/Git         # Create in specific directory`
 }
 
@@ -175,11 +181,11 @@ func main() {
 	if args.Open != nil && args.Open.Dir == "" {
 		args.Open.Dir = cfg.DefaultPath
 	}
-	if args.Clean != nil && args.Clean.Path == "" {
-		args.Clean.Path = cfg.DefaultPath
+	if args.Clean != nil && args.Clean.Dir == "" {
+		args.Clean.Dir = cfg.DefaultPath
 	}
-	if args.List != nil && args.List.Path == "" {
-		args.List.Path = cfg.DefaultPath
+	if args.List != nil && args.List.Dir == "" {
+		args.List.Dir = cfg.DefaultPath
 	}
 	if args.Pr != nil && args.Pr.Open != nil && args.Pr.Open.Dir == "" {
 		args.Pr.Open.Dir = cfg.DefaultPath
@@ -233,11 +239,12 @@ func runCreate(cmd *CreateCmd, cfg config.Config) error {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
 	}
 
-	if cmd.Dir == "" {
-		return fmt.Errorf("no directory specified: use -d flag or set default_path in config")
+	dir := cmd.Dir
+	if dir == "" {
+		dir = "."
 	}
 
-	basePath, err := expandPath(cmd.Dir)
+	basePath, err := expandPath(dir)
 	if err != nil {
 		return fmt.Errorf("failed to expand path: %w", err)
 	}
@@ -303,11 +310,12 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
 	}
 
-	if cmd.Dir == "" {
-		return fmt.Errorf("no directory specified: use -d flag or set default_path in config")
+	dir := cmd.Dir
+	if dir == "" {
+		dir = "."
 	}
 
-	basePath, err := expandPath(cmd.Dir)
+	basePath, err := expandPath(dir)
 	if err != nil {
 		return fmt.Errorf("failed to expand path: %w", err)
 	}
@@ -371,12 +379,13 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 const maxConcurrentPRFetches = 5
 
 func runClean(cmd *CleanCmd) error {
-	if cmd.Path == "" {
-		return fmt.Errorf("no directory specified: provide a path or set default_path in config")
+	dir := cmd.Dir
+	if dir == "" {
+		dir = "."
 	}
 
 	// Expand path
-	scanPath, err := expandPath(cmd.Path)
+	scanPath, err := expandPath(dir)
 	if err != nil {
 		return fmt.Errorf("failed to expand path: %w", err)
 	}
@@ -591,12 +600,13 @@ func expandPath(path string) (string, error) {
 }
 
 func runList(cmd *ListCmd) error {
-	if cmd.Path == "" {
-		return fmt.Errorf("no directory specified: provide a path or set default_path in config")
+	dir := cmd.Dir
+	if dir == "" {
+		dir = "."
 	}
 
 	// Expand path
-	scanPath, err := expandPath(cmd.Path)
+	scanPath, err := expandPath(dir)
 	if err != nil {
 		return fmt.Errorf("failed to expand path: %w", err)
 	}
@@ -659,11 +669,12 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
 	}
 
-	if cmd.Dir == "" {
-		return fmt.Errorf("no directory specified: use -d flag or set default_path in config")
+	dir := cmd.Dir
+	if dir == "" {
+		dir = "."
 	}
 
-	basePath, err := expandPath(cmd.Dir)
+	basePath, err := expandPath(dir)
 	if err != nil {
 		return fmt.Errorf("failed to expand path: %w", err)
 	}
@@ -888,16 +899,14 @@ complete -c wt -n "__fish_seen_subcommand_from open" -s d -l dir -r -a "(__fish_
 complete -c wt -n "__fish_seen_subcommand_from open" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from open" -l no-hook -d "Skip post-create hook"
 
-# clean: suggest common paths + directories (absolute paths only)
-complete -c wt -n "__fish_seen_subcommand_from clean; and not __fish_seen_argument -s n -l dry-run -l refresh-pr -s e -l empty" -a "~/Git/worktrees" -d "Default worktrees directory"
-complete -c wt -n "__fish_seen_subcommand_from clean" -a "(__fish_complete_directories)" -d "Directory"
+# clean: flags only (no positional args)
+complete -c wt -n "__fish_seen_subcommand_from clean" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from clean" -s n -l dry-run -d "Preview without removing"
 complete -c wt -n "__fish_seen_subcommand_from clean" -l refresh-pr -d "Force refresh PR cache"
 complete -c wt -n "__fish_seen_subcommand_from clean" -s e -l empty -d "Also remove worktrees with 0 commits ahead"
 
-# list: suggest directories (absolute paths only)
-complete -c wt -n "__fish_seen_subcommand_from list; and not __fish_seen_argument -l json" -a "~/Git/worktrees" -d "Worktrees directory"
-complete -c wt -n "__fish_seen_subcommand_from list" -a "(__fish_complete_directories)" -d "Directory"
+# list: flags only (no positional args)
+complete -c wt -n "__fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
 
 # pr: subcommands
@@ -914,7 +923,10 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_fr
 function __wt_list_repos
     set -l dir "$WT_DEFAULT_PATH"
     if test -z "$dir"
-        set dir (wt config show 2>/dev/null | grep default_path | awk -F'=' '{print $2}' | string trim)
+        set -l config_file ~/.config/wt/config.toml
+        if test -f "$config_file"
+            set dir (grep '^default_path' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | string replace '~' "$HOME")
+        end
     end
     if test -d "$dir"
         for d in $dir/*/
@@ -928,6 +940,7 @@ end
 # config: subcommands
 complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init hooks" -a "init" -d "Create default config file"
 complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init hooks" -a "hooks" -d "List available hooks"
+complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from init" -s f -l force -d "Overwrite existing config file"
 complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from hooks" -l json -d "Output as JSON"
 
 # completion
