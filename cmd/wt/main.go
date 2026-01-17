@@ -228,8 +228,14 @@ func runCreate(cmd *CreateCmd, cfg config.Config) error {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
 	}
 
-	basePath := expandPath(cmd.Dir)
-	absPath, _ := filepath.Abs(basePath)
+	basePath, err := expandPath(cmd.Dir)
+	if err != nil {
+		return fmt.Errorf("failed to expand path: %w", err)
+	}
+	absPath, err := filepath.Abs(basePath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
 	fmt.Printf("Creating worktree for branch %s in %s\n", cmd.Branch, absPath)
 
 	result, err := git.CreateWorktree(basePath, cmd.Branch, cfg.WorktreeFormat)
@@ -253,10 +259,13 @@ func runCreate(cmd *CreateCmd, cfg config.Config) error {
 		// Get context for placeholder substitution
 		repoName, _ := git.GetRepoName()
 		folderName, _ := git.GetRepoFolderName()
-		mainRepo, _ := git.GetMainRepoPath(result.Path)
-		if mainRepo == "" {
+		mainRepo, err := git.GetMainRepoPath(result.Path)
+		if err != nil || mainRepo == "" {
 			// Fallback for newly created worktrees
-			mainRepo, _ = filepath.Abs(".")
+			mainRepo, err = filepath.Abs(".")
+			if err != nil {
+				return fmt.Errorf("failed to determine main repo path: %w", err)
+			}
 		}
 
 		ctx := hooks.Context{
@@ -285,8 +294,14 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
 	}
 
-	basePath := expandPath(cmd.Dir)
-	absPath, _ := filepath.Abs(basePath)
+	basePath, err := expandPath(cmd.Dir)
+	if err != nil {
+		return fmt.Errorf("failed to expand path: %w", err)
+	}
+	absPath, err := filepath.Abs(basePath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
 	fmt.Printf("Opening worktree for branch %s in %s\n", cmd.Branch, absPath)
 
 	result, err := git.OpenWorktree(basePath, cmd.Branch, cfg.WorktreeFormat)
@@ -310,10 +325,13 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 		// Get context for placeholder substitution
 		repoName, _ := git.GetRepoName()
 		folderName, _ := git.GetRepoFolderName()
-		mainRepo, _ := git.GetMainRepoPath(result.Path)
-		if mainRepo == "" {
+		mainRepo, err := git.GetMainRepoPath(result.Path)
+		if err != nil || mainRepo == "" {
 			// Fallback for newly created worktrees
-			mainRepo, _ = filepath.Abs(".")
+			mainRepo, err = filepath.Abs(".")
+			if err != nil {
+				return fmt.Errorf("failed to determine main repo path: %w", err)
+			}
 		}
 
 		ctx := hooks.Context{
@@ -349,9 +367,17 @@ func runClean(cmd *CleanCmd) error {
 			return err
 		}
 	} else {
-		scanPath = expandPath(scanPath)
+		var err error
+		scanPath, err = expandPath(scanPath)
+		if err != nil {
+			return fmt.Errorf("failed to expand path: %w", err)
+		}
 	}
-	scanPath, _ = filepath.Abs(scanPath)
+	var err error
+	scanPath, err = filepath.Abs(scanPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
 
 	fmt.Printf("Cleaning worktrees in %s\n", scanPath)
 
@@ -533,16 +559,22 @@ func runClean(cmd *CleanCmd) error {
 }
 
 // expandPath expands ~ to home directory
-func expandPath(path string) string {
+func expandPath(path string) (string, error) {
 	if len(path) >= 2 && path[:2] == "~/" {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, path[2:])
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get home directory: %w", err)
+		}
+		return filepath.Join(home, path[2:]), nil
 	}
 	if path == "~" {
-		home, _ := os.UserHomeDir()
-		return home
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get home directory: %w", err)
+		}
+		return home, nil
 	}
-	return path
+	return path, nil
 }
 
 func runList(cmd *ListCmd) error {
@@ -555,9 +587,17 @@ func runList(cmd *ListCmd) error {
 			return err
 		}
 	} else {
-		scanPath = expandPath(scanPath)
+		var err error
+		scanPath, err = expandPath(scanPath)
+		if err != nil {
+			return fmt.Errorf("failed to expand path: %w", err)
+		}
 	}
-	scanPath, _ = filepath.Abs(scanPath)
+	var err error
+	scanPath, err = filepath.Abs(scanPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
 
 	// List worktrees in directory
 	worktrees, err := git.ListWorktrees(scanPath)
@@ -574,15 +614,25 @@ func runList(cmd *ListCmd) error {
 		return nil
 	}
 
-	// Simple text output
-	fmt.Printf("Worktrees in %s\n", scanPath)
 	if len(worktrees) == 0 {
-		fmt.Println("  (none)")
 		return nil
 	}
 
+	// Find max path length for alignment
+	maxPathLen := 0
 	for _, wt := range worktrees {
-		fmt.Printf("  %s (%s)\n", filepath.Base(wt.Path), wt.Branch)
+		if len(wt.Path) > maxPathLen {
+			maxPathLen = len(wt.Path)
+		}
+	}
+
+	// Output in git worktree list format: /path  commit [branch]
+	for _, wt := range worktrees {
+		hash, _ := git.GetShortCommitHash(wt.Path)
+		if hash == "" {
+			hash = "???????"
+		}
+		fmt.Printf("%-*s  %s [%s]\n", maxPathLen, wt.Path, hash, wt.Branch)
 	}
 
 	return nil
@@ -616,8 +666,14 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 		return fmt.Errorf("failed to get PR branch: %w", err)
 	}
 
-	basePath := expandPath(cmd.Dir)
-	absPath, _ := filepath.Abs(basePath)
+	basePath, err := expandPath(cmd.Dir)
+	if err != nil {
+		return fmt.Errorf("failed to expand path: %w", err)
+	}
+	absPath, err := filepath.Abs(basePath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
 	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
 
 	result, err := git.CreateWorktree(basePath, branch, cfg.WorktreeFormat)
@@ -641,10 +697,13 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 		// Get context for placeholder substitution
 		repoName, _ := git.GetRepoName()
 		folderName, _ := git.GetRepoFolderName()
-		mainRepo, _ := git.GetMainRepoPath(result.Path)
-		if mainRepo == "" {
+		mainRepo, err := git.GetMainRepoPath(result.Path)
+		if err != nil || mainRepo == "" {
 			// Fallback for newly created worktrees
-			mainRepo, _ = filepath.Abs(".")
+			mainRepo, err = filepath.Abs(".")
+			if err != nil {
+				return fmt.Errorf("failed to determine main repo path: %w", err)
+			}
 		}
 
 		ctx := hooks.Context{

@@ -137,8 +137,8 @@ func SavePRCache(scanDir string, cache PRCache) error {
 		return err
 	}
 
-	// Write to temp file first
-	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+	// Write to temp file first (0600 for user-only read/write)
+	if err := os.WriteFile(tempPath, data, 0600); err != nil {
 		return err
 	}
 

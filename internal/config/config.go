@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -69,12 +70,12 @@ func Load() (Config, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return Default(), nil
 		}
-		return Default(), nil
+		return Default(), fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	var raw rawConfig
 	if err := toml.Unmarshal(data, &raw); err != nil {
-		return Default(), err
+		return Default(), fmt.Errorf("failed to parse config file: %w", err)
 	}
 
 	cfg := Config{

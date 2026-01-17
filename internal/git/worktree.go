@@ -63,20 +63,20 @@ func ListWorktrees(scanDir string) ([]Worktree, error) {
 		// Get repo name from main repo
 		repoName := filepath.Base(mainRepo)
 
-		// Get merge status
+		// Get merge status (errors treated as "not merged" - safe default)
 		isMerged, _ := IsBranchMerged(mainRepo, branch)
 
-		// Get commit count if not merged
+		// Get commit count if not merged (errors treated as 0 commits)
 		var commitCount int
 		if !isMerged {
 			commitCount, _ = GetCommitCount(mainRepo, branch)
 		}
 
-		// Get diff stats (includes untracked file detection)
+		// Get diff stats - errors treated as clean (safe for display purposes)
 		additions, deletions, hasUntracked, _ := GetDiffStats(path)
 		isDirty := additions > 0 || deletions > 0 || hasUntracked
 
-		// Get last commit time
+		// Get last commit time (errors treated as empty string)
 		lastCommit, _ := GetLastCommitRelative(path)
 
 		worktrees = append(worktrees, Worktree{
