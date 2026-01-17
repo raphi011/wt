@@ -621,6 +621,17 @@ func runList(cmd *ListCmd) error {
 		return err
 	}
 
+	// If in a git repo, filter to only show worktrees from that repo
+	if currentRepo := git.GetCurrentRepoMainPath(); currentRepo != "" {
+		var filtered []git.Worktree
+		for _, wt := range worktrees {
+			if wt.MainRepo == currentRepo {
+				filtered = append(filtered, wt)
+			}
+		}
+		worktrees = filtered
+	}
+
 	if cmd.JSON {
 		data, err := json.MarshalIndent(worktrees, "", "  ")
 		if err != nil {

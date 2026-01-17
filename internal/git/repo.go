@@ -316,6 +316,38 @@ func GetShortCommitHash(path string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// GetCurrentRepoMainPath returns the main repository path from cwd
+// Works whether you're in the main repo or a worktree
+// Returns empty string if not in a git repo
+func GetCurrentRepoMainPath() string {
+	// First check if we're in a git repo at all
+	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	toplevel := strings.TrimSpace(string(output))
+
+	// Check if we're in a worktree by seeing if .git is a file (not dir)
+	gitPath := filepath.Join(toplevel, ".git")
+	info, err := os.Stat(gitPath)
+	if err != nil {
+		return ""
+	}
+
+	if info.IsDir() {
+		// Main repo - toplevel is the main repo path
+		return toplevel
+	}
+
+	// Worktree - need to resolve main repo from .git file
+	mainRepo, err := GetMainRepoPath(toplevel)
+	if err != nil {
+		return ""
+	}
+	return mainRepo
+}
+
 // GetBranchWorktree returns the worktree path if branch is checked out, empty string if not
 func GetBranchWorktree(branch string) (string, error) {
 	cmd := exec.Command("git", "worktree", "list", "--porcelain")
