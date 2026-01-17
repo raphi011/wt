@@ -182,11 +182,12 @@ func CleanPRCache(cache PRCache, worktrees []git.Worktree) PRCache {
 }
 
 // GetPRBranch fetches the head branch name for a PR number using gh CLI
+// Returns an error if the PR is from a fork (cross-repository PR)
 func GetPRBranch(repoURL string, number int) (string, error) {
 	cmd := exec.Command("gh", "pr", "view",
 		fmt.Sprintf("%d", number),
 		"-R", repoURL,
-		"--json", "headRefName")
+		"--json", "headRefName,isCrossRepository")
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -200,10 +201,15 @@ func GetPRBranch(repoURL string, number int) (string, error) {
 	}
 
 	var result struct {
-		HeadRefName string `json:"headRefName"`
+		HeadRefName       string `json:"headRefName"`
+		IsCrossRepository bool   `json:"isCrossRepository"`
 	}
 	if err := json.Unmarshal(output, &result); err != nil {
 		return "", fmt.Errorf("failed to parse gh output: %w", err)
+	}
+
+	if result.IsCrossRepository {
+		return "", fmt.Errorf("PR #%d is from a fork - cross-repository PRs are not supported", number)
 	}
 
 	if result.HeadRefName == "" {

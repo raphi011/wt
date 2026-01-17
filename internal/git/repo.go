@@ -11,7 +11,12 @@ import (
 
 // GetRepoName extracts the repository name from the origin URL
 func GetRepoName() (string, error) {
-	cmd := exec.Command("git", "remote", "get-url", "origin")
+	return GetRepoNameFrom(".")
+}
+
+// GetRepoNameFrom extracts the repository name from the origin URL of a repo at the given path
+func GetRepoNameFrom(repoPath string) (string, error) {
+	cmd := exec.Command("git", "-C", repoPath, "remote", "get-url", "origin")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	output, err := cmd.Output()
