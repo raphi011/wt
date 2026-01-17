@@ -271,3 +271,46 @@ func GetMainRepoPath(worktreePath string) (string, error) {
 	repoPath := strings.Split(gitdir, "/.git/worktrees/")[0]
 	return repoPath, nil
 }
+
+// BranchExists checks if a local branch exists
+func BranchExists(branch string) (bool, error) {
+	cmd := exec.Command("git", "rev-parse", "--verify", "refs/heads/"+branch)
+	err := cmd.Run()
+	if err != nil {
+		// Exit code 128 means branch doesn't exist
+		return false, nil
+	}
+	return true, nil
+}
+
+// GetBranchWorktree returns the worktree path if branch is checked out, empty string if not
+func GetBranchWorktree(branch string) (string, error) {
+	cmd := exec.Command("git", "worktree", "list", "--porcelain")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("failed to list worktrees: %s", strings.TrimSpace(stderr.String()))
+		}
+		return "", err
+	}
+
+	// Parse porcelain output: each worktree has "worktree <path>" and "branch refs/heads/<name>"
+	lines := strings.Split(string(output), "\n")
+	var currentPath string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "worktree ") {
+			currentPath = strings.TrimPrefix(line, "worktree ")
+		} else if strings.HasPrefix(line, "branch refs/heads/") {
+			wtBranch := strings.TrimPrefix(line, "branch refs/heads/")
+			if wtBranch == branch {
+				return currentPath, nil
+			}
+		} else if line == "" {
+			currentPath = ""
+		}
+	}
+
+	return "", nil
+}
