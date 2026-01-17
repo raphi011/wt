@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/alexflint/go-arg"
@@ -20,7 +21,7 @@ import (
 
 type CreateCmd struct {
 	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"branch name"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (default: from config or '.')"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (from config or -d flag)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
@@ -28,14 +29,13 @@ type CreateCmd struct {
 func (CreateCmd) Description() string {
 	return `Create a new git worktree at <dir>/<repo>-<branch>
 Examples:
-  wt create feature-branch           # Use default directory
-  wt create feature-branch -d ..     # Create next to current repo
-  wt create branch -d ~/worktrees    # Create in specific directory`
+  wt create feature-branch              # Use default directory from config
+  wt create branch -d ~/Git/worktrees   # Create in specific directory`
 }
 
 type OpenCmd struct {
 	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"existing local branch name"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (default: from config or '.')"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (from config or -d flag)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
@@ -43,23 +43,25 @@ type OpenCmd struct {
 func (OpenCmd) Description() string {
 	return `Open a worktree for an existing local branch
 Examples:
-  wt open feature-branch           # Use default directory
-  wt open feature-branch -d ..     # Create next to current repo`
+  wt open feature-branch              # Use default directory from config
+  wt open feature-branch -d ~/Git     # Create in specific directory`
 }
 
 type CleanCmd struct {
-	Path      string `arg:"positional,env:WT_DEFAULT_PATH" placeholder:"DIRECTORY" help:"directory to scan (default: from config or '.')"`
+	Path      string `arg:"positional,env:WT_DEFAULT_PATH" placeholder:"DIRECTORY" help:"directory to scan (from config or positional arg)"`
 	DryRun    bool   `arg:"-n,--dry-run" help:"preview without removing"`
 	RefreshPR bool   `arg:"--refresh-pr" help:"force refresh PR cache"`
+	Empty     bool   `arg:"-e,--empty" help:"also remove worktrees with 0 commits ahead and clean working directory"`
 }
 
 func (CleanCmd) Description() string {
 	return `Cleanup merged git worktrees with PR status display.
-Removes worktrees where the branch is merged AND working directory is clean.`
+Removes worktrees where the branch is merged AND working directory is clean.
+With --empty, also removes worktrees with 0 commits ahead and clean working directory.`
 }
 
 type ListCmd struct {
-	Path string `arg:"positional,env:WT_DEFAULT_PATH" placeholder:"DIRECTORY" help:"directory to scan (default: from config or '.')"`
+	Path string `arg:"positional,env:WT_DEFAULT_PATH" placeholder:"DIRECTORY" help:"directory to scan (from config or positional arg)"`
 	JSON bool   `arg:"--json" help:"output as JSON"`
 }
 
@@ -102,7 +104,8 @@ func (ConfigCmd) Description() string {
 
 type PrOpenCmd struct {
 	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR number"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (default: from config or '.')"`
+	Repo   string `arg:"positional" placeholder:"REPO" help:"repository (org/repo or name)"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (from config or -d flag)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
@@ -110,8 +113,10 @@ type PrOpenCmd struct {
 func (PrOpenCmd) Description() string {
 	return `Create a worktree for a GitHub PR
 Examples:
-  wt pr open 123              # Use default directory
-  wt pr open 123 -d ~/Git     # Create in specific directory`
+  wt pr open 123                  # Use current repo
+  wt pr open 123 myrepo           # Find "myrepo" in default_path
+  wt pr open 123 org/repo         # Find locally or clone to default_path
+  wt pr open 123 -d ~/Git         # Create in specific directory`
 }
 
 type PrCmd struct {
@@ -228,6 +233,10 @@ func runCreate(cmd *CreateCmd, cfg config.Config) error {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
 	}
 
+	if cmd.Dir == "" {
+		return fmt.Errorf("no directory specified: use -d flag or set default_path in config")
+	}
+
 	basePath, err := expandPath(cmd.Dir)
 	if err != nil {
 		return fmt.Errorf("failed to expand path: %w", err)
@@ -294,6 +303,10 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
 	}
 
+	if cmd.Dir == "" {
+		return fmt.Errorf("no directory specified: use -d flag or set default_path in config")
+	}
+
 	basePath, err := expandPath(cmd.Dir)
 	if err != nil {
 		return fmt.Errorf("failed to expand path: %w", err)
@@ -358,22 +371,15 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 const maxConcurrentPRFetches = 5
 
 func runClean(cmd *CleanCmd) error {
-	// Expand path
-	scanPath := cmd.Path
-	if scanPath == "." {
-		var err error
-		scanPath, err = os.Getwd()
-		if err != nil {
-			return err
-		}
-	} else {
-		var err error
-		scanPath, err = expandPath(scanPath)
-		if err != nil {
-			return fmt.Errorf("failed to expand path: %w", err)
-		}
+	if cmd.Path == "" {
+		return fmt.Errorf("no directory specified: provide a path or set default_path in config")
 	}
-	var err error
+
+	// Expand path
+	scanPath, err := expandPath(cmd.Path)
+	if err != nil {
+		return fmt.Errorf("failed to expand path: %w", err)
+	}
 	scanPath, err = filepath.Abs(scanPath)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
@@ -523,7 +529,14 @@ func runClean(cmd *CleanCmd) error {
 	var skipped int
 
 	for _, wt := range worktrees {
+		shouldRemove := false
 		if wt.IsMerged && !wt.IsDirty {
+			shouldRemove = true
+		} else if cmd.Empty && wt.CommitCount == 0 && !wt.IsDirty {
+			shouldRemove = true
+		}
+
+		if shouldRemove {
 			toRemove = append(toRemove, wt)
 			toRemoveMap[wt.Path] = true
 		} else {
@@ -578,22 +591,15 @@ func expandPath(path string) (string, error) {
 }
 
 func runList(cmd *ListCmd) error {
-	// Expand path
-	scanPath := cmd.Path
-	if scanPath == "." {
-		var err error
-		scanPath, err = os.Getwd()
-		if err != nil {
-			return err
-		}
-	} else {
-		var err error
-		scanPath, err = expandPath(scanPath)
-		if err != nil {
-			return fmt.Errorf("failed to expand path: %w", err)
-		}
+	if cmd.Path == "" {
+		return fmt.Errorf("no directory specified: provide a path or set default_path in config")
 	}
-	var err error
+
+	// Expand path
+	scanPath, err := expandPath(cmd.Path)
+	if err != nil {
+		return fmt.Errorf("failed to expand path: %w", err)
+	}
 	scanPath, err = filepath.Abs(scanPath)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
@@ -653,8 +659,50 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
 	}
 
-	// Get origin URL from current repo
-	originURL, err := github.GetOriginURL(".")
+	if cmd.Dir == "" {
+		return fmt.Errorf("no directory specified: use -d flag or set default_path in config")
+	}
+
+	basePath, err := expandPath(cmd.Dir)
+	if err != nil {
+		return fmt.Errorf("failed to expand path: %w", err)
+	}
+
+	// Determine which repo to use
+	var repoPath string
+	if cmd.Repo == "" {
+		// No repo arg: use current directory
+		repoPath = "."
+	} else {
+		// Repo arg provided: find or clone
+		org, name := git.ParseRepoArg(cmd.Repo)
+
+		// Try to find repo locally
+		foundPath, err := git.FindRepoByName(basePath, name)
+		if err == nil {
+			repoPath = foundPath
+			fmt.Printf("Using repo at %s\n", repoPath)
+		} else if org != "" {
+			// Not found but org/repo provided: clone it
+			fmt.Printf("Cloning %s to %s...\n", cmd.Repo, basePath)
+			clonedPath, err := github.CloneRepo(cmd.Repo, basePath)
+			if err != nil {
+				return fmt.Errorf("failed to clone repo: %w", err)
+			}
+			repoPath = clonedPath
+			fmt.Printf("✓ Cloned to %s\n", repoPath)
+		} else {
+			// Not found and no org: error with suggestions
+			similar := git.FindSimilarRepos(basePath, name)
+			if len(similar) > 0 {
+				return fmt.Errorf("repository %q not found in %s\nDid you mean: %s", name, basePath, strings.Join(similar, ", "))
+			}
+			return fmt.Errorf("repository %q not found in %s\nUse org/repo format to clone from GitHub", name, basePath)
+		}
+	}
+
+	// Get origin URL from repo
+	originURL, err := github.GetOriginURL(repoPath)
 	if err != nil {
 		return fmt.Errorf("failed to get origin URL: %w", err)
 	}
@@ -666,17 +714,13 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 		return fmt.Errorf("failed to get PR branch: %w", err)
 	}
 
-	basePath, err := expandPath(cmd.Dir)
-	if err != nil {
-		return fmt.Errorf("failed to expand path: %w", err)
-	}
 	absPath, err := filepath.Abs(basePath)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
 
-	result, err := git.CreateWorktree(basePath, branch, cfg.WorktreeFormat)
+	result, err := git.CreateWorktreeFrom(repoPath, basePath, branch, cfg.WorktreeFormat)
 	if err != nil {
 		return err
 	}
@@ -695,12 +739,12 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 
 	if hook != nil {
 		// Get context for placeholder substitution
-		repoName, _ := git.GetRepoName()
-		folderName, _ := git.GetRepoFolderName()
+		repoName, _ := git.GetRepoNameFrom(repoPath)
+		folderName := filepath.Base(repoPath)
 		mainRepo, err := git.GetMainRepoPath(result.Path)
 		if err != nil || mainRepo == "" {
 			// Fallback for newly created worktrees
-			mainRepo, err = filepath.Abs(".")
+			mainRepo, err = filepath.Abs(repoPath)
 			if err != nil {
 				return fmt.Errorf("failed to determine main repo path: %w", err)
 			}
@@ -844,25 +888,42 @@ complete -c wt -n "__fish_seen_subcommand_from open" -s d -l dir -r -a "(__fish_
 complete -c wt -n "__fish_seen_subcommand_from open" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from open" -l no-hook -d "Skip post-create hook"
 
-# clean: suggest common paths + directories
-complete -c wt -n "__fish_seen_subcommand_from clean; and not __fish_seen_argument -s n -l dry-run -l refresh-pr" -a "~/Git/worktrees" -d "Default worktrees directory"
-complete -c wt -n "__fish_seen_subcommand_from clean; and not __fish_seen_argument -s n -l dry-run -l refresh-pr" -a "." -d "Current directory"
-complete -c wt -n "__fish_seen_subcommand_from clean" -a "(__fish_complete_directories)"
+# clean: suggest common paths + directories (absolute paths only)
+complete -c wt -n "__fish_seen_subcommand_from clean; and not __fish_seen_argument -s n -l dry-run -l refresh-pr -s e -l empty" -a "~/Git/worktrees" -d "Default worktrees directory"
+complete -c wt -n "__fish_seen_subcommand_from clean" -a "(__fish_complete_directories)" -d "Directory"
 complete -c wt -n "__fish_seen_subcommand_from clean" -s n -l dry-run -d "Preview without removing"
 complete -c wt -n "__fish_seen_subcommand_from clean" -l refresh-pr -d "Force refresh PR cache"
+complete -c wt -n "__fish_seen_subcommand_from clean" -s e -l empty -d "Also remove worktrees with 0 commits ahead"
 
-# list: suggest directories
+# list: suggest directories (absolute paths only)
 complete -c wt -n "__fish_seen_subcommand_from list; and not __fish_seen_argument -l json" -a "~/Git/worktrees" -d "Worktrees directory"
-complete -c wt -n "__fish_seen_subcommand_from list; and not __fish_seen_argument -l json" -a "." -d "Current directory"
-complete -c wt -n "__fish_seen_subcommand_from list" -a "(__fish_complete_directories)"
+complete -c wt -n "__fish_seen_subcommand_from list" -a "(__fish_complete_directories)" -d "Directory"
 complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
 
 # pr: subcommands
 complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open" -a "open" -d "Checkout PR as new worktree"
+# pr open: PR number (first positional), then repo (second positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -a "(gh pr list --json number,title --jq '.[] | \"\\(.number)\t\\(.title)\"' 2>/dev/null)" -d "PR number"
+# Repo names from default_path (second positional after PR number)
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -a "(__wt_list_repos)" -d "Repository"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -l no-hook -d "Skip post-create hook"
+
+# Helper function to list repos in default_path
+function __wt_list_repos
+    set -l dir "$WT_DEFAULT_PATH"
+    if test -z "$dir"
+        set dir (wt config show 2>/dev/null | grep default_path | awk -F'=' '{print $2}' | string trim)
+    end
+    if test -d "$dir"
+        for d in $dir/*/
+            if test -d "$d/.git" -o -f "$d/.git"
+                basename $d
+            end
+        end
+    end
+end
 
 # config: subcommands
 complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init hooks" -a "init" -d "Create default config file"
