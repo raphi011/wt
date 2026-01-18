@@ -417,7 +417,6 @@ func PruneWorktrees(repoPath string) error {
 	return cmd.Run()
 }
 
-
 // GroupWorktreesByRepo groups worktrees by their main repository
 func GroupWorktreesByRepo(worktrees []Worktree) map[string][]Worktree {
 	groups := make(map[string][]Worktree)

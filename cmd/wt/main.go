@@ -160,6 +160,7 @@ func main() {
 			p.WriteHelp(os.Stdout)
 			os.Exit(0)
 		case arg.ErrVersion:
+			fmt.Println(args.Version())
 			os.Exit(0)
 		default:
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)

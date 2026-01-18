@@ -1,13 +1,21 @@
-.PHONY: build install test clean
+VERSION ?= dev
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
+
+.PHONY: build install test clean snapshot
 
 build:
-	go build -o wt ./cmd/wt
+	go build -ldflags "$(LDFLAGS)" -o wt ./cmd/wt
 
 install:
-	go install ./cmd/wt
+	go install -ldflags "$(LDFLAGS)" ./cmd/wt
 
 test:
 	go test ./...
 
 clean:
 	rm -f wt
+
+snapshot:
+	goreleaser release --snapshot --clean
