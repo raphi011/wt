@@ -63,7 +63,7 @@ internal/ui/             - Terminal UI components
 
 - `wt create <branch>` - Create worktree for new branch
 - `wt open <branch>` - Create worktree for existing local branch
-- `wt clean` - Remove merged+clean worktrees, show table with PR status
+- `wt tidy` - Remove merged+clean worktrees, show table with PR status
 - `wt list [--json]` - List worktrees in directory
 - `wt pr open <number> [repo]` - Create worktree for GitHub PR
 - `wt config init` - Create default config file
@@ -101,6 +101,7 @@ Completions provide context-aware suggestions for branches, directories, and fla
 - `-d, --dir` - target directory (with `env:WT_DEFAULT_PATH`)
 - `-n, --dry-run` - preview without making changes
 - `-f, --force` - force operation (override safety checks)
+- `-c, --include-clean` - include clean worktrees (0 commits, no changes)
 - `--json` - output as JSON
 - `--hook` / `--no-hook` - control hook execution (for worktree creation commands)
 
