@@ -284,7 +284,7 @@ complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr 
 complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "clean" -d "Cleanup merged worktrees"
 complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "list" -d "List worktrees"
 complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "mv" -d "Move worktrees to another directory"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "pr" -d "Work with PRs/MRs"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "pr" -d "Work with PRs"
 complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "config" -d "Manage configuration"
 complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "completion" -d "Generate completion script"
 
@@ -317,7 +317,7 @@ complete -c wt -n "__fish_seen_subcommand_from mv" -l dry-run -d "Show what woul
 complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move dirty worktrees"
 
 # pr: subcommands
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open" -a "open" -d "Checkout PR/MR as new worktree"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open" -a "open" -d "Checkout PR as new worktree"
 # pr open: PR number (first positional), then repo (second positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -a "(gh pr list --json number,title --jq '.[] | \"\\(.number)\t\\(.title)\"' 2>/dev/null)" -d "PR number"
 # Repo names from default_path (second positional after PR number)

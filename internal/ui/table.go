@@ -21,7 +21,7 @@ var (
 )
 
 // FormatWorktreesTable creates a formatted table for worktrees
-func FormatWorktreesTable(worktrees []git.Worktree, mrMap map[string]*forge.MRInfo, toRemove map[string]bool, dryRun bool) string {
+func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRInfo, toRemove map[string]bool, dryRun bool) string {
 	if len(worktrees) == 0 {
 		return ""
 	}
@@ -79,14 +79,14 @@ func FormatWorktreesTable(worktrees []git.Worktree, mrMap map[string]*forge.MRIn
 			diffPlain = diff
 		}
 
-		// Format MR/PR (show URL)
+		// Format PR (show URL)
 		var prDisplay, prPlain string
-		if mr, ok := mrMap[wt.Branch]; ok && mr != nil {
+		if pr, ok := prMap[wt.Branch]; ok && pr != nil {
 			// Get forge for this worktree to format icon
-			f := forge.DetectFromRepo(wt.MainRepo)
-			icon := f.FormatIcon(mr.State)
-			prDisplay = fmt.Sprintf("%s %s", icon, mr.URL)
-			prPlain = fmt.Sprintf("%s %s", icon, mr.URL)
+			f := forge.DetectFromRepo(wt.MainRepo, nil)
+			icon := f.FormatIcon(pr.State)
+			prDisplay = fmt.Sprintf("%s %s", icon, pr.URL)
+			prPlain = fmt.Sprintf("%s %s", icon, pr.URL)
 		}
 
 		// Track max widths using plain text (without ANSI codes)

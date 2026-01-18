@@ -84,7 +84,7 @@ func main() {
 			os.Exit(1)
 		}
 	case args.Clean != nil:
-		if err := runClean(args.Clean); err != nil {
+		if err := runClean(args.Clean, cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -276,12 +276,12 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 // maxConcurrentPRFetches limits parallel gh API calls to avoid rate limiting
 const maxConcurrentPRFetches = 5
 
-func runClean(cmd *CleanCmd) error {
+func runClean(cmd *CleanCmd, cfg config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
 
-	// Detect forge per-worktree (optional - MR status is a nice-to-have)
+	// Detect forge per-worktree (optional - PR status is a nice-to-have)
 	// We'll check availability when we actually need it
 
 	dir := cmd.Dir
@@ -334,36 +334,36 @@ func runClean(cmd *CleanCmd) error {
 		}
 	}
 
-	// MR status handling (requires forge CLI - gh or glab)
-	mrCache := make(forge.MRCache)
-	mrMap := make(map[string]*forge.MRInfo)
+	// PR status handling (requires forge CLI - gh or glab)
+	prCache := make(forge.PRCache)
+	prMap := make(map[string]*forge.PRInfo)
 
-	// Load MR cache
-	mrCache, err = forge.LoadMRCache(scanPath)
+	// Load PR cache
+	prCache, err = forge.LoadPRCache(scanPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to load MR cache: %v\n", err)
-		mrCache = make(forge.MRCache)
+		fmt.Fprintf(os.Stderr, "Warning: failed to load PR cache: %v\n", err)
+		prCache = make(forge.PRCache)
 	}
 
 	// Clean cache (remove deleted origins/branches)
-	mrCache = forge.CleanMRCache(mrCache, worktrees)
+	prCache = forge.CleanPRCache(prCache, worktrees)
 
 	// Determine which branches need fetching (uses cache expiration)
-	toFetch := forge.NeedsFetch(mrCache, worktrees, cmd.RefreshPR)
+	toFetch := forge.NeedsFetch(prCache, worktrees, cmd.RefreshPR)
 
-	// Fetch uncached MRs in parallel with rate limiting
+	// Fetch uncached PRs in parallel with rate limiting
 	if len(toFetch) > 0 {
-		sp.UpdateMessage(fmt.Sprintf("Fetching MR status (%d branches)...", len(toFetch)))
-		var mrMutex sync.Mutex
-		var mrWg sync.WaitGroup
+		sp.UpdateMessage(fmt.Sprintf("Fetching PR status (%d branches)...", len(toFetch)))
+		var prMutex sync.Mutex
+		var prWg sync.WaitGroup
 		semaphore := make(chan struct{}, maxConcurrentPRFetches)
 		var fetchErrors []string
 		var errMutex sync.Mutex
 
 		for _, wt := range toFetch {
-			mrWg.Add(1)
+			prWg.Add(1)
 			go func(wt git.Worktree) {
-				defer mrWg.Done()
+				defer prWg.Done()
 				semaphore <- struct{}{}        // Acquire
 				defer func() { <-semaphore }() // Release
 
@@ -372,20 +372,20 @@ func runClean(cmd *CleanCmd) error {
 				}
 
 				// Detect forge for this repo
-				f := forge.Detect(wt.OriginURL)
+				f := forge.Detect(wt.OriginURL, cfg.Hosts)
 
 				// Check if forge CLI is available (skip silently if not)
 				if err := f.Check(); err != nil {
 					return
 				}
 
-				// Use upstream branch name for MR lookup (may differ from local)
+				// Use upstream branch name for PR lookup (may differ from local)
 				upstreamBranch := git.GetUpstreamBranch(wt.MainRepo, wt.Branch)
 				if upstreamBranch == "" {
-					return // No upstream = never pushed = no MR
+					return // No upstream = never pushed = no PR
 				}
 
-				mr, err := f.GetMRForBranch(wt.OriginURL, upstreamBranch)
+				pr, err := f.GetPRForBranch(wt.OriginURL, upstreamBranch)
 				if err != nil {
 					errMutex.Lock()
 					fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", wt.Branch, err))
@@ -393,46 +393,46 @@ func runClean(cmd *CleanCmd) error {
 					return
 				}
 
-				mrMutex.Lock()
-				if mrCache[wt.OriginURL] == nil {
-					mrCache[wt.OriginURL] = make(map[string]*forge.MRInfo)
+				prMutex.Lock()
+				if prCache[wt.OriginURL] == nil {
+					prCache[wt.OriginURL] = make(map[string]*forge.PRInfo)
 				}
-				mrCache[wt.OriginURL][wt.Branch] = mr // nil is valid (no MR)
-				mrMutex.Unlock()
+				prCache[wt.OriginURL][wt.Branch] = pr // nil is valid (no PR)
+				prMutex.Unlock()
 			}(wt)
 		}
 
-		mrWg.Wait()
+		prWg.Wait()
 
 		// Report errors (non-fatal)
 		if len(fetchErrors) > 0 {
 			sp.Stop()
 			for _, e := range fetchErrors {
-				fmt.Fprintf(os.Stderr, "Warning: MR fetch failed for %s\n", e)
+				fmt.Fprintf(os.Stderr, "Warning: PR fetch failed for %s\n", e)
 			}
 			sp = ui.NewSpinner("Continuing...")
 			sp.Start()
 		}
 
 		// Save updated cache
-		if err := forge.SaveMRCache(scanPath, mrCache); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to save MR cache: %v\n", err)
+		if err := forge.SavePRCache(scanPath, prCache); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to save PR cache: %v\n", err)
 		}
 	}
 
-	// Build mrMap from cache for display
+	// Build PR map from cache for display
 	for _, wt := range worktrees {
-		if originCache, ok := mrCache[wt.OriginURL]; ok {
-			if mr, ok := originCache[wt.Branch]; ok {
-				mrMap[wt.Branch] = mr
+		if originCache, ok := prCache[wt.OriginURL]; ok {
+			if pr, ok := originCache[wt.Branch]; ok {
+				prMap[wt.Branch] = pr
 			}
 		}
 	}
 
-	// Update merge status for worktrees based on MR state
+	// Update merge status for worktrees based on PR state
 	for i := range worktrees {
-		if mr, ok := mrMap[worktrees[i].Branch]; ok && mr != nil {
-			if mr.State == "MERGED" {
+		if pr, ok := prMap[worktrees[i].Branch]; ok && pr != nil {
+			if pr.State == "MERGED" {
 				worktrees[i].IsMerged = true
 			}
 		}
@@ -468,7 +468,7 @@ func runClean(cmd *CleanCmd) error {
 	}
 
 	// Display table with cleaned worktrees marked
-	fmt.Print(ui.FormatWorktreesTable(worktrees, mrMap, toRemoveMap, cmd.DryRun))
+	fmt.Print(ui.FormatWorktreesTable(worktrees, prMap, toRemoveMap, cmd.DryRun))
 
 	// Remove worktrees
 	if !cmd.DryRun && len(toRemove) > 0 {
@@ -832,14 +832,14 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 	}
 
 	// Detect forge and check CLI availability
-	f := forge.Detect(originURL)
+	f := forge.Detect(originURL, cfg.Hosts)
 	if err := f.Check(); err != nil {
 		return err
 	}
 
-	// Fetch MR/PR branch name
+	// Fetch PR branch name
 	fmt.Printf("Fetching PR #%d...\n", cmd.Number)
-	branch, err := f.GetMRBranch(originURL, cmd.Number)
+	branch, err := f.GetPRBranch(originURL, cmd.Number)
 	if err != nil {
 		return fmt.Errorf("failed to get PR branch: %w", err)
 	}

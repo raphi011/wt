@@ -43,8 +43,8 @@ func (g *GitHub) Check() error {
 	return nil
 }
 
-// GetMRForBranch fetches PR info for a branch using gh CLI
-func (g *GitHub) GetMRForBranch(repoURL, branch string) (*MRInfo, error) {
+// GetPRForBranch fetches PR info for a branch using gh CLI
+func (g *GitHub) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 	cmd := exec.Command("gh", "pr", "list",
 		"-R", repoURL,
 		"--head", branch,
@@ -76,7 +76,7 @@ func (g *GitHub) GetMRForBranch(repoURL, branch string) (*MRInfo, error) {
 		return nil, nil
 	}
 
-	return &MRInfo{
+	return &PRInfo{
 		Number:   prs[0].Number,
 		State:    prs[0].State, // GitHub already uses OPEN, MERGED, CLOSED
 		URL:      prs[0].URL,
@@ -84,8 +84,8 @@ func (g *GitHub) GetMRForBranch(repoURL, branch string) (*MRInfo, error) {
 	}, nil
 }
 
-// GetMRBranch fetches the head branch name for a PR number using gh CLI
-func (g *GitHub) GetMRBranch(repoURL string, number int) (string, error) {
+// GetPRBranch fetches the head branch name for a PR number using gh CLI
+func (g *GitHub) GetPRBranch(repoURL string, number int) (string, error) {
 	cmd := exec.Command("gh", "pr", "view",
 		fmt.Sprintf("%d", number),
 		"-R", repoURL,
