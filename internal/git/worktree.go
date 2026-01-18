@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/raphaelgruber/wt/internal/format"
+	"github.com/raphi011/wt/internal/format"
 )
 
 // Worktree represents a git worktree with its status

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/raphaelgruber/wt/internal/git"
+	"github.com/raphi011/wt/internal/git"
 )
 
 // CacheMaxAge is the maximum age of cached MR info before it's considered stale

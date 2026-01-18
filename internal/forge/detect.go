@@ -3,7 +3,7 @@ package forge
 import (
 	"strings"
 
-	"github.com/raphaelgruber/wt/internal/git"
+	"github.com/raphi011/wt/internal/git"
 )
 
 // Detect returns the appropriate Forge implementation based on the remote URL.
