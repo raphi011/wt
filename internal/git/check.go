@@ -1,0 +1,18 @@
+package git
+
+import (
+	"fmt"
+	"os/exec"
+)
+
+// ErrGitNotFound indicates git is not installed or not in PATH
+var ErrGitNotFound = fmt.Errorf("git not found: please install git (https://git-scm.com)")
+
+// CheckGit verifies that git is available in PATH
+func CheckGit() error {
+	_, err := exec.LookPath("git")
+	if err != nil {
+		return ErrGitNotFound
+	}
+	return nil
+}
