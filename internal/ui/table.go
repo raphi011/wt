@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/raphaelgruber/wt/internal/forge"
 	"github.com/raphaelgruber/wt/internal/git"
-	"github.com/raphaelgruber/wt/internal/github"
 )
 
 var (
@@ -21,7 +21,7 @@ var (
 )
 
 // FormatWorktreesTable creates a formatted table for worktrees
-func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*github.PRInfo, toRemove map[string]bool, dryRun bool) string {
+func FormatWorktreesTable(worktrees []git.Worktree, mrMap map[string]*forge.MRInfo, toRemove map[string]bool, dryRun bool) string {
 	if len(worktrees) == 0 {
 		return ""
 	}
@@ -79,12 +79,14 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*github.PRI
 			diffPlain = diff
 		}
 
-		// Format PR (show URL)
+		// Format MR/PR (show URL)
 		var prDisplay, prPlain string
-		if pr, ok := prMap[wt.Branch]; ok && pr != nil {
-			icon := github.FormatPRIcon(pr.State)
-			prDisplay = fmt.Sprintf("%s %s", icon, pr.URL)
-			prPlain = fmt.Sprintf("%s %s", icon, pr.URL)
+		if mr, ok := mrMap[wt.Branch]; ok && mr != nil {
+			// Get forge for this worktree to format icon
+			f := forge.DetectFromRepo(wt.MainRepo)
+			icon := f.FormatIcon(mr.State)
+			prDisplay = fmt.Sprintf("%s %s", icon, mr.URL)
+			prPlain = fmt.Sprintf("%s %s", icon, mr.URL)
 		}
 
 		// Track max widths using plain text (without ANSI codes)
