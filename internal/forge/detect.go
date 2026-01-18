@@ -1,9 +1,9 @@
 package forge
 
 import (
-	"bytes"
-	"os/exec"
 	"strings"
+
+	"github.com/raphaelgruber/wt/internal/git"
 )
 
 // Detect returns the appropriate Forge implementation based on the remote URL.
@@ -19,7 +19,7 @@ func Detect(remoteURL string) Forge {
 // DetectFromRepo detects the forge for a repository by reading its origin URL.
 // Returns GitHub as default if detection fails.
 func DetectFromRepo(repoPath string) Forge {
-	url, err := GetOriginURL(repoPath)
+	url, err := git.GetOriginURL(repoPath)
 	if err != nil {
 		return &GitHub{}
 	}
@@ -66,20 +66,4 @@ func isGitLab(url string) bool {
 func isGitHub(url string) bool {
 	url = strings.ToLower(url)
 	return strings.Contains(url, "github.com")
-}
-
-// GetOriginURL gets the origin URL for a repository
-func GetOriginURL(repoPath string) (string, error) {
-	cmd := exec.Command("git", "-C", repoPath, "remote", "get-url", "origin")
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	output, err := cmd.Output()
-	if err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return "", err
-		}
-		return "", err
-	}
-	return strings.TrimSpace(string(output)), nil
 }
