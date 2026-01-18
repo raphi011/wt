@@ -55,19 +55,30 @@ internal/ui/             - Terminal UI components
 
 ### CLI Commands
 
-- `wt create <path> <branch>` - Create worktree at path/<repo>-<branch>
-- `wt clean [path]` - Remove merged+clean worktrees, show table with PR status
+- `wt create <branch>` - Create worktree for new branch
+- `wt open <branch>` - Create worktree for existing local branch
+- `wt clean` - Remove merged+clean worktrees, show table with PR status
 - `wt list [--json]` - List worktrees in directory
-- `wt completion fish` - Generate fish shell completions
+- `wt pr open <number> [repo]` - Create worktree for GitHub PR
+- `wt config init` - Create default config file
+- `wt completion <shell>` - Generate shell completions (fish, bash, zsh)
 
-### Fish Completions
+### Shell Completions
 
-The tool includes a built-in fish completion script accessed via `wt completion fish`. Install with:
+The tool includes built-in completion scripts for fish, bash, and zsh:
+
 ```bash
+# Fish
 wt completion fish > ~/.config/fish/completions/wt.fish
+
+# Bash
+wt completion bash > ~/.local/share/bash-completion/completions/wt
+
+# Zsh (then add ~/.zfunc to fpath in .zshrc)
+wt completion zsh > ~/.zfunc/_wt
 ```
 
-Completions provide context-aware suggestions for paths, branches, and flags.
+Completions provide context-aware suggestions for branches, directories, and flags.
 
 ### Dependencies
 
@@ -78,7 +89,7 @@ Completions provide context-aware suggestions for paths, branches, and flags.
 
 ### Development Guidelines
 
-**Keep completions/config in sync** - When CLI commands, flags, or subcommands change, always update the shell completion script (`wt completion fish`) and any config generation commands to match.
+**Keep completions/config in sync** - When CLI commands, flags, or subcommands change, always update the shell completion scripts (fish, bash, zsh in `cmd/wt/main.go`) and any config generation commands to match.
 
 ### Commit Messages
 
