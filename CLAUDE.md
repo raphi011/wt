@@ -80,6 +80,20 @@ Completions provide context-aware suggestions for paths, branches, and flags.
 
 **Keep completions/config in sync** - When CLI commands, flags, or subcommands change, always update the shell completion script (`wt completion fish`) and any config generation commands to match.
 
+### Commit Messages
+
+Follow **Conventional Commits** for GoReleaser changelog grouping:
+
+| Type | Changelog Group | Example |
+|------|-----------------|---------|
+| `feat:` | ✨ Features | `feat: add list command` |
+| `fix:` | 🐛 Bug Fixes | `fix: crash on empty dir` |
+| `docs:` | 📚 Documentation | `docs: update readme` |
+| `chore:` | (excluded) | `chore: update deps` |
+| `test:` | (excluded) | `test: add unit tests` |
+
+Format: `type(scope)!: description` - scope optional, `!` for breaking changes.
+
 ### Testing Locally
 
 The tool must be run from within a git repository for `wt create` to work (needs origin URL). For testing:
