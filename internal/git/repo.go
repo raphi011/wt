@@ -290,6 +290,19 @@ func GetMainRepoPath(worktreePath string) (string, error) {
 	}
 }
 
+// GetUpstreamBranch returns the remote branch name for a local branch.
+// Returns empty string if no upstream is configured.
+func GetUpstreamBranch(repoPath, branch string) string {
+	cmd := exec.Command("git", "-C", repoPath, "config", fmt.Sprintf("branch.%s.merge", branch))
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	// Output is like "refs/heads/feature-branch"
+	ref := strings.TrimSpace(string(output))
+	return strings.TrimPrefix(ref, "refs/heads/")
+}
+
 // BranchExists checks if a local branch exists
 func BranchExists(branch string) (bool, error) {
 	cmd := exec.Command("git", "rev-parse", "--verify", "refs/heads/"+branch)

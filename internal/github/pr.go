@@ -220,11 +220,17 @@ func GetPRBranch(repoURL string, number int) (string, error) {
 }
 
 // NeedsFetch returns worktrees that need PR info fetched (not cached or stale)
+// Skips worktrees without an upstream branch configured (never pushed = no PR)
 func NeedsFetch(cache PRCache, worktrees []git.Worktree, forceRefresh bool) []git.Worktree {
 	var toFetch []git.Worktree
 	for _, wt := range worktrees {
 		originURL, _ := GetOriginURL(wt.MainRepo)
 		if originURL == "" {
+			continue
+		}
+
+		// Skip branches without upstream (never pushed = no PR possible)
+		if git.GetUpstreamBranch(wt.MainRepo, wt.Branch) == "" {
 			continue
 		}
 

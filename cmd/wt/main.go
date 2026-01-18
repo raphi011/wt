@@ -491,7 +491,13 @@ func runClean(cmd *CleanCmd) error {
 						return
 					}
 
-					pr, err := github.GetPRForBranch(originURL, wt.Branch)
+					// Use upstream branch name for PR lookup (may differ from local)
+					upstreamBranch := git.GetUpstreamBranch(wt.MainRepo, wt.Branch)
+					if upstreamBranch == "" {
+						return // No upstream = never pushed = no PR
+					}
+
+					pr, err := github.GetPRForBranch(originURL, upstreamBranch)
 					if err != nil {
 						errMutex.Lock()
 						fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", wt.Branch, err))
