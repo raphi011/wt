@@ -54,8 +54,8 @@ func main() {
 	if args.Open != nil && args.Open.Dir == "" {
 		args.Open.Dir = cfg.DefaultPath
 	}
-	if args.Clean != nil && args.Clean.Dir == "" {
-		args.Clean.Dir = cfg.DefaultPath
+	if args.Tidy != nil && args.Tidy.Dir == "" {
+		args.Tidy.Dir = cfg.DefaultPath
 	}
 	if args.List != nil && args.List.Dir == "" {
 		args.List.Dir = cfg.DefaultPath
@@ -83,8 +83,8 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
-	case args.Clean != nil:
-		if err := runClean(args.Clean, cfg); err != nil {
+	case args.Tidy != nil:
+		if err := runTidy(args.Tidy, cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -276,7 +276,7 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 // maxConcurrentPRFetches limits parallel gh API calls to avoid rate limiting
 const maxConcurrentPRFetches = 5
 
-func runClean(cmd *CleanCmd, cfg config.Config) error {
+func runTidy(cmd *TidyCmd, cfg config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
@@ -455,7 +455,7 @@ func runClean(cmd *CleanCmd, cfg config.Config) error {
 		shouldRemove := false
 		if wt.IsMerged && !wt.IsDirty {
 			shouldRemove = true
-		} else if cmd.Empty && wt.CommitCount == 0 && !wt.IsDirty {
+		} else if cmd.IncludeClean && wt.CommitCount == 0 && !wt.IsDirty {
 			shouldRemove = true
 		}
 
@@ -503,8 +503,8 @@ func writeHelp(w *os.File, p *arg.Parser, args *Args) {
 		desc = args.Create.Description()
 	case args.Open != nil:
 		desc = args.Open.Description()
-	case args.Clean != nil:
-		desc = args.Clean.Description()
+	case args.Tidy != nil:
+		desc = args.Tidy.Description()
 	case args.List != nil:
 		desc = args.List.Description()
 	case args.Mv != nil:

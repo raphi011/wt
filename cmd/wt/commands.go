@@ -41,26 +41,30 @@ Examples:
   wt open feature-branch --no-hook    # Skip post-create hook`
 }
 
-// CleanCmd removes merged and clean worktrees.
-type CleanCmd struct {
-	Dir       string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	DryRun    bool   `arg:"-n,--dry-run" help:"preview without removing"`
-	RefreshPR bool   `arg:"--refresh-pr" help:"force refresh PR cache"`
-	Empty     bool   `arg:"-e,--empty" help:"also remove worktrees with 0 commits ahead and clean working directory"`
+// TidyCmd removes merged and clean worktrees.
+type TidyCmd struct {
+	Dir          string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	DryRun       bool   `arg:"-n,--dry-run" help:"preview without removing"`
+	RefreshPR    bool   `arg:"--refresh-pr" help:"force refresh PR cache"`
+	IncludeClean bool   `arg:"-c,--include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
 }
 
-func (CleanCmd) Description() string {
-	return `Cleanup merged git worktrees with PR status display
+func (TidyCmd) Description() string {
+	return `Tidy up merged git worktrees with PR status display
 
 Removes worktrees where the branch is merged AND working directory is clean.
-Shows a table with PR status (requires gh CLI) before removal.
+Shows a table with PR status (requires gh/glab CLI) before removal.
+
+Merge detection uses git merge-base locally, which may miss squash-merged
+or rebased PRs. For accurate detection, use GitHub/GitLab where PR status
+shows if the branch was merged.
 
 Examples:
-  wt clean                      # Remove merged worktrees
-  wt clean -n                   # Dry-run: preview without removing
-  wt clean -d ~/Git/worktrees   # Scan specific directory
-  wt clean -e                   # Also remove 0-commit worktrees
-  wt clean --refresh-pr         # Force refresh PR status from GitHub`
+  wt tidy                      # Remove merged worktrees
+  wt tidy -n                   # Dry-run: preview without removing
+  wt tidy -d ~/Git/worktrees   # Scan specific directory
+  wt tidy -c                   # Also remove clean (0-commit) worktrees
+  wt tidy --refresh-pr         # Force refresh PR status from GitHub`
 }
 
 // ListCmd lists worktrees in a directory.
@@ -195,7 +199,7 @@ Examples:
 type Args struct {
 	Create     *CreateCmd     `arg:"subcommand:create" help:"create a new worktree"`
 	Open       *OpenCmd       `arg:"subcommand:open" help:"open worktree for existing branch"`
-	Clean      *CleanCmd      `arg:"subcommand:clean" help:"cleanup merged worktrees"`
+	Tidy       *TidyCmd       `arg:"subcommand:tidy" help:"tidy up merged worktrees"`
 	List       *ListCmd       `arg:"subcommand:list" help:"list worktrees"`
 	Mv         *MvCmd         `arg:"subcommand:mv" help:"move worktrees to another directory"`
 	Pr         *PrCmd         `arg:"subcommand:pr" help:"work with PRs"`
@@ -214,8 +218,8 @@ Examples:
   wt open existing-branch          # Create worktree for existing local branch
   wt pr open 123                   # Checkout PR as worktree
   wt list                          # List worktrees in current directory
-  wt clean                         # Remove merged worktrees
-  wt clean -n                      # Dry-run: preview what would be removed
+  wt tidy                          # Remove merged worktrees
+  wt tidy -n                       # Dry-run: preview what would be removed
   wt config init                   # Create default config file
 
 Exit codes:

@@ -15,7 +15,7 @@ _wt_completions() {
         cword=$COMP_CWORD
     fi
 
-    local commands="create open clean list mv pr config completion"
+    local commands="create open tidy list mv pr config completion"
 
     # Handle subcommand-specific completions
     case "${words[1]}" in
@@ -55,14 +55,14 @@ _wt_completions() {
                 COMPREPLY=($(compgen -W "-d --dir --hook --no-hook" -- "$cur"))
             fi
             ;;
-        clean)
+        tidy)
             case "$prev" in
                 -d|--dir)
                     COMPREPLY=($(compgen -d -- "$cur"))
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-d --dir -n --dry-run --refresh-pr -e --empty" -- "$cur"))
+            COMPREPLY=($(compgen -W "-d --dir -n --dry-run --refresh-pr -c --include-clean" -- "$cur"))
             ;;
         list)
             case "$prev" in
@@ -144,7 +144,7 @@ _wt() {
             local commands=(
                 'create:Create new worktree for a branch'
                 'open:Open worktree for existing local branch'
-                'clean:Cleanup merged worktrees'
+                'tidy:Tidy up merged worktrees'
                 'list:List worktrees'
                 'mv:Move worktrees to another directory'
                 'pr:Work with GitHub PRs'
@@ -171,15 +171,15 @@ _wt() {
                         '--hook[run named hook]:hook:' \
                         '--no-hook[skip post-create hook]'
                     ;;
-                clean)
+                tidy)
                     _arguments \
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/' \
                         '-n[preview without removing]' \
                         '--dry-run[preview without removing]' \
                         '--refresh-pr[force refresh PR cache]' \
-                        '-e[also remove 0-commit worktrees]' \
-                        '--empty[also remove 0-commit worktrees]'
+                        '-c[also remove clean worktrees]' \
+                        '--include-clean[also remove clean worktrees]'
                     ;;
                 list)
                     _arguments \
@@ -280,14 +280,14 @@ const fishCompletions = `# wt completions - supports fish autosuggestions and ta
 complete -c wt -f
 
 # Subcommands (shown in completions and autosuggestions)
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "create" -d "Create new worktree"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "open" -d "Open worktree for existing branch"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "clean" -d "Cleanup merged worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "list" -d "List worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "mv" -d "Move worktrees to another directory"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "pr" -d "Work with PRs"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "config" -d "Manage configuration"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "completion" -d "Generate completion script"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "create" -d "Create new worktree"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "open" -d "Open worktree for existing branch"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "tidy" -d "Tidy up merged worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "list" -d "List worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "mv" -d "Move worktrees to another directory"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "pr" -d "Work with PRs"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "config" -d "Manage configuration"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "completion" -d "Generate completion script"
 
 # create: branch name (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from create; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
@@ -301,11 +301,11 @@ complete -c wt -n "__fish_seen_subcommand_from open" -s d -l dir -r -a "(__fish_
 complete -c wt -n "__fish_seen_subcommand_from open" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from open" -l no-hook -d "Skip post-create hook"
 
-# clean: flags only (no positional args)
-complete -c wt -n "__fish_seen_subcommand_from clean" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
-complete -c wt -n "__fish_seen_subcommand_from clean" -s n -l dry-run -d "Preview without removing"
-complete -c wt -n "__fish_seen_subcommand_from clean" -l refresh-pr -d "Force refresh PR cache"
-complete -c wt -n "__fish_seen_subcommand_from clean" -s e -l empty -d "Also remove worktrees with 0 commits ahead"
+# tidy: flags only (no positional args)
+complete -c wt -n "__fish_seen_subcommand_from tidy" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
+complete -c wt -n "__fish_seen_subcommand_from tidy" -s n -l dry-run -d "Preview without removing"
+complete -c wt -n "__fish_seen_subcommand_from tidy" -l refresh-pr -d "Force refresh PR cache"
+complete -c wt -n "__fish_seen_subcommand_from tidy" -s c -l include-clean -d "Also remove clean worktrees"
 
 # list: flags only (no positional args)
 complete -c wt -n "__fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
