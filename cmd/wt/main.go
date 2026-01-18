@@ -235,6 +235,10 @@ func main() {
 }
 
 func runCreate(cmd *CreateCmd, cfg config.Config) error {
+	if err := git.CheckGit(); err != nil {
+		return err
+	}
+
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
@@ -306,6 +310,10 @@ func runCreate(cmd *CreateCmd, cfg config.Config) error {
 }
 
 func runOpen(cmd *OpenCmd, cfg config.Config) error {
+	if err := git.CheckGit(); err != nil {
+		return err
+	}
+
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
@@ -380,6 +388,13 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 const maxConcurrentPRFetches = 5
 
 func runClean(cmd *CleanCmd) error {
+	if err := git.CheckGit(); err != nil {
+		return err
+	}
+
+	// Check gh (optional - PR status is a nice-to-have)
+	ghAvailable := github.CheckGH() == nil
+
 	dir := cmd.Dir
 	if dir == "" {
 		dir = "."
@@ -430,97 +445,103 @@ func runClean(cmd *CleanCmd) error {
 		}
 	}
 
-	// Load PR cache
-	prCache, err := github.LoadPRCache(scanPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to load PR cache: %v\n", err)
-		prCache = make(github.PRCache)
-	}
-
-	// Clean cache (remove deleted origins/branches)
-	prCache = github.CleanPRCache(prCache, worktrees)
-
-	// Determine which branches need fetching (uses cache expiration)
-	toFetch := github.NeedsFetch(prCache, worktrees, cmd.RefreshPR)
-
-	// Fetch uncached PRs in parallel with rate limiting
-	if len(toFetch) > 0 {
-		sp.UpdateMessage(fmt.Sprintf("Fetching PR status (%d branches)...", len(toFetch)))
-		var prMutex sync.Mutex
-		var prWg sync.WaitGroup
-		semaphore := make(chan struct{}, maxConcurrentPRFetches)
-		var fetchErrors []string
-		var errMutex sync.Mutex
-
-		for _, wt := range toFetch {
-			prWg.Add(1)
-			go func(wt git.Worktree) {
-				defer prWg.Done()
-				semaphore <- struct{}{}        // Acquire
-				defer func() { <-semaphore }() // Release
-
-				originURL, err := github.GetOriginURL(wt.MainRepo)
-				if err != nil {
-					errMutex.Lock()
-					fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", wt.Branch, err))
-					errMutex.Unlock()
-					return
-				}
-				if originURL == "" {
-					return
-				}
-
-				pr, err := github.GetPRForBranch(originURL, wt.Branch)
-				if err != nil {
-					errMutex.Lock()
-					fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", wt.Branch, err))
-					errMutex.Unlock()
-					return
-				}
-
-				prMutex.Lock()
-				if prCache[originURL] == nil {
-					prCache[originURL] = make(map[string]*github.PRInfo)
-				}
-				prCache[originURL][wt.Branch] = pr // nil is valid (no PR)
-				prMutex.Unlock()
-			}(wt)
-		}
-
-		prWg.Wait()
-
-		// Report errors (non-fatal)
-		if len(fetchErrors) > 0 {
-			sp.Stop()
-			for _, e := range fetchErrors {
-				fmt.Fprintf(os.Stderr, "Warning: PR fetch failed for %s\n", e)
-			}
-			sp = ui.NewSpinner("Continuing...")
-			sp.Start()
-		}
-
-		// Save updated cache
-		if err := github.SavePRCache(scanPath, prCache); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to save PR cache: %v\n", err)
-		}
-	}
-
-	// Build prMap from cache for display
+	// PR status handling (requires gh CLI)
+	prCache := make(github.PRCache)
 	prMap := make(map[string]*github.PRInfo)
-	for _, wt := range worktrees {
-		originURL, _ := github.GetOriginURL(wt.MainRepo)
-		if originCache, ok := prCache[originURL]; ok {
-			if pr, ok := originCache[wt.Branch]; ok {
-				prMap[wt.Branch] = pr
+
+	if ghAvailable {
+		// Load PR cache
+		var err error
+		prCache, err = github.LoadPRCache(scanPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to load PR cache: %v\n", err)
+			prCache = make(github.PRCache)
+		}
+
+		// Clean cache (remove deleted origins/branches)
+		prCache = github.CleanPRCache(prCache, worktrees)
+
+		// Determine which branches need fetching (uses cache expiration)
+		toFetch := github.NeedsFetch(prCache, worktrees, cmd.RefreshPR)
+
+		// Fetch uncached PRs in parallel with rate limiting
+		if len(toFetch) > 0 {
+			sp.UpdateMessage(fmt.Sprintf("Fetching PR status (%d branches)...", len(toFetch)))
+			var prMutex sync.Mutex
+			var prWg sync.WaitGroup
+			semaphore := make(chan struct{}, maxConcurrentPRFetches)
+			var fetchErrors []string
+			var errMutex sync.Mutex
+
+			for _, wt := range toFetch {
+				prWg.Add(1)
+				go func(wt git.Worktree) {
+					defer prWg.Done()
+					semaphore <- struct{}{}        // Acquire
+					defer func() { <-semaphore }() // Release
+
+					originURL, err := github.GetOriginURL(wt.MainRepo)
+					if err != nil {
+						errMutex.Lock()
+						fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", wt.Branch, err))
+						errMutex.Unlock()
+						return
+					}
+					if originURL == "" {
+						return
+					}
+
+					pr, err := github.GetPRForBranch(originURL, wt.Branch)
+					if err != nil {
+						errMutex.Lock()
+						fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", wt.Branch, err))
+						errMutex.Unlock()
+						return
+					}
+
+					prMutex.Lock()
+					if prCache[originURL] == nil {
+						prCache[originURL] = make(map[string]*github.PRInfo)
+					}
+					prCache[originURL][wt.Branch] = pr // nil is valid (no PR)
+					prMutex.Unlock()
+				}(wt)
+			}
+
+			prWg.Wait()
+
+			// Report errors (non-fatal)
+			if len(fetchErrors) > 0 {
+				sp.Stop()
+				for _, e := range fetchErrors {
+					fmt.Fprintf(os.Stderr, "Warning: PR fetch failed for %s\n", e)
+				}
+				sp = ui.NewSpinner("Continuing...")
+				sp.Start()
+			}
+
+			// Save updated cache
+			if err := github.SavePRCache(scanPath, prCache); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to save PR cache: %v\n", err)
 			}
 		}
-	}
 
-	// Update merge status for worktrees based on PR state
-	for i := range worktrees {
-		if pr, ok := prMap[worktrees[i].Branch]; ok && pr != nil {
-			if pr.State == "MERGED" {
-				worktrees[i].IsMerged = true
+		// Build prMap from cache for display
+		for _, wt := range worktrees {
+			originURL, _ := github.GetOriginURL(wt.MainRepo)
+			if originCache, ok := prCache[originURL]; ok {
+				if pr, ok := originCache[wt.Branch]; ok {
+					prMap[wt.Branch] = pr
+				}
+			}
+		}
+
+		// Update merge status for worktrees based on PR state
+		for i := range worktrees {
+			if pr, ok := prMap[worktrees[i].Branch]; ok && pr != nil {
+				if pr.State == "MERGED" {
+					worktrees[i].IsMerged = true
+				}
 			}
 		}
 	}
@@ -601,6 +622,10 @@ func expandPath(path string) (string, error) {
 }
 
 func runList(cmd *ListCmd) error {
+	if err := git.CheckGit(); err != nil {
+		return err
+	}
+
 	dir := cmd.Dir
 	if dir == "" {
 		dir = "."
@@ -676,6 +701,13 @@ func runPr(cmd *PrCmd, cfg config.Config) error {
 }
 
 func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
+	if err := git.CheckGit(); err != nil {
+		return err
+	}
+	if err := github.CheckGH(); err != nil {
+		return err
+	}
+
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
