@@ -135,6 +135,27 @@ Examples:
   wt config hooks          # List available hooks`
 }
 
+// MvCmd moves worktrees to a different directory with optional renaming.
+type MvCmd struct {
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"destination directory (flag > WT_DEFAULT_PATH > config)"`
+	Format string `arg:"--format" placeholder:"FORMAT" help:"worktree naming format"`
+	DryRun bool   `arg:"--dry-run" help:"show what would be moved"`
+	Force  bool   `arg:"-f,--force" help:"force move dirty worktrees"`
+}
+
+func (MvCmd) Description() string {
+	return `Move worktrees to a different directory
+
+Scans the current directory for worktrees and moves them to the destination
+directory, optionally renaming them using the configured worktree format.
+
+Examples:
+  wt mv -d ~/Git/worktrees           # Move all worktrees to ~/Git/worktrees
+  wt mv -d ~/Git --format={branch-name}  # Move and rename to just branch name
+  wt mv --dry-run -d ~/Git           # Preview what would be moved
+  wt mv -f -d ~/Git                  # Force move even if worktrees are dirty`
+}
+
 // PrOpenCmd creates a worktree for a PR/MR.
 type PrOpenCmd struct {
 	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR/MR number"`
@@ -176,6 +197,7 @@ type Args struct {
 	Open       *OpenCmd       `arg:"subcommand:open" help:"open worktree for existing branch"`
 	Clean      *CleanCmd      `arg:"subcommand:clean" help:"cleanup merged worktrees"`
 	List       *ListCmd       `arg:"subcommand:list" help:"list worktrees"`
+	Mv         *MvCmd         `arg:"subcommand:mv" help:"move worktrees to another directory"`
 	Pr         *PrCmd         `arg:"subcommand:pr" help:"work with PRs/MRs"`
 	Config     *ConfigCmd     `arg:"subcommand:config" help:"manage configuration"`
 	Completion *CompletionCmd `arg:"subcommand:completion" help:"generate completion script"`
