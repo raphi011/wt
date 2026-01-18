@@ -416,6 +416,26 @@ func RemoveWorktree(worktree Worktree, force bool) error {
 	return cmd.Run()
 }
 
+// MoveWorktree moves a git worktree to a new path
+func MoveWorktree(worktree Worktree, newPath string, force bool) error {
+	args := []string{"-C", worktree.MainRepo, "worktree", "move", worktree.Path, newPath}
+	if force {
+		args = append(args, "--force")
+	}
+
+	cmd := exec.Command("git", args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg != "" {
+			return fmt.Errorf("%s", errMsg)
+		}
+		return err
+	}
+	return nil
+}
+
 // PruneWorktrees prunes stale worktree references
 func PruneWorktrees(repoPath string) error {
 	cmd := exec.Command("git", "-C", repoPath, "worktree", "prune")

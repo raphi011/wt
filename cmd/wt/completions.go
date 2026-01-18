@@ -15,7 +15,7 @@ _wt_completions() {
         cword=$COMP_CWORD
     fi
 
-    local commands="create open clean list pr config completion"
+    local commands="create open clean list mv pr config completion"
 
     # Handle subcommand-specific completions
     case "${words[1]}" in
@@ -72,6 +72,18 @@ _wt_completions() {
                     ;;
             esac
             COMPREPLY=($(compgen -W "-d --dir --json" -- "$cur"))
+            ;;
+        mv)
+            case "$prev" in
+                -d|--dir)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    return
+                    ;;
+                --format)
+                    return
+                    ;;
+            esac
+            COMPREPLY=($(compgen -W "-d --dir --format --dry-run -f --force" -- "$cur"))
             ;;
         pr)
             if [[ $cword -eq 2 ]]; then
@@ -134,6 +146,7 @@ _wt() {
                 'open:Open worktree for existing local branch'
                 'clean:Cleanup merged worktrees'
                 'list:List worktrees'
+                'mv:Move worktrees to another directory'
                 'pr:Work with GitHub PRs'
                 'config:Manage configuration'
                 'completion:Generate completion script'
@@ -173,6 +186,15 @@ _wt() {
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/' \
                         '--json[output as JSON]'
+                    ;;
+                mv)
+                    _arguments \
+                        '-d[destination directory]:directory:_files -/' \
+                        '--dir[destination directory]:directory:_files -/' \
+                        '--format[worktree naming format]:format:' \
+                        '--dry-run[show what would be moved]' \
+                        '-f[force move dirty worktrees]' \
+                        '--force[force move dirty worktrees]'
                     ;;
                 pr)
                     _arguments -C \
@@ -257,13 +279,14 @@ const fishCompletions = `# wt completions - supports fish autosuggestions and ta
 complete -c wt -f
 
 # Subcommands (shown in completions and autosuggestions)
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "create" -d "Create new worktree"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "open" -d "Open worktree for existing branch"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "clean" -d "Cleanup merged worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "list" -d "List worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "pr" -d "Work with PRs/MRs"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "config" -d "Manage configuration"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "completion" -d "Generate completion script"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "create" -d "Create new worktree"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "open" -d "Open worktree for existing branch"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "clean" -d "Cleanup merged worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "list" -d "List worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "mv" -d "Move worktrees to another directory"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "pr" -d "Work with PRs/MRs"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "config" -d "Manage configuration"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list mv pr config completion" -a "completion" -d "Generate completion script"
 
 # create: branch name (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from create; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
@@ -286,6 +309,12 @@ complete -c wt -n "__fish_seen_subcommand_from clean" -s e -l empty -d "Also rem
 # list: flags only (no positional args)
 complete -c wt -n "__fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
+
+# mv: flags only (no positional args)
+complete -c wt -n "__fish_seen_subcommand_from mv" -s d -l dir -r -a "(__fish_complete_directories)" -d "Destination directory"
+complete -c wt -n "__fish_seen_subcommand_from mv" -l format -d "Worktree naming format"
+complete -c wt -n "__fish_seen_subcommand_from mv" -l dry-run -d "Show what would be moved"
+complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move dirty worktrees"
 
 # pr: subcommands
 complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open" -a "open" -d "Checkout PR/MR as new worktree"

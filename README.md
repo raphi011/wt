@@ -44,6 +44,12 @@ wt list                               # in cwd (filters to current repo if in on
 wt list -d ~/Git/worktrees
 wt list --json
 
+# Move worktrees to another directory
+wt mv -d ~/Git/worktrees              # move all worktrees from cwd to dir
+wt mv -d ~/Git --format={branch-name} # move and rename using format
+wt mv --dry-run -d ~/Git              # preview what would be moved
+wt mv -f -d ~/Git                     # force move dirty worktrees
+
 # Configuration
 wt config init                        # create ~/.config/wt/config.toml
 wt config hooks                       # list configured hooks
