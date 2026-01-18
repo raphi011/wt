@@ -32,12 +32,12 @@ wt create branch                      # runs hooks with on=["create"]
 wt create branch --hook=vscode        # run specific hook
 wt create branch --no-hook            # skip all hooks
 
-# Cleanup merged worktrees
-wt clean                              # in cwd
-wt clean -d ~/Git/worktrees           # in specific dir
-wt clean -n                           # dry run
-wt clean -e                           # also remove empty (0 commits ahead)
-wt clean --refresh-pr                 # force refresh PR cache
+# Tidy up merged worktrees
+wt tidy                               # in cwd
+wt tidy -d ~/Git/worktrees            # in specific dir
+wt tidy -n                            # dry run
+wt tidy -c                            # also remove clean (0 commits ahead)
+wt tidy --refresh-pr                  # force refresh PR cache
 
 # List worktrees
 wt list                               # in cwd (filters to current repo if in one)
