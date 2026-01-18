@@ -133,7 +133,18 @@ GoReleaser will:
 - Build binaries for darwin/linux (amd64/arm64)
 - Generate changelog from conventional commits
 - Create GitHub release with assets
-- Update Homebrew tap
+- Update Homebrew tap (cask in `raphi011/homebrew-tap`)
+
+### Homebrew Distribution
+
+Uses **casks** (not formulas) via `homebrew_casks` in `.goreleaser.yaml`. This is correct because:
+- Formulas build from source, casks install pre-compiled binaries
+- GoReleaser produces pre-compiled binaries → casks are semantically correct
+- GoReleaser deprecated `brews` in v2.10, recommends `homebrew_casks`
+
+Install: `brew install --cask raphi011/tap/wt`
+
+Tap repo: `raphi011/homebrew-tap` with cask in `Casks/wt.rb`
 
 ### Testing Locally
 
