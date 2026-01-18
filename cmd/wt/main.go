@@ -301,7 +301,11 @@ func runTidy(cmd *TidyCmd, cfg config.Config) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	fmt.Printf("Cleaning worktrees in %s\n", scanPath)
+	if cmd.DryRun {
+		fmt.Printf("Cleaning worktrees in %s (dry run)\n", scanPath)
+	} else {
+		fmt.Printf("Cleaning worktrees in %s\n", scanPath)
+	}
 
 	// Start spinner
 	sp := ui.NewSpinner("Scanning worktrees...")
@@ -558,8 +562,8 @@ func writeHelp(w *os.File, p *arg.Parser, args *Args) {
 	case args.Completion != nil:
 		desc = args.Completion.Description()
 	default:
-		// No subcommand - use default help
-		p.WriteHelp(w)
+		// No subcommand - use custom root help
+		writeRootHelp(w)
 		return
 	}
 
@@ -581,6 +585,32 @@ func writeHelp(w *os.File, p *arg.Parser, args *Args) {
 			break
 		}
 	}
+}
+
+// writeRootHelp prints custom help for the root command
+func writeRootHelp(w *os.File) {
+	fmt.Fprintln(w, "wt - Git worktree manager with GitHub/GitLab integration")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Usage: wt <command> [options]")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Commands:")
+	fmt.Fprintln(w, "  create      Create worktree for new branch")
+	fmt.Fprintln(w, "  open        Open worktree for existing branch")
+	fmt.Fprintln(w, "  tidy        Remove merged worktrees")
+	fmt.Fprintln(w, "  list        List worktrees")
+	fmt.Fprintln(w, "  mv          Move worktrees")
+	fmt.Fprintln(w, "  pr          Work with PRs")
+	fmt.Fprintln(w, "  config      Manage configuration")
+	fmt.Fprintln(w, "  completion  Generate shell completions")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Options:")
+	fmt.Fprintln(w, "  -h, --help     Show help")
+	fmt.Fprintln(w, "      --version  Show version")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Examples:")
+	fmt.Fprintln(w, "  wt create feature-x    Create worktree for new branch")
+	fmt.Fprintln(w, "  wt tidy -n             Preview merged worktrees to remove")
+	fmt.Fprintln(w, "  wt pr open 123         Checkout PR #123 as worktree")
 }
 
 // expandPath expands ~ to home directory
