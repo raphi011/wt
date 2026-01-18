@@ -949,11 +949,11 @@ func runConfigHooks(cmd *ConfigHooksCmd, cfg config.Config) error {
 
 	if cmd.JSON {
 		type hookJSON struct {
-			Name        string `json:"name"`
-			Command     string `json:"command"`
-			Description string `json:"description,omitempty"`
-			RunOnExists bool   `json:"run_on_exists"`
-			IsDefault   bool   `json:"is_default"`
+			Name        string   `json:"name"`
+			Command     string   `json:"command"`
+			Description string   `json:"description,omitempty"`
+			RunOnExists bool     `json:"run_on_exists"`
+			On          []string `json:"on,omitempty"`
 		}
 
 		var result []hookJSON
@@ -963,7 +963,7 @@ func runConfigHooks(cmd *ConfigHooksCmd, cfg config.Config) error {
 				Command:     hook.Command,
 				Description: hook.Description,
 				RunOnExists: hook.RunOnExists,
-				IsDefault:   name == hooksConfig.Default,
+				On:          hook.On,
 			})
 		}
 
@@ -999,8 +999,8 @@ func runConfigHooks(cmd *ConfigHooksCmd, cfg config.Config) error {
 	for _, name := range names {
 		hook := hooksConfig.Hooks[name]
 		suffix := ""
-		if name == hooksConfig.Default {
-			suffix = " (default)"
+		if len(hook.On) > 0 {
+			suffix = fmt.Sprintf(" (on: %v)", hook.On)
 		}
 		desc := hook.Description
 		if desc == "" {
