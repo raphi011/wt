@@ -58,10 +58,10 @@ func TestParseHooksConfig(t *testing.T) {
 		{
 			name: "full hooks config",
 			raw: map[string]interface{}{
-				"default": "kitty",
 				"kitty": map[string]interface{}{
 					"command":     "kitty @ launch --cwd={path}",
 					"description": "Open kitty tab",
+					"on":          []interface{}{"create", "open"},
 				},
 				"vscode": map[string]interface{}{
 					"command":       "code {path}",
@@ -70,12 +70,12 @@ func TestParseHooksConfig(t *testing.T) {
 				},
 			},
 			expected: HooksConfig{
-				Default: "kitty",
 				Hooks: map[string]Hook{
 					"kitty": {
 						Command:     "kitty @ launch --cwd={path}",
 						Description: "Open kitty tab",
 						RunOnExists: false,
+						On:          []string{"create", "open"},
 					},
 					"vscode": {
 						Command:     "code {path}",
@@ -86,14 +86,13 @@ func TestParseHooksConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "no default",
+			name: "hook without on",
 			raw: map[string]interface{}{
 				"test": map[string]interface{}{
 					"command": "echo test",
 				},
 			},
 			expected: HooksConfig{
-				Default: "",
 				Hooks: map[string]Hook{
 					"test": {Command: "echo test"},
 				},
@@ -114,10 +113,6 @@ func TestParseHooksConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parseHooksConfig(tt.raw)
-
-			if result.Default != tt.expected.Default {
-				t.Errorf("Default = %q, want %q", result.Default, tt.expected.Default)
-			}
 
 			if len(result.Hooks) != len(tt.expected.Hooks) {
 				t.Errorf("len(Hooks) = %d, want %d", len(result.Hooks), len(tt.expected.Hooks))

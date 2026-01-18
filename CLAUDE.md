@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`wt` is a Go CLI tool for managing git worktrees with GitHub PR integration. It replaces complex fish shell functions with a clean, portable binary.
+`wt` is a Go CLI tool for managing git worktrees with GitHub PR integration.
 
 ## Build & Development
 
