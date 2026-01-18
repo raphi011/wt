@@ -103,7 +103,7 @@ Completions provide context-aware suggestions for branches, directories, and fla
 - `-f, --force` - force operation (override safety checks)
 - `-c, --include-clean` - include clean worktrees (0 commits, no changes)
 - `--json` - output as JSON
-- `--hook` / `--no-hook` - control hook execution (for worktree creation commands)
+- `--hook` / `--no-hook` - control hook execution (for create, open, pr open, tidy)
 
 ### Commit Messages
 

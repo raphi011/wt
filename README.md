@@ -38,6 +38,7 @@ wt tidy -d ~/Git/worktrees            # in specific dir
 wt tidy -n                            # dry run
 wt tidy -c                            # also remove clean (0 commits ahead)
 wt tidy --refresh-pr                  # force refresh PR cache
+wt tidy --no-hook                     # skip post-removal hooks
 
 # List worktrees
 wt list                               # in cwd (filters to current repo if in one)
@@ -77,6 +78,11 @@ command = "cd {path} && npm install && code {path}"
 description = "Setup PR for review"
 on = ["pr"]  # auto-run when opening PRs
 
+[hooks.cleanup]
+command = "echo 'Removed {branch} from {repo}'"
+description = "Log removed branches"
+on = ["tidy"]  # auto-run when removing worktrees
+
 [hooks.vscode]
 command = "code {path}"
 description = "Open VS Code"
@@ -97,7 +103,7 @@ description = "Open VS Code"
 |--------|-------------|
 | `command` | Shell command to run (required) |
 | `description` | Human-readable description |
-| `on` | Commands to auto-run on: `["create", "open", "pr", "all"]` (empty = only via `--hook`) |
+| `on` | Commands to auto-run on: `["create", "open", "pr", "tidy", "all"]` (empty = only via `--hook`) |
 | `run_on_exists` | Run even if worktree already existed (default: false) |
 
 ### Hook Placeholders
@@ -109,6 +115,7 @@ description = "Open VS Code"
 | `{repo}` | Repo name from origin |
 | `{folder}` | Main repo folder name |
 | `{main-repo}` | Main repo path |
+| `{trigger}` | Command that triggered the hook (create, open, pr, tidy) |
 
 ### Clone Rules (for `wt pr open`)
 

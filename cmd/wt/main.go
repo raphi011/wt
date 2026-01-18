@@ -180,6 +180,7 @@ func runCreate(cmd *CreateCmd, cfg config.Config) error {
 			Repo:     repoName,
 			Folder:   folderName,
 			MainRepo: mainRepo,
+			Trigger:  string(hooks.CommandCreate),
 		}
 
 		for _, match := range hookMatches {
@@ -257,6 +258,7 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 			Repo:     repoName,
 			Folder:   folderName,
 			MainRepo: mainRepo,
+			Trigger:  string(hooks.CommandOpen),
 		}
 
 		for _, match := range hookMatches {
@@ -470,11 +472,41 @@ func runTidy(cmd *TidyCmd, cfg config.Config) error {
 	// Display table with cleaned worktrees marked
 	fmt.Print(ui.FormatWorktreesTable(worktrees, prMap, toRemoveMap, cmd.DryRun))
 
+	// Select hooks for tidy (before removing, so we can report errors early)
+	// alreadyExists=false since tidy hooks always run for removed worktrees
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, false, hooks.CommandTidy)
+	if err != nil {
+		return err
+	}
+
 	// Remove worktrees
 	if !cmd.DryRun && len(toRemove) > 0 {
 		for _, wt := range toRemove {
 			if err := git.RemoveWorktree(wt, true); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", wt.Path, err)
+				continue // Skip hooks for failed removals
+			}
+
+			// Run tidy hooks for this worktree
+			if len(hookMatches) > 0 {
+				ctx := hooks.Context{
+					Path:     wt.Path,
+					Branch:   wt.Branch,
+					Repo:     wt.RepoName,
+					Folder:   filepath.Base(wt.MainRepo),
+					MainRepo: wt.MainRepo,
+					Trigger:  string(hooks.CommandTidy),
+				}
+
+				for _, match := range hookMatches {
+					fmt.Printf("Running hook '%s' for %s...\n", match.Name, wt.Branch)
+					// Use RunWithDir with main repo since worktree path is deleted
+					if err := hooks.RunWithDir(match.Hook, ctx, wt.MainRepo); err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: hook %q failed for %s: %v\n", match.Name, wt.Branch, err)
+					} else if match.Hook.Description != "" {
+						fmt.Printf("  ✓ %s\n", match.Hook.Description)
+					}
+				}
 			}
 		}
 
@@ -886,6 +918,7 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 			Repo:     repoName,
 			Folder:   folderName,
 			MainRepo: mainRepo,
+			Trigger:  string(hooks.CommandPR),
 		}
 
 		for _, match := range hookMatches {
