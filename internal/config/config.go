@@ -188,7 +188,7 @@ worktree_format = "{git-origin}-{branch-name}"
 # description = "Open VS Code"
 # # no "on" - only runs via --hook=vscode
 #
-# Available "on" values: "create", "open", "pr"
+# Available "on" values: "create", "open", "pr", "all"
 #
 # Other options:
 #   run_on_exists = false  # skip if worktree already existed (default: false)

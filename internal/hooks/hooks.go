@@ -85,9 +85,10 @@ func findMatchingHooks(cfg config.HooksConfig, cmdType CommandType, alreadyExist
 }
 
 // hookMatchesCommand returns true if cmdType is in the hook's "on" list.
+// Special value "all" matches all command types.
 func hookMatchesCommand(hook config.Hook, cmdType CommandType) bool {
 	for _, cmd := range hook.On {
-		if cmd == string(cmdType) {
+		if cmd == "all" || cmd == string(cmdType) {
 			return true
 		}
 	}

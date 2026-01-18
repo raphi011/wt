@@ -367,3 +367,25 @@ func TestSelectHooks_MultipleMatches(t *testing.T) {
 		t.Errorf("expected 2 hooks, got %d", len(matches))
 	}
 }
+
+func TestSelectHooks_OnAll(t *testing.T) {
+	hooksConfig := config.HooksConfig{
+		Hooks: map[string]config.Hook{
+			"universal": {
+				Command: "notify-send {branch}",
+				On:      []string{"all"},
+			},
+		},
+	}
+
+	// "all" should match all command types
+	for _, cmdType := range []CommandType{CommandCreate, CommandOpen, CommandPR} {
+		matches, err := SelectHooks(hooksConfig, "", false, false, cmdType)
+		if err != nil {
+			t.Errorf("unexpected error for %s: %v", cmdType, err)
+		}
+		if len(matches) != 1 {
+			t.Errorf("expected 1 hook for %s with on=all, got %d", cmdType, len(matches))
+		}
+	}
+}
