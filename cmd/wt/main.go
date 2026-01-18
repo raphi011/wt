@@ -21,7 +21,7 @@ import (
 
 type CreateCmd struct {
 	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"branch name"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (default: cwd)"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (uses: -d flag, WT_DEFAULT_PATH env, config default_path, or cwd)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
@@ -29,13 +29,13 @@ type CreateCmd struct {
 func (CreateCmd) Description() string {
 	return `Create a new git worktree at <dir>/<repo>-<branch>
 Examples:
-  wt create feature-branch              # Create in current directory
-  wt create feature-branch -d ~/Git     # Create in specific directory`
+  wt create feature-branch              # Uses default path resolution
+  wt create feature-branch -d ~/Git     # Override with specific directory`
 }
 
 type OpenCmd struct {
 	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"existing local branch name"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (default: cwd)"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (uses: -d flag, WT_DEFAULT_PATH env, config default_path, or cwd)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
@@ -43,12 +43,12 @@ type OpenCmd struct {
 func (OpenCmd) Description() string {
 	return `Open a worktree for an existing local branch
 Examples:
-  wt open feature-branch              # Create in current directory
-  wt open feature-branch -d ~/Git     # Create in specific directory`
+  wt open feature-branch              # Uses default path resolution
+  wt open feature-branch -d ~/Git     # Override with specific directory`
 }
 
 type CleanCmd struct {
-	Dir       string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"directory to scan (default: cwd)"`
+	Dir       string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"directory to scan (uses: -d flag, WT_DEFAULT_PATH env, config default_path, or cwd)"`
 	DryRun    bool   `arg:"-n,--dry-run" help:"preview without removing"`
 	RefreshPR bool   `arg:"--refresh-pr" help:"force refresh PR cache"`
 	Empty     bool   `arg:"-e,--empty" help:"also remove worktrees with 0 commits ahead and clean working directory"`
@@ -59,19 +59,19 @@ func (CleanCmd) Description() string {
 Removes worktrees where the branch is merged AND working directory is clean.
 With --empty, also removes worktrees with 0 commits ahead and clean working directory.
 Examples:
-  wt clean                      # Scan current directory
+  wt clean                      # Uses default path resolution
   wt clean -d ~/Git/worktrees   # Scan specific directory`
 }
 
 type ListCmd struct {
-	Dir  string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"directory to scan (default: cwd)"`
+	Dir  string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"directory to scan (uses: -d flag, WT_DEFAULT_PATH env, config default_path, or cwd)"`
 	JSON bool   `arg:"--json" help:"output as JSON"`
 }
 
 func (ListCmd) Description() string {
 	return `List all git worktrees with their status
 Examples:
-  wt list                      # List in current directory
+  wt list                      # Uses default path resolution
   wt list -d ~/Git/worktrees   # List from specific directory`
 }
 
@@ -122,7 +122,7 @@ Examples:
 type PrOpenCmd struct {
 	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR number"`
 	Repo   string `arg:"positional" placeholder:"REPO" help:"repository (org/repo or name)"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (default: cwd)"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (uses: -d flag, WT_DEFAULT_PATH env, config default_path, or cwd)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
@@ -130,10 +130,10 @@ type PrOpenCmd struct {
 func (PrOpenCmd) Description() string {
 	return `Create a worktree for a GitHub PR
 Examples:
-  wt pr open 123                  # Use current repo, create in cwd
-  wt pr open 123 myrepo           # Find "myrepo" in cwd
-  wt pr open 123 org/repo         # Find locally or clone to cwd
-  wt pr open 123 -d ~/Git         # Create in specific directory`
+  wt pr open 123                  # Use current repo, default path resolution
+  wt pr open 123 myrepo           # Find "myrepo" in default path
+  wt pr open 123 org/repo         # Find locally or clone
+  wt pr open 123 -d ~/Git         # Override with specific directory`
 }
 
 type PrCmd struct {
