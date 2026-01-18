@@ -12,9 +12,9 @@ import (
 	"github.com/alexflint/go-arg"
 
 	"github.com/raphaelgruber/wt/internal/config"
+	"github.com/raphaelgruber/wt/internal/forge"
 	"github.com/raphaelgruber/wt/internal/format"
 	"github.com/raphaelgruber/wt/internal/git"
-	"github.com/raphaelgruber/wt/internal/github"
 	"github.com/raphaelgruber/wt/internal/hooks"
 	"github.com/raphaelgruber/wt/internal/ui"
 )
@@ -458,8 +458,8 @@ func runClean(cmd *CleanCmd) error {
 		return err
 	}
 
-	// Check gh (optional - PR status is a nice-to-have)
-	ghAvailable := github.CheckGH() == nil
+	// Detect forge per-worktree (optional - MR status is a nice-to-have)
+	// We'll check availability when we actually need it
 
 	dir := cmd.Dir
 	if dir == "" {
@@ -511,109 +511,114 @@ func runClean(cmd *CleanCmd) error {
 		}
 	}
 
-	// PR status handling (requires gh CLI)
-	prCache := make(github.PRCache)
-	prMap := make(map[string]*github.PRInfo)
+	// MR status handling (requires forge CLI - gh or glab)
+	mrCache := make(forge.MRCache)
+	mrMap := make(map[string]*forge.MRInfo)
 
-	if ghAvailable {
-		// Load PR cache
-		var err error
-		prCache, err = github.LoadPRCache(scanPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to load PR cache: %v\n", err)
-			prCache = make(github.PRCache)
+	// Load MR cache
+	mrCache, err = forge.LoadMRCache(scanPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load MR cache: %v\n", err)
+		mrCache = make(forge.MRCache)
+	}
+
+	// Clean cache (remove deleted origins/branches)
+	mrCache = forge.CleanMRCache(mrCache, worktrees)
+
+	// Determine which branches need fetching (uses cache expiration)
+	toFetch := forge.NeedsFetch(mrCache, worktrees, cmd.RefreshPR)
+
+	// Fetch uncached MRs in parallel with rate limiting
+	if len(toFetch) > 0 {
+		sp.UpdateMessage(fmt.Sprintf("Fetching MR status (%d branches)...", len(toFetch)))
+		var mrMutex sync.Mutex
+		var mrWg sync.WaitGroup
+		semaphore := make(chan struct{}, maxConcurrentPRFetches)
+		var fetchErrors []string
+		var errMutex sync.Mutex
+
+		for _, wt := range toFetch {
+			mrWg.Add(1)
+			go func(wt git.Worktree) {
+				defer mrWg.Done()
+				semaphore <- struct{}{}        // Acquire
+				defer func() { <-semaphore }() // Release
+
+				originURL, err := forge.GetOriginURL(wt.MainRepo)
+				if err != nil {
+					errMutex.Lock()
+					fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", wt.Branch, err))
+					errMutex.Unlock()
+					return
+				}
+				if originURL == "" {
+					return
+				}
+
+				// Detect forge for this repo
+				f := forge.Detect(originURL)
+
+				// Check if forge CLI is available (skip silently if not)
+				if err := f.Check(); err != nil {
+					return
+				}
+
+				// Use upstream branch name for MR lookup (may differ from local)
+				upstreamBranch := git.GetUpstreamBranch(wt.MainRepo, wt.Branch)
+				if upstreamBranch == "" {
+					return // No upstream = never pushed = no MR
+				}
+
+				mr, err := f.GetMRForBranch(originURL, upstreamBranch)
+				if err != nil {
+					errMutex.Lock()
+					fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", wt.Branch, err))
+					errMutex.Unlock()
+					return
+				}
+
+				mrMutex.Lock()
+				if mrCache[originURL] == nil {
+					mrCache[originURL] = make(map[string]*forge.MRInfo)
+				}
+				mrCache[originURL][wt.Branch] = mr // nil is valid (no MR)
+				mrMutex.Unlock()
+			}(wt)
 		}
 
-		// Clean cache (remove deleted origins/branches)
-		prCache = github.CleanPRCache(prCache, worktrees)
+		mrWg.Wait()
 
-		// Determine which branches need fetching (uses cache expiration)
-		toFetch := github.NeedsFetch(prCache, worktrees, cmd.RefreshPR)
-
-		// Fetch uncached PRs in parallel with rate limiting
-		if len(toFetch) > 0 {
-			sp.UpdateMessage(fmt.Sprintf("Fetching PR status (%d branches)...", len(toFetch)))
-			var prMutex sync.Mutex
-			var prWg sync.WaitGroup
-			semaphore := make(chan struct{}, maxConcurrentPRFetches)
-			var fetchErrors []string
-			var errMutex sync.Mutex
-
-			for _, wt := range toFetch {
-				prWg.Add(1)
-				go func(wt git.Worktree) {
-					defer prWg.Done()
-					semaphore <- struct{}{}        // Acquire
-					defer func() { <-semaphore }() // Release
-
-					originURL, err := github.GetOriginURL(wt.MainRepo)
-					if err != nil {
-						errMutex.Lock()
-						fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", wt.Branch, err))
-						errMutex.Unlock()
-						return
-					}
-					if originURL == "" {
-						return
-					}
-
-					// Use upstream branch name for PR lookup (may differ from local)
-					upstreamBranch := git.GetUpstreamBranch(wt.MainRepo, wt.Branch)
-					if upstreamBranch == "" {
-						return // No upstream = never pushed = no PR
-					}
-
-					pr, err := github.GetPRForBranch(originURL, upstreamBranch)
-					if err != nil {
-						errMutex.Lock()
-						fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", wt.Branch, err))
-						errMutex.Unlock()
-						return
-					}
-
-					prMutex.Lock()
-					if prCache[originURL] == nil {
-						prCache[originURL] = make(map[string]*github.PRInfo)
-					}
-					prCache[originURL][wt.Branch] = pr // nil is valid (no PR)
-					prMutex.Unlock()
-				}(wt)
+		// Report errors (non-fatal)
+		if len(fetchErrors) > 0 {
+			sp.Stop()
+			for _, e := range fetchErrors {
+				fmt.Fprintf(os.Stderr, "Warning: MR fetch failed for %s\n", e)
 			}
-
-			prWg.Wait()
-
-			// Report errors (non-fatal)
-			if len(fetchErrors) > 0 {
-				sp.Stop()
-				for _, e := range fetchErrors {
-					fmt.Fprintf(os.Stderr, "Warning: PR fetch failed for %s\n", e)
-				}
-				sp = ui.NewSpinner("Continuing...")
-				sp.Start()
-			}
-
-			// Save updated cache
-			if err := github.SavePRCache(scanPath, prCache); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to save PR cache: %v\n", err)
-			}
+			sp = ui.NewSpinner("Continuing...")
+			sp.Start()
 		}
 
-		// Build prMap from cache for display
-		for _, wt := range worktrees {
-			originURL, _ := github.GetOriginURL(wt.MainRepo)
-			if originCache, ok := prCache[originURL]; ok {
-				if pr, ok := originCache[wt.Branch]; ok {
-					prMap[wt.Branch] = pr
-				}
+		// Save updated cache
+		if err := forge.SaveMRCache(scanPath, mrCache); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to save MR cache: %v\n", err)
+		}
+	}
+
+	// Build mrMap from cache for display
+	for _, wt := range worktrees {
+		originURL, _ := forge.GetOriginURL(wt.MainRepo)
+		if originCache, ok := mrCache[originURL]; ok {
+			if mr, ok := originCache[wt.Branch]; ok {
+				mrMap[wt.Branch] = mr
 			}
 		}
+	}
 
-		// Update merge status for worktrees based on PR state
-		for i := range worktrees {
-			if pr, ok := prMap[worktrees[i].Branch]; ok && pr != nil {
-				if pr.State == "MERGED" {
-					worktrees[i].IsMerged = true
-				}
+	// Update merge status for worktrees based on MR state
+	for i := range worktrees {
+		if mr, ok := mrMap[worktrees[i].Branch]; ok && mr != nil {
+			if mr.State == "MERGED" {
+				worktrees[i].IsMerged = true
 			}
 		}
 	}
@@ -648,7 +653,7 @@ func runClean(cmd *CleanCmd) error {
 	}
 
 	// Display table with cleaned worktrees marked
-	fmt.Print(ui.FormatWorktreesTable(worktrees, prMap, toRemoveMap, cmd.DryRun))
+	fmt.Print(ui.FormatWorktreesTable(worktrees, mrMap, toRemoveMap, cmd.DryRun))
 
 	// Remove worktrees
 	if !cmd.DryRun && len(toRemove) > 0 {
@@ -831,9 +836,6 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
-	if err := github.CheckGH(); err != nil {
-		return err
-	}
 
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
@@ -866,8 +868,10 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 			fmt.Printf("Using repo at %s\n", repoPath)
 		} else if org != "" {
 			// Not found but org/repo provided: clone it
+			// Detect forge from repo spec (assume GitHub for org/repo format without URL)
+			f := &forge.GitHub{}
 			fmt.Printf("Cloning %s to %s...\n", cmd.Repo, basePath)
-			clonedPath, err := github.CloneRepo(cmd.Repo, basePath)
+			clonedPath, err := f.CloneRepo(cmd.Repo, basePath)
 			if err != nil {
 				return fmt.Errorf("failed to clone repo: %w", err)
 			}
@@ -884,14 +888,20 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 	}
 
 	// Get origin URL from repo
-	originURL, err := github.GetOriginURL(repoPath)
+	originURL, err := forge.GetOriginURL(repoPath)
 	if err != nil {
 		return fmt.Errorf("failed to get origin URL: %w", err)
 	}
 
-	// Fetch PR branch name
+	// Detect forge and check CLI availability
+	f := forge.Detect(originURL)
+	if err := f.Check(); err != nil {
+		return err
+	}
+
+	// Fetch MR/PR branch name
 	fmt.Printf("Fetching PR #%d...\n", cmd.Number)
-	branch, err := github.GetPRBranch(originURL, cmd.Number)
+	branch, err := f.GetMRBranch(originURL, cmd.Number)
 	if err != nil {
 		return fmt.Errorf("failed to get PR branch: %w", err)
 	}
