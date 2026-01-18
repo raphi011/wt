@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/raphaelgruber/wt/internal/git"
 	"github.com/raphaelgruber/wt/internal/github"

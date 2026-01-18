@@ -14,12 +14,12 @@ type messageUpdate string
 
 // Spinner wraps a Bubbletea spinner for simple non-interactive use
 type Spinner struct {
-	program    *tea.Program
-	msgChan    chan string
-	done       chan struct{}
-	mu         sync.Mutex
-	isRunning  bool
-	lastMsg    string
+	program   *tea.Program
+	msgChan   chan string
+	done      chan struct{}
+	mu        sync.Mutex
+	isRunning bool
+	lastMsg   string
 }
 
 // spinnerModel is the internal Bubbletea model

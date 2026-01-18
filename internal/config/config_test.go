@@ -28,15 +28,15 @@ func TestValidateDefaultPath(t *testing.T) {
 		path    string
 		wantErr bool
 	}{
-		{"", false},                     // empty is allowed
-		{"~/Git/worktrees", false},      // tilde path
-		{"~", false},                    // just tilde
-		{"/absolute/path", false},       // absolute path
-		{".", true},                     // relative - not allowed
-		{"..", true},                    // relative - not allowed
-		{"relative/path", true},         // relative - not allowed
-		{"./foo", true},                 // relative - not allowed
-		{"../foo", true},                // relative - not allowed
+		{"", false},                // empty is allowed
+		{"~/Git/worktrees", false}, // tilde path
+		{"~", false},               // just tilde
+		{"/absolute/path", false},  // absolute path
+		{".", true},                // relative - not allowed
+		{"..", true},               // relative - not allowed
+		{"relative/path", true},    // relative - not allowed
+		{"./foo", true},            // relative - not allowed
+		{"../foo", true},           // relative - not allowed
 	}
 
 	for _, tt := range tests {
