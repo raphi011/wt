@@ -22,11 +22,24 @@ type HooksConfig struct {
 	Hooks map[string]Hook `toml:"-"` // parsed from [hooks.NAME] sections
 }
 
+// CloneRule maps a pattern to a forge
+type CloneRule struct {
+	Pattern string `toml:"pattern"` // glob pattern like "n26/*" or "company/*"
+	Forge   string `toml:"forge"`   // "github" or "gitlab"
+}
+
+// CloneConfig holds clone-related configuration
+type CloneConfig struct {
+	Default string      `toml:"default"` // default forge: "github" or "gitlab"
+	Rules   []CloneRule `toml:"rules"`   // pattern-based rules
+}
+
 // Config holds the wt configuration
 type Config struct {
 	DefaultPath    string      `toml:"default_path"`
 	WorktreeFormat string      `toml:"worktree_format"`
 	Hooks          HooksConfig `toml:"-"` // custom parsing needed
+	Clone          CloneConfig `toml:"clone"`
 }
 
 // DefaultWorktreeFormat is the default format for worktree folder names
@@ -37,6 +50,9 @@ func Default() Config {
 	return Config{
 		DefaultPath:    "",
 		WorktreeFormat: DefaultWorktreeFormat,
+		Clone: CloneConfig{
+			Default: "github", // backwards compatible default
+		},
 	}
 }
 
@@ -71,6 +87,7 @@ type rawConfig struct {
 	DefaultPath    string                 `toml:"default_path"`
 	WorktreeFormat string                 `toml:"worktree_format"`
 	Hooks          map[string]interface{} `toml:"hooks"`
+	Clone          CloneConfig            `toml:"clone"`
 }
 
 // Load reads config from ~/.config/wt/config.toml
@@ -99,6 +116,7 @@ func Load() (Config, error) {
 		DefaultPath:    raw.DefaultPath,
 		WorktreeFormat: raw.WorktreeFormat,
 		Hooks:          parseHooksConfig(raw.Hooks),
+		Clone:          raw.Clone,
 	}
 
 	// Validate default_path (must be absolute or start with ~)
@@ -109,6 +127,9 @@ func Load() (Config, error) {
 	// Use defaults for empty values
 	if cfg.WorktreeFormat == "" {
 		cfg.WorktreeFormat = DefaultWorktreeFormat
+	}
+	if cfg.Clone.Default == "" {
+		cfg.Clone.Default = "github"
 	}
 
 	return cfg, nil
@@ -150,6 +171,42 @@ func parseHooksConfig(raw map[string]interface{}) HooksConfig {
 	}
 
 	return hc
+}
+
+// GetForgeForRepo returns the forge name for a given repo spec (e.g., "org/repo")
+// Matches against clone rules in order, returns default if no match
+func (c *CloneConfig) GetForgeForRepo(repoSpec string) string {
+	for _, rule := range c.Rules {
+		if matchPattern(rule.Pattern, repoSpec) {
+			return rule.Forge
+		}
+	}
+	return c.Default
+}
+
+// matchPattern checks if repoSpec matches the pattern
+// Supports simple glob patterns: * matches any sequence of characters
+// Examples: "n26/*" matches "n26/foo", "company/*" matches "company/bar"
+func matchPattern(pattern, repoSpec string) bool {
+	// Simple glob matching - split on *
+	if pattern == "*" {
+		return true
+	}
+
+	// Handle prefix match like "n26/*"
+	if len(pattern) > 1 && pattern[len(pattern)-1] == '*' {
+		prefix := pattern[:len(pattern)-1]
+		return len(repoSpec) >= len(prefix) && repoSpec[:len(prefix)] == prefix
+	}
+
+	// Handle suffix match like "*/repo"
+	if len(pattern) > 1 && pattern[0] == '*' {
+		suffix := pattern[1:]
+		return len(repoSpec) >= len(suffix) && repoSpec[len(repoSpec)-len(suffix):] == suffix
+	}
+
+	// Exact match
+	return pattern == repoSpec
 }
 
 const defaultConfig = `# wt configuration
@@ -200,6 +257,23 @@ worktree_format = "{git-origin}-{branch-name}"
 #   {repo}      - repo name from git origin
 #   {folder}    - main repo folder name
 #   {main-repo} - main repo path
+
+# Clone settings - configure which forge to use when cloning repos
+# Used by "wt pr open" when cloning a new repository
+#
+# [clone]
+# default = "github"  # fallback forge when no rule matches
+#
+# [[clone.rules]]
+# pattern = "n26/*"     # glob pattern (* matches anything)
+# forge = "github"
+#
+# [[clone.rules]]
+# pattern = "company/*"
+# forge = "gitlab"
+#
+# Rules are matched in order; first match wins.
+# Supported forges: "github" (gh CLI), "gitlab" (glab CLI)
 `
 
 // Init creates a default config file at ~/.config/wt/config.toml

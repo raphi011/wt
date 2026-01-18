@@ -26,6 +26,20 @@ func DetectFromRepo(repoPath string) Forge {
 	return Detect(url)
 }
 
+// ByName returns a Forge implementation by name.
+// Supported names: "github", "gitlab"
+// Returns GitHub as default for unknown names.
+func ByName(name string) Forge {
+	switch strings.ToLower(name) {
+	case "gitlab":
+		return &GitLab{}
+	case "github":
+		return &GitHub{}
+	default:
+		return &GitHub{}
+	}
+}
+
 // isGitLab checks if a URL points to a GitLab instance
 func isGitLab(url string) bool {
 	url = strings.ToLower(url)

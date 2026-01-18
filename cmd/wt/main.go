@@ -868,9 +868,13 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 			fmt.Printf("Using repo at %s\n", repoPath)
 		} else if org != "" {
 			// Not found but org/repo provided: clone it
-			// Detect forge from repo spec (assume GitHub for org/repo format without URL)
-			f := &forge.GitHub{}
-			fmt.Printf("Cloning %s to %s...\n", cmd.Repo, basePath)
+			// Use clone config rules to determine forge
+			forgeName := cfg.Clone.GetForgeForRepo(cmd.Repo)
+			f := forge.ByName(forgeName)
+			if err := f.Check(); err != nil {
+				return err
+			}
+			fmt.Printf("Cloning %s to %s (using %s)...\n", cmd.Repo, basePath, forgeName)
 			clonedPath, err := f.CloneRepo(cmd.Repo, basePath)
 			if err != nil {
 				return fmt.Errorf("failed to clone repo: %w", err)
