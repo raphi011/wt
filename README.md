@@ -96,6 +96,20 @@ run_on_exists = false  # skip if worktree already existed
 | `{folder}` | Main repo folder name |
 | `{main-repo}` | Main repo path |
 
+## Integration with gh dash
+
+`wt` works well with [gh dash](https://github.com/dlvhdr/gh-dash) for reviewing PRs. Configure a keybinding to open PRs as worktrees:
+
+```yaml
+# ~/.config/gh-dash/config.yml
+keybindings:
+  prs:
+    - key: O
+      command: wt pr open {{.PrNumber}} {{.RepoName}}
+```
+
+Combined with hooks, you get a seamless workflow: press `O` in gh dash to checkout the PR as a worktree and automatically open it in your editor.
+
 ## Shell Completions
 
 ```bash
