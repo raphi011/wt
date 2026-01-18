@@ -31,8 +31,32 @@ checksum:
 
 changelog:
   sort: asc
+  groups:
+    - title: "✨ Features"
+      regexp: '^.*?feat(\(.+\))?\!?:.+$'
+      order: 0
+    - title: "🐛 Bug Fixes"
+      regexp: '^.*?fix(\(.+\))?\!?:.+$'
+      order: 1
+    - title: "📚 Documentation"
+      regexp: '^.*?docs(\(.+\))?\!?:.+$'
+      order: 2
+    - title: "🔧 Other"
+      order: 999
   filters:
     exclude:
-      - "^docs:"
       - "^test:"
       - "^chore:"
+
+brews:
+  - repository:
+      owner: raphi011
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/raphi011/wt"
+    description: "Git worktree manager with GitHub PR integration"
+    license: "MIT"
+    install: |
+      bin.install "wt"
+    test: |
+      system "#{bin}/wt", "--version"
