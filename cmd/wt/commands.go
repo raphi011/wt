@@ -139,7 +139,7 @@ Examples:
 type MvCmd struct {
 	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"destination directory (flag > WT_DEFAULT_PATH > config)"`
 	Format string `arg:"--format" placeholder:"FORMAT" help:"worktree naming format"`
-	DryRun bool   `arg:"--dry-run" help:"show what would be moved"`
+	DryRun bool   `arg:"-n,--dry-run" help:"show what would be moved"`
 	Force  bool   `arg:"-f,--force" help:"force move dirty worktrees"`
 }
 

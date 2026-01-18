@@ -83,7 +83,7 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-d --dir --format --dry-run -f --force" -- "$cur"))
+            COMPREPLY=($(compgen -W "-d --dir --format -n --dry-run -f --force" -- "$cur"))
             ;;
         pr)
             if [[ $cword -eq 2 ]]; then
@@ -192,6 +192,7 @@ _wt() {
                         '-d[destination directory]:directory:_files -/' \
                         '--dir[destination directory]:directory:_files -/' \
                         '--format[worktree naming format]:format:' \
+                        '-n[show what would be moved]' \
                         '--dry-run[show what would be moved]' \
                         '-f[force move dirty worktrees]' \
                         '--force[force move dirty worktrees]'
@@ -313,7 +314,7 @@ complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
 # mv: flags only (no positional args)
 complete -c wt -n "__fish_seen_subcommand_from mv" -s d -l dir -r -a "(__fish_complete_directories)" -d "Destination directory"
 complete -c wt -n "__fish_seen_subcommand_from mv" -l format -d "Worktree naming format"
-complete -c wt -n "__fish_seen_subcommand_from mv" -l dry-run -d "Show what would be moved"
+complete -c wt -n "__fish_seen_subcommand_from mv" -s n -l dry-run -d "Show what would be moved"
 complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move dirty worktrees"
 
 # pr: subcommands
