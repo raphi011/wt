@@ -544,19 +544,12 @@ func runClean(cmd *CleanCmd) error {
 				semaphore <- struct{}{}        // Acquire
 				defer func() { <-semaphore }() // Release
 
-				originURL, err := forge.GetOriginURL(wt.MainRepo)
-				if err != nil {
-					errMutex.Lock()
-					fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", wt.Branch, err))
-					errMutex.Unlock()
-					return
-				}
-				if originURL == "" {
+				if wt.OriginURL == "" {
 					return
 				}
 
 				// Detect forge for this repo
-				f := forge.Detect(originURL)
+				f := forge.Detect(wt.OriginURL)
 
 				// Check if forge CLI is available (skip silently if not)
 				if err := f.Check(); err != nil {
@@ -569,7 +562,7 @@ func runClean(cmd *CleanCmd) error {
 					return // No upstream = never pushed = no MR
 				}
 
-				mr, err := f.GetMRForBranch(originURL, upstreamBranch)
+				mr, err := f.GetMRForBranch(wt.OriginURL, upstreamBranch)
 				if err != nil {
 					errMutex.Lock()
 					fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", wt.Branch, err))
@@ -578,10 +571,10 @@ func runClean(cmd *CleanCmd) error {
 				}
 
 				mrMutex.Lock()
-				if mrCache[originURL] == nil {
-					mrCache[originURL] = make(map[string]*forge.MRInfo)
+				if mrCache[wt.OriginURL] == nil {
+					mrCache[wt.OriginURL] = make(map[string]*forge.MRInfo)
 				}
-				mrCache[originURL][wt.Branch] = mr // nil is valid (no MR)
+				mrCache[wt.OriginURL][wt.Branch] = mr // nil is valid (no MR)
 				mrMutex.Unlock()
 			}(wt)
 		}
@@ -606,8 +599,7 @@ func runClean(cmd *CleanCmd) error {
 
 	// Build mrMap from cache for display
 	for _, wt := range worktrees {
-		originURL, _ := forge.GetOriginURL(wt.MainRepo)
-		if originCache, ok := mrCache[originURL]; ok {
+		if originCache, ok := mrCache[wt.OriginURL]; ok {
 			if mr, ok := originCache[wt.Branch]; ok {
 				mrMap[wt.Branch] = mr
 			}
@@ -892,7 +884,7 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 	}
 
 	// Get origin URL from repo
-	originURL, err := forge.GetOriginURL(repoPath)
+	originURL, err := git.GetOriginURL(repoPath)
 	if err != nil {
 		return fmt.Errorf("failed to get origin URL: %w", err)
 	}

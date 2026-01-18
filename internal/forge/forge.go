@@ -94,14 +94,13 @@ func SaveMRCache(scanDir string, cache MRCache) error {
 func CleanMRCache(cache MRCache, worktrees []git.Worktree) MRCache {
 	existing := make(map[string]map[string]bool)
 	for _, wt := range worktrees {
-		originURL, _ := GetOriginURL(wt.MainRepo)
-		if originURL == "" {
+		if wt.OriginURL == "" {
 			continue
 		}
-		if existing[originURL] == nil {
-			existing[originURL] = make(map[string]bool)
+		if existing[wt.OriginURL] == nil {
+			existing[wt.OriginURL] = make(map[string]bool)
 		}
-		existing[originURL][wt.Branch] = true
+		existing[wt.OriginURL][wt.Branch] = true
 	}
 
 	cleaned := make(MRCache)
@@ -125,8 +124,7 @@ func CleanMRCache(cache MRCache, worktrees []git.Worktree) MRCache {
 func NeedsFetch(cache MRCache, worktrees []git.Worktree, forceRefresh bool) []git.Worktree {
 	var toFetch []git.Worktree
 	for _, wt := range worktrees {
-		originURL, _ := GetOriginURL(wt.MainRepo)
-		if originURL == "" {
+		if wt.OriginURL == "" {
 			continue
 		}
 
@@ -140,7 +138,7 @@ func NeedsFetch(cache MRCache, worktrees []git.Worktree, forceRefresh bool) []gi
 			continue
 		}
 
-		originCache, ok := cache[originURL]
+		originCache, ok := cache[wt.OriginURL]
 		if !ok {
 			toFetch = append(toFetch, wt)
 			continue
