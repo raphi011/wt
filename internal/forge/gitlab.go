@@ -43,8 +43,8 @@ func (g *GitLab) Check() error {
 	return nil
 }
 
-// GetMRForBranch fetches MR info for a branch using glab CLI
-func (g *GitLab) GetMRForBranch(repoURL, branch string) (*MRInfo, error) {
+// GetPRForBranch fetches PR info for a branch using glab CLI
+func (g *GitLab) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 	// glab uses -R for repo like gh, but needs project path format
 	projectPath := extractGitLabProject(repoURL)
 
@@ -66,30 +66,30 @@ func (g *GitLab) GetMRForBranch(repoURL, branch string) (*MRInfo, error) {
 		return nil, fmt.Errorf("glab command failed: %w", err)
 	}
 
-	// glab returns an array of MRs
-	var mrs []struct {
+	// glab returns an array of PRs
+	var prs []struct {
 		IID      int    `json:"iid"`
 		State    string `json:"state"` // opened, merged, closed
 		WebURL   string `json:"web_url"`
 	}
-	if err := json.Unmarshal(output, &mrs); err != nil {
+	if err := json.Unmarshal(output, &prs); err != nil {
 		return nil, fmt.Errorf("failed to parse glab output: %w", err)
 	}
 
-	if len(mrs) == 0 {
+	if len(prs) == 0 {
 		return nil, nil
 	}
 
-	return &MRInfo{
-		Number:   mrs[0].IID,
-		State:    normalizeGitLabState(mrs[0].State),
-		URL:      mrs[0].WebURL,
+	return &PRInfo{
+		Number:   prs[0].IID,
+		State:    normalizeGitLabState(prs[0].State),
+		URL:      prs[0].WebURL,
 		CachedAt: time.Now(),
 	}, nil
 }
 
-// GetMRBranch fetches the source branch name for an MR number using glab CLI
-func (g *GitLab) GetMRBranch(repoURL string, number int) (string, error) {
+// GetPRBranch fetches the source branch name for a PR number using glab CLI
+func (g *GitLab) GetPRBranch(repoURL string, number int) (string, error) {
 	projectPath := extractGitLabProject(repoURL)
 
 	cmd := exec.Command("glab", "mr", "view",
@@ -117,14 +117,14 @@ func (g *GitLab) GetMRBranch(repoURL string, number int) (string, error) {
 		return "", fmt.Errorf("failed to parse glab output: %w", err)
 	}
 
-	// Check for cross-project MR (fork)
+	// Check for cross-project PR (fork)
 	if result.SourceProjectID != 0 && result.TargetProjectID != 0 &&
 		result.SourceProjectID != result.TargetProjectID {
-		return "", fmt.Errorf("MR !%d is from a fork - cross-project MRs are not supported", number)
+		return "", fmt.Errorf("PR !%d is from a fork - cross-project PRs are not supported", number)
 	}
 
 	if result.SourceBranch == "" {
-		return "", fmt.Errorf("MR !%d has no source branch", number)
+		return "", fmt.Errorf("PR !%d has no source branch", number)
 	}
 
 	return result.SourceBranch, nil
@@ -154,7 +154,7 @@ func (g *GitLab) CloneRepo(repoSpec, destPath string) (string, error) {
 	return clonePath, nil
 }
 
-// FormatIcon returns the nerd font icon for MR state
+// FormatIcon returns the nerd font icon for PR state
 func (g *GitLab) FormatIcon(state string) string {
 	switch state {
 	case "MERGED":

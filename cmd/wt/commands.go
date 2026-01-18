@@ -156,9 +156,9 @@ Examples:
   wt mv -f -d ~/Git                  # Force move even if worktrees are dirty`
 }
 
-// PrOpenCmd creates a worktree for a PR/MR.
+// PrOpenCmd creates a worktree for a PR.
 type PrOpenCmd struct {
-	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR/MR number"`
+	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR number"`
 	Repo   string `arg:"positional" placeholder:"REPO" help:"repository (org/repo or name)"`
 	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
@@ -166,9 +166,9 @@ type PrOpenCmd struct {
 }
 
 func (PrOpenCmd) Description() string {
-	return `Create a worktree for a GitHub PR or GitLab MR
+	return `Create a worktree for a PR
 
-Fetches PR/MR metadata and creates a worktree for the branch.
+Fetches PR metadata and creates a worktree for the branch.
 If the repository isn't found locally, use org/repo format to clone it.
 
 Examples:
@@ -179,16 +179,16 @@ Examples:
   wt pr open 123 --no-hook        # Skip post-create hook`
 }
 
-// PrCmd works with PRs and MRs.
+// PrCmd works with PRs.
 type PrCmd struct {
-	Open *PrOpenCmd `arg:"subcommand:open" help:"checkout PR/MR as new worktree"`
+	Open *PrOpenCmd `arg:"subcommand:open" help:"checkout PR as new worktree"`
 }
 
 func (PrCmd) Description() string {
-	return `Work with GitHub PRs and GitLab MRs
+	return `Work with PRs
 Examples:
-  wt pr open 123           # Checkout PR/MR #123 from current repo
-  wt pr open 123 myrepo    # Checkout PR/MR #123 from myrepo`
+  wt pr open 123           # Checkout PR #123 from current repo
+  wt pr open 123 myrepo    # Checkout PR #123 from myrepo`
 }
 
 // Args is the root command.
@@ -198,7 +198,7 @@ type Args struct {
 	Clean      *CleanCmd      `arg:"subcommand:clean" help:"cleanup merged worktrees"`
 	List       *ListCmd       `arg:"subcommand:list" help:"list worktrees"`
 	Mv         *MvCmd         `arg:"subcommand:mv" help:"move worktrees to another directory"`
-	Pr         *PrCmd         `arg:"subcommand:pr" help:"work with PRs/MRs"`
+	Pr         *PrCmd         `arg:"subcommand:pr" help:"work with PRs"`
 	Config     *ConfigCmd     `arg:"subcommand:config" help:"manage configuration"`
 	Completion *CompletionCmd `arg:"subcommand:completion" help:"generate completion script"`
 }
@@ -212,7 +212,7 @@ Set WT_DEFAULT_PATH or configure default_path in ~/.config/wt/config.toml.
 Examples:
   wt create feature-x              # Create worktree for new branch
   wt open existing-branch          # Create worktree for existing local branch
-  wt pr open 123                   # Checkout PR/MR as worktree
+  wt pr open 123                   # Checkout PR as worktree
   wt list                          # List worktrees in current directory
   wt clean                         # Remove merged worktrees
   wt clean -n                      # Dry-run: preview what would be removed
