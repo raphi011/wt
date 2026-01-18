@@ -22,7 +22,7 @@ builds:
       - -X main.date={{.Date}}
 
 archives:
-  - format: tar.gz
+  - formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     wrap_in_directory: true
 
@@ -48,15 +48,11 @@ changelog:
       - "^test:"
       - "^chore:"
 
-brews:
+homebrew_casks:
   - repository:
       owner: raphi011
       name: homebrew-tap
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Casks
     homepage: "https://github.com/raphi011/wt"
     description: "Git worktree manager with GitHub PR integration"
-    license: "MIT"
-    install: |
-      bin.install "wt"
-    test: |
-      system "#{bin}/wt", "--version"
