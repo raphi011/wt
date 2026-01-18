@@ -21,68 +21,95 @@ import (
 
 type CreateCmd struct {
 	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"branch name"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (uses: -d flag, WT_DEFAULT_PATH env, config default_path, or cwd)"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
 
 func (CreateCmd) Description() string {
 	return `Create a new git worktree at <dir>/<repo>-<branch>
+
+Creates a new branch and worktree in one step. If the branch already exists
+remotely, it will be checked out instead.
+
 Examples:
   wt create feature-branch              # Uses default path resolution
-  wt create feature-branch -d ~/Git     # Override with specific directory`
+  wt create feature-branch -d ~/Git     # Specify target directory
+  wt create feature-branch --no-hook    # Skip post-create hook
+  wt create feature-branch --hook=ide   # Run 'ide' hook instead of default`
 }
 
 type OpenCmd struct {
 	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"existing local branch name"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (uses: -d flag, WT_DEFAULT_PATH env, config default_path, or cwd)"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
 
 func (OpenCmd) Description() string {
 	return `Open a worktree for an existing local branch
+
+Unlike 'create', this command requires the branch to already exist locally.
+Use this when you want to work on a branch that was created elsewhere.
+
 Examples:
   wt open feature-branch              # Uses default path resolution
-  wt open feature-branch -d ~/Git     # Override with specific directory`
+  wt open feature-branch -d ~/Git     # Specify target directory
+  wt open feature-branch --no-hook    # Skip post-create hook`
 }
 
 type CleanCmd struct {
-	Dir       string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"directory to scan (uses: -d flag, WT_DEFAULT_PATH env, config default_path, or cwd)"`
+	Dir       string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	DryRun    bool   `arg:"-n,--dry-run" help:"preview without removing"`
 	RefreshPR bool   `arg:"--refresh-pr" help:"force refresh PR cache"`
 	Empty     bool   `arg:"-e,--empty" help:"also remove worktrees with 0 commits ahead and clean working directory"`
 }
 
 func (CleanCmd) Description() string {
-	return `Cleanup merged git worktrees with PR status display.
+	return `Cleanup merged git worktrees with PR status display
+
 Removes worktrees where the branch is merged AND working directory is clean.
-With --empty, also removes worktrees with 0 commits ahead and clean working directory.
+Shows a table with PR status (requires gh CLI) before removal.
+
 Examples:
-  wt clean                      # Uses default path resolution
-  wt clean -d ~/Git/worktrees   # Scan specific directory`
+  wt clean                      # Remove merged worktrees
+  wt clean -n                   # Dry-run: preview without removing
+  wt clean -d ~/Git/worktrees   # Scan specific directory
+  wt clean -e                   # Also remove 0-commit worktrees
+  wt clean --refresh-pr         # Force refresh PR status from GitHub`
 }
 
 type ListCmd struct {
-	Dir  string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"directory to scan (uses: -d flag, WT_DEFAULT_PATH env, config default_path, or cwd)"`
+	Dir  string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	JSON bool   `arg:"--json" help:"output as JSON"`
 }
 
 func (ListCmd) Description() string {
 	return `List all git worktrees with their status
+
+When run inside a git repository, only shows worktrees for that repo.
+Output format matches 'git worktree list'.
+
 Examples:
-  wt list                      # Uses default path resolution
-  wt list -d ~/Git/worktrees   # List from specific directory`
+  wt list                      # List worktrees for current repo
+  wt list -d ~/Git/worktrees   # List from specific directory
+  wt list --json               # Output as JSON for scripting`
 }
 
 type CompletionCmd struct {
-	Shell string `arg:"positional,required" placeholder:"SHELL" help:"shell type (fish)"`
+	Shell string `arg:"positional,required" placeholder:"SHELL" help:"shell type (fish, bash, zsh)"`
 }
 
 func (CompletionCmd) Description() string {
 	return `Generate shell completion script
+
+Outputs a completion script for the specified shell.
+Redirect to the appropriate file for your shell.
+
 Examples:
-  wt completion fish > ~/.config/fish/completions/wt.fish`
+  wt completion fish > ~/.config/fish/completions/wt.fish
+  wt completion bash > ~/.local/share/bash-completion/completions/wt
+  wt completion zsh > ~/.zfunc/_wt  # then add ~/.zfunc to fpath`
 }
 
 type ConfigInitCmd struct {
@@ -122,18 +149,23 @@ Examples:
 type PrOpenCmd struct {
 	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR number"`
 	Repo   string `arg:"positional" placeholder:"REPO" help:"repository (org/repo or name)"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"base directory (uses: -d flag, WT_DEFAULT_PATH env, config default_path, or cwd)"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
 
 func (PrOpenCmd) Description() string {
 	return `Create a worktree for a GitHub PR
+
+Fetches PR metadata and creates a worktree for the PR's branch.
+If the repository isn't found locally, use org/repo format to clone it.
+
 Examples:
-  wt pr open 123                  # Use current repo, default path resolution
-  wt pr open 123 myrepo           # Find "myrepo" in default path
-  wt pr open 123 org/repo         # Find locally or clone
-  wt pr open 123 -d ~/Git         # Override with specific directory`
+  wt pr open 123                  # PR from current repo
+  wt pr open 123 myrepo           # Find "myrepo" in target directory
+  wt pr open 123 org/repo         # Clone if not found locally
+  wt pr open 123 -d ~/Git         # Specify target directory
+  wt pr open 123 --no-hook        # Skip post-create hook`
 }
 
 type PrCmd struct {
@@ -170,7 +202,11 @@ Examples:
   wt list                          # List worktrees in current directory
   wt clean                         # Remove merged worktrees
   wt clean -n                      # Dry-run: preview what would be removed
-  wt config init                   # Create default config file`
+  wt config init                   # Create default config file
+
+Exit codes:
+  0  Success
+  1  Error (invalid arguments, git/gh failures, etc.)`
 }
 
 func main() {
@@ -198,7 +234,7 @@ func main() {
 	// Load config
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: config error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 	}
 
 	// Apply config defaults
@@ -917,8 +953,14 @@ func runCompletion(cmd *CompletionCmd) error {
 	case "fish":
 		fmt.Print(fishCompletions)
 		return nil
+	case "bash":
+		fmt.Print(bashCompletions)
+		return nil
+	case "zsh":
+		fmt.Print(zshCompletions)
+		return nil
 	default:
-		return fmt.Errorf("unsupported shell: %s (supported: fish)", cmd.Shell)
+		return fmt.Errorf("unsupported shell: %s (supported: fish, bash, zsh)", cmd.Shell)
 	}
 }
 
@@ -1006,6 +1048,259 @@ func runConfigHooks(cmd *ConfigHooksCmd, cfg config.Config) error {
 	return nil
 }
 
+const bashCompletions = `# wt bash completions
+# Install: wt completion bash > ~/.local/share/bash-completion/completions/wt
+# Or: wt completion bash >> ~/.bashrc
+
+_wt_completions() {
+    local cur prev words cword
+    if type _init_completion &>/dev/null; then
+        _init_completion || return
+    else
+        cur="${COMP_WORDS[COMP_CWORD]}"
+        prev="${COMP_WORDS[COMP_CWORD-1]}"
+        words=("${COMP_WORDS[@]}")
+        cword=$COMP_CWORD
+    fi
+
+    local commands="create open clean list pr config completion"
+
+    # Handle subcommand-specific completions
+    case "${words[1]}" in
+        create)
+            case "$prev" in
+                -d|--dir)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    return
+                    ;;
+                --hook)
+                    return
+                    ;;
+            esac
+            if [[ $cword -eq 2 ]]; then
+                # Complete branch names
+                local branches=$(git branch --all --format='%(refname:short)' 2>/dev/null | sed 's|origin/||' | sort -u)
+                COMPREPLY=($(compgen -W "$branches" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -W "-d --dir --hook --no-hook" -- "$cur"))
+            fi
+            ;;
+        open)
+            case "$prev" in
+                -d|--dir)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    return
+                    ;;
+                --hook)
+                    return
+                    ;;
+            esac
+            if [[ $cword -eq 2 ]]; then
+                # Complete local branch names only
+                local branches=$(git branch --format='%(refname:short)' 2>/dev/null)
+                COMPREPLY=($(compgen -W "$branches" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -W "-d --dir --hook --no-hook" -- "$cur"))
+            fi
+            ;;
+        clean)
+            case "$prev" in
+                -d|--dir)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    return
+                    ;;
+            esac
+            COMPREPLY=($(compgen -W "-d --dir -n --dry-run --refresh-pr -e --empty" -- "$cur"))
+            ;;
+        list)
+            case "$prev" in
+                -d|--dir)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    return
+                    ;;
+            esac
+            COMPREPLY=($(compgen -W "-d --dir --json" -- "$cur"))
+            ;;
+        pr)
+            if [[ $cword -eq 2 ]]; then
+                COMPREPLY=($(compgen -W "open" -- "$cur"))
+            elif [[ "${words[2]}" == "open" ]]; then
+                case "$prev" in
+                    -d|--dir)
+                        COMPREPLY=($(compgen -d -- "$cur"))
+                        return
+                        ;;
+                    --hook)
+                        return
+                        ;;
+                esac
+                COMPREPLY=($(compgen -W "-d --dir --hook --no-hook" -- "$cur"))
+            fi
+            ;;
+        config)
+            if [[ $cword -eq 2 ]]; then
+                COMPREPLY=($(compgen -W "init hooks" -- "$cur"))
+            elif [[ "${words[2]}" == "init" ]]; then
+                COMPREPLY=($(compgen -W "-f --force" -- "$cur"))
+            elif [[ "${words[2]}" == "hooks" ]]; then
+                COMPREPLY=($(compgen -W "--json" -- "$cur"))
+            fi
+            ;;
+        completion)
+            if [[ $cword -eq 2 ]]; then
+                COMPREPLY=($(compgen -W "fish bash zsh" -- "$cur"))
+            fi
+            ;;
+        *)
+            if [[ $cword -eq 1 ]]; then
+                COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+            fi
+            ;;
+    esac
+}
+
+complete -F _wt_completions wt
+`
+
+const zshCompletions = `#compdef wt
+# wt zsh completions
+# Install: wt completion zsh > ~/.zfunc/_wt
+# Then add to ~/.zshrc: fpath=(~/.zfunc $fpath) && autoload -Uz compinit && compinit
+
+_wt() {
+    local curcontext="$curcontext" state line
+    typeset -A opt_args
+
+    _arguments -C \
+        '1: :->command' \
+        '*:: :->args'
+
+    case $state in
+        command)
+            local commands=(
+                'create:Create new worktree for a branch'
+                'open:Open worktree for existing local branch'
+                'clean:Cleanup merged worktrees'
+                'list:List worktrees'
+                'pr:Work with GitHub PRs'
+                'config:Manage configuration'
+                'completion:Generate completion script'
+            )
+            _describe 'command' commands
+            ;;
+        args)
+            case $words[1] in
+                create)
+                    _arguments \
+                        '1:branch:__wt_all_branches' \
+                        '-d[target directory]:directory:_files -/' \
+                        '--dir[target directory]:directory:_files -/' \
+                        '--hook[run named hook]:hook:' \
+                        '--no-hook[skip post-create hook]'
+                    ;;
+                open)
+                    _arguments \
+                        '1:branch:__wt_local_branches' \
+                        '-d[target directory]:directory:_files -/' \
+                        '--dir[target directory]:directory:_files -/' \
+                        '--hook[run named hook]:hook:' \
+                        '--no-hook[skip post-create hook]'
+                    ;;
+                clean)
+                    _arguments \
+                        '-d[target directory]:directory:_files -/' \
+                        '--dir[target directory]:directory:_files -/' \
+                        '-n[preview without removing]' \
+                        '--dry-run[preview without removing]' \
+                        '--refresh-pr[force refresh PR cache]' \
+                        '-e[also remove 0-commit worktrees]' \
+                        '--empty[also remove 0-commit worktrees]'
+                    ;;
+                list)
+                    _arguments \
+                        '-d[target directory]:directory:_files -/' \
+                        '--dir[target directory]:directory:_files -/' \
+                        '--json[output as JSON]'
+                    ;;
+                pr)
+                    _arguments -C \
+                        '1: :->subcmd' \
+                        '*:: :->args'
+                    case $state in
+                        subcmd)
+                            local subcommands=(
+                                'open:Checkout PR as new worktree'
+                            )
+                            _describe 'subcommand' subcommands
+                            ;;
+                        args)
+                            case $words[1] in
+                                open)
+                                    _arguments \
+                                        '1:PR number:' \
+                                        '2:repository:' \
+                                        '-d[target directory]:directory:_files -/' \
+                                        '--dir[target directory]:directory:_files -/' \
+                                        '--hook[run named hook]:hook:' \
+                                        '--no-hook[skip post-create hook]'
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                config)
+                    _arguments -C \
+                        '1: :->subcmd' \
+                        '*:: :->args'
+                    case $state in
+                        subcmd)
+                            local subcommands=(
+                                'init:Create default config file'
+                                'hooks:List available hooks'
+                            )
+                            _describe 'subcommand' subcommands
+                            ;;
+                        args)
+                            case $words[1] in
+                                init)
+                                    _arguments \
+                                        '-f[overwrite existing config]' \
+                                        '--force[overwrite existing config]'
+                                    ;;
+                                hooks)
+                                    _arguments \
+                                        '--json[output as JSON]'
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                completion)
+                    _arguments \
+                        '1:shell:(fish bash zsh)'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+# Helper: complete all branches (local + remote)
+__wt_all_branches() {
+    local branches
+    branches=(${(f)"$(git branch --all --format='%(refname:short)' 2>/dev/null | sed 's|origin/||' | sort -u)"})
+    _describe 'branch' branches
+}
+
+# Helper: complete local branches only
+__wt_local_branches() {
+    local branches
+    branches=(${(f)"$(git branch --format='%(refname:short)' 2>/dev/null)"})
+    _describe 'branch' branches
+}
+
+_wt "$@"
+`
+
 const fishCompletions = `# wt completions - supports fish autosuggestions and tab completion
 complete -c wt -f
 
@@ -1076,6 +1371,8 @@ complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcomman
 
 # completion
 complete -c wt -n "__fish_seen_subcommand_from completion" -a "fish" -d "Fish shell"
+complete -c wt -n "__fish_seen_subcommand_from completion" -a "bash" -d "Bash shell"
+complete -c wt -n "__fish_seen_subcommand_from completion" -a "zsh" -d "Zsh shell"
 
 # Global help
 complete -c wt -s h -l help -d "Show help message"
