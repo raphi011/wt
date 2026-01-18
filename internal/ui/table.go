@@ -64,6 +64,9 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 		} else if wt.IsMerged {
 			status = greenStyle.Render("prunable")
 			statusPlain = "prunable"
+		} else if wt.CommitCount == 0 && !wt.IsDirty {
+			status = "clean"
+			statusPlain = "clean"
 		} else {
 			status = fmt.Sprintf("%d commit(s) ahead", wt.CommitCount)
 			statusPlain = status
