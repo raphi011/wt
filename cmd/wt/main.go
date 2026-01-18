@@ -80,7 +80,9 @@ type CompletionCmd struct {
 }
 
 func (CompletionCmd) Description() string {
-	return "Generate shell completion script"
+	return `Generate shell completion script
+Examples:
+  wt completion fish > ~/.config/fish/completions/wt.fish`
 }
 
 type ConfigInitCmd struct {
@@ -88,7 +90,10 @@ type ConfigInitCmd struct {
 }
 
 func (ConfigInitCmd) Description() string {
-	return "Create default config file at ~/.config/wt/config.toml"
+	return `Create default config file at ~/.config/wt/config.toml
+Examples:
+  wt config init           # Create config if missing
+  wt config init -f        # Overwrite existing config`
 }
 
 type ConfigHooksCmd struct {
@@ -96,7 +101,10 @@ type ConfigHooksCmd struct {
 }
 
 func (ConfigHooksCmd) Description() string {
-	return "List available hooks"
+	return `List available hooks
+Examples:
+  wt config hooks          # Show hooks in text format
+  wt config hooks --json   # Output as JSON`
 }
 
 type ConfigCmd struct {
@@ -105,7 +113,10 @@ type ConfigCmd struct {
 }
 
 func (ConfigCmd) Description() string {
-	return "Manage wt configuration"
+	return `Manage wt configuration
+Examples:
+  wt config init           # Create default config
+  wt config hooks          # List available hooks`
 }
 
 type PrOpenCmd struct {
@@ -130,7 +141,10 @@ type PrCmd struct {
 }
 
 func (PrCmd) Description() string {
-	return "Work with GitHub pull requests"
+	return `Work with GitHub pull requests
+Examples:
+  wt pr open 123           # Checkout PR #123 from current repo
+  wt pr open 123 myrepo    # Checkout PR #123 from myrepo`
 }
 
 type Args struct {
@@ -144,7 +158,19 @@ type Args struct {
 }
 
 func (Args) Description() string {
-	return "Git worktree manager - create, clean, and list worktrees"
+	return `Git worktree manager with GitHub PR integration
+
+Worktrees are created as <repo>-<branch> in the specified directory.
+Set WT_DEFAULT_PATH or configure default_path in ~/.config/wt/config.toml.
+
+Examples:
+  wt create feature-x              # Create worktree for new branch
+  wt open existing-branch          # Create worktree for existing local branch
+  wt pr open 123                   # Checkout GitHub PR as worktree
+  wt list                          # List worktrees in current directory
+  wt clean                         # Remove merged worktrees
+  wt clean -n                      # Dry-run: preview what would be removed
+  wt config init                   # Create default config file`
 }
 
 func main() {
@@ -157,7 +183,7 @@ func main() {
 	if err := p.Parse(os.Args[1:]); err != nil {
 		switch err {
 		case arg.ErrHelp:
-			p.WriteHelp(os.Stdout)
+			writeHelp(os.Stdout, p, &args)
 			os.Exit(0)
 		case arg.ErrVersion:
 			fmt.Println(args.Version())
@@ -606,6 +632,61 @@ func runClean(cmd *CleanCmd) error {
 	fmt.Print(ui.FormatSummary(len(toRemove), skipped, cmd.DryRun))
 
 	return nil
+}
+
+// writeHelp prints help with subcommand-specific descriptions
+func writeHelp(w *os.File, p *arg.Parser, args *Args) {
+	// Determine active subcommand and get its description
+	var desc string
+	switch {
+	case args.Create != nil:
+		desc = args.Create.Description()
+	case args.Open != nil:
+		desc = args.Open.Description()
+	case args.Clean != nil:
+		desc = args.Clean.Description()
+	case args.List != nil:
+		desc = args.List.Description()
+	case args.Pr != nil:
+		if args.Pr.Open != nil {
+			desc = args.Pr.Open.Description()
+		} else {
+			desc = args.Pr.Description()
+		}
+	case args.Config != nil:
+		if args.Config.Init != nil {
+			desc = args.Config.Init.Description()
+		} else if args.Config.Hooks != nil {
+			desc = args.Config.Hooks.Description()
+		} else {
+			desc = args.Config.Description()
+		}
+	case args.Completion != nil:
+		desc = args.Completion.Description()
+	default:
+		// No subcommand - use default help
+		p.WriteHelp(w)
+		return
+	}
+
+	// Print subcommand description, then full help (which includes usage + flags)
+	// Capture WriteHelp output and replace the parent description with subcommand's
+	fmt.Fprintln(w, desc)
+	fmt.Fprintln(w)
+
+	// WriteHelp outputs: description, version line, usage, options
+	// We need usage + options, so capture and skip first lines
+	var buf strings.Builder
+	p.WriteHelp(&buf)
+	lines := strings.Split(buf.String(), "\n")
+
+	// Find "Usage:" line and print from there
+	for i, line := range lines {
+		if strings.HasPrefix(line, "Usage:") {
+			fmt.Fprintln(w, strings.Join(lines[i:], "\n"))
+			break
+		}
+	}
 }
 
 // expandPath expands ~ to home directory
