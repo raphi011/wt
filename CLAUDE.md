@@ -97,6 +97,13 @@ Completions provide context-aware suggestions for branches, directories, and fla
 
 **Keep completions/config in sync** - When CLI commands, flags, or subcommands change, always update the shell completion scripts (fish, bash, zsh in `cmd/wt/main.go`) and any config generation commands to match.
 
+**Reuse flags consistently** - When adding flags that serve the same purpose across commands, use identical names/shortcuts. Standard flags:
+- `-d, --dir` - target directory (with `env:WT_DEFAULT_PATH`)
+- `-n, --dry-run` - preview without making changes
+- `-f, --force` - force operation (override safety checks)
+- `--json` - output as JSON
+- `--hook` / `--no-hook` - control hook execution (for worktree creation commands)
+
 ### Commit Messages
 
 Follow **Conventional Commits** for GoReleaser changelog grouping:
