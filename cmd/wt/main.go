@@ -147,7 +147,7 @@ Examples:
 }
 
 type PrOpenCmd struct {
-	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR number"`
+	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR/MR number"`
 	Repo   string `arg:"positional" placeholder:"REPO" help:"repository (org/repo or name)"`
 	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
@@ -155,9 +155,9 @@ type PrOpenCmd struct {
 }
 
 func (PrOpenCmd) Description() string {
-	return `Create a worktree for a GitHub PR
+	return `Create a worktree for a GitHub PR or GitLab MR
 
-Fetches PR metadata and creates a worktree for the PR's branch.
+Fetches PR/MR metadata and creates a worktree for the branch.
 If the repository isn't found locally, use org/repo format to clone it.
 
 Examples:
@@ -169,14 +169,14 @@ Examples:
 }
 
 type PrCmd struct {
-	Open *PrOpenCmd `arg:"subcommand:open" help:"checkout PR as new worktree"`
+	Open *PrOpenCmd `arg:"subcommand:open" help:"checkout PR/MR as new worktree"`
 }
 
 func (PrCmd) Description() string {
-	return `Work with GitHub pull requests
+	return `Work with GitHub PRs and GitLab MRs
 Examples:
-  wt pr open 123           # Checkout PR #123 from current repo
-  wt pr open 123 myrepo    # Checkout PR #123 from myrepo`
+  wt pr open 123           # Checkout PR/MR #123 from current repo
+  wt pr open 123 myrepo    # Checkout PR/MR #123 from myrepo`
 }
 
 type Args struct {
@@ -184,13 +184,13 @@ type Args struct {
 	Open       *OpenCmd       `arg:"subcommand:open" help:"open worktree for existing branch"`
 	Clean      *CleanCmd      `arg:"subcommand:clean" help:"cleanup merged worktrees"`
 	List       *ListCmd       `arg:"subcommand:list" help:"list worktrees"`
-	Pr         *PrCmd         `arg:"subcommand:pr" help:"work with GitHub PRs"`
+	Pr         *PrCmd         `arg:"subcommand:pr" help:"work with PRs/MRs"`
 	Config     *ConfigCmd     `arg:"subcommand:config" help:"manage configuration"`
 	Completion *CompletionCmd `arg:"subcommand:completion" help:"generate completion script"`
 }
 
 func (Args) Description() string {
-	return `Git worktree manager with GitHub PR integration
+	return `Git worktree manager with GitHub/GitLab integration
 
 Worktrees are created as <repo>-<branch> in the specified directory.
 Set WT_DEFAULT_PATH or configure default_path in ~/.config/wt/config.toml.
@@ -198,7 +198,7 @@ Set WT_DEFAULT_PATH or configure default_path in ~/.config/wt/config.toml.
 Examples:
   wt create feature-x              # Create worktree for new branch
   wt open existing-branch          # Create worktree for existing local branch
-  wt pr open 123                   # Checkout GitHub PR as worktree
+  wt pr open 123                   # Checkout PR/MR as worktree
   wt list                          # List worktrees in current directory
   wt clean                         # Remove merged worktrees
   wt clean -n                      # Dry-run: preview what would be removed
@@ -883,7 +883,7 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 			if len(similar) > 0 {
 				return fmt.Errorf("repository %q not found in %s\nDid you mean: %s", name, basePath, strings.Join(similar, ", "))
 			}
-			return fmt.Errorf("repository %q not found in %s\nUse org/repo format to clone from GitHub", name, basePath)
+			return fmt.Errorf("repository %q not found in %s\nUse org/repo format to clone (defaults to GitHub)", name, basePath)
 		}
 	}
 
@@ -1325,7 +1325,7 @@ complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr con
 complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "open" -d "Open worktree for existing branch"
 complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "clean" -d "Cleanup merged worktrees"
 complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "list" -d "List worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "pr" -d "Work with GitHub PRs"
+complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "pr" -d "Work with PRs/MRs"
 complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "config" -d "Manage configuration"
 complete -c wt -n "not __fish_seen_subcommand_from create open clean list pr config completion" -a "completion" -d "Generate completion script"
 
@@ -1352,7 +1352,7 @@ complete -c wt -n "__fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_
 complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
 
 # pr: subcommands
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open" -a "open" -d "Checkout PR as new worktree"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open" -a "open" -d "Checkout PR/MR as new worktree"
 # pr open: PR number (first positional), then repo (second positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -a "(gh pr list --json number,title --jq '.[] | \"\\(.number)\t\\(.title)\"' 2>/dev/null)" -d "PR number"
 # Repo names from default_path (second positional after PR number)
