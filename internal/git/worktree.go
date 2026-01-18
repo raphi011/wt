@@ -17,6 +17,7 @@ type Worktree struct {
 	Branch       string `json:"branch"`
 	MainRepo     string `json:"main_repo"`
 	RepoName     string `json:"repo_name"`
+	OriginURL    string `json:"origin_url"`
 	IsMerged     bool   `json:"is_merged"`
 	CommitCount  int    `json:"commit_count"`
 	Additions    int    `json:"additions"`
@@ -63,6 +64,9 @@ func ListWorktrees(scanDir string) ([]Worktree, error) {
 		// Get repo name from main repo
 		repoName := filepath.Base(mainRepo)
 
+		// Get origin URL (errors treated as empty string)
+		originURL, _ := GetOriginURL(mainRepo)
+
 		// Get merge status (errors treated as "not merged" - safe default)
 		isMerged, _ := IsBranchMerged(mainRepo, branch)
 
@@ -84,6 +88,7 @@ func ListWorktrees(scanDir string) ([]Worktree, error) {
 			Branch:       branch,
 			MainRepo:     mainRepo,
 			RepoName:     repoName,
+			OriginURL:    originURL,
 			IsMerged:     isMerged,
 			CommitCount:  commitCount,
 			Additions:    additions,

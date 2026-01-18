@@ -361,6 +361,21 @@ func GetCurrentRepoMainPath() string {
 	return mainRepo
 }
 
+// GetOriginURL gets the origin URL for a repository
+func GetOriginURL(repoPath string) (string, error) {
+	cmd := exec.Command("git", "-C", repoPath, "remote", "get-url", "origin")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("failed to get origin URL: %s", strings.TrimSpace(stderr.String()))
+		}
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 // GetBranchWorktree returns the worktree path if branch is checked out, empty string if not
 func GetBranchWorktree(branch string) (string, error) {
 	cmd := exec.Command("git", "worktree", "list", "--porcelain")
