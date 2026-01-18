@@ -206,8 +206,8 @@ type Args struct {
 func (Args) Description() string {
 	return `Git worktree manager with GitHub/GitLab integration
 
-Worktrees are created as <repo>-<branch> in the specified directory.
-Set WT_DEFAULT_PATH or configure default_path in ~/.config/wt/config.toml.
+Manages git worktrees in a configurable base directory.
+Set WT_DEFAULT_PATH or see ~/.config/wt/config.toml for options.
 
 Examples:
   wt create feature-x              # Create worktree for new branch
