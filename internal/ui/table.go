@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/raphaelgruber/wt/internal/forge"
-	"github.com/raphaelgruber/wt/internal/git"
+	"github.com/raphi011/wt/internal/forge"
+	"github.com/raphi011/wt/internal/git"
 )
 
 var (

@@ -3,7 +3,7 @@ package hooks
 import (
 	"testing"
 
-	"github.com/raphaelgruber/wt/internal/config"
+	"github.com/raphi011/wt/internal/config"
 )
 
 func TestSubstitutePlaceholders(t *testing.T) {

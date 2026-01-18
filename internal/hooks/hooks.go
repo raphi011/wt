@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/raphaelgruber/wt/internal/config"
+	"github.com/raphi011/wt/internal/config"
 )
 
 // shellQuote escapes a string for safe use in shell commands.

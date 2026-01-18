@@ -1,4 +1,4 @@
-module github.com/raphaelgruber/wt
+module github.com/raphi011/wt
 
 go 1.25.5
 

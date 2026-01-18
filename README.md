@@ -5,7 +5,7 @@ Git worktree manager with GitHub PR integration.
 ## Install
 
 ```bash
-go install github.com/raphaelgruber/wt/cmd/wt@latest
+go install github.com/raphi011/wt/cmd/wt@latest
 ```
 
 Requires `git` and `gh` CLI in PATH.

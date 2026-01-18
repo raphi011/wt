@@ -11,12 +11,12 @@ import (
 
 	"github.com/alexflint/go-arg"
 
-	"github.com/raphaelgruber/wt/internal/config"
-	"github.com/raphaelgruber/wt/internal/forge"
-	"github.com/raphaelgruber/wt/internal/format"
-	"github.com/raphaelgruber/wt/internal/git"
-	"github.com/raphaelgruber/wt/internal/hooks"
-	"github.com/raphaelgruber/wt/internal/ui"
+	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/forge"
+	"github.com/raphi011/wt/internal/format"
+	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/hooks"
+	"github.com/raphi011/wt/internal/ui"
 )
 
 type CreateCmd struct {
@@ -1050,11 +1050,12 @@ func runConfigHooks(cmd *ConfigHooksCmd, cfg config.Config) error {
 		if len(hook.On) > 0 {
 			suffix = fmt.Sprintf(" (on: %v)", hook.On)
 		}
-		desc := hook.Description
-		if desc == "" {
-			desc = hook.Command
+		if hook.Description != "" {
+			fmt.Printf("  %-10s %s%s\n", name, hook.Description, suffix)
+			fmt.Printf("             %s\n", hook.Command)
+		} else {
+			fmt.Printf("  %-10s %s%s\n", name, hook.Command, suffix)
 		}
-		fmt.Printf("  %-10s %s%s\n", name, desc, suffix)
 	}
 
 	return nil
