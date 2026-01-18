@@ -1,6 +1,6 @@
 # wt
 
-Git worktree manager with GitHub PR integration.
+Git worktree manager with GitHub/GitLab integration.
 
 ## Install
 
@@ -8,7 +8,7 @@ Git worktree manager with GitHub PR integration.
 go install github.com/raphi011/wt/cmd/wt@latest
 ```
 
-Requires `git` and `gh` CLI in PATH.
+Requires `git` in PATH. For GitHub repos: `gh` CLI. For GitLab repos: `glab` CLI.
 
 ## Usage
 
@@ -21,8 +21,8 @@ wt create feature-branch -d ~/Git     # in specific dir
 wt open existing-branch               # in cwd
 wt open existing-branch -d ~/Git      # in specific dir
 
-# Open worktree for a GitHub PR
-wt pr open 123                        # PR from current repo
+# Open worktree for a GitHub PR or GitLab MR
+wt pr open 123                        # PR/MR from current repo
 wt pr open 123 myrepo                 # find repo by name in cwd
 wt pr open 123 org/repo               # clone if not found locally
 wt pr open 123 -d ~/Git               # specify base directory
@@ -103,6 +103,25 @@ description = "Open VS Code"
 | `{repo}` | Repo name from origin |
 | `{folder}` | Main repo folder name |
 | `{main-repo}` | Main repo path |
+
+### Clone Rules (for `wt pr open`)
+
+When cloning a repo via `wt pr open org/repo`, configure which forge to use:
+
+```toml
+[clone]
+default = "github"  # or "gitlab"
+
+[[clone.rules]]
+pattern = "company/*"
+forge = "gitlab"
+
+[[clone.rules]]
+pattern = "oss/*"
+forge = "github"
+```
+
+Rules are matched in order; first match wins. Supports glob patterns with `*`.
 
 ## Integration with gh dash
 
