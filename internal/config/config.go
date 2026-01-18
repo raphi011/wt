@@ -11,15 +11,15 @@ import (
 
 // Hook defines a post-create hook
 type Hook struct {
-	Command     string `toml:"command"`
-	Description string `toml:"description"`
-	RunOnExists bool   `toml:"run_on_exists"` // default false
+	Command     string   `toml:"command"`
+	Description string   `toml:"description"`
+	RunOnExists bool     `toml:"run_on_exists"` // default false
+	On          []string `toml:"on"`            // commands this hook runs on (empty = only via --hook)
 }
 
 // HooksConfig holds hook-related configuration
 type HooksConfig struct {
-	Default string          `toml:"default"` // name of default hook (empty = none)
-	Hooks   map[string]Hook `toml:"-"`       // parsed from [hooks.NAME] sections
+	Hooks map[string]Hook `toml:"-"` // parsed from [hooks.NAME] sections
 }
 
 // Config holds the wt configuration
@@ -115,7 +115,7 @@ func Load() (Config, error) {
 }
 
 // parseHooksConfig extracts HooksConfig from raw TOML map
-// Handles [hooks] with "default" key and [hooks.NAME] sections
+// Handles [hooks.NAME] sections
 func parseHooksConfig(raw map[string]interface{}) HooksConfig {
 	hc := HooksConfig{
 		Hooks: make(map[string]Hook),
@@ -126,14 +126,7 @@ func parseHooksConfig(raw map[string]interface{}) HooksConfig {
 	}
 
 	for key, value := range raw {
-		if key == "default" {
-			if s, ok := value.(string); ok {
-				hc.Default = s
-			}
-			continue
-		}
-
-		// Other keys are hook definitions (tables)
+		// Hook definitions are tables
 		if hookMap, ok := value.(map[string]interface{}); ok {
 			hook := Hook{}
 			if cmd, ok := hookMap["command"].(string); ok {
@@ -144,6 +137,13 @@ func parseHooksConfig(raw map[string]interface{}) HooksConfig {
 			}
 			if roe, ok := hookMap["run_on_exists"].(bool); ok {
 				hook.RunOnExists = roe
+			}
+			if on, ok := hookMap["on"].([]interface{}); ok {
+				for _, v := range on {
+					if s, ok := v.(string); ok {
+						hook.On = append(hook.On, s)
+					}
+				}
 			}
 			hc.Hooks[key] = hook
 		}
@@ -168,24 +168,30 @@ const defaultConfig = `# wt configuration
 worktree_format = "{git-origin}-{branch-name}"
 
 # Hooks - run commands after worktree creation
-# Set default = "hookname" to run a hook by default
-# Use --hook=name to run a specific hook, --no-hook to skip
+# Use --hook=name to run a specific hook, --no-hook to skip all hooks
 #
-# [hooks]
-# default = "kitty"  # which hook runs by default (empty = none)
+# Hooks with "on" run automatically for matching commands.
+# Hooks without "on" only run when explicitly called with --hook=name.
 #
 # [hooks.kitty]
 # command = "kitty @ launch --type=tab --cwd={path}"
 # description = "Open new kitty tab"
+# on = ["create", "open"]  # auto-run for create and open commands
+#
+# [hooks.pr-setup]
+# command = "cd {path} && npm install && code {path}"
+# description = "Install deps and open editor"
+# on = ["pr"]  # auto-run when opening PRs
 #
 # [hooks.vscode]
 # command = "code {path}"
 # description = "Open VS Code"
+# # no "on" - only runs via --hook=vscode
 #
-# [hooks.setup]
-# command = "cd {path} && npm install && code {path}"
-# description = "Install deps and open editor"
-# run_on_exists = false  # don't run if worktree already existed
+# Available "on" values: "create", "open", "pr"
+#
+# Other options:
+#   run_on_exists = false  # skip if worktree already existed (default: false)
 #
 # Hooks run with working directory set to the worktree path.
 # Available placeholders:

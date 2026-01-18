@@ -296,13 +296,13 @@ func runCreate(cmd *CreateCmd, cfg config.Config) error {
 		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
 	}
 
-	// Run post-create hook
-	hook, hookName, err := hooks.SelectHook(cfg.Hooks, cmd.Hook, cmd.NoHook, result.AlreadyExists)
+	// Run post-create hooks
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, result.AlreadyExists, hooks.CommandCreate)
 	if err != nil {
 		return err
 	}
 
-	if hook != nil {
+	if len(hookMatches) > 0 {
 		// Get context for placeholder substitution
 		repoName, _ := git.GetRepoName()
 		folderName, _ := git.GetRepoFolderName()
@@ -323,12 +323,14 @@ func runCreate(cmd *CreateCmd, cfg config.Config) error {
 			MainRepo: mainRepo,
 		}
 
-		fmt.Printf("Running hook '%s'...\n", hookName)
-		if err := hooks.Run(hook, ctx); err != nil {
-			return fmt.Errorf("hook %q failed: %w", hookName, err)
-		}
-		if hook.Description != "" {
-			fmt.Printf("  ✓ %s\n", hook.Description)
+		for _, match := range hookMatches {
+			fmt.Printf("Running hook '%s'...\n", match.Name)
+			if err := hooks.Run(match.Hook, ctx); err != nil {
+				return fmt.Errorf("hook %q failed: %w", match.Name, err)
+			}
+			if match.Hook.Description != "" {
+				fmt.Printf("  ✓ %s\n", match.Hook.Description)
+			}
 		}
 	}
 
@@ -371,13 +373,13 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
 	}
 
-	// Run post-create hook (always run for open, ignore run_on_exists config)
-	hook, hookName, err := hooks.SelectHook(cfg.Hooks, cmd.Hook, cmd.NoHook, false)
+	// Run post-create hooks (always run for open, ignore run_on_exists config)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, false, hooks.CommandOpen)
 	if err != nil {
 		return err
 	}
 
-	if hook != nil {
+	if len(hookMatches) > 0 {
 		// Get context for placeholder substitution
 		repoName, _ := git.GetRepoName()
 		folderName, _ := git.GetRepoFolderName()
@@ -398,12 +400,14 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 			MainRepo: mainRepo,
 		}
 
-		fmt.Printf("Running hook '%s'...\n", hookName)
-		if err := hooks.Run(hook, ctx); err != nil {
-			return fmt.Errorf("hook %q failed: %w", hookName, err)
-		}
-		if hook.Description != "" {
-			fmt.Printf("  ✓ %s\n", hook.Description)
+		for _, match := range hookMatches {
+			fmt.Printf("Running hook '%s'...\n", match.Name)
+			if err := hooks.Run(match.Hook, ctx); err != nil {
+				return fmt.Errorf("hook %q failed: %w", match.Name, err)
+			}
+			if match.Hook.Description != "" {
+				fmt.Printf("  ✓ %s\n", match.Hook.Description)
+			}
 		}
 	}
 
@@ -873,13 +877,13 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
 	}
 
-	// Run post-create hook
-	hook, hookName, err := hooks.SelectHook(cfg.Hooks, cmd.Hook, cmd.NoHook, result.AlreadyExists)
+	// Run post-create hooks
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, result.AlreadyExists, hooks.CommandPR)
 	if err != nil {
 		return err
 	}
 
-	if hook != nil {
+	if len(hookMatches) > 0 {
 		// Get context for placeholder substitution
 		repoName, _ := git.GetRepoNameFrom(repoPath)
 		folderName := filepath.Base(repoPath)
@@ -900,12 +904,14 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 			MainRepo: mainRepo,
 		}
 
-		fmt.Printf("Running hook '%s'...\n", hookName)
-		if err := hooks.Run(hook, ctx); err != nil {
-			return fmt.Errorf("hook %q failed: %w", hookName, err)
-		}
-		if hook.Description != "" {
-			fmt.Printf("  ✓ %s\n", hook.Description)
+		for _, match := range hookMatches {
+			fmt.Printf("Running hook '%s'...\n", match.Name)
+			if err := hooks.Run(match.Hook, ctx); err != nil {
+				return fmt.Errorf("hook %q failed: %w", match.Name, err)
+			}
+			if match.Hook.Description != "" {
+				fmt.Printf("  ✓ %s\n", match.Hook.Description)
+			}
 		}
 	}
 
