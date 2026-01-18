@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`wt` is a Go CLI tool for managing git worktrees with GitHub PR integration.
+`wt` is a Go CLI tool for managing git worktrees with GitHub/GitLab MR integration.
 
 ## Build & Development
 
@@ -34,7 +34,11 @@ cmd/wt/main.go           - CLI entry point with go-arg subcommands
 internal/git/            - Git operations via exec.Command
   ├── worktree.go        - Create/list/remove worktrees
   └── repo.go            - Branch info, merge status, diff stats
-internal/github/pr.go    - PR status via gh CLI
+internal/forge/          - Git hosting service abstraction (GitHub/GitLab)
+  ├── forge.go           - Forge interface and MR cache
+  ├── detect.go          - Auto-detect forge from remote URL
+  ├── github.go          - GitHub implementation (gh CLI)
+  └── gitlab.go          - GitLab implementation (glab CLI)
 internal/ui/             - Terminal UI components
   ├── table.go           - Lipgloss table formatting with colors
   └── spinner.go         - Bubbletea spinner (unused currently)
@@ -42,7 +46,9 @@ internal/ui/             - Terminal UI components
 
 ### Key Design Decisions
 
-**Shell out to git/gh CLI** - All git and GitHub operations use `os/exec.Command` to call `git` and `gh` CLI directly. This is simpler and more reliable than Go git libraries. If swapping to a library is needed, changes are isolated to `internal/git/` and `internal/github/`.
+**Shell out to git/gh/glab CLI** - All git and forge operations use `os/exec.Command` to call CLI tools directly. This is simpler and more reliable than Go libraries. Changes are isolated to `internal/git/` and `internal/forge/`.
+
+**Forge abstraction** - The `internal/forge/` package provides a common interface for GitHub and GitLab. Platform is auto-detected from the remote URL. Both `gh` (GitHub) and `glab` (GitLab) CLIs are supported.
 
 **Worktree naming convention** - Worktrees are created as `<repo-name>-<branch>` (e.g., `wt-feature-branch`). The repo name is extracted from git origin URL.
 
@@ -51,7 +57,7 @@ internal/ui/             - Terminal UI components
 - `wt create .. branch` - Create next to repo
 - `wt create ~/Git/worktrees branch` - Create in central location
 
-**PR status** - Uses `gh pr list --json` to fetch PR info. Nerd font icons: 󰜘 (merged), 󰜛 (open), 󰅖 (closed).
+**MR/PR status** - Uses `gh pr list` or `glab mr list` to fetch merge request info (auto-detected). Nerd font icons: 󰜘 (merged), 󰜛 (open), 󰅖 (closed).
 
 ### CLI Commands
 
@@ -85,7 +91,7 @@ Completions provide context-aware suggestions for branches, directories, and fla
 - **CLI parsing**: `github.com/alexflint/go-arg` - Struct-based arg parsing with subcommands
 - **UI**: `github.com/charmbracelet/lipgloss` - Terminal styling
 - **UI**: `github.com/charmbracelet/bubbles/table` - Table component
-- **External**: Requires `git` and `gh` CLI in PATH
+- **External**: Requires `git` in PATH; `gh` CLI for GitHub repos, `glab` CLI for GitLab repos
 
 ### Development Guidelines
 
