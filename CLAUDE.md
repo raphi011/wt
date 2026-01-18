@@ -94,6 +94,30 @@ Follow **Conventional Commits** for GoReleaser changelog grouping:
 
 Format: `type(scope)!: description` - scope optional, `!` for breaking changes.
 
+### Releasing
+
+Releases are automated via GoReleaser in CI. **Do not use `gh release create` manually** - it won't generate the proper changelog.
+
+```bash
+# 1. Ensure all changes are committed and pushed
+git push origin main
+
+# 2. Create and push a tag (triggers GoReleaser CI)
+git tag v0.X.0
+git push origin v0.X.0
+```
+
+Version bumping:
+- `feat:` commits → minor version bump (v0.1.0 → v0.2.0)
+- `fix:` commits only → patch version bump (v0.1.0 → v0.1.1)
+- Breaking changes (`!`) → major version bump (v0.1.0 → v1.0.0)
+
+GoReleaser will:
+- Build binaries for darwin/linux (amd64/arm64)
+- Generate changelog from conventional commits
+- Create GitHub release with assets
+- Update Homebrew tap
+
 ### Testing Locally
 
 The tool must be run from within a git repository for `wt create` to work (needs origin URL). For testing:
