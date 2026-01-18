@@ -25,6 +25,7 @@ const (
 	CommandCreate CommandType = "create"
 	CommandOpen   CommandType = "open"
 	CommandPR     CommandType = "pr"
+	CommandTidy   CommandType = "tidy"
 )
 
 // Context holds the values for placeholder substitution
@@ -34,6 +35,7 @@ type Context struct {
 	Repo     string // repo name from git origin
 	Folder   string // main repo folder name
 	MainRepo string // main repo path
+	Trigger  string // command that triggered the hook (create, open, pr, tidy)
 }
 
 // HookMatch represents a hook that matched the current command
@@ -95,13 +97,21 @@ func hookMatchesCommand(hook config.Hook, cmdType CommandType) bool {
 	return false
 }
 
-// Run executes the hook command with variable substitution
+// Run executes the hook command with variable substitution.
+// Working directory is set to ctx.Path.
 func Run(hook *config.Hook, ctx Context) error {
+	return RunWithDir(hook, ctx, ctx.Path)
+}
+
+// RunWithDir executes the hook command with variable substitution.
+// Allows specifying a custom working directory (useful for tidy hooks
+// where the worktree path has been deleted).
+func RunWithDir(hook *config.Hook, ctx Context, workDir string) error {
 	cmd := SubstitutePlaceholders(hook.Command, ctx)
 
 	// Execute via shell for complex commands (pipes, &&, etc.)
 	shellCmd := exec.Command("sh", "-c", cmd)
-	shellCmd.Dir = ctx.Path
+	shellCmd.Dir = workDir
 	shellCmd.Stdout = os.Stdout
 	shellCmd.Stderr = os.Stderr
 	shellCmd.Stdin = os.Stdin
@@ -118,6 +128,7 @@ func SubstitutePlaceholders(command string, ctx Context) string {
 		"{repo}":      shellQuote(ctx.Repo),
 		"{folder}":    shellQuote(ctx.Folder),
 		"{main-repo}": shellQuote(ctx.MainRepo),
+		"{trigger}":   shellQuote(ctx.Trigger),
 	}
 
 	result := command

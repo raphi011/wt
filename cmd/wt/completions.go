@@ -61,8 +61,11 @@ _wt_completions() {
                     COMPREPLY=($(compgen -d -- "$cur"))
                     return
                     ;;
+                --hook)
+                    return
+                    ;;
             esac
-            COMPREPLY=($(compgen -W "-d --dir -n --dry-run --refresh-pr -c --include-clean" -- "$cur"))
+            COMPREPLY=($(compgen -W "-d --dir -n --dry-run --refresh-pr -c --include-clean --hook --no-hook" -- "$cur"))
             ;;
         list)
             case "$prev" in
@@ -179,7 +182,9 @@ _wt() {
                         '--dry-run[preview without removing]' \
                         '--refresh-pr[force refresh PR cache]' \
                         '-c[also remove clean worktrees]' \
-                        '--include-clean[also remove clean worktrees]'
+                        '--include-clean[also remove clean worktrees]' \
+                        '--hook[run named hook]:hook:' \
+                        '--no-hook[skip post-removal hooks]'
                     ;;
                 list)
                     _arguments \
@@ -306,6 +311,8 @@ complete -c wt -n "__fish_seen_subcommand_from tidy" -s d -l dir -r -a "(__fish_
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s n -l dry-run -d "Preview without removing"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -l refresh-pr -d "Force refresh PR cache"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s c -l include-clean -d "Also remove clean worktrees"
+complete -c wt -n "__fish_seen_subcommand_from tidy" -l hook -d "Run named hook instead of default"
+complete -c wt -n "__fish_seen_subcommand_from tidy" -l no-hook -d "Skip post-removal hooks"
 
 # list: flags only (no positional args)
 complete -c wt -n "__fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"

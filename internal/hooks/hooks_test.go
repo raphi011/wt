@@ -13,6 +13,7 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		Repo:     "myrepo",
 		Folder:   "repo",
 		MainRepo: "/home/user/repo",
+		Trigger:  "create",
 	}
 
 	tests := []struct {
@@ -32,8 +33,8 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		},
 		{
 			name:     "all placeholders",
-			command:  "{path} {branch} {repo} {folder} {main-repo}",
-			expected: "'/home/user/worktrees/repo-branch' 'feature-branch' 'myrepo' 'repo' '/home/user/repo'",
+			command:  "{path} {branch} {repo} {folder} {main-repo} {trigger}",
+			expected: "'/home/user/worktrees/repo-branch' 'feature-branch' 'myrepo' 'repo' '/home/user/repo' 'create'",
 		},
 		{
 			name:     "no placeholders",
@@ -44,6 +45,11 @@ func TestSubstitutePlaceholders(t *testing.T) {
 			name:     "repeated placeholder",
 			command:  "{path} and {path}",
 			expected: "'/home/user/worktrees/repo-branch' and '/home/user/worktrees/repo-branch'",
+		},
+		{
+			name:     "trigger placeholder",
+			command:  "echo triggered by {trigger}",
+			expected: "echo triggered by 'create'",
 		},
 	}
 
@@ -379,7 +385,7 @@ func TestSelectHooks_OnAll(t *testing.T) {
 	}
 
 	// "all" should match all command types
-	for _, cmdType := range []CommandType{CommandCreate, CommandOpen, CommandPR} {
+	for _, cmdType := range []CommandType{CommandCreate, CommandOpen, CommandPR, CommandTidy} {
 		matches, err := SelectHooks(hooksConfig, "", false, false, cmdType)
 		if err != nil {
 			t.Errorf("unexpected error for %s: %v", cmdType, err)
@@ -387,5 +393,42 @@ func TestSelectHooks_OnAll(t *testing.T) {
 		if len(matches) != 1 {
 			t.Errorf("expected 1 hook for %s with on=all, got %d", cmdType, len(matches))
 		}
+	}
+}
+
+func TestSelectHooks_TidyCommand(t *testing.T) {
+	hooksConfig := config.HooksConfig{
+		Hooks: map[string]config.Hook{
+			"cleanup": {
+				Command:     "echo 'Removed {branch}'",
+				Description: "Log removal",
+				On:          []string{"tidy"},
+			},
+			"editor": {
+				Command: "code {path}",
+				On:      []string{"create", "open"},
+			},
+		},
+	}
+
+	// Tidy hook runs for tidy command
+	matches, err := SelectHooks(hooksConfig, "", false, false, CommandTidy)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Errorf("expected 1 hook for tidy, got %d", len(matches))
+	}
+	if len(matches) > 0 && matches[0].Name != "cleanup" {
+		t.Errorf("expected cleanup hook, got %s", matches[0].Name)
+	}
+
+	// Tidy hook does NOT run for create command
+	matches, err = SelectHooks(hooksConfig, "", false, false, CommandCreate)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if len(matches) != 1 || matches[0].Name != "editor" {
+		t.Errorf("expected only editor hook for create, got %v", matches)
 	}
 }

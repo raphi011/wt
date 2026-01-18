@@ -47,6 +47,8 @@ type TidyCmd struct {
 	DryRun       bool   `arg:"-n,--dry-run" help:"preview without removing"`
 	RefreshPR    bool   `arg:"--refresh-pr" help:"force refresh PR cache"`
 	IncludeClean bool   `arg:"-c,--include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
+	Hook         string `arg:"--hook" help:"run named hook instead of default"`
+	NoHook       bool   `arg:"--no-hook" help:"skip post-removal hooks"`
 }
 
 func (TidyCmd) Description() string {
@@ -54,6 +56,9 @@ func (TidyCmd) Description() string {
 
 Removes worktrees where the branch is merged AND working directory is clean.
 Shows a table with PR status (requires gh/glab CLI) before removal.
+
+Hooks with on=["tidy"] run after each worktree removal. Hooks run with
+working directory set to the main repo (since worktree path is deleted).
 
 Merge detection uses git merge-base locally, which may miss squash-merged
 or rebased PRs. For accurate detection, use GitHub/GitLab where PR status
@@ -64,7 +69,9 @@ Examples:
   wt tidy -n                   # Dry-run: preview without removing
   wt tidy -d ~/Git/worktrees   # Scan specific directory
   wt tidy -c                   # Also remove clean (0-commit) worktrees
-  wt tidy --refresh-pr         # Force refresh PR status from GitHub`
+  wt tidy --refresh-pr         # Force refresh PR status from GitHub
+  wt tidy --no-hook            # Skip post-removal hooks
+  wt tidy --hook=cleanup       # Run 'cleanup' hook instead of default`
 }
 
 // ListCmd lists worktrees in a directory.

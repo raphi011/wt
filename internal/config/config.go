@@ -234,7 +234,7 @@ const defaultConfig = `# wt configuration
 # Example: "{folder-name}_{branch-name}" creates "my-repo_feature-branch"
 worktree_format = "{git-origin}-{branch-name}"
 
-# Hooks - run commands after worktree creation
+# Hooks - run commands after worktree creation/removal
 # Use --hook=name to run a specific hook, --no-hook to skip all hooks
 #
 # Hooks with "on" run automatically for matching commands.
@@ -250,23 +250,30 @@ worktree_format = "{git-origin}-{branch-name}"
 # description = "Install deps and open editor"
 # on = ["pr"]  # auto-run when opening PRs
 #
+# [hooks.cleanup]
+# command = "echo 'Removed {branch} from {repo}'"
+# description = "Log removed branches"
+# on = ["tidy"]  # auto-run when removing worktrees
+#
 # [hooks.vscode]
 # command = "code {path}"
 # description = "Open VS Code"
 # # no "on" - only runs via --hook=vscode
 #
-# Available "on" values: "create", "open", "pr", "all"
+# Available "on" values: "create", "open", "pr", "tidy", "all"
 #
 # Other options:
 #   run_on_exists = false  # skip if worktree already existed (default: false)
 #
 # Hooks run with working directory set to the worktree path.
+# For "tidy" hooks, working directory is the main repo (worktree is deleted).
 # Available placeholders:
 #   {path}      - absolute worktree path
 #   {branch}    - branch name
 #   {repo}      - repo name from git origin
 #   {folder}    - main repo folder name
 #   {main-repo} - main repo path
+#   {trigger}   - command that triggered the hook (create, open, pr, tidy)
 
 # Clone settings - configure which forge to use when cloning repos
 # Used by "wt pr open" when cloning a new repository
