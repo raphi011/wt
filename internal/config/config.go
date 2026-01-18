@@ -36,10 +36,11 @@ type CloneConfig struct {
 
 // Config holds the wt configuration
 type Config struct {
-	DefaultPath    string      `toml:"default_path"`
-	WorktreeFormat string      `toml:"worktree_format"`
-	Hooks          HooksConfig `toml:"-"` // custom parsing needed
-	Clone          CloneConfig `toml:"clone"`
+	DefaultPath    string            `toml:"default_path"`
+	WorktreeFormat string            `toml:"worktree_format"`
+	Hooks          HooksConfig       `toml:"-"` // custom parsing needed
+	Clone          CloneConfig       `toml:"clone"`
+	Hosts          map[string]string `toml:"hosts"` // domain -> forge type mapping
 }
 
 // DefaultWorktreeFormat is the default format for worktree folder names
@@ -88,6 +89,7 @@ type rawConfig struct {
 	WorktreeFormat string                 `toml:"worktree_format"`
 	Hooks          map[string]interface{} `toml:"hooks"`
 	Clone          CloneConfig            `toml:"clone"`
+	Hosts          map[string]string      `toml:"hosts"`
 }
 
 // Load reads config from ~/.config/wt/config.toml
@@ -117,11 +119,19 @@ func Load() (Config, error) {
 		WorktreeFormat: raw.WorktreeFormat,
 		Hooks:          parseHooksConfig(raw.Hooks),
 		Clone:          raw.Clone,
+		Hosts:          raw.Hosts,
 	}
 
 	// Validate default_path (must be absolute or start with ~)
 	if err := ValidateDefaultPath(cfg.DefaultPath); err != nil {
 		return Default(), err
+	}
+
+	// Validate hosts (only "github" or "gitlab" allowed)
+	for host, forgeType := range cfg.Hosts {
+		if forgeType != "github" && forgeType != "gitlab" {
+			return Default(), fmt.Errorf("invalid forge type %q for host %q: must be \"github\" or \"gitlab\"", forgeType, host)
+		}
 	}
 
 	// Use defaults for empty values
@@ -274,6 +284,18 @@ worktree_format = "{git-origin}-{branch-name}"
 #
 # Rules are matched in order; first match wins.
 # Supported forges: "github" (gh CLI), "gitlab" (glab CLI)
+
+# Host mappings - for self-hosted GitHub Enterprise or GitLab instances
+# Maps custom domains to forge type for automatic detection
+#
+# [hosts]
+# "github.mycompany.com" = "github"   # GitHub Enterprise
+# "gitlab.internal.corp" = "gitlab"   # Self-hosted GitLab
+# "code.company.com" = "gitlab"       # Another GitLab instance
+#
+# Note: You must also authenticate with the respective CLI:
+#   gh auth login --hostname github.mycompany.com
+#   glab auth login --hostname gitlab.internal.corp
 `
 
 // Init creates a default config file at ~/.config/wt/config.toml
