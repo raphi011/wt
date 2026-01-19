@@ -29,6 +29,77 @@ type Worktree struct {
 	Note         string `json:"note,omitempty"`
 }
 
+// GetWorktreeInfo returns info for a single worktree at the given path
+func GetWorktreeInfo(path string) (*Worktree, error) {
+	gitFile := filepath.Join(path, ".git")
+
+	// Check if it's a worktree (has .git file, not directory)
+	info, err := os.Stat(gitFile)
+	if err != nil {
+		return nil, fmt.Errorf("not a git worktree: %w", err)
+	}
+	if info.IsDir() {
+		return nil, fmt.Errorf("not a worktree (main repo)")
+	}
+
+	// Get main repo path
+	mainRepo, err := GetMainRepoPath(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get main repo: %w", err)
+	}
+
+	// Get branch
+	branch, err := GetCurrentBranch(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get branch: %w", err)
+	}
+
+	// Get repo name from main repo
+	repoName := filepath.Base(mainRepo)
+
+	// Get origin URL (errors treated as empty string)
+	originURL, _ := GetOriginURL(mainRepo)
+
+	// Get merge status (errors treated as "not merged" - safe default)
+	isMerged, _ := IsBranchMerged(mainRepo, branch)
+
+	// Get commit count if not merged (errors treated as 0 commits)
+	var commitCount int
+	if !isMerged {
+		commitCount, _ = GetCommitCount(mainRepo, branch)
+	}
+
+	// Get diff stats - errors treated as clean (safe for display purposes)
+	additions, deletions, hasUntracked, _ := GetDiffStats(path)
+	isDirty := additions > 0 || deletions > 0 || hasUntracked
+
+	// Get last commit time (errors treated as empty string)
+	lastCommit, _ := GetLastCommitRelative(path)
+
+	// Get branch note (errors treated as empty string)
+	note, _ := GetBranchNote(mainRepo, branch)
+
+	// Check if branch has upstream
+	hasUpstream := GetUpstreamBranch(mainRepo, branch) != ""
+
+	return &Worktree{
+		Path:         path,
+		Branch:       branch,
+		MainRepo:     mainRepo,
+		RepoName:     repoName,
+		OriginURL:    originURL,
+		IsMerged:     isMerged,
+		CommitCount:  commitCount,
+		Additions:    additions,
+		Deletions:    deletions,
+		IsDirty:      isDirty,
+		HasUntracked: hasUntracked,
+		HasUpstream:  hasUpstream,
+		LastCommit:   lastCommit,
+		Note:         note,
+	}, nil
+}
+
 // ListWorktrees scans a directory for git worktrees
 func ListWorktrees(scanDir string) ([]Worktree, error) {
 	entries, err := os.ReadDir(scanDir)

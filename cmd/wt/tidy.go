@@ -11,6 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
+	"github.com/raphi011/wt/internal/resolve"
 	"github.com/raphi011/wt/internal/ui"
 )
 
@@ -18,9 +19,6 @@ func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
-
-	// Detect forge per-worktree (optional - PR status is a nice-to-have)
-	// We'll check availability when we actually need it
 
 	dir := cmd.Dir
 	if dir == "" {
@@ -30,6 +28,11 @@ func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 	scanPath, err := filepath.Abs(dir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	// If a target is specified, handle single worktree removal
+	if cmd.Target != "" {
+		return runTidyTarget(cmd, cfg, scanPath)
 	}
 
 	if cmd.DryRun {
@@ -201,4 +204,87 @@ func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 	fmt.Print(ui.FormatSummary(len(toRemove), skipped, cmd.DryRun))
 
 	return nil
+}
+
+// runTidyTarget handles removal of a single targeted worktree
+func runTidyTarget(cmd *TidyCmd, cfg *config.Config, scanPath string) error {
+	// Resolve target
+	target, err := resolve.ByIDOrBranch(cmd.Target, scanPath)
+	if err != nil {
+		return err
+	}
+
+	// Get worktree info
+	wt, err := git.GetWorktreeInfo(target.Path)
+	if err != nil {
+		return fmt.Errorf("failed to get worktree info: %w", err)
+	}
+
+	// Check if removable (unless force)
+	if !cmd.Force {
+		isPrunable := (wt.IsMerged && !wt.IsDirty) ||
+			(cmd.IncludeClean && wt.CommitCount == 0 && !wt.IsDirty)
+		if !isPrunable {
+			return fmt.Errorf("worktree %q is not removable: %s",
+				target.Branch, formatNotRemovableReason(wt, cmd.IncludeClean))
+		}
+	}
+
+	// Dry run output
+	if cmd.DryRun {
+		fmt.Printf("Would remove worktree: %s (%s)\n", target.Branch, target.Path)
+		return nil
+	}
+
+	// Select hooks
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandTidy)
+	if err != nil {
+		return err
+	}
+
+	// Remove worktree
+	if err := git.RemoveWorktree(*wt, cmd.Force); err != nil {
+		return fmt.Errorf("failed to remove worktree: %w", err)
+	}
+
+	// Run hooks
+	ctx := hooks.Context{
+		Path:     wt.Path,
+		Branch:   wt.Branch,
+		Repo:     wt.RepoName,
+		Folder:   filepath.Base(wt.MainRepo),
+		MainRepo: wt.MainRepo,
+		Trigger:  string(hooks.CommandTidy),
+	}
+	hooks.RunForEach(hookMatches, ctx, wt.MainRepo)
+
+	// Prune stale references
+	git.PruneWorktrees(wt.MainRepo)
+
+	fmt.Printf("Removed worktree: %s (%s)\n", target.Branch, target.Path)
+	return nil
+}
+
+// formatNotRemovableReason returns a helpful error message explaining why a worktree
+// can't be removed and what flags could help
+func formatNotRemovableReason(wt *git.Worktree, includeCleanSet bool) string {
+	if wt.IsDirty {
+		return "has uncommitted changes (use -f to force)"
+	}
+
+	// Not dirty, but not merged
+	if wt.CommitCount == 0 {
+		if includeCleanSet {
+			// -c was set but still not removable - shouldn't happen if not dirty
+			return "not merged (use -f to force)"
+		}
+		return "not merged, but has 0 commits ahead (use -c to include clean worktrees, or -f to force)"
+	}
+
+	// Has commits ahead and not merged
+	commitWord := "commit"
+	if wt.CommitCount > 1 {
+		commitWord = "commits"
+	}
+	return fmt.Sprintf("not merged (%d %s ahead of default branch), use -f to force", wt.CommitCount, commitWord)
 }

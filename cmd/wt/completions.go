@@ -83,7 +83,14 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-d --dir -n --dry-run -c --include-clean --hook --no-hook" -- "$cur"))
+            if [[ $cword -eq 2 ]] && [[ "$cur" != -* ]]; then
+                # Complete worktree IDs and branch names (optional target)
+                local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                local branches=$(wt list 2>/dev/null | awk '{print $3}')
+                COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -W "-d --dir -n --dry-run -f --force -c --include-clean --hook --no-hook" -- "$cur"))
+            fi
             ;;
         list)
             case "$prev" in
@@ -321,10 +328,13 @@ _wt() {
                     ;;
                 tidy)
                     _arguments \
+                        '1:worktree ID or branch:__wt_worktree_targets' \
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/' \
                         '-n[preview without removing]' \
                         '--dry-run[preview without removing]' \
+                        '-f[force remove even if not merged/dirty]' \
+                        '--force[force remove even if not merged/dirty]' \
                         '-c[also remove clean worktrees]' \
                         '--include-clean[also remove clean worktrees]' \
                         '--hook[run named hook]:hook:' \
@@ -569,9 +579,11 @@ complete -c wt -n "__fish_seen_subcommand_from open" -l note -r -d "Set note on 
 complete -c wt -n "__fish_seen_subcommand_from open" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from open" -l no-hook -d "Skip post-create hook"
 
-# tidy: flags only (no positional args)
+# tidy: optional target (ID or branch), then flags
+complete -c wt -n "__fish_seen_subcommand_from tidy; and not __fish_seen_argument" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s n -l dry-run -d "Preview without removing"
+complete -c wt -n "__fish_seen_subcommand_from tidy" -s f -l force -d "Force remove even if not merged/dirty"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s c -l include-clean -d "Also remove clean worktrees"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -l no-hook -d "Skip post-removal hooks"

@@ -191,15 +191,15 @@ func (g *GitHub) MergePR(repoURL string, number int, strategy string) error {
 	return nil
 }
 
-// FormatIcon returns the nerd font icon for PR state
-func (g *GitHub) FormatIcon(state string) string {
+// FormatState returns a human-readable PR state
+func (g *GitHub) FormatState(state string) string {
 	switch state {
 	case "MERGED":
-		return "󰜘"
+		return "merged"
 	case "OPEN":
-		return "󰜛"
+		return "open"
 	case "CLOSED":
-		return "󰅖"
+		return "closed"
 	default:
 		return ""
 	}

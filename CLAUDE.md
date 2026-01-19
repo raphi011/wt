@@ -59,7 +59,7 @@ internal/ui/             - Terminal UI components
 - `wt create .. branch` - Create next to repo
 - `wt create ~/Git/worktrees branch` - Create in central location
 
-**MR/PR status** - Uses `gh pr list` or `glab mr list` to fetch merge request info (auto-detected). Nerd font icons: 󰜘 (merged), 󰜛 (open), 󰅖 (closed).
+**MR/PR status** - Uses `gh pr list` or `glab mr list` to fetch merge request info (auto-detected). States: merged, open, closed.
 
 ### CLI Commands
 

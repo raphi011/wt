@@ -62,17 +62,19 @@ func (c *OpenCmd) Run(ctx *Context) error {
 
 // TidyCmd removes merged and clean worktrees.
 type TidyCmd struct {
+	Target       string `arg:"" optional:"" placeholder:"ID|BRANCH" help:"specific worktree to remove (by ID or branch name)"`
 	Dir          string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	DryRun       bool   `short:"n" name:"dry-run" negatable:"" help:"preview without removing"`
+	Force        bool   `short:"f" name:"force" help:"force remove even if not merged or has uncommitted changes"`
 	IncludeClean bool   `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
 	Hook         string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook       bool   `name:"no-hook" help:"skip post-removal hooks" xor:"hook-ctrl"`
 }
 
 func (c *TidyCmd) Help() string {
-	return `Tidy up merged git worktrees with PR status display
+	return `Without arguments, removes all worktrees where the branch is merged AND
+working directory is clean. With a target, removes only that specific worktree.
 
-Removes worktrees where the branch is merged AND working directory is clean.
 Shows a table with cached PR status. Run 'wt pr refresh' to update PR info.
 
 Hooks with on=["tidy"] run after each worktree removal. Hooks run with
@@ -88,6 +90,9 @@ Examples:
   wt tidy -n                   # Dry-run: preview without removing
   wt tidy -d ~/Git/worktrees   # Scan specific directory
   wt tidy -c                   # Also remove clean (0-commit) worktrees
+  wt tidy feature-x            # Remove specific worktree by branch name
+  wt tidy 1                    # Remove specific worktree by ID
+  wt tidy feature-x -f         # Force remove even if not merged/dirty
   wt tidy --no-hook            # Skip post-removal hooks
   wt tidy --hook=cleanup       # Run 'cleanup' hook instead of default`
 }

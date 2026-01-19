@@ -98,10 +98,10 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, prM
 		} else if pr, ok := prMap[wt.Branch]; ok && pr != nil && pr.Number > 0 {
 			// PR exists - show details
 			f := forge.DetectFromRepo(wt.MainRepo, nil)
-			icon := f.FormatIcon(pr.State)
+			state := f.FormatState(pr.State)
 
-			// Format: icon author comments reviews url
-			parts := []string{icon}
+			// Format: state author comments reviews url
+			parts := []string{state}
 			if pr.Author != "" {
 				parts = append(parts, "@"+pr.Author)
 			}

@@ -55,8 +55,8 @@ type Forge interface {
 	// Returns error if repo doesn't allow the requested merge strategy
 	MergePR(repoURL string, number int, strategy string) error
 
-	// FormatIcon returns the nerd font icon for PR state
-	FormatIcon(state string) string
+	// FormatState returns a human-readable PR state
+	FormatState(state string) string
 }
 
 // PRCache maps origin URL -> branch -> PR info
