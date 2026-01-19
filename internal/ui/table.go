@@ -180,7 +180,7 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, prM
 		table.WithColumns(columns),
 		table.WithRows(rows),
 		table.WithFocused(false),
-		table.WithHeight(len(rows)),
+		table.WithHeight(len(rows)+1),
 	)
 
 	// Style the table

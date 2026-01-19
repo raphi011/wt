@@ -154,7 +154,11 @@ func runList(cmd *ListCmd) error {
 		return nil
 	}
 
-	fmt.Printf("Listing worktrees in %s\n\n", scanPath)
+	if currentRepo != "" && len(allWorktrees) != len(worktrees) {
+		fmt.Printf("Listing worktrees for %s (%d of %d)\n\n", worktrees[0].RepoName, len(worktrees), len(allWorktrees))
+	} else {
+		fmt.Printf("Listing worktrees in %s (%d)\n\n", scanPath, len(worktrees))
+	}
 
 	// Build PR map from cache for display, track unknown branches
 	prMap := make(map[string]*forge.PRInfo)
