@@ -30,8 +30,9 @@ type CloneRule struct {
 
 // CloneConfig holds clone-related configuration
 type CloneConfig struct {
-	Default string      `toml:"default"` // default forge: "github" or "gitlab"
-	Rules   []CloneRule `toml:"rules"`   // pattern-based rules
+	Forge string      `toml:"forge"` // default forge: "github" or "gitlab"
+	Org   string      `toml:"org"`   // default organization when not specified
+	Rules []CloneRule `toml:"rules"` // pattern-based rules
 }
 
 // Config holds the wt configuration
@@ -52,7 +53,7 @@ func Default() Config {
 		DefaultPath:    "",
 		WorktreeFormat: DefaultWorktreeFormat,
 		Clone: CloneConfig{
-			Default: "github", // backwards compatible default
+			Forge: "github", // backwards compatible default
 		},
 	}
 }
@@ -127,6 +128,11 @@ func Load() (Config, error) {
 		return Default(), err
 	}
 
+	// Validate clone.forge (only "github", "gitlab", or empty allowed)
+	if cfg.Clone.Forge != "" && cfg.Clone.Forge != "github" && cfg.Clone.Forge != "gitlab" {
+		return Default(), fmt.Errorf("invalid clone.forge %q: must be \"github\" or \"gitlab\"", cfg.Clone.Forge)
+	}
+
 	// Validate hosts (only "github" or "gitlab" allowed)
 	for host, forgeType := range cfg.Hosts {
 		if forgeType != "github" && forgeType != "gitlab" {
@@ -138,8 +144,8 @@ func Load() (Config, error) {
 	if cfg.WorktreeFormat == "" {
 		cfg.WorktreeFormat = DefaultWorktreeFormat
 	}
-	if cfg.Clone.Default == "" {
-		cfg.Clone.Default = "github"
+	if cfg.Clone.Forge == "" {
+		cfg.Clone.Forge = "github"
 	}
 
 	return cfg, nil
@@ -191,7 +197,7 @@ func (c *CloneConfig) GetForgeForRepo(repoSpec string) string {
 			return rule.Forge
 		}
 	}
-	return c.Default
+	return c.Forge
 }
 
 // matchPattern checks if repoSpec matches the pattern
@@ -275,11 +281,12 @@ worktree_format = "{git-origin}-{branch-name}"
 #   {main-repo} - main repo path
 #   {trigger}   - command that triggered the hook (create, open, pr, tidy)
 
-# Clone settings - configure which forge to use when cloning repos
-# Used by "wt pr open" when cloning a new repository
+# Clone settings - configure forge and default org for cloning repos
+# Used by "wt pr clone" when cloning a new repository
 #
 # [clone]
-# default = "github"  # fallback forge when no rule matches
+# forge = "github"    # default forge when no rule matches (github or gitlab)
+# org = "my-org"      # default org when repo specified without org/ prefix
 #
 # [[clone.rules]]
 # pattern = "n26/*"     # glob pattern (* matches anything)

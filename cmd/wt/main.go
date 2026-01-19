@@ -63,6 +63,9 @@ func main() {
 	if args.Pr != nil && args.Pr.Open != nil && args.Pr.Open.Dir == "" {
 		args.Pr.Open.Dir = cfg.DefaultPath
 	}
+	if args.Pr != nil && args.Pr.Clone != nil && args.Pr.Clone.Dir == "" {
+		args.Pr.Clone.Dir = cfg.DefaultPath
+	}
 	if args.Mv != nil {
 		if args.Mv.Dir == "" {
 			args.Mv.Dir = cfg.DefaultPath
@@ -566,6 +569,8 @@ func writeHelp(w *os.File, p *arg.Parser, args *Args) {
 	case args.Pr != nil:
 		if args.Pr.Open != nil {
 			desc = args.Pr.Open.Description()
+		} else if args.Pr.Clone != nil {
+			desc = args.Pr.Clone.Description()
 		} else {
 			desc = args.Pr.Description()
 		}
@@ -841,8 +846,10 @@ func runPr(cmd *PrCmd, cfg config.Config) error {
 	switch {
 	case cmd.Open != nil:
 		return runPrOpen(cmd.Open, cfg)
+	case cmd.Clone != nil:
+		return runPrClone(cmd.Clone, cfg)
 	default:
-		return fmt.Errorf("no subcommand specified (try: wt pr open)")
+		return fmt.Errorf("no subcommand specified (try: wt pr open, wt pr clone)")
 	}
 }
 
@@ -866,42 +873,27 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 		return fmt.Errorf("failed to expand path: %w", err)
 	}
 
-	// Determine which repo to use
+	// Determine which repo to use (local only - never clones)
 	var repoPath string
 	if cmd.Repo == "" {
 		// No repo arg: use current directory
 		repoPath = "."
 	} else {
-		// Repo arg provided: find or clone
-		org, name := git.ParseRepoArg(cmd.Repo)
+		// Repo arg provided: find locally only
+		_, name := git.ParseRepoArg(cmd.Repo)
 
 		// Try to find repo locally
 		foundPath, err := git.FindRepoByName(basePath, name)
 		if err == nil {
 			repoPath = foundPath
 			fmt.Printf("Using repo at %s\n", repoPath)
-		} else if org != "" {
-			// Not found but org/repo provided: clone it
-			// Use clone config rules to determine forge
-			forgeName := cfg.Clone.GetForgeForRepo(cmd.Repo)
-			f := forge.ByName(forgeName)
-			if err := f.Check(); err != nil {
-				return err
-			}
-			fmt.Printf("Cloning %s to %s (using %s)...\n", cmd.Repo, basePath, forgeName)
-			clonedPath, err := f.CloneRepo(cmd.Repo, basePath)
-			if err != nil {
-				return fmt.Errorf("failed to clone repo: %w", err)
-			}
-			repoPath = clonedPath
-			fmt.Printf("✓ Cloned to %s\n", repoPath)
 		} else {
-			// Not found and no org: error with suggestions
+			// Not found: error with suggestions and hint to use pr clone
 			similar := git.FindSimilarRepos(basePath, name)
 			if len(similar) > 0 {
-				return fmt.Errorf("repository %q not found in %s\nDid you mean: %s", name, basePath, strings.Join(similar, ", "))
+				return fmt.Errorf("repository %q not found in %s\nDid you mean: %s\nTo clone a new repo, use: wt pr clone %d %s", name, basePath, strings.Join(similar, ", "), cmd.Number, cmd.Repo)
 			}
-			return fmt.Errorf("repository %q not found in %s\nUse org/repo format to clone (defaults to GitHub)", name, basePath)
+			return fmt.Errorf("repository %q not found in %s\nTo clone a new repo, use: wt pr clone %d %s", name, basePath, cmd.Number, cmd.Repo)
 		}
 	}
 
@@ -915,6 +907,138 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 	f := forge.Detect(originURL, cfg.Hosts)
 	if err := f.Check(); err != nil {
 		return err
+	}
+
+	// Fetch PR branch name
+	fmt.Printf("Fetching PR #%d...\n", cmd.Number)
+	branch, err := f.GetPRBranch(originURL, cmd.Number)
+	if err != nil {
+		return fmt.Errorf("failed to get PR branch: %w", err)
+	}
+
+	absPath, err := filepath.Abs(basePath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
+
+	result, err := git.CreateWorktreeFrom(repoPath, basePath, branch, cfg.WorktreeFormat)
+	if err != nil {
+		return err
+	}
+
+	if result.AlreadyExists {
+		fmt.Printf("→ Worktree already exists at: %s\n", result.Path)
+	} else {
+		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
+	}
+
+	// Run post-create hooks
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, result.AlreadyExists, hooks.CommandPR)
+	if err != nil {
+		return err
+	}
+
+	if len(hookMatches) > 0 {
+		// Get context for placeholder substitution
+		repoName, err := git.GetRepoNameFrom(repoPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to get repo name for hook context: %v\n", err)
+		}
+		folderName := filepath.Base(repoPath)
+		mainRepo, mainRepoErr := git.GetMainRepoPath(result.Path)
+		if mainRepoErr != nil || mainRepo == "" {
+			// Fallback to the repo path used for creating the worktree
+			if mainRepoErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to get main repo path: %v (using %s)\n", mainRepoErr, repoPath)
+			}
+			mainRepo, err = filepath.Abs(repoPath)
+			if err != nil {
+				return fmt.Errorf("failed to determine main repo path: %w", err)
+			}
+		}
+
+		ctx := hooks.Context{
+			Path:     result.Path,
+			Branch:   branch,
+			Repo:     repoName,
+			Folder:   folderName,
+			MainRepo: mainRepo,
+			Trigger:  string(hooks.CommandPR),
+		}
+
+		for _, match := range hookMatches {
+			fmt.Printf("Running hook '%s'...\n", match.Name)
+			if err := hooks.Run(match.Hook, ctx); err != nil {
+				return fmt.Errorf("hook %q failed: %w", match.Name, err)
+			}
+			if match.Hook.Description != "" {
+				fmt.Printf("  ✓ %s\n", match.Hook.Description)
+			}
+		}
+	}
+
+	return nil
+}
+
+func runPrClone(cmd *PrCloneCmd, cfg config.Config) error {
+	if err := git.CheckGit(); err != nil {
+		return err
+	}
+
+	// Validate worktree format
+	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
+		return fmt.Errorf("invalid worktree_format in config: %w", err)
+	}
+
+	// Parse org/repo - use clone.org if org not specified
+	org, name := git.ParseRepoArg(cmd.Repo)
+	if org == "" {
+		if cfg.Clone.Org == "" {
+			return fmt.Errorf("repository must be in org/repo format, or configure [clone] org in config")
+		}
+		org = cfg.Clone.Org
+	}
+	repoSpec := org + "/" + name
+
+	dir := cmd.Dir
+	if dir == "" {
+		dir = "."
+	}
+
+	basePath, err := expandPath(dir)
+	if err != nil {
+		return fmt.Errorf("failed to expand path: %w", err)
+	}
+
+	// Check if repo already exists locally
+	if existingPath, err := git.FindRepoByName(basePath, name); err == nil {
+		return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr open %d %s' instead", name, existingPath, cmd.Number, name)
+	}
+
+	// Determine forge: cmd.Forge > cfg.Clone rules > cfg.Clone.Forge
+	forgeName := cmd.Forge
+	if forgeName == "" {
+		forgeName = cfg.Clone.GetForgeForRepo(repoSpec)
+	}
+
+	f := forge.ByName(forgeName)
+	if err := f.Check(); err != nil {
+		return err
+	}
+
+	// Clone the repo
+	fmt.Printf("Cloning %s to %s (using %s)...\n", repoSpec, basePath, forgeName)
+	repoPath, err := f.CloneRepo(repoSpec, basePath)
+	if err != nil {
+		return fmt.Errorf("failed to clone repo: %w", err)
+	}
+	fmt.Printf("✓ Cloned to %s\n", repoPath)
+
+	// Get origin URL from cloned repo
+	originURL, err := git.GetOriginURL(repoPath)
+	if err != nil {
+		return fmt.Errorf("failed to get origin URL: %w", err)
 	}
 
 	// Fetch PR branch name

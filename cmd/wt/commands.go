@@ -167,39 +167,67 @@ Examples:
   wt mv -f -d ~/Git                  # Force move even if worktrees are dirty`
 }
 
-// PrOpenCmd creates a worktree for a PR.
+// PrOpenCmd creates a worktree for a PR from an existing local repo.
 type PrOpenCmd struct {
 	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR number"`
-	Repo   string `arg:"positional" placeholder:"REPO" help:"repository (org/repo or name)"`
+	Repo   string `arg:"positional" placeholder:"REPO" help:"repository name to find locally"`
 	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
 
 func (PrOpenCmd) Description() string {
-	return `Create a worktree for a PR
+	return `Create a worktree for a PR from an existing local repo
 
 Fetches PR metadata and creates a worktree for the branch.
-If the repository isn't found locally, use org/repo format to clone it.
+Only works with repos that already exist locally. Use 'wt pr clone' to clone new repos.
 
 Examples:
   wt pr open 123                  # PR from current repo
   wt pr open 123 myrepo           # Find "myrepo" in target directory
-  wt pr open 123 org/repo         # Clone if not found locally
+  wt pr open 123 org/repo         # Find "repo" locally (org is ignored)
   wt pr open 123 -d ~/Git         # Specify target directory
   wt pr open 123 --no-hook        # Skip post-create hook`
 }
 
+// PrCloneCmd clones a repo and creates a worktree for a PR.
+type PrCloneCmd struct {
+	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR number"`
+	Repo   string `arg:"positional,required" placeholder:"REPO" help:"repository (org/repo or repo if [clone] org configured)"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Forge  string `arg:"--forge,env:WT_FORGE" placeholder:"FORGE" help:"forge: github or gitlab (flag > env > clone rules > config)"`
+	Hook   string `arg:"--hook" help:"run named hook instead of default"`
+	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
+}
+
+func (PrCloneCmd) Description() string {
+	return `Clone a repo and create a worktree for a PR
+
+Clones the repository if not present locally, then creates a worktree for the PR branch.
+Use this for repos you don't have locally yet. Use 'wt pr open' for existing repos.
+
+If [clone] org is configured, you can omit the org/ prefix from the repo name.
+
+Examples:
+  wt pr clone 123 org/repo              # Clone and checkout PR
+  wt pr clone 123 repo                  # Use default org from config
+  wt pr clone 123 org/repo -d ~/Git     # Specify target directory
+  wt pr clone 123 org/repo --forge=gitlab  # Use GitLab instead of GitHub
+  wt pr clone 123 org/repo --no-hook    # Skip post-create hook`
+}
+
 // PrCmd works with PRs.
 type PrCmd struct {
-	Open *PrOpenCmd `arg:"subcommand:open" help:"checkout PR as new worktree"`
+	Open  *PrOpenCmd  `arg:"subcommand:open" help:"checkout PR from existing local repo"`
+	Clone *PrCloneCmd `arg:"subcommand:clone" help:"clone repo and checkout PR"`
 }
 
 func (PrCmd) Description() string {
 	return `Work with PRs
 Examples:
-  wt pr open 123           # Checkout PR #123 from current repo
-  wt pr open 123 myrepo    # Checkout PR #123 from myrepo`
+  wt pr open 123             # PR from current repo
+  wt pr open 123 myrepo      # PR from existing local repo
+  wt pr clone 123 org/repo   # Clone repo and checkout PR`
 }
 
 // Args is the root command.

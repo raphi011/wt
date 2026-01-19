@@ -90,7 +90,7 @@ _wt_completions() {
             ;;
         pr)
             if [[ $cword -eq 2 ]]; then
-                COMPREPLY=($(compgen -W "open" -- "$cur"))
+                COMPREPLY=($(compgen -W "open clone" -- "$cur"))
             elif [[ "${words[2]}" == "open" ]]; then
                 case "$prev" in
                     -d|--dir)
@@ -102,6 +102,21 @@ _wt_completions() {
                         ;;
                 esac
                 COMPREPLY=($(compgen -W "-d --dir --hook --no-hook" -- "$cur"))
+            elif [[ "${words[2]}" == "clone" ]]; then
+                case "$prev" in
+                    -d|--dir)
+                        COMPREPLY=($(compgen -d -- "$cur"))
+                        return
+                        ;;
+                    --forge)
+                        COMPREPLY=($(compgen -W "github gitlab" -- "$cur"))
+                        return
+                        ;;
+                    --hook)
+                        return
+                        ;;
+                esac
+                COMPREPLY=($(compgen -W "-d --dir --forge --hook --no-hook" -- "$cur"))
             fi
             ;;
         config)
@@ -209,7 +224,8 @@ _wt() {
                     case $state in
                         subcmd)
                             local subcommands=(
-                                'open:Checkout PR as new worktree'
+                                'open:Checkout PR from existing local repo'
+                                'clone:Clone repo and checkout PR'
                             )
                             _describe 'subcommand' subcommands
                             ;;
@@ -221,6 +237,16 @@ _wt() {
                                         '2:repository:' \
                                         '-d[target directory]:directory:_files -/' \
                                         '--dir[target directory]:directory:_files -/' \
+                                        '--hook[run named hook]:hook:' \
+                                        '--no-hook[skip post-create hook]'
+                                    ;;
+                                clone)
+                                    _arguments \
+                                        '1:PR number:' \
+                                        '2:repository (org/repo):' \
+                                        '-d[target directory]:directory:_files -/' \
+                                        '--dir[target directory]:directory:_files -/' \
+                                        '--forge[forge type]:forge:(github gitlab)' \
                                         '--hook[run named hook]:hook:' \
                                         '--no-hook[skip post-create hook]'
                                     ;;
@@ -325,7 +351,8 @@ complete -c wt -n "__fish_seen_subcommand_from mv" -s n -l dry-run -d "Show what
 complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move dirty worktrees"
 
 # pr: subcommands
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open" -a "open" -d "Checkout PR as new worktree"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone" -a "open" -d "Checkout PR from existing local repo"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone" -a "clone" -d "Clone repo and checkout PR"
 # pr open: PR number (first positional), then repo (second positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -a "(gh pr list --json number,title --jq '.[] | \"\\(.number)\t\\(.title)\"' 2>/dev/null)" -d "PR number"
 # Repo names from default_path (second positional after PR number)
@@ -333,6 +360,11 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_fr
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -l no-hook -d "Skip post-create hook"
+# pr clone: PR number (first positional), then org/repo (second positional), then flags
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l forge -r -a "github gitlab" -d "Forge type"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l hook -d "Run named hook instead of default"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l no-hook -d "Skip post-create hook"
 
 # Helper function to list repos in default_path
 function __wt_list_repos
