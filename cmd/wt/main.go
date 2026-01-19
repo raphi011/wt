@@ -202,6 +202,28 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 		return err
 	}
 
+	// Check if we're in a git repo
+	inRepo := git.GetCurrentRepoMainPath() != ""
+
+	// Handle fuzzy search mode: no branch specified and not in a repo
+	if cmd.Branch == "" {
+		if inRepo {
+			return fmt.Errorf("branch name required when inside a git repository")
+		}
+
+		// Need a configured default_path for fuzzy search
+		if cmd.Dir == "" {
+			return fmt.Errorf("no branch specified and no default_path configured\nSet default_path in ~/.config/wt/config.toml or use -d flag")
+		}
+
+		return runOpenFuzzy(cmd, cfg)
+	}
+
+	// Normal mode: branch specified, must be in a repo
+	if !inRepo {
+		return fmt.Errorf("not in a git repository\nRun 'wt open' without arguments to fuzzy search existing worktrees")
+	}
+
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
@@ -271,6 +293,45 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 			}
 		}
 	}
+
+	return nil
+}
+
+// runOpenFuzzy handles the fuzzy search mode for wt open
+func runOpenFuzzy(cmd *OpenCmd, cfg config.Config) error {
+	// Expand and validate path
+	scanPath, err := expandPath(cmd.Dir)
+	if err != nil {
+		return fmt.Errorf("failed to expand path: %w", err)
+	}
+	scanPath, err = filepath.Abs(scanPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	// List worktrees in directory
+	worktrees, err := git.ListWorktrees(scanPath)
+	if err != nil {
+		return fmt.Errorf("failed to list worktrees: %w", err)
+	}
+
+	if len(worktrees) == 0 {
+		return fmt.Errorf("no worktrees found in %s", scanPath)
+	}
+
+	// Run interactive selector
+	result, err := ui.RunSelector(worktrees)
+	if err != nil {
+		return fmt.Errorf("selector failed: %w", err)
+	}
+
+	if result.Cancelled {
+		return nil // User cancelled, exit silently
+	}
+
+	// Print the selected worktree path
+	// This allows shell integration: cd $(wt open)
+	fmt.Println(result.Worktree.Path)
 
 	return nil
 }
@@ -595,7 +656,7 @@ func writeRootHelp(w *os.File) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Commands:")
 	fmt.Fprintln(w, "  create      Create worktree for new branch")
-	fmt.Fprintln(w, "  open        Open worktree for existing branch")
+	fmt.Fprintln(w, "  open        Open worktree or fuzzy search")
 	fmt.Fprintln(w, "  tidy        Remove merged worktrees")
 	fmt.Fprintln(w, "  list        List worktrees")
 	fmt.Fprintln(w, "  mv          Move worktrees")

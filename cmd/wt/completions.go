@@ -146,7 +146,7 @@ _wt() {
         command)
             local commands=(
                 'create:Create new worktree for a branch'
-                'open:Open worktree for existing local branch'
+                'open:Open worktree or fuzzy search existing'
                 'tidy:Tidy up merged worktrees'
                 'list:List worktrees'
                 'mv:Move worktrees to another directory'
@@ -286,7 +286,7 @@ complete -c wt -f
 
 # Subcommands (shown in completions and autosuggestions)
 complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "create" -d "Create new worktree"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "open" -d "Open worktree for existing branch"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "open" -d "Open worktree or fuzzy search"
 complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "tidy" -d "Tidy up merged worktrees"
 complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "list" -d "List worktrees"
 complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "mv" -d "Move worktrees to another directory"

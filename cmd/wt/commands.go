@@ -23,7 +23,7 @@ Examples:
 
 // OpenCmd opens a worktree for an existing local branch.
 type OpenCmd struct {
-	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"existing local branch name"`
+	Branch string `arg:"positional" placeholder:"BRANCH" help:"existing local branch name (optional when outside repo)"`
 	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
@@ -35,10 +35,14 @@ func (OpenCmd) Description() string {
 Unlike 'create', this command requires the branch to already exist locally.
 Use this when you want to work on a branch that was created elsewhere.
 
+When run outside a git repository with a configured default_path, shows an
+interactive fuzzy search to select from existing worktrees.
+
 Examples:
   wt open feature-branch              # Uses default path resolution
   wt open feature-branch -d ~/Git     # Specify target directory
-  wt open feature-branch --no-hook    # Skip post-create hook`
+  wt open feature-branch --no-hook    # Skip post-create hook
+  wt open                             # Fuzzy search worktrees (outside repo)`
 }
 
 // TidyCmd removes merged and clean worktrees.
@@ -205,7 +209,7 @@ Examples:
 // Args is the root command.
 type Args struct {
 	Create     *CreateCmd     `arg:"subcommand:create" help:"create a new worktree"`
-	Open       *OpenCmd       `arg:"subcommand:open" help:"open worktree for existing branch"`
+	Open       *OpenCmd       `arg:"subcommand:open" help:"open worktree or fuzzy search"`
 	Tidy       *TidyCmd       `arg:"subcommand:tidy" help:"tidy up merged worktrees"`
 	List       *ListCmd       `arg:"subcommand:list" help:"list worktrees"`
 	Mv         *MvCmd         `arg:"subcommand:mv" help:"move worktrees to another directory"`
@@ -223,6 +227,7 @@ Set WT_DEFAULT_PATH or see ~/.config/wt/config.toml for options.
 Examples:
   wt create feature-x              # Create worktree for new branch
   wt open existing-branch          # Create worktree for existing local branch
+  wt open                          # Fuzzy search worktrees (outside repo)
   wt pr open 123                   # Checkout PR as worktree
   wt list                          # List worktrees in current directory
   wt tidy                          # Remove merged worktrees
