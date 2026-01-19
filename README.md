@@ -10,6 +10,7 @@ Git worktree manager with GitHub/GitLab integration.
 - [Configuration](#configuration)
 - [Hook Examples](#hook-examples)
 - [Shell Completions](#shell-completions)
+- [Development](#development)
 
 ## Why wt
 
@@ -24,6 +25,12 @@ But worktrees can pile up fast. You end up with a dozen directories, can't remem
 
 ## Install
 
+**Homebrew (macOS/Linux):**
+```bash
+brew install raphi011/tap/wt
+```
+
+**Go:**
 ```bash
 go install github.com/raphi011/wt/cmd/wt@latest
 ```
@@ -194,4 +201,12 @@ Combined with hooks, you get a seamless workflow: press `O` in gh dash to checko
 
 ```bash
 wt completion fish > ~/.config/fish/completions/wt.fish
+```
+
+## Development
+
+```bash
+make build    # build ./wt binary
+make test     # run tests
+make install  # install to ~/go/bin
 ```
