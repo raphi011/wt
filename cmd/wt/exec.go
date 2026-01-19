@@ -25,8 +25,14 @@ func runExec(cmd *ExecCmd) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
+	// Strip leading "--" if present (kong passthrough includes it)
+	command := cmd.Command
+	if len(command) > 0 && command[0] == "--" {
+		command = command[1:]
+	}
+
 	// Validate command is provided
-	if len(cmd.Command) == 0 {
+	if len(command) == 0 {
 		return fmt.Errorf("no command specified (use: wt exec <id|branch> -- <command>)")
 	}
 
@@ -42,7 +48,7 @@ func runExec(cmd *ExecCmd) error {
 	}
 
 	// Execute command in worktree directory
-	c := exec.Command(cmd.Command[0], cmd.Command[1:]...)
+	c := exec.Command(command[0], command[1:]...)
 	c.Dir = target.Path
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
