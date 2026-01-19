@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/ui"
 )
 
 func runList(cmd *ListCmd) error {
@@ -39,8 +41,8 @@ func runList(cmd *ListCmd) error {
 		return fmt.Errorf("failed to load cache: %w", err)
 	}
 
-	// List worktrees using optimized lightweight function
-	allWorktrees, err := git.ListWorktreesLight(scanPath)
+	// List worktrees with full info (same as tidy, but no fetch)
+	allWorktrees, err := git.ListWorktrees(scanPath)
 	if err != nil {
 		return err
 	}
@@ -64,7 +66,7 @@ func runList(cmd *ListCmd) error {
 	if !cmd.All {
 		currentRepo = git.GetCurrentRepoMainPath()
 		if currentRepo != "" {
-			var filtered []git.WorktreeLight
+			var filtered []git.Worktree
 			for _, wt := range allWorktrees {
 				if wt.MainRepo == currentRepo {
 					filtered = append(filtered, wt)
@@ -88,27 +90,38 @@ func runList(cmd *ListCmd) error {
 			URL        string `json:"url,omitempty"`
 		}
 		type worktreeJSON struct {
-			ID         int     `json:"id"`
-			Path       string  `json:"path"`
-			Branch     string  `json:"branch"`
-			MainRepo   string  `json:"main_repo,omitempty"`
-			RepoName   string  `json:"repo_name,omitempty"`
-			OriginURL  string  `json:"origin_url"`
-			CommitHash string  `json:"commit_hash,omitempty"`
-			Note       string  `json:"note,omitempty"`
-			PR         *prJSON `json:"pr,omitempty"`
+			ID          int     `json:"id"`
+			Path        string  `json:"path"`
+			Branch      string  `json:"branch"`
+			MainRepo    string  `json:"main_repo,omitempty"`
+			RepoName    string  `json:"repo_name,omitempty"`
+			OriginURL   string  `json:"origin_url"`
+			IsMerged    bool    `json:"is_merged"`
+			CommitCount int     `json:"commit_count"`
+			Additions   int     `json:"additions"`
+			Deletions   int     `json:"deletions"`
+			IsDirty     bool    `json:"is_dirty"`
+			HasUpstream bool    `json:"has_upstream"`
+			LastCommit  string  `json:"last_commit,omitempty"`
+			Note        string  `json:"note,omitempty"`
+			PR          *prJSON `json:"pr,omitempty"`
 		}
 		result := make([]worktreeJSON, 0, len(worktrees))
 		for _, wt := range worktrees {
 			wtJSON := worktreeJSON{
-				ID:         pathToID[wt.Path],
-				Path:       wt.Path,
-				Branch:     wt.Branch,
-				MainRepo:   wt.MainRepo,
-				RepoName:   wt.RepoName,
-				OriginURL:  wt.OriginURL,
-				CommitHash: wt.CommitHash,
-				Note:       wt.Note,
+				Path:        wt.Path,
+				Branch:      wt.Branch,
+				MainRepo:    wt.MainRepo,
+				RepoName:    wt.RepoName,
+				OriginURL:   wt.OriginURL,
+				IsMerged:    wt.IsMerged,
+				CommitCount: wt.CommitCount,
+				Additions:   wt.Additions,
+				Deletions:   wt.Deletions,
+				IsDirty:     wt.IsDirty,
+				HasUpstream: wt.HasUpstream,
+				LastCommit:  wt.LastCommit,
+				Note:        wt.Note,
 			}
 			// Add PR info if available
 			if originCache, ok := wtCache.PRs[wt.OriginURL]; ok {
@@ -131,30 +144,7 @@ func runList(cmd *ListCmd) error {
 		return nil
 	}
 
-	// Build list of items to display
-	type displayItem struct {
-		ID         int
-		Path       string
-		Origin     string
-		Branch     string
-		CommitHash string
-		Note       string
-		OriginURL  string
-	}
-	items := make([]displayItem, 0, len(worktrees))
-	for _, wt := range worktrees {
-		items = append(items, displayItem{
-			ID:         pathToID[wt.Path],
-			Path:       wt.Path,
-			Origin:     wt.RepoName,
-			Branch:     wt.Branch,
-			CommitHash: wt.CommitHash,
-			Note:       wt.Note,
-			OriginURL:  wt.OriginURL,
-		})
-	}
-
-	if len(items) == 0 {
+	if len(worktrees) == 0 {
 		// No worktrees found - show appropriate message
 		if currentRepo != "" && len(allWorktrees) > 0 {
 			// We're in a repo but no worktrees for this repo (others exist)
@@ -164,91 +154,39 @@ func runList(cmd *ListCmd) error {
 		return nil
 	}
 
-	// Find max widths for alignment
-	maxID := 0
-	maxOriginLen := 0
-	maxBranchLen := 0
-	maxPRLen := 0
-	for _, item := range items {
-		if item.ID > maxID {
-			maxID = item.ID
+	fmt.Printf("Listing worktrees in %s\n\n", scanPath)
+
+	// Build PR map from cache for display, track unknown branches
+	prMap := make(map[string]*forge.PRInfo)
+	prUnknown := make(map[string]bool)
+	for _, wt := range worktrees {
+		if originCache, ok := wtCache.PRs[wt.OriginURL]; ok {
+			if pr, ok := originCache[wt.Branch]; ok && pr != nil && pr.Fetched {
+				prMap[wt.Branch] = pr
+				continue
+			}
 		}
-		if len(item.Origin) > maxOriginLen {
-			maxOriginLen = len(item.Origin)
-		}
-		if len(item.Branch) > maxBranchLen {
-			maxBranchLen = len(item.Branch)
-		}
-		// Calculate PR display width
-		if originCache, ok := wtCache.PRs[item.OriginURL]; ok {
-			if pr, ok := originCache[item.Branch]; ok && pr != nil && pr.Fetched && pr.Number > 0 {
-				prLen := len(formatPRDisplay(pr))
-				if prLen > maxPRLen {
-					maxPRLen = prLen
-				}
+		// Not in cache or not fetched - mark as unknown
+		prUnknown[wt.Branch] = true
+	}
+
+	// Update merge status for worktrees based on PR state
+	for i := range worktrees {
+		if pr, ok := prMap[worktrees[i].Branch]; ok && pr != nil {
+			if pr.State == "MERGED" {
+				worktrees[i].IsMerged = true
 			}
 		}
 	}
-	idWidth := len(fmt.Sprintf("%d", maxID))
 
-	// Output: ID  origin  branch  commit  [PR]  [note]
-	for _, item := range items {
-		hash := item.CommitHash
-		if hash == "" {
-			hash = "???????"
-		}
+	// Sort worktrees by repo name
+	sort.Slice(worktrees, func(i, j int) bool {
+		return worktrees[i].RepoName < worktrees[j].RepoName
+	})
 
-		// Get PR info
-		var prDisplay string
-		if originCache, ok := wtCache.PRs[item.OriginURL]; ok {
-			if pr, ok := originCache[item.Branch]; ok && pr != nil && pr.Fetched && pr.Number > 0 {
-				prDisplay = formatPRDisplay(pr)
-			}
-		}
-
-		// Build output line
-		if prDisplay != "" {
-			if item.Note != "" {
-				fmt.Printf("%*d  %-*s  %-*s  %s  %-*s  %s\n", idWidth, item.ID, maxOriginLen, item.Origin, maxBranchLen, item.Branch, hash, maxPRLen, prDisplay, item.Note)
-			} else {
-				fmt.Printf("%*d  %-*s  %-*s  %s  %s\n", idWidth, item.ID, maxOriginLen, item.Origin, maxBranchLen, item.Branch, hash, prDisplay)
-			}
-		} else {
-			if item.Note != "" {
-				fmt.Printf("%*d  %-*s  %-*s  %s  %s\n", idWidth, item.ID, maxOriginLen, item.Origin, maxBranchLen, item.Branch, hash, item.Note)
-			} else {
-				fmt.Printf("%*d  %-*s  %-*s  %s\n", idWidth, item.ID, maxOriginLen, item.Origin, maxBranchLen, item.Branch, hash)
-			}
-		}
-	}
+	// Display table (no items marked for removal in list)
+	toRemoveMap := make(map[string]bool)
+	fmt.Print(ui.FormatWorktreesTable(worktrees, pathToID, prMap, prUnknown, toRemoveMap, false))
 
 	return nil
-}
-
-// formatPRDisplay formats PR info for display: #123 open ✓
-func formatPRDisplay(pr *forge.PRInfo) string {
-	if pr == nil || pr.Number == 0 {
-		return ""
-	}
-
-	// State text
-	var state string
-	switch pr.State {
-	case "MERGED":
-		state = "merged"
-	case "OPEN":
-		state = "open"
-	case "CLOSED":
-		state = "closed"
-	default:
-		state = pr.State
-	}
-
-	// Approval indicator
-	approval := ""
-	if pr.IsApproved {
-		approval = " ✓"
-	}
-
-	return fmt.Sprintf("#%d %s%s", pr.Number, state, approval)
 }

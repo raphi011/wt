@@ -40,17 +40,7 @@ func resolveNoteTarget(target string, dir string) (branch string, repoPath strin
 		return branch, repoPath, nil
 	}
 
-	// Target provided - check if we're in a git repo (main repo, not worktree)
-	if git.IsInsideRepo() && !inWorktree {
-		// In main repo - target is branch name, use current repo
-		repoPath, err = filepath.Abs(".")
-		if err != nil {
-			return "", "", fmt.Errorf("failed to get repo path: %w", err)
-		}
-		return target, repoPath, nil
-	}
-
-	// Outside git context or in worktree with explicit target: use unified resolver
+	// Use unified resolver to handle both IDs and branch names
 	scanPath := dir
 	if scanPath == "" {
 		scanPath = "."
@@ -76,7 +66,8 @@ func runNoteSet(cmd *NoteSetCmd) error {
 	if err := git.SetBranchNote(repoPath, branch, cmd.Text); err != nil {
 		return fmt.Errorf("failed to set note: %w", err)
 	}
-	fmt.Printf("Note set on branch %s\n", branch)
+	repoName := filepath.Base(repoPath)
+	fmt.Printf("Note set on %s/%s\n", repoName, branch)
 	return nil
 }
 
@@ -103,6 +94,7 @@ func runNoteClear(cmd *NoteClearCmd) error {
 	if err := git.ClearBranchNote(repoPath, branch); err != nil {
 		return fmt.Errorf("failed to clear note: %w", err)
 	}
-	fmt.Printf("Note cleared from branch %s\n", branch)
+	repoName := filepath.Base(repoPath)
+	fmt.Printf("Note cleared from %s/%s\n", repoName, branch)
 	return nil
 }

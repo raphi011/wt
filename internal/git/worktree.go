@@ -24,6 +24,7 @@ type Worktree struct {
 	Deletions    int    `json:"deletions"`
 	IsDirty      bool   `json:"is_dirty"`
 	HasUntracked bool   `json:"has_untracked"`
+	HasUpstream  bool   `json:"has_upstream"`
 	LastCommit   string `json:"last_commit"`
 	Note         string `json:"note,omitempty"`
 }
@@ -87,6 +88,9 @@ func ListWorktrees(scanDir string) ([]Worktree, error) {
 		// Get branch note (errors treated as empty string)
 		note, _ := GetBranchNote(mainRepo, branch)
 
+		// Check if branch has upstream
+		hasUpstream := GetUpstreamBranch(mainRepo, branch) != ""
+
 		worktrees = append(worktrees, Worktree{
 			Path:         path,
 			Branch:       branch,
@@ -99,6 +103,7 @@ func ListWorktrees(scanDir string) ([]Worktree, error) {
 			Deletions:    deletions,
 			IsDirty:      isDirty,
 			HasUntracked: hasUntracked,
+			HasUpstream:  hasUpstream,
 			LastCommit:   lastCommit,
 			Note:         note,
 		})

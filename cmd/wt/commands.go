@@ -151,9 +151,7 @@ type NoteSetCmd struct {
 }
 
 func (c *NoteSetCmd) Help() string {
-	return `Set a note on a branch
-
-When run inside a worktree, target is optional (defaults to current branch).
+	return `When run inside a worktree, target is optional (defaults to current branch).
 When run outside, specify a worktree ID or branch name.
 
 The note is stored in git config (branch.<name>.description) and displayed
@@ -176,9 +174,7 @@ type NoteGetCmd struct {
 }
 
 func (c *NoteGetCmd) Help() string {
-	return `Get the note for a branch
-
-When run inside a worktree, target is optional (defaults to current branch).
+	return `When run inside a worktree, target is optional (defaults to current branch).
 When run outside, specify a worktree ID or branch name.
 
 Prints the note if set, or nothing if no note exists.
@@ -200,9 +196,7 @@ type NoteClearCmd struct {
 }
 
 func (c *NoteClearCmd) Help() string {
-	return `Clear the note from a branch
-
-When run inside a worktree, target is optional (defaults to current branch).
+	return `When run inside a worktree, target is optional (defaults to current branch).
 When run outside, specify a worktree ID or branch name.
 
 Removes the note from the branch. Safe to run even if no note exists.
@@ -219,15 +213,13 @@ func (c *NoteClearCmd) Run(ctx *Context) error {
 
 // NoteCmd manages branch notes.
 type NoteCmd struct {
-	Set   NoteSetCmd   `cmd:"" help:"set a note on a branch"`
-	Get   NoteGetCmd   `cmd:"" help:"get the note for a branch"`
-	Clear NoteClearCmd `cmd:"" help:"clear the note from a branch"`
+	Set   NoteSetCmd   `cmd:"" help:"Set a note on a branch"`
+	Get   NoteGetCmd   `cmd:"" help:"Get the note for a branch"`
+	Clear NoteClearCmd `cmd:"" help:"Clear the note from a branch"`
 }
 
 func (c *NoteCmd) Help() string {
-	return `Manage branch notes
-
-Notes are stored in git config and displayed in list/tidy output.
+	return `Notes are stored in git config and displayed in list/tidy output.
 Inside a worktree, operates on current branch. Outside, specify ID or branch.
 
 Examples:
@@ -310,9 +302,9 @@ func (c *ConfigHooksCmd) Run(ctx *Context) error {
 
 // ConfigCmd manages wt configuration.
 type ConfigCmd struct {
-	Init  ConfigInitCmd  `cmd:"" help:"create default config file"`
-	Show  ConfigShowCmd  `cmd:"" help:"show effective configuration"`
-	Hooks ConfigHooksCmd `cmd:"" help:"list available hooks"`
+	Init  ConfigInitCmd  `cmd:"" help:"Create default config file"`
+	Show  ConfigShowCmd  `cmd:"" help:"Show effective configuration"`
+	Hooks ConfigHooksCmd `cmd:"" help:"List available hooks"`
 }
 
 func (c *ConfigCmd) Help() string {
@@ -331,9 +323,7 @@ type HookRunCmd struct {
 }
 
 func (c *HookRunCmd) Help() string {
-	return `Run a hook by name for a worktree
-
-When run inside a worktree, target is optional (defaults to current worktree).
+	return `When run inside a worktree, target is optional (defaults to current worktree).
 When run outside, specify a worktree ID or branch name.
 
 Examples:
@@ -349,12 +339,11 @@ func (c *HookRunCmd) Run(ctx *Context) error {
 
 // HookCmd manages hooks.
 type HookCmd struct {
-	Run HookRunCmd `cmd:"" help:"run a hook by name"`
+	Run HookRunCmd `cmd:"" help:"Run a hook by name"`
 }
 
 func (c *HookCmd) Help() string {
-	return `Manage hooks
-Examples:
+	return `Examples:
   wt hook run kitty              # Run hook for current worktree
   wt hook run kitty 1            # Run hook for worktree ID 1`
 }
@@ -496,15 +485,14 @@ func (c *PrMergeCmd) Run(ctx *Context) error {
 
 // PrCmd works with PRs.
 type PrCmd struct {
-	Open    PrOpenCmd    `cmd:"" help:"checkout PR from existing local repo"`
-	Clone   PrCloneCmd   `cmd:"" help:"clone repo and checkout PR"`
-	Refresh PrRefreshCmd `cmd:"" help:"refresh PR status cache"`
-	Merge   PrMergeCmd   `cmd:"" help:"merge PR and clean up worktree"`
+	Open    PrOpenCmd    `cmd:"" help:"Checkout PR from existing local repo"`
+	Clone   PrCloneCmd   `cmd:"" help:"Clone repo and checkout PR"`
+	Refresh PrRefreshCmd `cmd:"" help:"Refresh PR status cache"`
+	Merge   PrMergeCmd   `cmd:"" help:"Merge PR and clean up worktree"`
 }
 
 func (c *PrCmd) Help() string {
-	return `Work with PRs
-Examples:
+	return `Examples:
   wt pr open 123             # PR from current repo
   wt pr open 123 myrepo      # PR from existing local repo
   wt pr clone 123 org/repo   # Clone repo and checkout PR
@@ -518,23 +506,23 @@ type VersionFlag bool
 // CLI is the root command.
 type CLI struct {
 	// Core commands (ungrouped - shown first)
-	Create CreateCmd `cmd:"" help:"create a new worktree"`
-	Open   OpenCmd   `cmd:"" help:"open worktree for existing branch"`
-	List   ListCmd   `cmd:"" default:"withargs" help:"list worktrees"`
-	Tidy   TidyCmd   `cmd:"" help:"tidy up merged worktrees"`
+	Create CreateCmd `cmd:"" help:"Create a new worktree"`
+	Open   OpenCmd   `cmd:"" help:"Open worktree for existing branch"`
+	List   ListCmd   `cmd:"" default:"withargs" help:"List worktrees"`
+	Tidy   TidyCmd   `cmd:"" help:"Tidy up merged worktrees"`
 
 	// PR commands
-	Pr PrCmd `cmd:"" help:"work with PRs" group:"pr"`
+	Pr PrCmd `cmd:"" help:"Work with PRs" group:"pr"`
 
 	// Utility commands
-	Exec ExecCmd `cmd:"" help:"run command in worktree by ID" group:"util"`
-	Mv   MvCmd   `cmd:"" help:"move worktrees to another directory" group:"util"`
-	Note NoteCmd `cmd:"" help:"manage branch notes" group:"util"`
-	Hook HookCmd `cmd:"" help:"manage hooks" group:"util"`
+	Exec ExecCmd `cmd:"" help:"Run command in worktree by ID" group:"util"`
+	Mv   MvCmd   `cmd:"" help:"Move worktrees to another directory" group:"util"`
+	Note NoteCmd `cmd:"" help:"Manage branch notes" group:"util"`
+	Hook HookCmd `cmd:"" help:"Manage hooks" group:"util"`
 
 	// Configuration commands
-	Config     ConfigCmd     `cmd:"" help:"manage configuration" group:"config"`
-	Completion CompletionCmd `cmd:"" help:"generate completion script" group:"config"`
+	Config     ConfigCmd     `cmd:"" help:"Manage configuration" group:"config"`
+	Completion CompletionCmd `cmd:"" help:"Generate completion script" group:"config"`
 
-	Version VersionFlag `name:"version" help:"show version"`
+	Version VersionFlag `name:"version" help:"Show version"`
 }

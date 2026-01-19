@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
@@ -70,21 +71,39 @@ func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 		}
 	}
 
+	// Acquire lock on cache
+	lock := cache.NewFileLock(forge.LockPath(scanPath))
+	if err := lock.Lock(); err != nil {
+		return fmt.Errorf("failed to acquire lock: %w", err)
+	}
+	defer lock.Unlock()
+
+	// Load cache
+	wtCache, err := forge.LoadCache(scanPath)
+	if err != nil {
+		return fmt.Errorf("failed to load cache: %w", err)
+	}
+
+	// Convert worktrees to WorktreeInfo for cache sync
+	wtInfos := make([]forge.WorktreeInfo, len(worktrees))
+	for i, wt := range worktrees {
+		wtInfos[i] = forge.WorktreeInfo{
+			Path:      wt.Path,
+			Branch:    wt.Branch,
+			OriginURL: wt.OriginURL,
+		}
+	}
+
+	// Sync cache to get IDs
+	pathToID := wtCache.SyncWorktrees(wtInfos)
+
 	// PR status handling - load from cache only (run 'wt pr list' to fetch)
-	prCache := make(forge.PRCache)
 	prMap := make(map[string]*forge.PRInfo)
 	prUnknown := make(map[string]bool)
 
-	// Load PR cache
-	prCache, err = forge.LoadPRCache(scanPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to load PR cache: %v\n", err)
-		prCache = make(forge.PRCache)
-	}
-
 	// Build PR map from cache for display, track unknown branches
 	for _, wt := range worktrees {
-		if originCache, ok := prCache[wt.OriginURL]; ok {
+		if originCache, ok := wtCache.PRs[wt.OriginURL]; ok {
 			if pr, ok := originCache[wt.Branch]; ok && pr != nil && pr.Fetched {
 				prMap[wt.Branch] = pr
 				continue
@@ -132,8 +151,15 @@ func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 		}
 	}
 
-	// Display table with cleaned worktrees marked
-	fmt.Print(ui.FormatWorktreesTable(worktrees, prMap, prUnknown, toRemoveMap, cmd.DryRun))
+	// Display table with only purgeable worktrees
+	if len(toRemove) > 0 {
+		fmt.Print(ui.FormatWorktreesTable(toRemove, pathToID, prMap, prUnknown, toRemoveMap, cmd.DryRun))
+	}
+
+	// Save updated cache
+	if err := forge.SaveCache(scanPath, wtCache); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
+	}
 
 	// Select hooks for tidy (before removing, so we can report errors early)
 	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandTidy)

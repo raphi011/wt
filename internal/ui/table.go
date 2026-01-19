@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -12,16 +11,8 @@ import (
 	"github.com/raphi011/wt/internal/git"
 )
 
-var (
-	// Colors
-	greenStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("78"))
-	redStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
-	orangeStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
-	yellowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
-)
-
 // FormatWorktreesTable creates a formatted table for worktrees
-func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRInfo, prUnknown map[string]bool, toRemove map[string]bool, dryRun bool) string {
+func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, prMap map[string]*forge.PRInfo, prUnknown map[string]bool, toRemove map[string]bool, dryRun bool) string {
 	if len(worktrees) == 0 {
 		return ""
 	}
@@ -29,8 +20,9 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 	var output strings.Builder
 
 	// Track max widths for each column
+	maxIDWidth := len("ID")
 	maxRepoWidth := len("REPO")
-	maxFolderWidth := len("FOLDER")
+	maxBranchWidth := len("BRANCH")
 	maxStatusWidth := len("STATUS")
 	maxLastCommitWidth := len("LAST COMMIT")
 	maxDiffWidth := len("DIFF")
@@ -39,8 +31,9 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 
 	// First pass: calculate widths and prepare row data
 	type rowData struct {
+		id         string
 		repo       string
-		folder     string
+		branch     string
 		status     string
 		lastCommit string
 		diff       string
@@ -50,38 +43,41 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 	var rowsData []rowData
 
 	for _, wt := range worktrees {
+		// Format ID
+		id := fmt.Sprintf("%d", pathToID[wt.Path])
+
 		// Format repo name
 		repoName := wt.RepoName
 
-		// Format folder name (no coloring - causes bleed in table)
-		folderPlain := "./" + filepath.Base(wt.Path)
-		folder := folderPlain
+		// Branch name
+		branch := wt.Branch
 
-		// Format status (without last commit time), keep plain for width calc
-		var status, statusPlain string
+		// Format status
+		var status string
 		if toRemove[wt.Path] && !dryRun {
-			// Actually being pruned (not dry-run)
-			status = greenStyle.Render("pruned")
-			statusPlain = "pruned"
+			status = "pruned"
 		} else if wt.IsMerged {
-			status = greenStyle.Render("prunable")
-			statusPlain = "prunable"
+			status = "prunable"
 		} else if wt.CommitCount == 0 && !wt.IsDirty {
 			status = "clean"
-			statusPlain = "clean"
+		} else if wt.CommitCount == 0 && wt.IsDirty {
+			status = "dirty"
 		} else {
-			status = fmt.Sprintf("%d commit(s) ahead", wt.CommitCount)
-			statusPlain = status
+			status = fmt.Sprintf("%d ahead", wt.CommitCount)
 		}
 
 		// Last commit time
 		lastCommit := wt.LastCommit
 
-		// Format diff (always show both if there are any changes)
-		var diff, diffPlain string
+		// Format diff (show additions/deletions and/or untracked indicator)
+		var diff string
 		if wt.Additions > 0 || wt.Deletions > 0 {
 			diff = fmt.Sprintf("+%d -%d", wt.Additions, wt.Deletions)
-			diffPlain = diff
+			if wt.HasUntracked {
+				diff += " ?"
+			}
+		} else if wt.HasUntracked {
+			diff = "?"
 		}
 
 		// Format note (truncate if too long)
@@ -92,11 +88,13 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 		}
 
 		// Format PR column
-		var prDisplay, prPlain string
-		if prUnknown[wt.Branch] {
+		var prCol string
+		if !wt.HasUpstream {
+			// No upstream branch - can't have a PR
+			prCol = "-"
+		} else if prUnknown[wt.Branch] {
 			// Not fetched yet - show ?
-			prDisplay = "?"
-			prPlain = "?"
+			prCol = "?"
 		} else if pr, ok := prMap[wt.Branch]; ok && pr != nil && pr.Number > 0 {
 			// PR exists - show details
 			f := forge.DetectFromRepo(wt.MainRepo, nil)
@@ -116,49 +114,55 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 				parts = append(parts, "◐") // partial/pending reviews
 			}
 			parts = append(parts, pr.URL)
-			prDisplay = strings.Join(parts, " ")
-			prPlain = prDisplay
+			prCol = strings.Join(parts, " ")
+		} else {
+			// Fetched but no PR found
+			prCol = "-"
 		}
-		// else: fetched but no PR - leave empty
 
 		// Track max widths using plain text (without ANSI codes)
+		if len(id) > maxIDWidth {
+			maxIDWidth = len(id)
+		}
 		if len(repoName) > maxRepoWidth {
 			maxRepoWidth = len(repoName)
 		}
-		if len(folderPlain) > maxFolderWidth {
-			maxFolderWidth = len(folderPlain)
+		if len(branch) > maxBranchWidth {
+			maxBranchWidth = len(branch)
 		}
-		if len(statusPlain) > maxStatusWidth {
-			maxStatusWidth = len(statusPlain)
+		if len(status) > maxStatusWidth {
+			maxStatusWidth = len(status)
 		}
 		if len(lastCommit) > maxLastCommitWidth {
 			maxLastCommitWidth = len(lastCommit)
 		}
-		if len(diffPlain) > maxDiffWidth {
-			maxDiffWidth = len(diffPlain)
+		if len(diff) > maxDiffWidth {
+			maxDiffWidth = len(diff)
 		}
 		if len(note) > maxNoteWidth {
 			maxNoteWidth = len(note)
 		}
-		if len(prPlain) > maxPRWidth {
-			maxPRWidth = len(prPlain)
+		if len(prCol) > maxPRWidth {
+			maxPRWidth = len(prCol)
 		}
 
 		rowsData = append(rowsData, rowData{
+			id:         id,
 			repo:       repoName,
-			folder:     folder,
+			branch:     branch,
 			status:     status,
 			lastCommit: lastCommit,
 			diff:       diff,
 			note:       note,
-			pr:         prDisplay,
+			pr:         prCol,
 		})
 	}
 
 	// Create table columns with calculated widths + spacing
 	columns := []table.Column{
+		{Title: "ID", Width: maxIDWidth + 2},
 		{Title: "REPO", Width: maxRepoWidth + 2},
-		{Title: "FOLDER", Width: maxFolderWidth + 2},
+		{Title: "BRANCH", Width: maxBranchWidth + 2},
 		{Title: "STATUS", Width: maxStatusWidth + 2},
 		{Title: "LAST COMMIT", Width: maxLastCommitWidth + 2},
 		{Title: "DIFF", Width: maxDiffWidth + 2},
@@ -169,7 +173,7 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 	// Build rows
 	var rows []table.Row
 	for _, rd := range rowsData {
-		rows = append(rows, table.Row{rd.repo, rd.folder, rd.status, rd.lastCommit, rd.diff, rd.note, rd.pr})
+		rows = append(rows, table.Row{rd.id, rd.repo, rd.branch, rd.status, rd.lastCommit, rd.diff, rd.note, rd.pr})
 	}
 
 	t := table.New(
@@ -205,9 +209,9 @@ func FormatSummary(removed, skipped int, dryRun bool) string {
 	output.WriteString("\n")
 
 	if dryRun {
-		output.WriteString(yellowStyle.Render("Dry run complete") + fmt.Sprintf(" - Would remove: %d, Not merged: %d\n", removed, skipped))
+		fmt.Fprintf(&output, "Dry run complete - Would remove: %d, Skipped: %d\n", removed, skipped)
 	} else {
-		output.WriteString(greenStyle.Render("Cleanup complete") + fmt.Sprintf(" - Removed: %d, Skipped: %d\n", removed, skipped))
+		fmt.Fprintf(&output, "Cleanup complete - Removed: %d, Skipped: %d\n", removed, skipped)
 	}
 
 	return output.String()
