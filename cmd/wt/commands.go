@@ -80,15 +80,33 @@ type ListCmd struct {
 }
 
 func (ListCmd) Description() string {
-	return `List all git worktrees with their status
+	return `List all git worktrees with stable IDs
 
 When run inside a git repository, only shows worktrees for that repo.
-Output format matches 'git worktree list'.
+IDs are stable across runs - use them with 'wt exec'.
 
 Examples:
   wt list                      # List worktrees for current repo
   wt list -d ~/Git/worktrees   # List from specific directory
   wt list --json               # Output as JSON for scripting`
+}
+
+// ExecCmd runs a command in a worktree by ID.
+type ExecCmd struct {
+	ID      int      `arg:"positional,required" placeholder:"ID" help:"worktree ID from wt list"`
+	Command []string `arg:"positional" placeholder:"COMMAND" help:"command to run (after --)"`
+	Dir     string   `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+}
+
+func (ExecCmd) Description() string {
+	return `Run a command in a worktree by ID
+
+Use 'wt list' to see worktree IDs. The command runs in the worktree directory.
+
+Examples:
+  wt exec 1 -- gh pr view      # View PR for worktree #1
+  wt exec 2 -- git status      # Run git status in worktree #2
+  wt exec 1 -- code .          # Open worktree in VS Code`
 }
 
 // CompletionCmd generates shell completion scripts.
@@ -281,6 +299,7 @@ type Args struct {
 	Open       *OpenCmd       `arg:"subcommand:open" help:"open worktree for existing branch"`
 	Tidy       *TidyCmd       `arg:"subcommand:tidy" help:"tidy up merged worktrees"`
 	List       *ListCmd       `arg:"subcommand:list" help:"list worktrees"`
+	Exec       *ExecCmd       `arg:"subcommand:exec" help:"run command in worktree by ID"`
 	Mv         *MvCmd         `arg:"subcommand:mv" help:"move worktrees to another directory"`
 	Pr         *PrCmd         `arg:"subcommand:pr" help:"work with PRs"`
 	Config     *ConfigCmd     `arg:"subcommand:config" help:"manage configuration"`

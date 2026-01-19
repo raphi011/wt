@@ -63,29 +63,88 @@ type Forge interface {
 // PRCache maps origin URL -> branch -> PR info
 type PRCache map[string]map[string]*PRInfo
 
-// LoadPRCache loads the PR cache from disk
-func LoadPRCache(scanDir string) (PRCache, error) {
-	cachePath := filepath.Join(scanDir, ".wt-cache.json")
+// WorktreeIDEntry stores the ID for a worktree
+type WorktreeIDEntry struct {
+	ID   int    `json:"id"`
+	Path string `json:"path"`
+}
+
+// Cache is the unified cache structure stored in .wt-cache.json
+type Cache struct {
+	PRs       PRCache                     `json:"prs,omitempty"`
+	Worktrees map[string]*WorktreeIDEntry `json:"worktrees,omitempty"` // key: "origin::branch"
+	NextID    int                         `json:"next_id,omitempty"`
+}
+
+// MakeWorktreeKey creates a cache key from origin URL and branch
+func MakeWorktreeKey(originURL, branch string) string {
+	return originURL + "::" + branch
+}
+
+// CachePath returns the path to the cache file for a directory
+func CachePath(dir string) string {
+	return filepath.Join(dir, ".wt-cache.json")
+}
+
+// LockPath returns the path to the lock file for a directory
+func LockPath(dir string) string {
+	return filepath.Join(dir, ".wt-cache.lock")
+}
+
+// LoadCache loads the unified cache from disk
+func LoadCache(scanDir string) (*Cache, error) {
+	cachePath := CachePath(scanDir)
 
 	data, err := os.ReadFile(cachePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return make(PRCache), nil
+			return &Cache{
+				PRs:       make(PRCache),
+				Worktrees: make(map[string]*WorktreeIDEntry),
+				NextID:    1,
+			}, nil
 		}
 		return nil, err
 	}
 
-	var cache PRCache
+	// Try to unmarshal as new unified format
+	var cache Cache
 	if err := json.Unmarshal(data, &cache); err != nil {
-		return nil, err
+		// Try old format (PRCache only)
+		var oldCache PRCache
+		if err := json.Unmarshal(data, &oldCache); err != nil {
+			// Corrupted - start fresh
+			return &Cache{
+				PRs:       make(PRCache),
+				Worktrees: make(map[string]*WorktreeIDEntry),
+				NextID:    1,
+			}, nil
+		}
+		// Migrate from old format
+		return &Cache{
+			PRs:       oldCache,
+			Worktrees: make(map[string]*WorktreeIDEntry),
+			NextID:    1,
+		}, nil
 	}
 
-	return cache, nil
+	// Initialize nil maps
+	if cache.PRs == nil {
+		cache.PRs = make(PRCache)
+	}
+	if cache.Worktrees == nil {
+		cache.Worktrees = make(map[string]*WorktreeIDEntry)
+	}
+	if cache.NextID < 1 {
+		cache.NextID = 1
+	}
+
+	return &cache, nil
 }
 
-// SavePRCache saves the PR cache to disk atomically
-func SavePRCache(scanDir string, cache PRCache) error {
-	cachePath := filepath.Join(scanDir, ".wt-cache.json")
+// SaveCache saves the unified cache to disk atomically
+func SaveCache(scanDir string, cache *Cache) error {
+	cachePath := CachePath(scanDir)
 	tempPath := cachePath + ".tmp"
 
 	data, err := json.MarshalIndent(cache, "", "  ")
@@ -98,6 +157,92 @@ func SavePRCache(scanDir string, cache PRCache) error {
 	}
 
 	return os.Rename(tempPath, cachePath)
+}
+
+// GetOrAssignID returns the existing ID for a worktree or assigns a new one
+func (c *Cache) GetOrAssignID(originURL, branch, path string) int {
+	key := MakeWorktreeKey(originURL, branch)
+
+	if entry, ok := c.Worktrees[key]; ok {
+		// Update path if changed
+		entry.Path = path
+		return entry.ID
+	}
+
+	// Assign new ID
+	id := c.NextID
+	c.NextID++
+	c.Worktrees[key] = &WorktreeIDEntry{
+		ID:   id,
+		Path: path,
+	}
+
+	return id
+}
+
+// GetByID looks up a worktree by its ID
+func (c *Cache) GetByID(id int) (path string, found bool) {
+	for _, entry := range c.Worktrees {
+		if entry.ID == id {
+			return entry.Path, true
+		}
+	}
+	return "", false
+}
+
+// WorktreeInfo contains the minimal info needed to sync the cache
+type WorktreeInfo struct {
+	Path      string
+	Branch    string
+	OriginURL string
+}
+
+// SyncWorktrees updates the cache with current worktrees
+// Returns a map of path -> ID for display
+func (c *Cache) SyncWorktrees(worktrees []WorktreeInfo) map[string]int {
+	// Track which keys are still valid
+	validKeys := make(map[string]bool)
+	pathToID := make(map[string]int)
+
+	for _, wt := range worktrees {
+		key := MakeWorktreeKey(wt.OriginURL, wt.Branch)
+		validKeys[key] = true
+
+		id := c.GetOrAssignID(wt.OriginURL, wt.Branch, wt.Path)
+		pathToID[wt.Path] = id
+	}
+
+	// Remove stale entries (worktrees that no longer exist)
+	for key := range c.Worktrees {
+		if !validKeys[key] {
+			delete(c.Worktrees, key)
+		}
+	}
+
+	return pathToID
+}
+
+// LoadPRCache loads the PR cache from disk (legacy compatibility)
+func LoadPRCache(scanDir string) (PRCache, error) {
+	cache, err := LoadCache(scanDir)
+	if err != nil {
+		return nil, err
+	}
+	return cache.PRs, nil
+}
+
+// SavePRCache saves the PR cache to disk (legacy compatibility)
+func SavePRCache(scanDir string, prCache PRCache) error {
+	// Load existing cache to preserve worktree IDs
+	cache, err := LoadCache(scanDir)
+	if err != nil {
+		cache = &Cache{
+			Worktrees: make(map[string]*WorktreeIDEntry),
+			NextID:    1,
+		}
+	}
+	cache.PRs = prCache
+	return SaveCache(scanDir, cache)
 }
 
 // CleanPRCache removes cache entries for origins/branches that no longer exist

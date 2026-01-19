@@ -15,7 +15,7 @@ _wt_completions() {
         cword=$COMP_CWORD
     fi
 
-    local commands="create open tidy list mv pr config completion"
+    local commands="create open tidy list exec mv pr config completion"
 
     # Handle subcommand-specific completions
     case "${words[1]}" in
@@ -75,6 +75,21 @@ _wt_completions() {
                     ;;
             esac
             COMPREPLY=($(compgen -W "-d --dir --json" -- "$cur"))
+            ;;
+        exec)
+            case "$prev" in
+                -d|--dir)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    return
+                    ;;
+            esac
+            if [[ $cword -eq 2 ]]; then
+                # Complete worktree IDs from wt list output
+                local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                COMPREPLY=($(compgen -W "$ids" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
+            fi
             ;;
         mv)
             case "$prev" in
@@ -182,7 +197,8 @@ _wt() {
                 'create:Create new worktree for a branch'
                 'open:Open worktree for existing local branch'
                 'tidy:Tidy up merged worktrees'
-                'list:List worktrees'
+                'list:List worktrees with stable IDs'
+                'exec:Run command in worktree by ID'
                 'mv:Move worktrees to another directory'
                 'pr:Work with GitHub PRs'
                 'config:Manage configuration'
@@ -224,6 +240,12 @@ _wt() {
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/' \
                         '--json[output as JSON]'
+                    ;;
+                exec)
+                    _arguments \
+                        '1:worktree ID:__wt_worktree_ids' \
+                        '-d[target directory]:directory:_files -/' \
+                        '--dir[target directory]:directory:_files -/'
                     ;;
                 mv)
                     _arguments \
@@ -338,6 +360,13 @@ __wt_local_branches() {
     _describe 'branch' branches
 }
 
+# Helper: complete worktree IDs
+__wt_worktree_ids() {
+    local ids
+    ids=(${(f)"$(wt list 2>/dev/null | awk '{print $1}')"})
+    _describe 'worktree ID' ids
+}
+
 _wt "$@"
 `
 
@@ -345,14 +374,15 @@ const fishCompletions = `# wt completions - supports fish autosuggestions and ta
 complete -c wt -f
 
 # Subcommands (shown in completions and autosuggestions)
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "create" -d "Create new worktree"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "open" -d "Open worktree for existing branch"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "tidy" -d "Tidy up merged worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "list" -d "List worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "mv" -d "Move worktrees to another directory"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "pr" -d "Work with PRs"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "config" -d "Manage configuration"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list mv pr config completion" -a "completion" -d "Generate completion script"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "create" -d "Create new worktree"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "open" -d "Open worktree for existing branch"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "tidy" -d "Tidy up merged worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "list" -d "List worktrees with stable IDs"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "exec" -d "Run command in worktree by ID"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "mv" -d "Move worktrees to another directory"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "pr" -d "Work with PRs"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "config" -d "Manage configuration"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "completion" -d "Generate completion script"
 
 # create: branch name (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from create; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
@@ -376,6 +406,10 @@ complete -c wt -n "__fish_seen_subcommand_from tidy" -l no-hook -d "Skip post-re
 # list: flags only (no positional args)
 complete -c wt -n "__fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
+
+# exec: worktree ID (positional), then -- command
+complete -c wt -n "__fish_seen_subcommand_from exec; and not __fish_seen_argument" -a "(__wt_worktree_ids)" -d "Worktree ID"
+complete -c wt -n "__fish_seen_subcommand_from exec" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 
 # mv: flags only (no positional args)
 complete -c wt -n "__fish_seen_subcommand_from mv" -s d -l dir -r -a "(__fish_complete_directories)" -d "Destination directory"
@@ -424,6 +458,11 @@ function __wt_list_repos
             end
         end
     end
+end
+
+# Helper function to list worktree IDs
+function __wt_worktree_ids
+    wt list 2>/dev/null | awk '{print $1}'
 end
 
 # config: subcommands

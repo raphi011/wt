@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/alexflint/go-arg"
 
+	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/format"
@@ -60,6 +62,9 @@ func main() {
 	if args.List != nil && args.List.Dir == "" {
 		args.List.Dir = cfg.DefaultPath
 	}
+	if args.Exec != nil && args.Exec.Dir == "" {
+		args.Exec.Dir = cfg.DefaultPath
+	}
 	if args.Pr != nil && args.Pr.Open != nil && args.Pr.Open.Dir == "" {
 		args.Pr.Open.Dir = cfg.DefaultPath
 	}
@@ -96,6 +101,11 @@ func main() {
 		}
 	case args.List != nil:
 		if err := runList(args.List); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case args.Exec != nil:
+		if err := runExec(args.Exec); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -496,6 +506,8 @@ func writeHelp(w *os.File, p *arg.Parser, args *Args) {
 		desc = args.Tidy.Description()
 	case args.List != nil:
 		desc = args.List.Description()
+	case args.Exec != nil:
+		desc = args.Exec.Description()
 	case args.Mv != nil:
 		desc = args.Mv.Description()
 	case args.Pr != nil:
@@ -556,7 +568,8 @@ func writeRootHelp(w *os.File) {
 	fmt.Fprintln(w, "  create      Create worktree for new branch")
 	fmt.Fprintln(w, "  open        Open worktree for existing branch")
 	fmt.Fprintln(w, "  tidy        Remove merged worktrees")
-	fmt.Fprintln(w, "  list        List worktrees")
+	fmt.Fprintln(w, "  list        List worktrees with stable IDs")
+	fmt.Fprintln(w, "  exec        Run command in worktree by ID")
 	fmt.Fprintln(w, "  mv          Move worktrees")
 	fmt.Fprintln(w, "  pr          Work with PRs")
 	fmt.Fprintln(w, "  config      Manage configuration")
@@ -611,6 +624,19 @@ func runList(cmd *ListCmd) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
+	// Acquire lock on cache
+	lock := cache.NewFileLock(forge.LockPath(scanPath))
+	if err := lock.Lock(); err != nil {
+		return fmt.Errorf("failed to acquire lock: %w", err)
+	}
+	defer lock.Unlock()
+
+	// Load cache
+	wtCache, err := forge.LoadCache(scanPath)
+	if err != nil {
+		return fmt.Errorf("failed to load cache: %w", err)
+	}
+
 	// List worktrees in directory
 	worktrees, err := git.ListWorktrees(scanPath)
 	if err != nil {
@@ -628,8 +654,60 @@ func runList(cmd *ListCmd) error {
 		worktrees = filtered
 	}
 
+	// Convert to WorktreeInfo for cache sync
+	wtInfos := make([]forge.WorktreeInfo, len(worktrees))
+	for i, wt := range worktrees {
+		wtInfos[i] = forge.WorktreeInfo{
+			Path:      wt.Path,
+			Branch:    wt.Branch,
+			OriginURL: wt.OriginURL,
+		}
+	}
+
+	// Sync cache and get ID mapping
+	pathToID := wtCache.SyncWorktrees(wtInfos)
+
+	// Save updated cache
+	if err := forge.SaveCache(scanPath, wtCache); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
+	}
+
 	if cmd.JSON {
-		data, err := json.MarshalIndent(worktrees, "", "  ")
+		// Build JSON output with IDs
+		type worktreeJSON struct {
+			ID           int    `json:"id"`
+			Path         string `json:"path"`
+			Branch       string `json:"branch"`
+			MainRepo     string `json:"main_repo"`
+			RepoName     string `json:"repo_name"`
+			OriginURL    string `json:"origin_url"`
+			IsMerged     bool   `json:"is_merged"`
+			CommitCount  int    `json:"commit_count"`
+			Additions    int    `json:"additions"`
+			Deletions    int    `json:"deletions"`
+			IsDirty      bool   `json:"is_dirty"`
+			HasUntracked bool   `json:"has_untracked"`
+			LastCommit   string `json:"last_commit"`
+		}
+		result := make([]worktreeJSON, len(worktrees))
+		for i, wt := range worktrees {
+			result[i] = worktreeJSON{
+				ID:           pathToID[wt.Path],
+				Path:         wt.Path,
+				Branch:       wt.Branch,
+				MainRepo:     wt.MainRepo,
+				RepoName:     wt.RepoName,
+				OriginURL:    wt.OriginURL,
+				IsMerged:     wt.IsMerged,
+				CommitCount:  wt.CommitCount,
+				Additions:    wt.Additions,
+				Deletions:    wt.Deletions,
+				IsDirty:      wt.IsDirty,
+				HasUntracked: wt.HasUntracked,
+				LastCommit:   wt.LastCommit,
+			}
+		}
+		data, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
 			return err
 		}
@@ -641,24 +719,92 @@ func runList(cmd *ListCmd) error {
 		return nil
 	}
 
-	// Find max path length for alignment
+	// Find max ID width and path length for alignment
+	maxID := 0
 	maxPathLen := 0
 	for _, wt := range worktrees {
+		if id := pathToID[wt.Path]; id > maxID {
+			maxID = id
+		}
 		if len(wt.Path) > maxPathLen {
 			maxPathLen = len(wt.Path)
 		}
 	}
+	idWidth := len(fmt.Sprintf("%d", maxID))
 
-	// Output in git worktree list format: /path  commit [branch]
+	// Output with ID: ID  /path  commit [branch]
 	for _, wt := range worktrees {
 		hash, _ := git.GetShortCommitHash(wt.Path)
 		if hash == "" {
 			hash = "???????"
 		}
-		fmt.Printf("%-*s  %s [%s]\n", maxPathLen, wt.Path, hash, wt.Branch)
+		id := pathToID[wt.Path]
+		fmt.Printf("%*d  %-*s  %s [%s]\n", idWidth, id, maxPathLen, wt.Path, hash, wt.Branch)
 	}
 
 	return nil
+}
+
+func runExec(cmd *ExecCmd) error {
+	if err := git.CheckGit(); err != nil {
+		return err
+	}
+
+	dir := cmd.Dir
+	if dir == "" {
+		dir = "."
+	}
+
+	// Expand path
+	scanPath, err := expandPath(dir)
+	if err != nil {
+		return fmt.Errorf("failed to expand path: %w", err)
+	}
+	scanPath, err = filepath.Abs(scanPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	// Validate command is provided
+	if len(cmd.Command) == 0 {
+		return fmt.Errorf("no command specified (use: wt exec <id> -- <command>)")
+	}
+
+	// Acquire lock on cache (read-only, but ensures consistency)
+	lock := cache.NewFileLock(forge.LockPath(scanPath))
+	if err := lock.Lock(); err != nil {
+		return fmt.Errorf("failed to acquire lock: %w", err)
+	}
+	defer lock.Unlock()
+
+	// Load cache
+	wtCache, err := forge.LoadCache(scanPath)
+	if err != nil {
+		return fmt.Errorf("failed to load cache: %w", err)
+	}
+
+	// Look up worktree by ID
+	path, found := wtCache.GetByID(cmd.ID)
+	if !found {
+		return fmt.Errorf("worktree ID %d not found (run 'wt list' to see available IDs)", cmd.ID)
+	}
+
+	// Validate path still exists
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("worktree path no longer exists: %s (run 'wt list' to refresh)", path)
+	}
+
+	// Release lock before executing command (command may take a while)
+	lock.Unlock()
+
+	// Execute command in worktree directory
+	c := exec.Command(cmd.Command[0], cmd.Command[1:]...)
+	c.Dir = path
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	c.Stdin = os.Stdin
+
+	return c.Run()
 }
 
 func runMv(cmd *MvCmd, cfg config.Config) error {
