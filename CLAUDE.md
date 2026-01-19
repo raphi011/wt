@@ -99,7 +99,7 @@ Completions provide context-aware suggestions for branches, directories, and fla
 
 ### Dependencies
 
-- **CLI parsing**: `github.com/alexflint/go-arg` - Struct-based arg parsing with subcommands
+- **CLI parsing**: `github.com/alecthomas/kong` - Struct-based arg parsing with subcommands and auto-dispatch
 - **UI**: `github.com/charmbracelet/lipgloss` - Terminal styling
 - **UI**: `github.com/charmbracelet/bubbles/table` - Table component
 - **External**: Requires `git` in PATH; `gh` CLI for GitHub repos, `glab` CLI for GitLab repos

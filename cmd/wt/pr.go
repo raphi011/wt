@@ -19,22 +19,7 @@ import (
 // maxConcurrentPRFetches limits parallel gh API calls to avoid rate limiting
 const maxConcurrentPRFetches = 5
 
-func runPr(cmd *PrCmd, cfg config.Config) error {
-	switch {
-	case cmd.Open != nil:
-		return runPrOpen(cmd.Open, cfg)
-	case cmd.Clone != nil:
-		return runPrClone(cmd.Clone, cfg)
-	case cmd.Refresh != nil:
-		return runPrRefresh(cmd.Refresh, cfg)
-	case cmd.Merge != nil:
-		return runPrMerge(cmd.Merge, cfg)
-	default:
-		return fmt.Errorf("no subcommand specified (try: wt pr open, wt pr clone, wt pr refresh, wt pr merge)")
-	}
-}
-
-func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
+func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
@@ -144,7 +129,7 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 	return hooks.RunAll(hookMatches, ctx)
 }
 
-func runPrClone(cmd *PrCloneCmd, cfg config.Config) error {
+func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
@@ -260,7 +245,7 @@ func runPrClone(cmd *PrCloneCmd, cfg config.Config) error {
 	return hooks.RunAll(hookMatches, ctx)
 }
 
-func runPrRefresh(cmd *PrRefreshCmd, cfg config.Config) error {
+func runPrRefresh(cmd *PrRefreshCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
@@ -397,7 +382,7 @@ func runPrRefresh(cmd *PrRefreshCmd, cfg config.Config) error {
 	return nil
 }
 
-func runPrMerge(cmd *PrMergeCmd, cfg config.Config) error {
+func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}

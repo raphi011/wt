@@ -1,15 +1,22 @@
 package main
 
-// CreateCmd creates a new worktree for a new or existing remote branch.
-type CreateCmd struct {
-	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"branch name"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	Note   string `arg:"--note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook   string `arg:"--hook" help:"run named hook instead of default"`
-	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
+import "github.com/raphi011/wt/internal/config"
+
+// Context is passed to all command Run() methods.
+type Context struct {
+	Config *config.Config
 }
 
-func (CreateCmd) Description() string {
+// CreateCmd creates a new worktree for a new or existing remote branch.
+type CreateCmd struct {
+	Branch string `arg:"" required:"" placeholder:"BRANCH" help:"branch name"`
+	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Note   string `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
+	Hook   string `name:"hook" help:"run named hook instead of default"`
+	NoHook bool   `name:"no-hook" help:"skip post-create hook"`
+}
+
+func (c *CreateCmd) Help() string {
 	return `Create a new git worktree at <dir>/<repo>-<branch>
 
 Creates a new branch and worktree in one step. If the branch already exists
@@ -22,16 +29,20 @@ Examples:
   wt create feature-branch --hook=ide   # Run 'ide' hook instead of default`
 }
 
-// OpenCmd opens a worktree for an existing local branch.
-type OpenCmd struct {
-	Branch string `arg:"positional,required" placeholder:"BRANCH|ID" help:"branch name (in repo) or worktree ID/branch (outside repo)"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	Note   string `arg:"--note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook   string `arg:"--hook" help:"run named hook instead of default"`
-	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
+func (c *CreateCmd) Run(ctx *Context) error {
+	return runCreate(c, ctx.Config)
 }
 
-func (OpenCmd) Description() string {
+// OpenCmd opens a worktree for an existing local branch.
+type OpenCmd struct {
+	Branch string `arg:"" required:"" placeholder:"BRANCH|ID" help:"branch name (in repo) or worktree ID/branch (outside repo)"`
+	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Note   string `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
+	Hook   string `name:"hook" help:"run named hook instead of default"`
+	NoHook bool   `name:"no-hook" help:"skip post-create hook"`
+}
+
+func (c *OpenCmd) Help() string {
 	return `Open a worktree for an existing local branch
 
 Inside a git repo: opens a worktree for the specified branch.
@@ -45,16 +56,20 @@ Examples:
   wt open feature-branch --no-hook    # Skip post-create hook`
 }
 
-// TidyCmd removes merged and clean worktrees.
-type TidyCmd struct {
-	Dir          string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	DryRun       bool   `arg:"-n,--dry-run" help:"preview without removing"`
-	IncludeClean bool   `arg:"-c,--include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
-	Hook         string `arg:"--hook" help:"run named hook instead of default"`
-	NoHook       bool   `arg:"--no-hook" help:"skip post-removal hooks"`
+func (c *OpenCmd) Run(ctx *Context) error {
+	return runOpen(c, ctx.Config)
 }
 
-func (TidyCmd) Description() string {
+// TidyCmd removes merged and clean worktrees.
+type TidyCmd struct {
+	Dir          string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	DryRun       bool   `short:"n" name:"dry-run" help:"preview without removing"`
+	IncludeClean bool   `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
+	Hook         string `name:"hook" help:"run named hook instead of default"`
+	NoHook       bool   `name:"no-hook" help:"skip post-removal hooks"`
+}
+
+func (c *TidyCmd) Help() string {
 	return `Tidy up merged git worktrees with PR status display
 
 Removes worktrees where the branch is merged AND working directory is clean.
@@ -77,14 +92,18 @@ Examples:
   wt tidy --hook=cleanup       # Run 'cleanup' hook instead of default`
 }
 
-// ListCmd lists worktrees in a directory.
-type ListCmd struct {
-	Dir  string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	JSON bool   `arg:"--json" help:"output as JSON"`
-	All  bool   `arg:"-a,--all" help:"show all worktrees (not just current repo)"`
+func (c *TidyCmd) Run(ctx *Context) error {
+	return runTidy(c, ctx.Config)
 }
 
-func (ListCmd) Description() string {
+// ListCmd lists worktrees in a directory.
+type ListCmd struct {
+	Dir  string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	JSON bool   `name:"json" help:"output as JSON"`
+	All  bool   `short:"a" name:"all" help:"show all worktrees (not just current repo)"`
+}
+
+func (c *ListCmd) Help() string {
 	return `List all git worktrees with stable IDs
 
 When run inside a git repository, only shows worktrees for that repo.
@@ -98,14 +117,18 @@ Examples:
   wt list --json               # Output as JSON for scripting`
 }
 
-// ExecCmd runs a command in a worktree by ID or branch.
-type ExecCmd struct {
-	Target  string   `arg:"positional,required" placeholder:"ID|BRANCH" help:"worktree ID or branch name"`
-	Command []string `arg:"positional" placeholder:"COMMAND" help:"command to run (after --)"`
-	Dir     string   `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+func (c *ListCmd) Run(ctx *Context) error {
+	return runList(c)
 }
 
-func (ExecCmd) Description() string {
+// ExecCmd runs a command in a worktree by ID or branch.
+type ExecCmd struct {
+	Target  string   `arg:"" required:"" placeholder:"ID|BRANCH" help:"worktree ID or branch name"`
+	Command []string `arg:"" optional:"" passthrough:"" placeholder:"COMMAND" help:"command to run (after --)"`
+	Dir     string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+}
+
+func (c *ExecCmd) Help() string {
 	return `Run a command in a worktree by ID or branch
 
 Use 'wt list' to see worktree IDs. The command runs in the worktree directory.
@@ -116,14 +139,18 @@ Examples:
   wt exec 1 -- code .                # Open worktree in VS Code`
 }
 
-// NoteSetCmd sets a note on a branch.
-type NoteSetCmd struct {
-	Text   string `arg:"positional,required" placeholder:"TEXT" help:"note text"`
-	Target string `arg:"positional" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+func (c *ExecCmd) Run(ctx *Context) error {
+	return runExec(c)
 }
 
-func (NoteSetCmd) Description() string {
+// NoteSetCmd sets a note on a branch.
+type NoteSetCmd struct {
+	Text   string `arg:"" required:"" placeholder:"TEXT" help:"note text"`
+	Target string `arg:"" optional:"" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
+	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+}
+
+func (c *NoteSetCmd) Help() string {
 	return `Set a note on a branch
 
 When run inside a worktree, target is optional (defaults to current branch).
@@ -138,13 +165,17 @@ Examples:
   wt note set "In progress" feature-x   # By branch name`
 }
 
-// NoteGetCmd gets a note from a branch.
-type NoteGetCmd struct {
-	Target string `arg:"positional" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+func (c *NoteSetCmd) Run(ctx *Context) error {
+	return runNoteSet(c)
 }
 
-func (NoteGetCmd) Description() string {
+// NoteGetCmd gets a note from a branch.
+type NoteGetCmd struct {
+	Target string `arg:"" optional:"" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
+	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+}
+
+func (c *NoteGetCmd) Help() string {
 	return `Get the note for a branch
 
 When run inside a worktree, target is optional (defaults to current branch).
@@ -158,13 +189,17 @@ Examples:
   wt note get feature-x  # By branch name`
 }
 
-// NoteClearCmd clears a note from a branch.
-type NoteClearCmd struct {
-	Target string `arg:"positional" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+func (c *NoteGetCmd) Run(ctx *Context) error {
+	return runNoteGet(c)
 }
 
-func (NoteClearCmd) Description() string {
+// NoteClearCmd clears a note from a branch.
+type NoteClearCmd struct {
+	Target string `arg:"" optional:"" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
+	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+}
+
+func (c *NoteClearCmd) Help() string {
 	return `Clear the note from a branch
 
 When run inside a worktree, target is optional (defaults to current branch).
@@ -178,14 +213,18 @@ Examples:
   wt note clear feature-x  # By branch name`
 }
 
-// NoteCmd manages branch notes.
-type NoteCmd struct {
-	Set   *NoteSetCmd   `arg:"subcommand:set" help:"set a note on a branch"`
-	Get   *NoteGetCmd   `arg:"subcommand:get" help:"get the note for a branch"`
-	Clear *NoteClearCmd `arg:"subcommand:clear" help:"clear the note from a branch"`
+func (c *NoteClearCmd) Run(ctx *Context) error {
+	return runNoteClear(c)
 }
 
-func (NoteCmd) Description() string {
+// NoteCmd manages branch notes.
+type NoteCmd struct {
+	Set   NoteSetCmd   `cmd:"" help:"set a note on a branch"`
+	Get   NoteGetCmd   `cmd:"" help:"get the note for a branch"`
+	Clear NoteClearCmd `cmd:"" help:"clear the note from a branch"`
+}
+
+func (c *NoteCmd) Help() string {
 	return `Manage branch notes
 
 Notes are stored in git config and displayed in list/tidy output.
@@ -202,10 +241,10 @@ Examples:
 
 // CompletionCmd generates shell completion scripts.
 type CompletionCmd struct {
-	Shell string `arg:"positional,required" placeholder:"SHELL" help:"shell type (fish, bash, zsh)"`
+	Shell string `arg:"" required:"" placeholder:"SHELL" help:"shell type (fish, bash, zsh)" enum:"fish,bash,zsh"`
 }
 
-func (CompletionCmd) Description() string {
+func (c *CompletionCmd) Help() string {
 	return `Generate shell completion script
 
 Outputs a completion script for the specified shell.
@@ -217,50 +256,66 @@ Examples:
   wt completion zsh > ~/.zfunc/_wt  # then add ~/.zfunc to fpath`
 }
 
-// ConfigInitCmd creates the default config file.
-type ConfigInitCmd struct {
-	Force bool `arg:"-f,--force" help:"overwrite existing config file"`
+func (c *CompletionCmd) Run(ctx *Context) error {
+	return runCompletion(c)
 }
 
-func (ConfigInitCmd) Description() string {
+// ConfigInitCmd creates the default config file.
+type ConfigInitCmd struct {
+	Force bool `short:"f" name:"force" help:"overwrite existing config file"`
+}
+
+func (c *ConfigInitCmd) Help() string {
 	return `Create default config file at ~/.config/wt/config.toml
 Examples:
   wt config init           # Create config if missing
   wt config init -f        # Overwrite existing config`
 }
 
-// ConfigShowCmd shows the effective configuration.
-type ConfigShowCmd struct {
-	JSON bool `arg:"--json" help:"output as JSON"`
+func (c *ConfigInitCmd) Run(ctx *Context) error {
+	return runConfigInit(c)
 }
 
-func (ConfigShowCmd) Description() string {
+// ConfigShowCmd shows the effective configuration.
+type ConfigShowCmd struct {
+	JSON bool `name:"json" help:"output as JSON"`
+}
+
+func (c *ConfigShowCmd) Help() string {
 	return `Show effective configuration
 Examples:
   wt config show           # Show config in text format
   wt config show --json    # Output as JSON`
 }
 
-// ConfigHooksCmd lists available hooks.
-type ConfigHooksCmd struct {
-	JSON bool `arg:"--json" help:"output as JSON"`
+func (c *ConfigShowCmd) Run(ctx *Context) error {
+	return runConfigShow(c, ctx.Config)
 }
 
-func (ConfigHooksCmd) Description() string {
+// ConfigHooksCmd lists available hooks.
+type ConfigHooksCmd struct {
+	JSON bool `name:"json" help:"output as JSON"`
+}
+
+func (c *ConfigHooksCmd) Help() string {
 	return `List available hooks
 Examples:
   wt config hooks          # Show hooks in text format
   wt config hooks --json   # Output as JSON`
 }
 
-// ConfigCmd manages wt configuration.
-type ConfigCmd struct {
-	Init  *ConfigInitCmd  `arg:"subcommand:init" help:"create default config file"`
-	Show  *ConfigShowCmd  `arg:"subcommand:show" help:"show effective configuration"`
-	Hooks *ConfigHooksCmd `arg:"subcommand:hooks" help:"list available hooks"`
+func (c *ConfigHooksCmd) Run(ctx *Context) error {
+	return runConfigHooks(c, ctx.Config)
 }
 
-func (ConfigCmd) Description() string {
+// ConfigCmd manages wt configuration.
+type ConfigCmd struct {
+	Init  ConfigInitCmd  `cmd:"" help:"create default config file"`
+	Show  ConfigShowCmd  `cmd:"" help:"show effective configuration"`
+	Hooks ConfigHooksCmd `cmd:"" help:"list available hooks"`
+}
+
+func (c *ConfigCmd) Help() string {
 	return `Manage wt configuration
 Examples:
   wt config init           # Create default config
@@ -270,12 +325,12 @@ Examples:
 
 // HookRunCmd runs a hook by name for a worktree.
 type HookRunCmd struct {
-	Hook   string `arg:"positional,required" placeholder:"HOOK" help:"hook name to run"`
-	Target string `arg:"positional" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
+	Hook   string `arg:"" required:"" placeholder:"HOOK" help:"hook name to run"`
+	Target string `arg:"" optional:"" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
+	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
 }
 
-func (HookRunCmd) Description() string {
+func (c *HookRunCmd) Help() string {
 	return `Run a hook by name for a worktree
 
 When run inside a worktree, target is optional (defaults to current worktree).
@@ -288,12 +343,16 @@ Examples:
   wt hook run kitty 1 -d ~/Git   # Specify directory for lookup`
 }
 
-// HookCmd manages hooks.
-type HookCmd struct {
-	Run *HookRunCmd `arg:"subcommand:run" help:"run a hook by name"`
+func (c *HookRunCmd) Run(ctx *Context) error {
+	return runHookRun(c, ctx.Config)
 }
 
-func (HookCmd) Description() string {
+// HookCmd manages hooks.
+type HookCmd struct {
+	Run HookRunCmd `cmd:"" help:"run a hook by name"`
+}
+
+func (c *HookCmd) Help() string {
 	return `Manage hooks
 Examples:
   wt hook run kitty              # Run hook for current worktree
@@ -302,13 +361,13 @@ Examples:
 
 // MvCmd moves worktrees to a different directory with optional renaming.
 type MvCmd struct {
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"destination directory (flag > WT_DEFAULT_PATH > config)"`
-	Format string `arg:"--format" placeholder:"FORMAT" help:"worktree naming format"`
-	DryRun bool   `arg:"-n,--dry-run" help:"show what would be moved"`
-	Force  bool   `arg:"-f,--force" help:"force move dirty worktrees"`
+	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"destination directory (flag > WT_DEFAULT_PATH > config)"`
+	Format string `name:"format" placeholder:"FORMAT" help:"worktree naming format"`
+	DryRun bool   `short:"n" name:"dry-run" help:"show what would be moved"`
+	Force  bool   `short:"f" name:"force" help:"force move dirty worktrees"`
 }
 
-func (MvCmd) Description() string {
+func (c *MvCmd) Help() string {
 	return `Move worktrees to a different directory
 
 Scans the current directory for worktrees and moves them to the destination
@@ -321,16 +380,20 @@ Examples:
   wt mv -f -d ~/Git                  # Force move even if worktrees are dirty`
 }
 
-// PrOpenCmd creates a worktree for a PR from an existing local repo.
-type PrOpenCmd struct {
-	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR number"`
-	Repo   string `arg:"positional" placeholder:"REPO" help:"repository name to find locally"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	Hook   string `arg:"--hook" help:"run named hook instead of default"`
-	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
+func (c *MvCmd) Run(ctx *Context) error {
+	return runMv(c, ctx.Config)
 }
 
-func (PrOpenCmd) Description() string {
+// PrOpenCmd creates a worktree for a PR from an existing local repo.
+type PrOpenCmd struct {
+	Number int    `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
+	Repo   string `arg:"" optional:"" placeholder:"REPO" help:"repository name to find locally"`
+	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Hook   string `name:"hook" help:"run named hook instead of default"`
+	NoHook bool   `name:"no-hook" help:"skip post-create hook"`
+}
+
+func (c *PrOpenCmd) Help() string {
 	return `Create a worktree for a PR from an existing local repo
 
 Fetches PR metadata and creates a worktree for the branch.
@@ -344,18 +407,22 @@ Examples:
   wt pr open 123 --no-hook        # Skip post-create hook`
 }
 
-// PrCloneCmd clones a repo and creates a worktree for a PR.
-type PrCloneCmd struct {
-	Number int    `arg:"positional,required" placeholder:"NUMBER" help:"PR number"`
-	Repo   string `arg:"positional,required" placeholder:"REPO" help:"repository (org/repo or repo if [clone] org configured)"`
-	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	Forge  string `arg:"--forge,env:WT_FORGE" placeholder:"FORGE" help:"forge: github or gitlab (flag > env > clone rules > config)"`
-	Note   string `arg:"--note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook   string `arg:"--hook" help:"run named hook instead of default"`
-	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
+func (c *PrOpenCmd) Run(ctx *Context) error {
+	return runPrOpen(c, ctx.Config)
 }
 
-func (PrCloneCmd) Description() string {
+// PrCloneCmd clones a repo and creates a worktree for a PR.
+type PrCloneCmd struct {
+	Number int    `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
+	Repo   string `arg:"" required:"" placeholder:"REPO" help:"repository (org/repo or repo if [clone] org configured)"`
+	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Forge  string `name:"forge" env:"WT_FORGE" placeholder:"FORGE" help:"forge: github or gitlab (flag > env > clone rules > config)"`
+	Note   string `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
+	Hook   string `name:"hook" help:"run named hook instead of default"`
+	NoHook bool   `name:"no-hook" help:"skip post-create hook"`
+}
+
+func (c *PrCloneCmd) Help() string {
 	return `Clone a repo and create a worktree for a PR
 
 Clones the repository if not present locally, then creates a worktree for the PR branch.
@@ -371,12 +438,16 @@ Examples:
   wt pr clone 123 org/repo --no-hook    # Skip post-create hook`
 }
 
-// PrRefreshCmd fetches PR status for worktrees.
-type PrRefreshCmd struct {
-	Dir string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+func (c *PrCloneCmd) Run(ctx *Context) error {
+	return runPrClone(c, ctx.Config)
 }
 
-func (PrRefreshCmd) Description() string {
+// PrRefreshCmd fetches PR status for worktrees.
+type PrRefreshCmd struct {
+	Dir string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+}
+
+func (c *PrRefreshCmd) Help() string {
 	return `Refresh PR status cache for all worktrees
 
 Queries GitHub/GitLab for PR info on each worktree branch and caches the results.
@@ -387,17 +458,21 @@ Examples:
   wt pr refresh -d ~/Git       # Refresh for worktrees in specific directory`
 }
 
-// PrMergeCmd merges the PR for the current branch.
-type PrMergeCmd struct {
-	Target   string `arg:"positional" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
-	Dir      string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
-	Strategy string `arg:"-s,--strategy,env:WT_MERGE_STRATEGY" placeholder:"STRATEGY" help:"merge strategy: squash, rebase, or merge"`
-	Keep     bool   `arg:"-k,--keep" help:"keep worktree and branch after merge"`
-	Hook     string `arg:"--hook" help:"run named hook instead of default"`
-	NoHook   bool   `arg:"--no-hook" help:"skip post-merge hook"`
+func (c *PrRefreshCmd) Run(ctx *Context) error {
+	return runPrRefresh(c, ctx.Config)
 }
 
-func (PrMergeCmd) Description() string {
+// PrMergeCmd merges the PR for the current branch.
+type PrMergeCmd struct {
+	Target   string `arg:"" optional:"" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
+	Dir      string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
+	Strategy string `short:"s" name:"strategy" env:"WT_MERGE_STRATEGY" placeholder:"STRATEGY" help:"merge strategy: squash, rebase, or merge"`
+	Keep     bool   `short:"k" name:"keep" help:"keep worktree and branch after merge"`
+	Hook     string `name:"hook" help:"run named hook instead of default"`
+	NoHook   bool   `name:"no-hook" help:"skip post-merge hook"`
+}
+
+func (c *PrMergeCmd) Help() string {
 	return `Merge the PR for a branch and clean up
 
 When run inside a worktree, target is optional (defaults to current branch).
@@ -415,15 +490,19 @@ Examples:
   wt pr merge -s rebase          # Use rebase merge strategy`
 }
 
-// PrCmd works with PRs.
-type PrCmd struct {
-	Open    *PrOpenCmd    `arg:"subcommand:open" help:"checkout PR from existing local repo"`
-	Clone   *PrCloneCmd   `arg:"subcommand:clone" help:"clone repo and checkout PR"`
-	Refresh *PrRefreshCmd `arg:"subcommand:refresh" help:"refresh PR status cache"`
-	Merge   *PrMergeCmd   `arg:"subcommand:merge" help:"merge PR and clean up worktree"`
+func (c *PrMergeCmd) Run(ctx *Context) error {
+	return runPrMerge(c, ctx.Config)
 }
 
-func (PrCmd) Description() string {
+// PrCmd works with PRs.
+type PrCmd struct {
+	Open    PrOpenCmd    `cmd:"" help:"checkout PR from existing local repo"`
+	Clone   PrCloneCmd   `cmd:"" help:"clone repo and checkout PR"`
+	Refresh PrRefreshCmd `cmd:"" help:"refresh PR status cache"`
+	Merge   PrMergeCmd   `cmd:"" help:"merge PR and clean up worktree"`
+}
+
+func (c *PrCmd) Help() string {
 	return `Work with PRs
 Examples:
   wt pr open 123             # PR from current repo
@@ -433,37 +512,22 @@ Examples:
   wt pr merge                # Merge PR and clean up worktree`
 }
 
-// Args is the root command.
-type Args struct {
-	Create     *CreateCmd     `arg:"subcommand:create" help:"create a new worktree"`
-	Open       *OpenCmd       `arg:"subcommand:open" help:"open worktree for existing branch"`
-	Tidy       *TidyCmd       `arg:"subcommand:tidy" help:"tidy up merged worktrees"`
-	List       *ListCmd       `arg:"subcommand:list" help:"list worktrees"`
-	Exec       *ExecCmd       `arg:"subcommand:exec" help:"run command in worktree by ID"`
-	Mv         *MvCmd         `arg:"subcommand:mv" help:"move worktrees to another directory"`
-	Note       *NoteCmd       `arg:"subcommand:note" help:"manage branch notes"`
-	Hook       *HookCmd       `arg:"subcommand:hook" help:"manage hooks"`
-	Pr         *PrCmd         `arg:"subcommand:pr" help:"work with PRs"`
-	Config     *ConfigCmd     `arg:"subcommand:config" help:"manage configuration"`
-	Completion *CompletionCmd `arg:"subcommand:completion" help:"generate completion script"`
-}
+// VersionFlag is used to show version info.
+type VersionFlag bool
 
-func (Args) Description() string {
-	return `Git worktree manager with GitHub/GitLab integration
+// CLI is the root command.
+type CLI struct {
+	Create     CreateCmd     `cmd:"" help:"create a new worktree"`
+	Open       OpenCmd       `cmd:"" help:"open worktree for existing branch"`
+	Tidy       TidyCmd       `cmd:"" help:"tidy up merged worktrees"`
+	List       ListCmd       `cmd:"" help:"list worktrees"`
+	Exec       ExecCmd       `cmd:"" help:"run command in worktree by ID"`
+	Mv         MvCmd         `cmd:"" help:"move worktrees to another directory"`
+	Note       NoteCmd       `cmd:"" help:"manage branch notes"`
+	Hook       HookCmd       `cmd:"" help:"manage hooks"`
+	Pr         PrCmd         `cmd:"" help:"work with PRs"`
+	Config     ConfigCmd     `cmd:"" help:"manage configuration"`
+	Completion CompletionCmd `cmd:"" help:"generate completion script"`
 
-Manages git worktrees in a configurable base directory.
-Set WT_DEFAULT_PATH or see ~/.config/wt/config.toml for options.
-
-Examples:
-  wt create feature-x              # Create worktree for new branch
-  wt open existing-branch          # Create worktree for existing local branch
-  wt pr open 123                   # Checkout PR as worktree
-  wt list                          # List worktrees in current directory
-  wt tidy                          # Remove merged worktrees
-  wt tidy -n                       # Dry-run: preview what would be removed
-  wt config init                   # Create default config file
-
-Exit codes:
-  0  Success
-  1  Error (invalid arguments, git/gh failures, etc.)`
+	Version VersionFlag `name:"version" help:"show version"`
 }

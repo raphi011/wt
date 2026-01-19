@@ -13,7 +13,7 @@ import (
 	"github.com/raphi011/wt/internal/ui"
 )
 
-func runTidy(cmd *TidyCmd, cfg config.Config) error {
+func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}

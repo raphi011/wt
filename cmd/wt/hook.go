@@ -11,16 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runHookCmd(cmd *HookCmd, cfg config.Config) error {
-	switch {
-	case cmd.Run != nil:
-		return runHookRun(cmd.Run, cfg)
-	default:
-		return fmt.Errorf("no subcommand specified (try: wt hook run)")
-	}
-}
-
-func runHookRun(cmd *HookRunCmd, cfg config.Config) error {
+func runHookRun(cmd *HookRunCmd, cfg *config.Config) error {
 	hookName := cmd.Hook
 	target := cmd.Target
 

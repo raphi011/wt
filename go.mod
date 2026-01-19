@@ -3,15 +3,14 @@ module github.com/raphi011/wt
 go 1.25.5
 
 require (
-	github.com/alexflint/go-arg v1.6.1
+	github.com/BurntSushi/toml v1.6.0
+	github.com/alecthomas/kong v1.13.0
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 )
 
 require (
-	github.com/BurntSushi/toml v1.6.0 // indirect
-	github.com/alexflint/go-scalar v1.2.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/charmbracelet/colorprofile v0.4.1 // indirect
 	github.com/charmbracelet/x/ansi v0.11.4 // indirect

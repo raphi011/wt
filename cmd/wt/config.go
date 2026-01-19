@@ -8,25 +8,16 @@ import (
 	"github.com/raphi011/wt/internal/config"
 )
 
-func runConfig(cmd *ConfigCmd, cfg config.Config) error {
-	switch {
-	case cmd.Init != nil:
-		path, err := config.Init(cmd.Init.Force)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("Created config file: %s\n", path)
-		return nil
-	case cmd.Show != nil:
-		return runConfigShow(cmd.Show, cfg)
-	case cmd.Hooks != nil:
-		return runConfigHooks(cmd.Hooks, cfg)
-	default:
-		return fmt.Errorf("no subcommand specified (try: wt config init, wt config show, wt config hooks)")
+func runConfigInit(cmd *ConfigInitCmd) error {
+	path, err := config.Init(cmd.Force)
+	if err != nil {
+		return err
 	}
+	fmt.Printf("Created config file: %s\n", path)
+	return nil
 }
 
-func runConfigShow(cmd *ConfigShowCmd, cfg config.Config) error {
+func runConfigShow(cmd *ConfigShowCmd, cfg *config.Config) error {
 	if cmd.JSON {
 		// Build JSON output structure
 		type cloneRuleJSON struct {
@@ -114,7 +105,7 @@ func runConfigShow(cmd *ConfigShowCmd, cfg config.Config) error {
 	return nil
 }
 
-func runConfigHooks(cmd *ConfigHooksCmd, cfg config.Config) error {
+func runConfigHooks(cmd *ConfigHooksCmd, cfg *config.Config) error {
 	hooksConfig := cfg.Hooks
 
 	if cmd.JSON {

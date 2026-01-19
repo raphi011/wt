@@ -12,7 +12,7 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runOpen(cmd *OpenCmd, cfg config.Config) error {
+func runOpen(cmd *OpenCmd, cfg *config.Config) error {
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
@@ -29,7 +29,7 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 }
 
 // runOpenInRepo handles wt open when inside a git repository
-func runOpenInRepo(cmd *OpenCmd, cfg config.Config) error {
+func runOpenInRepo(cmd *OpenCmd, cfg *config.Config) error {
 	dir := cmd.Dir
 	if dir == "" {
 		dir = "."
@@ -90,7 +90,7 @@ func runOpenInRepo(cmd *OpenCmd, cfg config.Config) error {
 
 // runOpenOutsideRepo handles wt open when outside a git repository
 // Resolves the argument as either a worktree ID or branch name
-func runOpenOutsideRepo(cmd *OpenCmd, cfg config.Config) error {
+func runOpenOutsideRepo(cmd *OpenCmd, cfg *config.Config) error {
 	scanDir := cmd.Dir
 	if scanDir == "" {
 		return fmt.Errorf("directory required when outside git repo (-d flag or WT_DEFAULT_PATH)")

@@ -10,7 +10,7 @@ import (
 	"github.com/raphi011/wt/internal/git"
 )
 
-func runMv(cmd *MvCmd, _ config.Config) error {
+func runMv(cmd *MvCmd, _ *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}

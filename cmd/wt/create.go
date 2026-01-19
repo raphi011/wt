@@ -11,7 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/hooks"
 )
 
-func runCreate(cmd *CreateCmd, cfg config.Config) error {
+func runCreate(cmd *CreateCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
