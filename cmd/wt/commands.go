@@ -138,6 +138,18 @@ Examples:
   wt config init -f        # Overwrite existing config`
 }
 
+// ConfigShowCmd shows the effective configuration.
+type ConfigShowCmd struct {
+	JSON bool `arg:"--json" help:"output as JSON"`
+}
+
+func (ConfigShowCmd) Description() string {
+	return `Show effective configuration
+Examples:
+  wt config show           # Show config in text format
+  wt config show --json    # Output as JSON`
+}
+
 // ConfigHooksCmd lists available hooks.
 type ConfigHooksCmd struct {
 	JSON bool `arg:"--json" help:"output as JSON"`
@@ -153,6 +165,7 @@ Examples:
 // ConfigCmd manages wt configuration.
 type ConfigCmd struct {
 	Init  *ConfigInitCmd  `arg:"subcommand:init" help:"create default config file"`
+	Show  *ConfigShowCmd  `arg:"subcommand:show" help:"show effective configuration"`
 	Hooks *ConfigHooksCmd `arg:"subcommand:hooks" help:"list available hooks"`
 }
 
@@ -160,6 +173,7 @@ func (ConfigCmd) Description() string {
 	return `Manage wt configuration
 Examples:
   wt config init           # Create default config
+  wt config show           # Show effective config
   wt config hooks          # List available hooks`
 }
 

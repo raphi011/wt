@@ -155,9 +155,11 @@ _wt_completions() {
             ;;
         config)
             if [[ $cword -eq 2 ]]; then
-                COMPREPLY=($(compgen -W "init hooks" -- "$cur"))
+                COMPREPLY=($(compgen -W "init show hooks" -- "$cur"))
             elif [[ "${words[2]}" == "init" ]]; then
                 COMPREPLY=($(compgen -W "-f --force" -- "$cur"))
+            elif [[ "${words[2]}" == "show" ]]; then
+                COMPREPLY=($(compgen -W "--json" -- "$cur"))
             elif [[ "${words[2]}" == "hooks" ]]; then
                 COMPREPLY=($(compgen -W "--json" -- "$cur"))
             fi
@@ -318,6 +320,7 @@ _wt() {
                         subcmd)
                             local subcommands=(
                                 'init:Create default config file'
+                                'show:Show effective configuration'
                                 'hooks:List available hooks'
                             )
                             _describe 'subcommand' subcommands
@@ -328,6 +331,10 @@ _wt() {
                                     _arguments \
                                         '-f[overwrite existing config]' \
                                         '--force[overwrite existing config]'
+                                    ;;
+                                show)
+                                    _arguments \
+                                        '--json[output as JSON]'
                                     ;;
                                 hooks)
                                     _arguments \
@@ -466,9 +473,11 @@ function __wt_worktree_ids
 end
 
 # config: subcommands
-complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init hooks" -a "init" -d "Create default config file"
-complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init hooks" -a "hooks" -d "List available hooks"
+complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init show hooks" -a "init" -d "Create default config file"
+complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init show hooks" -a "show" -d "Show effective configuration"
+complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init show hooks" -a "hooks" -d "List available hooks"
 complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from init" -s f -l force -d "Overwrite existing config file"
+complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from show" -l json -d "Output as JSON"
 complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from hooks" -l json -d "Output as JSON"
 
 # completion
