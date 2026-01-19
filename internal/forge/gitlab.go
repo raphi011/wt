@@ -184,6 +184,37 @@ func (g *GitLab) CloneRepo(repoSpec, destPath string) (string, error) {
 	return clonePath, nil
 }
 
+// MergePR merges a MR by number with the given strategy
+func (g *GitLab) MergePR(repoURL string, number int, strategy string) error {
+	// GitLab doesn't support rebase strategy via CLI
+	if strategy == "rebase" {
+		return fmt.Errorf("rebase merge strategy is not supported on GitLab (use squash or merge)")
+	}
+
+	projectPath := extractGitLabProject(repoURL)
+
+	args := []string{"mr", "merge", fmt.Sprintf("%d", number),
+		"-R", projectPath,
+		"--remove-source-branch"}
+
+	if strategy == "squash" {
+		args = append(args, "--squash")
+	}
+	// "merge" uses default behavior (no extra flag)
+
+	cmd := exec.Command("glab", args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg != "" {
+			return fmt.Errorf("merge failed: %s", errMsg)
+		}
+		return fmt.Errorf("merge failed: %w", err)
+	}
+	return nil
+}
+
 // FormatIcon returns the nerd font icon for PR state
 func (g *GitLab) FormatIcon(state string) string {
 	switch state {

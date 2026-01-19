@@ -505,6 +505,8 @@ func writeHelp(w *os.File, p *arg.Parser, args *Args) {
 			desc = args.Pr.Clone.Description()
 		} else if args.Pr.List != nil {
 			desc = args.Pr.List.Description()
+		} else if args.Pr.Merge != nil {
+			desc = args.Pr.Merge.Description()
 		} else {
 			desc = args.Pr.Description()
 		}
@@ -784,8 +786,10 @@ func runPr(cmd *PrCmd, cfg config.Config) error {
 		return runPrClone(cmd.Clone, cfg)
 	case cmd.List != nil:
 		return runPrList(cmd.List, cfg)
+	case cmd.Merge != nil:
+		return runPrMerge(cmd.Merge, cfg)
 	default:
-		return fmt.Errorf("no subcommand specified (try: wt pr open, wt pr clone, wt pr list)")
+		return fmt.Errorf("no subcommand specified (try: wt pr open, wt pr clone, wt pr list, wt pr merge)")
 	}
 }
 
@@ -1181,6 +1185,142 @@ func runPrList(cmd *PrListCmd, cfg config.Config) error {
 		fmt.Printf("Fetched: %d, Failed: %d\n", fetchedCount, failedCount)
 	} else {
 		fmt.Printf("Fetched: %d\n", fetchedCount)
+	}
+
+	return nil
+}
+
+func runPrMerge(cmd *PrMergeCmd, cfg config.Config) error {
+	if err := git.CheckGit(); err != nil {
+		return err
+	}
+
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// Must be in a worktree (not main repo)
+	if !git.IsWorktree(cwd) {
+		return fmt.Errorf("must run from inside a worktree (not the main repo)")
+	}
+
+	// Get branch and main repo
+	branch, err := git.GetCurrentBranch(cwd)
+	if err != nil {
+		return fmt.Errorf("failed to get current branch: %w", err)
+	}
+	mainRepo, err := git.GetMainRepoPath(cwd)
+	if err != nil {
+		return fmt.Errorf("failed to get main repo path: %w", err)
+	}
+
+	// Get origin URL and detect forge
+	originURL, err := git.GetOriginURL(mainRepo)
+	if err != nil {
+		return fmt.Errorf("failed to get origin URL: %w", err)
+	}
+	f := forge.Detect(originURL, cfg.Hosts)
+	if err := f.Check(); err != nil {
+		return err
+	}
+
+	// Get PR for current branch
+	fmt.Printf("Checking PR status for branch %s...\n", branch)
+	pr, err := f.GetPRForBranch(originURL, branch)
+	if err != nil {
+		return fmt.Errorf("failed to get PR info: %w", err)
+	}
+	if pr == nil || pr.Number == 0 {
+		return fmt.Errorf("no PR found for branch %q", branch)
+	}
+	if pr.State == "MERGED" {
+		return fmt.Errorf("PR #%d is already merged (use 'wt tidy' to clean up)", pr.Number)
+	}
+	if pr.State == "CLOSED" {
+		return fmt.Errorf("PR #%d is closed", pr.Number)
+	}
+
+	// Resolve merge strategy: flag > config > default
+	strategy := cmd.Strategy
+	if strategy == "" {
+		strategy = cfg.Merge.Strategy
+	}
+	if strategy == "" {
+		strategy = "squash"
+	}
+
+	// Validate strategy
+	if strategy != "squash" && strategy != "rebase" && strategy != "merge" {
+		return fmt.Errorf("invalid merge strategy %q: must be squash, rebase, or merge", strategy)
+	}
+
+	// Merge the PR
+	fmt.Printf("Merging PR #%d (%s)...\n", pr.Number, strategy)
+	if err := f.MergePR(originURL, pr.Number, strategy); err != nil {
+		return err
+	}
+	fmt.Printf("✓ PR #%d merged\n", pr.Number)
+
+	// Cleanup (unless --keep)
+	if !cmd.Keep {
+		// Build worktree struct for removal
+		wt := git.Worktree{
+			Path:     cwd,
+			Branch:   branch,
+			MainRepo: mainRepo,
+		}
+
+		fmt.Printf("Removing worktree...\n")
+		if err := git.RemoveWorktree(wt, true); err != nil {
+			return fmt.Errorf("failed to remove worktree: %w", err)
+		}
+
+		fmt.Printf("Deleting local branch %s...\n", branch)
+		if err := git.DeleteLocalBranch(mainRepo, branch, true); err != nil {
+			// Don't fail - branch might already be gone or worktree removal handled it
+			fmt.Fprintf(os.Stderr, "Warning: failed to delete local branch: %v\n", err)
+		}
+
+		git.PruneWorktrees(mainRepo)
+		fmt.Printf("✓ Cleanup complete\n")
+	}
+
+	// Run hooks
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, false, hooks.CommandMerge)
+	if err != nil {
+		return err
+	}
+
+	if len(hookMatches) > 0 {
+		// Get repo info for hook context
+		repoName, _ := git.GetRepoNameFrom(mainRepo)
+		folderName := filepath.Base(mainRepo)
+
+		ctx := hooks.Context{
+			Path:     cwd,
+			Branch:   branch,
+			Repo:     repoName,
+			Folder:   folderName,
+			MainRepo: mainRepo,
+			Trigger:  string(hooks.CommandMerge),
+		}
+
+		// If worktree was removed, run hooks from main repo
+		workDir := cwd
+		if !cmd.Keep {
+			workDir = mainRepo
+		}
+
+		for _, match := range hookMatches {
+			fmt.Printf("Running hook '%s'...\n", match.Name)
+			if err := hooks.RunWithDir(match.Hook, ctx, workDir); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: hook %q failed: %v\n", match.Name, err)
+			} else if match.Hook.Description != "" {
+				fmt.Printf("  ✓ %s\n", match.Hook.Description)
+			}
+		}
 	}
 
 	return nil

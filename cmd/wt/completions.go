@@ -90,7 +90,7 @@ _wt_completions() {
             ;;
         pr)
             if [[ $cword -eq 2 ]]; then
-                COMPREPLY=($(compgen -W "open clone list" -- "$cur"))
+                COMPREPLY=($(compgen -W "open clone list merge" -- "$cur"))
             elif [[ "${words[2]}" == "open" ]]; then
                 case "$prev" in
                     -d|--dir)
@@ -125,6 +125,17 @@ _wt_completions() {
                         ;;
                 esac
                 COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
+            elif [[ "${words[2]}" == "merge" ]]; then
+                case "$prev" in
+                    -s|--strategy)
+                        COMPREPLY=($(compgen -W "squash rebase merge" -- "$cur"))
+                        return
+                        ;;
+                    --hook)
+                        return
+                        ;;
+                esac
+                COMPREPLY=($(compgen -W "-s --strategy -k --keep --hook --no-hook" -- "$cur"))
             fi
             ;;
         config)
@@ -234,6 +245,7 @@ _wt() {
                                 'open:Checkout PR from existing local repo'
                                 'clone:Clone repo and checkout PR'
                                 'list:Fetch PR status for worktrees'
+                                'merge:Merge PR and clean up worktree'
                             )
                             _describe 'subcommand' subcommands
                             ;;
@@ -262,6 +274,15 @@ _wt() {
                                     _arguments \
                                         '-d[target directory]:directory:_files -/' \
                                         '--dir[target directory]:directory:_files -/'
+                                    ;;
+                                merge)
+                                    _arguments \
+                                        '-s[merge strategy]:strategy:(squash rebase merge)' \
+                                        '--strategy[merge strategy]:strategy:(squash rebase merge)' \
+                                        '-k[keep worktree and branch after merge]' \
+                                        '--keep[keep worktree and branch after merge]' \
+                                        '--hook[run named hook]:hook:' \
+                                        '--no-hook[skip post-merge hook]'
                                     ;;
                             esac
                             ;;
@@ -363,9 +384,10 @@ complete -c wt -n "__fish_seen_subcommand_from mv" -s n -l dry-run -d "Show what
 complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move dirty worktrees"
 
 # pr: subcommands
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list" -a "open" -d "Checkout PR from existing local repo"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list" -a "clone" -d "Clone repo and checkout PR"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list" -a "list" -d "Fetch PR status for worktrees"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list merge" -a "open" -d "Checkout PR from existing local repo"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list merge" -a "clone" -d "Clone repo and checkout PR"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list merge" -a "list" -d "Fetch PR status for worktrees"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list merge" -a "merge" -d "Merge PR and clean up worktree"
 # pr open: PR number (first positional), then repo (second positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -a "(gh pr list --json number,title --jq '.[] | \"\\(.number)\t\\(.title)\"' 2>/dev/null)" -d "PR number"
 # Repo names from default_path (second positional after PR number)
@@ -380,6 +402,11 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_fr
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l no-hook -d "Skip post-create hook"
 # pr list: flags only
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
+# pr merge: flags only
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s s -l strategy -r -a "squash rebase merge" -d "Merge strategy"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s k -l keep -d "Keep worktree and branch after merge"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -l hook -d "Run named hook instead of default"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -l no-hook -d "Skip post-merge hook"
 
 # Helper function to list repos in default_path
 function __wt_list_repos

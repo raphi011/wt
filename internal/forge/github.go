@@ -163,6 +163,34 @@ func (g *GitHub) CloneRepo(repoSpec, destPath string) (string, error) {
 	return clonePath, nil
 }
 
+// MergePR merges a PR by number with the given strategy
+func (g *GitHub) MergePR(repoURL string, number int, strategy string) error {
+	// Map strategy to gh flag
+	strategyFlag := "--squash" // default
+	switch strategy {
+	case "rebase":
+		strategyFlag = "--rebase"
+	case "merge":
+		strategyFlag = "--merge"
+	}
+
+	cmd := exec.Command("gh", "pr", "merge", fmt.Sprintf("%d", number),
+		"-R", repoURL,
+		strategyFlag,
+		"--delete-branch")
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg != "" {
+			return fmt.Errorf("merge failed: %s", errMsg)
+		}
+		return fmt.Errorf("merge failed: %w", err)
+	}
+	return nil
+}
+
 // FormatIcon returns the nerd font icon for PR state
 func (g *GitHub) FormatIcon(state string) string {
 	switch state {

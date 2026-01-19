@@ -436,3 +436,22 @@ func GetBranchWorktree(branch string) (string, error) {
 
 	return "", nil
 }
+
+// DeleteLocalBranch deletes a local branch
+func DeleteLocalBranch(repoPath, branch string, force bool) error {
+	flag := "-d"
+	if force {
+		flag = "-D"
+	}
+	cmd := exec.Command("git", "-C", repoPath, "branch", flag, branch)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg != "" {
+			return fmt.Errorf("failed to delete branch: %s", errMsg)
+		}
+		return fmt.Errorf("failed to delete branch: %w", err)
+	}
+	return nil
+}

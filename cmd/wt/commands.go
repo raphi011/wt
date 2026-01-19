@@ -232,11 +232,37 @@ Examples:
   wt pr list && wt tidy -n     # Fetch status, then preview tidy`
 }
 
+// PrMergeCmd merges the PR for the current branch.
+type PrMergeCmd struct {
+	Strategy string `arg:"-s,--strategy,env:WT_MERGE_STRATEGY" placeholder:"STRATEGY" help:"merge strategy: squash, rebase, or merge"`
+	Keep     bool   `arg:"-k,--keep" help:"keep worktree and branch after merge"`
+	Hook     string `arg:"--hook" help:"run named hook instead of default"`
+	NoHook   bool   `arg:"--no-hook" help:"skip post-merge hook"`
+}
+
+func (PrMergeCmd) Description() string {
+	return `Merge the PR for the current branch and clean up
+
+Must be run from inside a git worktree. Merges the PR associated with the
+current branch, then removes the worktree and deletes the local branch.
+
+Merge strategy can be set via flag, WT_MERGE_STRATEGY env, or config.
+Note: rebase strategy is not supported on GitLab.
+
+Examples:
+  wt pr merge                  # Merge PR, remove worktree, delete branch
+  wt pr merge --keep           # Merge PR only, keep worktree and branch
+  wt pr merge -s rebase        # Use rebase merge strategy
+  wt pr merge -s merge         # Use regular merge (merge commit)
+  wt pr merge --no-hook        # Skip post-merge hooks`
+}
+
 // PrCmd works with PRs.
 type PrCmd struct {
 	Open  *PrOpenCmd  `arg:"subcommand:open" help:"checkout PR from existing local repo"`
 	Clone *PrCloneCmd `arg:"subcommand:clone" help:"clone repo and checkout PR"`
 	List  *PrListCmd  `arg:"subcommand:list" help:"fetch PR status for worktrees"`
+	Merge *PrMergeCmd `arg:"subcommand:merge" help:"merge PR and clean up worktree"`
 }
 
 func (PrCmd) Description() string {
@@ -245,7 +271,8 @@ Examples:
   wt pr open 123             # PR from current repo
   wt pr open 123 myrepo      # PR from existing local repo
   wt pr clone 123 org/repo   # Clone repo and checkout PR
-  wt pr list                 # Fetch PR status for worktrees`
+  wt pr list                 # Fetch PR status for worktrees
+  wt pr merge                # Merge PR and clean up worktree`
 }
 
 // Args is the root command.

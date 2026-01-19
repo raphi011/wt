@@ -26,6 +26,7 @@ const (
 	CommandOpen   CommandType = "open"
 	CommandPR     CommandType = "pr"
 	CommandTidy   CommandType = "tidy"
+	CommandMerge  CommandType = "merge"
 )
 
 // Context holds the values for placeholder substitution

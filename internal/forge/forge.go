@@ -51,6 +51,11 @@ type Forge interface {
 	// CloneRepo clones a repository to destPath, returns the full clone path
 	CloneRepo(repoSpec, destPath string) (string, error)
 
+	// MergePR merges a PR by number with the given strategy
+	// strategy: "squash", "rebase", or "merge"
+	// Returns error if repo doesn't allow the requested merge strategy
+	MergePR(repoURL string, number int, strategy string) error
+
 	// FormatIcon returns the nerd font icon for PR state
 	FormatIcon(state string) string
 }

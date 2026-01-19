@@ -28,6 +28,11 @@ type CloneRule struct {
 	Forge   string `toml:"forge"`   // "github" or "gitlab"
 }
 
+// MergeConfig holds merge-related configuration
+type MergeConfig struct {
+	Strategy string `toml:"strategy"` // "squash", "rebase", or "merge"
+}
+
 // CloneConfig holds clone-related configuration
 type CloneConfig struct {
 	Forge string      `toml:"forge"` // default forge: "github" or "gitlab"
@@ -41,6 +46,7 @@ type Config struct {
 	WorktreeFormat string            `toml:"worktree_format"`
 	Hooks          HooksConfig       `toml:"-"` // custom parsing needed
 	Clone          CloneConfig       `toml:"clone"`
+	Merge          MergeConfig       `toml:"merge"`
 	Hosts          map[string]string `toml:"hosts"` // domain -> forge type mapping
 }
 
@@ -90,6 +96,7 @@ type rawConfig struct {
 	WorktreeFormat string                 `toml:"worktree_format"`
 	Hooks          map[string]interface{} `toml:"hooks"`
 	Clone          CloneConfig            `toml:"clone"`
+	Merge          MergeConfig            `toml:"merge"`
 	Hosts          map[string]string      `toml:"hosts"`
 }
 
@@ -120,6 +127,7 @@ func Load() (Config, error) {
 		WorktreeFormat: raw.WorktreeFormat,
 		Hooks:          parseHooksConfig(raw.Hooks),
 		Clone:          raw.Clone,
+		Merge:          raw.Merge,
 		Hosts:          raw.Hosts,
 	}
 
@@ -138,6 +146,11 @@ func Load() (Config, error) {
 		if forgeType != "github" && forgeType != "gitlab" {
 			return Default(), fmt.Errorf("invalid forge type %q for host %q: must be \"github\" or \"gitlab\"", forgeType, host)
 		}
+	}
+
+	// Validate merge.strategy (only "squash", "rebase", "merge", or empty allowed)
+	if cfg.Merge.Strategy != "" && cfg.Merge.Strategy != "squash" && cfg.Merge.Strategy != "rebase" && cfg.Merge.Strategy != "merge" {
+		return Default(), fmt.Errorf("invalid merge.strategy %q: must be \"squash\", \"rebase\", or \"merge\"", cfg.Merge.Strategy)
 	}
 
 	// Use defaults for empty values
@@ -298,6 +311,11 @@ worktree_format = "{git-origin}-{branch-name}"
 #
 # Rules are matched in order; first match wins.
 # Supported forges: "github" (gh CLI), "gitlab" (glab CLI)
+
+# Merge settings for "wt pr merge"
+# [merge]
+# strategy = "squash"  # squash, rebase, or merge (default: squash)
+#                      # Note: rebase is not supported on GitLab
 
 # Host mappings - for self-hosted GitHub Enterprise or GitLab instances
 # Maps custom domains to forge type for automatic detection

@@ -454,3 +454,16 @@ func GroupWorktreesByRepo(worktrees []Worktree) map[string][]Worktree {
 	}
 	return groups
 }
+
+// IsWorktree returns true if path is a git worktree (not main repo)
+// Worktrees have .git as a file pointing to the main repo,
+// while main repos have .git as a directory.
+func IsWorktree(path string) bool {
+	gitPath := filepath.Join(path, ".git")
+	info, err := os.Stat(gitPath)
+	if err != nil {
+		return false
+	}
+	// Worktrees have .git as file, main repos have .git as directory
+	return !info.IsDir()
+}
