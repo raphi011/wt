@@ -2,6 +2,26 @@
 
 Git worktree manager with GitHub/GitLab integration.
 
+## Table of Contents
+
+- [Why wt](#why-wt)
+- [Install](#install)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Hook Examples](#hook-examples)
+- [Shell Completions](#shell-completions)
+
+## Why wt
+
+Git worktrees let you work on multiple branches simultaneously without stashing or switching—great for juggling a feature branch and a hotfix, or running multiple AI agent sessions in parallel.
+
+But worktrees can pile up fast. You end up with a dozen directories, can't remember which ones are already merged, and need custom scripts to open your editor, create terminal tabs, or clean up stale checkouts.
+
+`wt` solves this:
+- **Hooks** auto-run commands when creating/opening worktrees (open editor, spawn terminal tab)
+- **Tidy** removes merged worktrees and shows PR/MR status so you know what's safe to delete
+- **PR checkout** opens pull requests in worktrees for easier code review
+
 ## Install
 
 ```bash
@@ -136,7 +156,27 @@ forge = "github"
 
 Rules are matched in order; first match wins. Supports glob patterns with `*`.
 
-## Integration with gh dash
+## Hook Examples
+
+### VS Code
+
+```toml
+[hooks.vscode]
+command = "code {path}"
+description = "Open worktree in VS Code"
+on = ["create", "open", "pr"]
+```
+
+### tmux
+
+```toml
+[hooks.tmux]
+command = "tmux new-window -c {path} -n {branch}"
+description = "Open new tmux window in worktree"
+on = ["create", "open"]
+```
+
+### gh dash
 
 `wt` works well with [gh dash](https://github.com/dlvhdr/gh-dash) for reviewing PRs. Configure a keybinding to open PRs as worktrees:
 
