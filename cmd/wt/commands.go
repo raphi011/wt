@@ -268,6 +268,38 @@ Examples:
   wt config hooks          # List available hooks`
 }
 
+// HookRunCmd runs a hook by name for a worktree.
+type HookRunCmd struct {
+	Target string `arg:"positional" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
+	Hook   string `arg:"positional" placeholder:"HOOK" help:"hook name to run"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
+}
+
+func (HookRunCmd) Description() string {
+	return `Run a hook by name for a worktree
+
+When run inside a worktree, target is optional (defaults to current worktree).
+When run outside, specify a worktree ID or branch name.
+
+Examples:
+  wt hook run kitty              # Inside worktree: run for current
+  wt hook run 1 kitty            # By worktree ID
+  wt hook run feature-x kitty    # By branch name
+  wt hook run 1 kitty -d ~/Git   # Specify directory for lookup`
+}
+
+// HookCmd manages hooks.
+type HookCmd struct {
+	Run *HookRunCmd `arg:"subcommand:run" help:"run a hook by name"`
+}
+
+func (HookCmd) Description() string {
+	return `Manage hooks
+Examples:
+  wt hook run kitty              # Run hook for current worktree
+  wt hook run 1 kitty            # Run hook for worktree ID 1`
+}
+
 // MvCmd moves worktrees to a different directory with optional renaming.
 type MvCmd struct {
 	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"destination directory (flag > WT_DEFAULT_PATH > config)"`
@@ -410,6 +442,7 @@ type Args struct {
 	Exec       *ExecCmd       `arg:"subcommand:exec" help:"run command in worktree by ID"`
 	Mv         *MvCmd         `arg:"subcommand:mv" help:"move worktrees to another directory"`
 	Note       *NoteCmd       `arg:"subcommand:note" help:"manage branch notes"`
+	Hook       *HookCmd       `arg:"subcommand:hook" help:"manage hooks"`
 	Pr         *PrCmd         `arg:"subcommand:pr" help:"work with PRs"`
 	Config     *ConfigCmd     `arg:"subcommand:config" help:"manage configuration"`
 	Completion *CompletionCmd `arg:"subcommand:completion" help:"generate completion script"`

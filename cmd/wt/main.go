@@ -72,6 +72,9 @@ func main() {
 			args.Mv.Format = cfg.WorktreeFormat
 		}
 	}
+	if args.Hook != nil && args.Hook.Run != nil && args.Hook.Run.Dir == "" {
+		args.Hook.Run.Dir = cfg.DefaultPath
+	}
 
 	switch {
 	case args.Create != nil:
@@ -106,6 +109,11 @@ func main() {
 		}
 	case args.Note != nil:
 		if err := runNote(args.Note); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case args.Hook != nil:
+		if err := runHookCmd(args.Hook, cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -156,6 +164,12 @@ func writeHelp(w *os.File, p *arg.Parser, args *Args) {
 			desc = args.Note.Clear.Description()
 		} else {
 			desc = args.Note.Description()
+		}
+	case args.Hook != nil:
+		if args.Hook.Run != nil {
+			desc = args.Hook.Run.Description()
+		} else {
+			desc = args.Hook.Description()
 		}
 	case args.Pr != nil:
 		if args.Pr.Open != nil {
@@ -221,6 +235,7 @@ func writeRootHelp(w *os.File) {
 	fmt.Fprintln(w, "  exec        Run command in worktree by ID")
 	fmt.Fprintln(w, "  mv          Move worktrees")
 	fmt.Fprintln(w, "  note        Manage branch notes")
+	fmt.Fprintln(w, "  hook        Manage hooks")
 	fmt.Fprintln(w, "  pr          Work with PRs")
 	fmt.Fprintln(w, "  config      Manage configuration")
 	fmt.Fprintln(w, "  completion  Generate shell completions")
