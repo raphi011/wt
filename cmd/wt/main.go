@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/alexflint/go-arg"
 
@@ -640,25 +641,14 @@ func runList(cmd *ListCmd) error {
 	}
 
 	// List worktrees in directory
-	worktrees, err := git.ListWorktrees(scanPath)
+	allWorktrees, err := git.ListWorktrees(scanPath)
 	if err != nil {
 		return err
 	}
 
-	// If in a git repo, filter to only show worktrees from that repo
-	if currentRepo := git.GetCurrentRepoMainPath(); currentRepo != "" {
-		var filtered []git.Worktree
-		for _, wt := range worktrees {
-			if wt.MainRepo == currentRepo {
-				filtered = append(filtered, wt)
-			}
-		}
-		worktrees = filtered
-	}
-
-	// Convert to WorktreeInfo for cache sync
-	wtInfos := make([]forge.WorktreeInfo, len(worktrees))
-	for i, wt := range worktrees {
+	// Convert ALL worktrees to WorktreeInfo for cache sync (before filtering)
+	wtInfos := make([]forge.WorktreeInfo, len(allWorktrees))
+	for i, wt := range allWorktrees {
 		wtInfos[i] = forge.WorktreeInfo{
 			Path:      wt.Path,
 			Branch:    wt.Branch,
@@ -666,8 +656,20 @@ func runList(cmd *ListCmd) error {
 		}
 	}
 
-	// Sync cache and get ID mapping
+	// Sync cache with ALL worktrees to avoid losing IDs
 	pathToID := wtCache.SyncWorktrees(wtInfos)
+
+	// If in a git repo, filter to only show worktrees from that repo
+	worktrees := allWorktrees
+	if currentRepo := git.GetCurrentRepoMainPath(); currentRepo != "" {
+		var filtered []git.Worktree
+		for _, wt := range allWorktrees {
+			if wt.MainRepo == currentRepo {
+				filtered = append(filtered, wt)
+			}
+		}
+		worktrees = filtered
+	}
 
 	// Save updated cache
 	if err := forge.SaveCache(scanPath, wtCache); err != nil {
@@ -677,23 +679,24 @@ func runList(cmd *ListCmd) error {
 	if cmd.JSON {
 		// Build JSON output with IDs
 		type worktreeJSON struct {
-			ID           int    `json:"id"`
-			Path         string `json:"path"`
-			Branch       string `json:"branch"`
-			MainRepo     string `json:"main_repo"`
-			RepoName     string `json:"repo_name"`
-			OriginURL    string `json:"origin_url"`
-			IsMerged     bool   `json:"is_merged"`
-			CommitCount  int    `json:"commit_count"`
-			Additions    int    `json:"additions"`
-			Deletions    int    `json:"deletions"`
-			IsDirty      bool   `json:"is_dirty"`
-			HasUntracked bool   `json:"has_untracked"`
-			LastCommit   string `json:"last_commit"`
+			ID           int        `json:"id"`
+			Path         string     `json:"path"`
+			Branch       string     `json:"branch"`
+			MainRepo     string     `json:"main_repo,omitempty"`
+			RepoName     string     `json:"repo_name,omitempty"`
+			OriginURL    string     `json:"origin_url"`
+			IsMerged     bool       `json:"is_merged,omitempty"`
+			CommitCount  int        `json:"commit_count,omitempty"`
+			Additions    int        `json:"additions,omitempty"`
+			Deletions    int        `json:"deletions,omitempty"`
+			IsDirty      bool       `json:"is_dirty,omitempty"`
+			HasUntracked bool       `json:"has_untracked,omitempty"`
+			LastCommit   string     `json:"last_commit,omitempty"`
+			RemovedAt    *time.Time `json:"removed_at,omitempty"`
 		}
-		result := make([]worktreeJSON, len(worktrees))
-		for i, wt := range worktrees {
-			result[i] = worktreeJSON{
+		result := make([]worktreeJSON, 0, len(worktrees))
+		for _, wt := range worktrees {
+			result = append(result, worktreeJSON{
 				ID:           pathToID[wt.Path],
 				Path:         wt.Path,
 				Branch:       wt.Branch,
@@ -707,6 +710,27 @@ func runList(cmd *ListCmd) error {
 				IsDirty:      wt.IsDirty,
 				HasUntracked: wt.HasUntracked,
 				LastCommit:   wt.LastCommit,
+			})
+		}
+		// Include removed worktrees if --all
+		if cmd.All {
+			for key, entry := range wtCache.Worktrees {
+				if entry.RemovedAt != nil {
+					// Parse key to get origin and branch
+					parts := strings.SplitN(key, "::", 2)
+					var originURL, branch string
+					if len(parts) == 2 {
+						originURL = parts[0]
+						branch = parts[1]
+					}
+					result = append(result, worktreeJSON{
+						ID:        entry.ID,
+						Path:      entry.Path,
+						Branch:    branch,
+						OriginURL: originURL,
+						RemovedAt: entry.RemovedAt,
+					})
+				}
 			}
 		}
 		data, err := json.MarshalIndent(result, "", "  ")
@@ -717,31 +741,69 @@ func runList(cmd *ListCmd) error {
 		return nil
 	}
 
-	if len(worktrees) == 0 {
+	// Build list of items to display
+	type displayItem struct {
+		ID        int
+		Path      string
+		Branch    string
+		RemovedAt *time.Time
+	}
+	items := make([]displayItem, 0, len(worktrees))
+	for _, wt := range worktrees {
+		items = append(items, displayItem{
+			ID:     pathToID[wt.Path],
+			Path:   wt.Path,
+			Branch: wt.Branch,
+		})
+	}
+	// Include removed worktrees if --all
+	if cmd.All {
+		for key, entry := range wtCache.Worktrees {
+			if entry.RemovedAt != nil {
+				parts := strings.SplitN(key, "::", 2)
+				var branch string
+				if len(parts) == 2 {
+					branch = parts[1]
+				}
+				items = append(items, displayItem{
+					ID:        entry.ID,
+					Path:      entry.Path,
+					Branch:    branch,
+					RemovedAt: entry.RemovedAt,
+				})
+			}
+		}
+	}
+
+	if len(items) == 0 {
 		return nil
 	}
 
 	// Find max ID width and path length for alignment
 	maxID := 0
 	maxPathLen := 0
-	for _, wt := range worktrees {
-		if id := pathToID[wt.Path]; id > maxID {
-			maxID = id
+	for _, item := range items {
+		if item.ID > maxID {
+			maxID = item.ID
 		}
-		if len(wt.Path) > maxPathLen {
-			maxPathLen = len(wt.Path)
+		if len(item.Path) > maxPathLen {
+			maxPathLen = len(item.Path)
 		}
 	}
 	idWidth := len(fmt.Sprintf("%d", maxID))
 
 	// Output with ID: ID  /path  commit [branch]
-	for _, wt := range worktrees {
-		hash, _ := git.GetShortCommitHash(wt.Path)
-		if hash == "" {
-			hash = "???????"
+	for _, item := range items {
+		if item.RemovedAt != nil {
+			// Removed worktree
+			fmt.Printf("%*d  %-*s  [removed %s] [%s]\n", idWidth, item.ID, maxPathLen, item.Path, item.RemovedAt.Format("2006-01-02"), item.Branch)
+		} else {
+			hash, _ := git.GetShortCommitHash(item.Path)
+			if hash == "" {
+				hash = "???????"
+			}
+			fmt.Printf("%*d  %-*s  %s [%s]\n", idWidth, item.ID, maxPathLen, item.Path, hash, item.Branch)
 		}
-		id := pathToID[wt.Path]
-		fmt.Printf("%*d  %-*s  %s [%s]\n", idWidth, id, maxPathLen, wt.Path, hash, wt.Branch)
 	}
 
 	return nil
@@ -786,9 +848,12 @@ func runExec(cmd *ExecCmd) error {
 	}
 
 	// Look up worktree by ID
-	path, found := wtCache.GetByID(cmd.ID)
+	path, found, removed := wtCache.GetByID(cmd.ID)
 	if !found {
 		return fmt.Errorf("worktree ID %d not found (run 'wt list' to see available IDs)", cmd.ID)
+	}
+	if removed {
+		return fmt.Errorf("worktree %d was removed (was at %s)", cmd.ID, path)
 	}
 
 	// Validate path still exists

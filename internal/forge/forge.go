@@ -65,8 +65,9 @@ type PRCache map[string]map[string]*PRInfo
 
 // WorktreeIDEntry stores the ID for a worktree
 type WorktreeIDEntry struct {
-	ID   int    `json:"id"`
-	Path string `json:"path"`
+	ID        int        `json:"id"`
+	Path      string     `json:"path"`
+	RemovedAt *time.Time `json:"removed_at,omitempty"` // nil if still exists
 }
 
 // Cache is the unified cache structure stored in .wt-cache.json
@@ -166,6 +167,8 @@ func (c *Cache) GetOrAssignID(originURL, branch, path string) int {
 	if entry, ok := c.Worktrees[key]; ok {
 		// Update path if changed
 		entry.Path = path
+		// Clear RemovedAt if worktree reappeared
+		entry.RemovedAt = nil
 		return entry.ID
 	}
 
@@ -181,13 +184,14 @@ func (c *Cache) GetOrAssignID(originURL, branch, path string) int {
 }
 
 // GetByID looks up a worktree by its ID
-func (c *Cache) GetByID(id int) (path string, found bool) {
+// Returns path, found, and whether it was marked as removed
+func (c *Cache) GetByID(id int) (path string, found bool, removed bool) {
 	for _, entry := range c.Worktrees {
 		if entry.ID == id {
-			return entry.Path, true
+			return entry.Path, true, entry.RemovedAt != nil
 		}
 	}
-	return "", false
+	return "", false, false
 }
 
 // WorktreeInfo contains the minimal info needed to sync the cache
@@ -199,23 +203,25 @@ type WorktreeInfo struct {
 
 // SyncWorktrees updates the cache with current worktrees
 // Returns a map of path -> ID for display
+// Note: entries are never deleted, only marked as removed for history
 func (c *Cache) SyncWorktrees(worktrees []WorktreeInfo) map[string]int {
-	// Track which keys are still valid
-	validKeys := make(map[string]bool)
+	// Track which keys still exist on disk
+	currentKeys := make(map[string]bool)
 	pathToID := make(map[string]int)
 
 	for _, wt := range worktrees {
 		key := MakeWorktreeKey(wt.OriginURL, wt.Branch)
-		validKeys[key] = true
+		currentKeys[key] = true
 
 		id := c.GetOrAssignID(wt.OriginURL, wt.Branch, wt.Path)
 		pathToID[wt.Path] = id
 	}
 
-	// Remove stale entries (worktrees that no longer exist)
-	for key := range c.Worktrees {
-		if !validKeys[key] {
-			delete(c.Worktrees, key)
+	// Mark missing worktrees as removed (instead of deleting)
+	now := time.Now()
+	for key, entry := range c.Worktrees {
+		if !currentKeys[key] && entry.RemovedAt == nil {
+			entry.RemovedAt = &now
 		}
 	}
 

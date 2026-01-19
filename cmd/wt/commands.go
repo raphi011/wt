@@ -77,6 +77,7 @@ Examples:
 type ListCmd struct {
 	Dir  string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	JSON bool   `arg:"--json" help:"output as JSON"`
+	All  bool   `arg:"-a,--all" help:"include removed worktrees (history)"`
 }
 
 func (ListCmd) Description() string {
@@ -88,7 +89,8 @@ IDs are stable across runs - use them with 'wt exec'.
 Examples:
   wt list                      # List worktrees for current repo
   wt list -d ~/Git/worktrees   # List from specific directory
-  wt list --json               # Output as JSON for scripting`
+  wt list --json               # Output as JSON for scripting
+  wt list --all                # Include removed worktrees`
 }
 
 // ExecCmd runs a command in a worktree by ID.
