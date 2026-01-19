@@ -137,7 +137,6 @@ description = "Open VS Code"
 | `command` | Shell command to run (required) |
 | `description` | Human-readable description |
 | `on` | Commands to auto-run on: `["create", "open", "pr", "tidy", "all"]` (empty = only via `--hook`) |
-| `run_on_exists` | Run even if worktree already existed (default: false) |
 
 ### Hook Placeholders
 
