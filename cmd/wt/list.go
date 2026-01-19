@@ -155,7 +155,7 @@ func runList(cmd *ListCmd) error {
 	}
 
 	if currentRepo != "" && len(allWorktrees) != len(worktrees) {
-		fmt.Printf("Listing worktrees for %s (%d of %d)\n\n", worktrees[0].RepoName, len(worktrees), len(allWorktrees))
+		fmt.Printf("Listing worktrees for %s (%d of %d). Use --all to show all\n\n", worktrees[0].RepoName, len(worktrees), len(allWorktrees))
 	} else {
 		fmt.Printf("Listing worktrees in %s (%d)\n\n", scanPath, len(worktrees))
 	}
