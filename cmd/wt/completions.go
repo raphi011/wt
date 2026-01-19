@@ -15,7 +15,7 @@ _wt_completions() {
         cword=$COMP_CWORD
     fi
 
-    local commands="create open tidy list exec mv pr config completion"
+    local commands="create open tidy list exec mv note pr config completion"
 
     # Handle subcommand-specific completions
     case "${words[1]}" in
@@ -25,7 +25,7 @@ _wt_completions() {
                     COMPREPLY=($(compgen -d -- "$cur"))
                     return
                     ;;
-                --hook)
+                --hook|--note)
                     return
                     ;;
             esac
@@ -34,7 +34,7 @@ _wt_completions() {
                 local branches=$(git branch --all --format='%(refname:short)' 2>/dev/null | sed 's|origin/||' | sort -u)
                 COMPREPLY=($(compgen -W "$branches" -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "-d --dir --hook --no-hook" -- "$cur"))
+                COMPREPLY=($(compgen -W "-d --dir --note --hook --no-hook" -- "$cur"))
             fi
             ;;
         open)
@@ -43,7 +43,7 @@ _wt_completions() {
                     COMPREPLY=($(compgen -d -- "$cur"))
                     return
                     ;;
-                --hook)
+                --hook|--note)
                     return
                     ;;
             esac
@@ -52,7 +52,7 @@ _wt_completions() {
                 local branches=$(git branch --format='%(refname:short)' 2>/dev/null)
                 COMPREPLY=($(compgen -W "$branches" -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "-d --dir --hook --no-hook" -- "$cur"))
+                COMPREPLY=($(compgen -W "-d --dir --note --hook --no-hook" -- "$cur"))
             fi
             ;;
         tidy)
@@ -74,7 +74,7 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-d --dir --json" -- "$cur"))
+            COMPREPLY=($(compgen -W "-d --dir --json -a --all" -- "$cur"))
             ;;
         exec)
             case "$prev" in
@@ -105,7 +105,7 @@ _wt_completions() {
             ;;
         pr)
             if [[ $cword -eq 2 ]]; then
-                COMPREPLY=($(compgen -W "open clone list merge" -- "$cur"))
+                COMPREPLY=($(compgen -W "open clone refresh merge" -- "$cur"))
             elif [[ "${words[2]}" == "open" ]]; then
                 case "$prev" in
                     -d|--dir)
@@ -127,12 +127,12 @@ _wt_completions() {
                         COMPREPLY=($(compgen -W "github gitlab" -- "$cur"))
                         return
                         ;;
-                    --hook)
+                    --hook|--note)
                         return
                         ;;
                 esac
-                COMPREPLY=($(compgen -W "-d --dir --forge --hook --no-hook" -- "$cur"))
-            elif [[ "${words[2]}" == "list" ]]; then
+                COMPREPLY=($(compgen -W "-d --dir --forge --note --hook --no-hook" -- "$cur"))
+            elif [[ "${words[2]}" == "refresh" ]]; then
                 case "$prev" in
                     -d|--dir)
                         COMPREPLY=($(compgen -d -- "$cur"))
@@ -151,6 +151,25 @@ _wt_completions() {
                         ;;
                 esac
                 COMPREPLY=($(compgen -W "-s --strategy -k --keep --hook --no-hook" -- "$cur"))
+            fi
+            ;;
+        note)
+            if [[ $cword -eq 2 ]]; then
+                COMPREPLY=($(compgen -W "set get clear" -- "$cur"))
+            elif [[ "${words[2]}" == "set" ]] || [[ "${words[2]}" == "get" ]] || [[ "${words[2]}" == "clear" ]]; then
+                case "$prev" in
+                    -d|--dir)
+                        COMPREPLY=($(compgen -d -- "$cur"))
+                        return
+                        ;;
+                esac
+                if [[ $cword -eq 3 ]]; then
+                    # Complete worktree IDs
+                    local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                    COMPREPLY=($(compgen -W "$ids" -- "$cur"))
+                else
+                    COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
+                fi
             fi
             ;;
         config)
@@ -202,6 +221,7 @@ _wt() {
                 'list:List worktrees with stable IDs'
                 'exec:Run command in worktree by ID'
                 'mv:Move worktrees to another directory'
+                'note:Manage branch notes'
                 'pr:Work with GitHub PRs'
                 'config:Manage configuration'
                 'completion:Generate completion script'
@@ -215,6 +235,7 @@ _wt() {
                         '1:branch:__wt_all_branches' \
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/' \
+                        '--note[set note on branch]:note:' \
                         '--hook[run named hook]:hook:' \
                         '--no-hook[skip post-create hook]'
                     ;;
@@ -223,6 +244,7 @@ _wt() {
                         '1:branch:__wt_local_branches' \
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/' \
+                        '--note[set note on branch]:note:' \
                         '--hook[run named hook]:hook:' \
                         '--no-hook[skip post-create hook]'
                     ;;
@@ -241,7 +263,9 @@ _wt() {
                     _arguments \
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/' \
-                        '--json[output as JSON]'
+                        '--json[output as JSON]' \
+                        '-a[show all worktrees]' \
+                        '--all[show all worktrees]'
                     ;;
                 exec)
                     _arguments \
@@ -268,7 +292,7 @@ _wt() {
                             local subcommands=(
                                 'open:Checkout PR from existing local repo'
                                 'clone:Clone repo and checkout PR'
-                                'list:Fetch PR status for worktrees'
+                                'refresh:Refresh PR status cache'
                                 'merge:Merge PR and clean up worktree'
                             )
                             _describe 'subcommand' subcommands
@@ -291,10 +315,11 @@ _wt() {
                                         '-d[target directory]:directory:_files -/' \
                                         '--dir[target directory]:directory:_files -/' \
                                         '--forge[forge type]:forge:(github gitlab)' \
+                                        '--note[set note on branch]:note:' \
                                         '--hook[run named hook]:hook:' \
                                         '--no-hook[skip post-create hook]'
                                     ;;
-                                list)
+                                refresh)
                                     _arguments \
                                         '-d[target directory]:directory:_files -/' \
                                         '--dir[target directory]:directory:_files -/'
@@ -307,6 +332,38 @@ _wt() {
                                         '--keep[keep worktree and branch after merge]' \
                                         '--hook[run named hook]:hook:' \
                                         '--no-hook[skip post-merge hook]'
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
+                note)
+                    _arguments -C \
+                        '1: :->subcmd' \
+                        '*:: :->args'
+                    case $state in
+                        subcmd)
+                            local subcommands=(
+                                'set:Set a note on a branch'
+                                'get:Get the note for a branch'
+                                'clear:Clear the note from a branch'
+                            )
+                            _describe 'subcommand' subcommands
+                            ;;
+                        args)
+                            case $words[1] in
+                                set)
+                                    _arguments \
+                                        '1:worktree ID:__wt_worktree_ids' \
+                                        '2:note text:' \
+                                        '-d[worktree directory]:directory:_files -/' \
+                                        '--dir[worktree directory]:directory:_files -/'
+                                    ;;
+                                get|clear)
+                                    _arguments \
+                                        '1:worktree ID:__wt_worktree_ids' \
+                                        '-d[worktree directory]:directory:_files -/' \
+                                        '--dir[worktree directory]:directory:_files -/'
                                     ;;
                             esac
                             ;;
@@ -381,25 +438,28 @@ const fishCompletions = `# wt completions - supports fish autosuggestions and ta
 complete -c wt -f
 
 # Subcommands (shown in completions and autosuggestions)
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "create" -d "Create new worktree"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "open" -d "Open worktree for existing branch"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "tidy" -d "Tidy up merged worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "list" -d "List worktrees with stable IDs"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "exec" -d "Run command in worktree by ID"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "mv" -d "Move worktrees to another directory"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "pr" -d "Work with PRs"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "config" -d "Manage configuration"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv pr config completion" -a "completion" -d "Generate completion script"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "create" -d "Create new worktree"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "open" -d "Open worktree for existing branch"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "tidy" -d "Tidy up merged worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "list" -d "List worktrees with stable IDs"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "exec" -d "Run command in worktree by ID"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "mv" -d "Move worktrees to another directory"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "note" -d "Manage branch notes"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "pr" -d "Work with PRs"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "config" -d "Manage configuration"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "completion" -d "Generate completion script"
 
 # create: branch name (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from create; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
 complete -c wt -n "__fish_seen_subcommand_from create" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
+complete -c wt -n "__fish_seen_subcommand_from create" -l note -r -d "Set note on branch"
 complete -c wt -n "__fish_seen_subcommand_from create" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from create" -l no-hook -d "Skip post-create hook"
 
 # open: local branch name (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from open; and not __fish_seen_argument" -a "(git branch --format='%(refname:short)' 2>/dev/null)" -d "Local branch"
 complete -c wt -n "__fish_seen_subcommand_from open" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
+complete -c wt -n "__fish_seen_subcommand_from open" -l note -r -d "Set note on branch"
 complete -c wt -n "__fish_seen_subcommand_from open" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from open" -l no-hook -d "Skip post-create hook"
 
@@ -413,6 +473,7 @@ complete -c wt -n "__fish_seen_subcommand_from tidy" -l no-hook -d "Skip post-re
 # list: flags only (no positional args)
 complete -c wt -n "__fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
+complete -c wt -n "__fish_seen_subcommand_from list" -s a -l all -d "Show all worktrees (not just current repo)"
 
 # exec: worktree ID (positional), then -- command
 complete -c wt -n "__fish_seen_subcommand_from exec; and not __fish_seen_argument" -a "(__wt_worktree_ids)" -d "Worktree ID"
@@ -424,11 +485,19 @@ complete -c wt -n "__fish_seen_subcommand_from mv" -l format -d "Worktree naming
 complete -c wt -n "__fish_seen_subcommand_from mv" -s n -l dry-run -d "Show what would be moved"
 complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move dirty worktrees"
 
+# note: subcommands
+complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "set" -d "Set a note on a branch"
+complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "get" -d "Get the note for a branch"
+complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "clear" -d "Clear the note from a branch"
+# note set/get/clear: worktree ID (positional), then flags
+complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -a "(__wt_worktree_ids)" -d "Worktree ID"
+complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for ID lookup"
+
 # pr: subcommands
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list merge" -a "open" -d "Checkout PR from existing local repo"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list merge" -a "clone" -d "Clone repo and checkout PR"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list merge" -a "list" -d "Fetch PR status for worktrees"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list merge" -a "merge" -d "Merge PR and clean up worktree"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone refresh merge" -a "open" -d "Checkout PR from existing local repo"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone refresh merge" -a "clone" -d "Clone repo and checkout PR"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone refresh merge" -a "refresh" -d "Refresh PR status cache"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone refresh merge" -a "merge" -d "Merge PR and clean up worktree"
 # pr open: PR number (first positional), then repo (second positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -a "(gh pr list --json number,title --jq '.[] | \"\\(.number)\t\\(.title)\"' 2>/dev/null)" -d "PR number"
 # Repo names from default_path (second positional after PR number)
@@ -439,10 +508,11 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_fr
 # pr clone: PR number (first positional), then org/repo (second positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l forge -r -a "github gitlab" -d "Forge type"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l note -r -d "Set note on branch"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l no-hook -d "Skip post-create hook"
-# pr list: flags only
-complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
+# pr refresh: flags only
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from refresh" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 # pr merge: flags only
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s s -l strategy -r -a "squash rebase merge" -d "Merge strategy"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s k -l keep -d "Keep worktree and branch after merge"

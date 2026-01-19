@@ -4,6 +4,7 @@ package main
 type CreateCmd struct {
 	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"branch name"`
 	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Note   string `arg:"--note" placeholder:"TEXT" help:"set a note on the branch"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
@@ -25,6 +26,7 @@ Examples:
 type OpenCmd struct {
 	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"existing local branch name"`
 	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Note   string `arg:"--note" placeholder:"TEXT" help:"set a note on the branch"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
@@ -54,7 +56,7 @@ func (TidyCmd) Description() string {
 	return `Tidy up merged git worktrees with PR status display
 
 Removes worktrees where the branch is merged AND working directory is clean.
-Shows a table with cached PR status. Run 'wt pr list' first to fetch PR info.
+Shows a table with cached PR status. Run 'wt pr refresh' to update PR info.
 
 Hooks with on=["tidy"] run after each worktree removal. Hooks run with
 working directory set to the main repo (since worktree path is deleted).
@@ -64,7 +66,7 @@ or rebased PRs. For accurate detection, use GitHub/GitLab where PR status
 shows if the branch was merged.
 
 Examples:
-  wt pr list && wt tidy        # Fetch PR status, then tidy
+  wt pr refresh && wt tidy     # Refresh PR status, then tidy
   wt tidy                      # Remove merged worktrees (uses cached PR info)
   wt tidy -n                   # Dry-run: preview without removing
   wt tidy -d ~/Git/worktrees   # Scan specific directory
@@ -77,20 +79,21 @@ Examples:
 type ListCmd struct {
 	Dir  string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	JSON bool   `arg:"--json" help:"output as JSON"`
-	All  bool   `arg:"-a,--all" help:"include removed worktrees (history)"`
+	All  bool   `arg:"-a,--all" help:"show all worktrees (not just current repo)"`
 }
 
 func (ListCmd) Description() string {
 	return `List all git worktrees with stable IDs
 
 When run inside a git repository, only shows worktrees for that repo.
+Use --all to show worktrees from all repos in the directory.
 IDs are stable across runs - use them with 'wt exec'.
 
 Examples:
   wt list                      # List worktrees for current repo
+  wt list --all                # List all worktrees (all repos)
   wt list -d ~/Git/worktrees   # List from specific directory
-  wt list --json               # Output as JSON for scripting
-  wt list --all                # Include removed worktrees`
+  wt list --json               # Output as JSON for scripting`
 }
 
 // ExecCmd runs a command in a worktree by ID.
@@ -109,6 +112,86 @@ Examples:
   wt exec 1 -- gh pr view      # View PR for worktree #1
   wt exec 2 -- git status      # Run git status in worktree #2
   wt exec 1 -- code .          # Open worktree in VS Code`
+}
+
+// NoteSetCmd sets a note on a branch.
+type NoteSetCmd struct {
+	ID   int    `arg:"positional" placeholder:"ID" help:"worktree ID (optional in worktree, required outside)"`
+	Text string `arg:"positional,required" placeholder:"TEXT" help:"note text"`
+	Dir  string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+}
+
+func (NoteSetCmd) Description() string {
+	return `Set a note on a branch
+
+When run inside a worktree, ID is optional (defaults to current branch).
+When run outside a worktree, ID is required.
+
+The note is stored in git config (branch.<name>.description) and displayed
+in 'wt list' and 'wt tidy' output.
+
+Examples:
+  wt note set "Working on login flow"   # Inside worktree, current branch
+  wt note set 1 "Working on login"      # By worktree ID`
+}
+
+// NoteGetCmd gets a note from a branch.
+type NoteGetCmd struct {
+	ID  int    `arg:"positional" placeholder:"ID" help:"worktree ID (optional in worktree, required outside)"`
+	Dir string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+}
+
+func (NoteGetCmd) Description() string {
+	return `Get the note for a branch
+
+When run inside a worktree, ID is optional (defaults to current branch).
+When run outside a worktree, ID is required.
+
+Prints the note if set, or nothing if no note exists.
+
+Examples:
+  wt note get        # Inside worktree, current branch
+  wt note get 1      # By worktree ID`
+}
+
+// NoteClearCmd clears a note from a branch.
+type NoteClearCmd struct {
+	ID  int    `arg:"positional" placeholder:"ID" help:"worktree ID (optional in worktree, required outside)"`
+	Dir string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+}
+
+func (NoteClearCmd) Description() string {
+	return `Clear the note from a branch
+
+When run inside a worktree, ID is optional (defaults to current branch).
+When run outside a worktree, ID is required.
+
+Removes the note from the branch. Safe to run even if no note exists.
+
+Examples:
+  wt note clear      # Inside worktree, current branch
+  wt note clear 1    # By worktree ID`
+}
+
+// NoteCmd manages branch notes.
+type NoteCmd struct {
+	Set   *NoteSetCmd   `arg:"subcommand:set" help:"set a note on a branch"`
+	Get   *NoteGetCmd   `arg:"subcommand:get" help:"get the note for a branch"`
+	Clear *NoteClearCmd `arg:"subcommand:clear" help:"clear the note from a branch"`
+}
+
+func (NoteCmd) Description() string {
+	return `Manage branch notes
+
+Notes are stored in git config and displayed in list/tidy output.
+Inside a worktree, operates on current branch. Outside, requires worktree ID.
+
+Examples:
+  wt note set "Working on login"    # Inside worktree
+  wt note set 1 "Working on login"  # By worktree ID
+  wt note get                       # Inside worktree
+  wt note get 1                     # By worktree ID
+  wt note clear 1                   # By worktree ID`
 }
 
 // CompletionCmd generates shell completion scripts.
@@ -229,6 +312,7 @@ type PrCloneCmd struct {
 	Repo   string `arg:"positional,required" placeholder:"REPO" help:"repository (org/repo or repo if [clone] org configured)"`
 	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Forge  string `arg:"--forge,env:WT_FORGE" placeholder:"FORGE" help:"forge: github or gitlab (flag > env > clone rules > config)"`
+	Note   string `arg:"--note" placeholder:"TEXT" help:"set a note on the branch"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook bool   `arg:"--no-hook" help:"skip post-create hook"`
 }
@@ -249,21 +333,20 @@ Examples:
   wt pr clone 123 org/repo --no-hook    # Skip post-create hook`
 }
 
-// PrListCmd fetches PR status for worktrees.
-type PrListCmd struct {
+// PrRefreshCmd fetches PR status for worktrees.
+type PrRefreshCmd struct {
 	Dir string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 }
 
-func (PrListCmd) Description() string {
-	return `Fetch PR status for all worktrees
+func (PrRefreshCmd) Description() string {
+	return `Refresh PR status cache for all worktrees
 
 Queries GitHub/GitLab for PR info on each worktree branch and caches the results.
-Run this before 'wt tidy' to see accurate PR status in the table.
+Run this to update PR info shown in 'wt list' and 'wt tidy'.
 
 Examples:
-  wt pr list                   # Fetch PR status for worktrees
-  wt pr list -d ~/Git          # Fetch for worktrees in specific directory
-  wt pr list && wt tidy -n     # Fetch status, then preview tidy`
+  wt pr refresh                # Refresh PR status for worktrees
+  wt pr refresh -d ~/Git       # Refresh for worktrees in specific directory`
 }
 
 // PrMergeCmd merges the PR for the current branch.
@@ -293,10 +376,10 @@ Examples:
 
 // PrCmd works with PRs.
 type PrCmd struct {
-	Open  *PrOpenCmd  `arg:"subcommand:open" help:"checkout PR from existing local repo"`
-	Clone *PrCloneCmd `arg:"subcommand:clone" help:"clone repo and checkout PR"`
-	List  *PrListCmd  `arg:"subcommand:list" help:"fetch PR status for worktrees"`
-	Merge *PrMergeCmd `arg:"subcommand:merge" help:"merge PR and clean up worktree"`
+	Open    *PrOpenCmd    `arg:"subcommand:open" help:"checkout PR from existing local repo"`
+	Clone   *PrCloneCmd   `arg:"subcommand:clone" help:"clone repo and checkout PR"`
+	Refresh *PrRefreshCmd `arg:"subcommand:refresh" help:"refresh PR status cache"`
+	Merge   *PrMergeCmd   `arg:"subcommand:merge" help:"merge PR and clean up worktree"`
 }
 
 func (PrCmd) Description() string {
@@ -305,7 +388,7 @@ Examples:
   wt pr open 123             # PR from current repo
   wt pr open 123 myrepo      # PR from existing local repo
   wt pr clone 123 org/repo   # Clone repo and checkout PR
-  wt pr list                 # Fetch PR status for worktrees
+  wt pr refresh              # Refresh PR status cache
   wt pr merge                # Merge PR and clean up worktree`
 }
 
@@ -317,6 +400,7 @@ type Args struct {
 	List       *ListCmd       `arg:"subcommand:list" help:"list worktrees"`
 	Exec       *ExecCmd       `arg:"subcommand:exec" help:"run command in worktree by ID"`
 	Mv         *MvCmd         `arg:"subcommand:mv" help:"move worktrees to another directory"`
+	Note       *NoteCmd       `arg:"subcommand:note" help:"manage branch notes"`
 	Pr         *PrCmd         `arg:"subcommand:pr" help:"work with PRs"`
 	Config     *ConfigCmd     `arg:"subcommand:config" help:"manage configuration"`
 	Completion *CompletionCmd `arg:"subcommand:completion" help:"generate completion script"`

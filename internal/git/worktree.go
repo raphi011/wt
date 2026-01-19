@@ -25,6 +25,7 @@ type Worktree struct {
 	IsDirty      bool   `json:"is_dirty"`
 	HasUntracked bool   `json:"has_untracked"`
 	LastCommit   string `json:"last_commit"`
+	Note         string `json:"note,omitempty"`
 }
 
 // ListWorktrees scans a directory for git worktrees
@@ -83,6 +84,9 @@ func ListWorktrees(scanDir string) ([]Worktree, error) {
 		// Get last commit time (errors treated as empty string)
 		lastCommit, _ := GetLastCommitRelative(path)
 
+		// Get branch note (errors treated as empty string)
+		note, _ := GetBranchNote(mainRepo, branch)
+
 		worktrees = append(worktrees, Worktree{
 			Path:         path,
 			Branch:       branch,
@@ -96,6 +100,7 @@ func ListWorktrees(scanDir string) ([]Worktree, error) {
 			IsDirty:      isDirty,
 			HasUntracked: hasUntracked,
 			LastCommit:   lastCommit,
+			Note:         note,
 		})
 	}
 
@@ -466,4 +471,126 @@ func IsWorktree(path string) bool {
 	}
 	// Worktrees have .git as file, main repos have .git as directory
 	return !info.IsDir()
+}
+
+// WorktreeLight contains only the fields needed for wt list display.
+// This is a lighter version of Worktree that can be populated much faster.
+type WorktreeLight struct {
+	Path       string
+	Branch     string
+	MainRepo   string
+	RepoName   string
+	OriginURL  string
+	CommitHash string // Short commit hash
+	Note       string
+}
+
+// ListWorktreesLight scans a directory for git worktrees and returns lightweight info.
+// This is optimized for wt list - it batches git calls per main repo instead of per worktree.
+// For 10 worktrees across 2 repos: ~6 subprocess calls instead of ~80.
+func ListWorktreesLight(scanDir string) ([]WorktreeLight, error) {
+	entries, err := os.ReadDir(scanDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Phase 1: Find all worktrees and group by main repo (no subprocess calls)
+	type pendingWorktree struct {
+		path     string
+		mainRepo string
+	}
+	var pending []pendingWorktree
+	mainRepos := make(map[string]bool)
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		path := filepath.Join(scanDir, entry.Name())
+		gitFile := filepath.Join(path, ".git")
+
+		// Check if it's a worktree (has .git file, not directory)
+		info, err := os.Stat(gitFile)
+		if err != nil || info.IsDir() {
+			continue
+		}
+
+		// Get main repo path (file read, no subprocess)
+		mainRepo, err := GetMainRepoPath(path)
+		if err != nil {
+			continue
+		}
+
+		pending = append(pending, pendingWorktree{path: path, mainRepo: mainRepo})
+		mainRepos[mainRepo] = true
+	}
+
+	if len(pending) == 0 {
+		return nil, nil
+	}
+
+	// Phase 2: Batch fetch info per main repo (3 subprocess calls per repo)
+	// Map: mainRepo -> (worktree path -> WorktreeInfo)
+	repoWorktrees := make(map[string]map[string]WorktreeInfo)
+	// Map: mainRepo -> (branch -> note)
+	repoNotes := make(map[string]map[string]string)
+	// Map: mainRepo -> originURL
+	repoOrigins := make(map[string]string)
+
+	for mainRepo := range mainRepos {
+		// Get all worktrees from this repo in one call
+		wtInfos, err := ListWorktreesFromRepo(mainRepo)
+		if err != nil {
+			continue
+		}
+		repoWorktrees[mainRepo] = make(map[string]WorktreeInfo)
+		for _, wti := range wtInfos {
+			repoWorktrees[mainRepo][wti.Path] = wti
+		}
+
+		// Get all branch notes in one call
+		repoNotes[mainRepo] = GetAllBranchNotes(mainRepo)
+
+		// Get origin URL once
+		originURL, _ := GetOriginURL(mainRepo)
+		repoOrigins[mainRepo] = originURL
+	}
+
+	// Phase 3: Build result by merging data
+	var worktrees []WorktreeLight
+	for _, p := range pending {
+		wtMap, ok := repoWorktrees[p.mainRepo]
+		if !ok {
+			continue
+		}
+		wtInfo, ok := wtMap[p.path]
+		if !ok {
+			continue
+		}
+
+		// Truncate commit hash to 7 chars (standard short hash)
+		shortHash := wtInfo.CommitHash
+		if len(shortHash) > 7 {
+			shortHash = shortHash[:7]
+		}
+
+		// Get note for this branch
+		note := ""
+		if notes, ok := repoNotes[p.mainRepo]; ok {
+			note = notes[wtInfo.Branch]
+		}
+
+		worktrees = append(worktrees, WorktreeLight{
+			Path:       p.path,
+			Branch:     wtInfo.Branch,
+			MainRepo:   p.mainRepo,
+			RepoName:   filepath.Base(p.mainRepo),
+			OriginURL:  repoOrigins[p.mainRepo],
+			CommitHash: shortHash,
+			Note:       note,
+		})
+	}
+
+	return worktrees, nil
 }

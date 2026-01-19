@@ -14,6 +14,13 @@ func GetRepoName() (string, error) {
 	return GetRepoNameFrom(".")
 }
 
+// ExtractRepoNameFromURL extracts the repository name from a git URL
+func ExtractRepoNameFromURL(url string) string {
+	url = strings.TrimSuffix(url, ".git")
+	parts := strings.Split(url, "/")
+	return parts[len(parts)-1]
+}
+
 // GetRepoNameFrom extracts the repository name from the origin URL of a repo at the given path
 func GetRepoNameFrom(repoPath string) (string, error) {
 	cmd := exec.Command("git", "-C", repoPath, "remote", "get-url", "origin")
@@ -435,6 +442,98 @@ func GetBranchWorktree(branch string) (string, error) {
 	}
 
 	return "", nil
+}
+
+// GetAllBranchNotes returns all branch notes for a repository in one call.
+// Returns a map of branch name -> note text.
+func GetAllBranchNotes(repoPath string) map[string]string {
+	notes := make(map[string]string)
+
+	cmd := exec.Command("git", "-C", repoPath, "config", "--get-regexp", `branch\..*\.description`)
+	output, err := cmd.Output()
+	if err != nil {
+		// No notes configured is not an error
+		return notes
+	}
+
+	// Parse output: "branch.feature-x.description Note text here"
+	// Note: description value can contain spaces
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Format: branch.<name>.description <value>
+		// Find the key-value boundary (first space after description)
+		parts := strings.SplitN(line, " ", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := parts[0]   // branch.<name>.description
+		value := parts[1] // note text
+
+		// Extract branch name from key
+		if !strings.HasPrefix(key, "branch.") || !strings.HasSuffix(key, ".description") {
+			continue
+		}
+		branch := key[7 : len(key)-12] // Remove "branch." prefix and ".description" suffix
+		if branch != "" {
+			notes[branch] = value
+		}
+	}
+
+	return notes
+}
+
+// WorktreeInfo contains basic worktree information from git worktree list.
+type WorktreeInfo struct {
+	Path       string
+	Branch     string
+	CommitHash string // Full hash from git, caller can truncate
+}
+
+// ListWorktreesFromRepo returns all worktrees for a repository using git worktree list --porcelain.
+// This is much faster than querying each worktree individually.
+func ListWorktreesFromRepo(repoPath string) ([]WorktreeInfo, error) {
+	cmd := exec.Command("git", "-C", repoPath, "worktree", "list", "--porcelain")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		if stderr.Len() > 0 {
+			return nil, fmt.Errorf("failed to list worktrees: %s", strings.TrimSpace(stderr.String()))
+		}
+		return nil, err
+	}
+
+	var worktrees []WorktreeInfo
+	var current WorktreeInfo
+
+	for _, line := range strings.Split(string(output), "\n") {
+		switch {
+		case strings.HasPrefix(line, "worktree "):
+			// Start of new worktree entry
+			if current.Path != "" {
+				worktrees = append(worktrees, current)
+			}
+			current = WorktreeInfo{Path: strings.TrimPrefix(line, "worktree ")}
+		case strings.HasPrefix(line, "HEAD "):
+			current.CommitHash = strings.TrimPrefix(line, "HEAD ")
+		case strings.HasPrefix(line, "branch refs/heads/"):
+			current.Branch = strings.TrimPrefix(line, "branch refs/heads/")
+		case line == "detached":
+			current.Branch = "(detached)"
+		}
+	}
+
+	// Don't forget the last entry
+	if current.Path != "" {
+		worktrees = append(worktrees, current)
+	}
+
+	return worktrees, nil
 }
 
 // DeleteLocalBranch deletes a local branch

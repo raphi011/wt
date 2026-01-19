@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/raphi011/wt/internal/git"
@@ -192,6 +193,22 @@ func (c *Cache) GetByID(id int) (path string, found bool, removed bool) {
 		}
 	}
 	return "", false, false
+}
+
+// GetBranchByID looks up a worktree by its ID and returns the branch name
+// Returns branch, path, found, and whether it was marked as removed
+func (c *Cache) GetBranchByID(id int) (branch string, path string, found bool, removed bool) {
+	for key, entry := range c.Worktrees {
+		if entry.ID == id {
+			// Key format is "originURL::branch"
+			parts := strings.SplitN(key, "::", 2)
+			if len(parts) == 2 {
+				return parts[1], entry.Path, true, entry.RemovedAt != nil
+			}
+			return "", entry.Path, true, entry.RemovedAt != nil
+		}
+	}
+	return "", "", false, false
 }
 
 // WorktreeInfo contains the minimal info needed to sync the cache

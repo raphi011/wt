@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/alexflint/go-arg"
 
@@ -72,8 +71,8 @@ func main() {
 	if args.Pr != nil && args.Pr.Clone != nil && args.Pr.Clone.Dir == "" {
 		args.Pr.Clone.Dir = cfg.DefaultPath
 	}
-	if args.Pr != nil && args.Pr.List != nil && args.Pr.List.Dir == "" {
-		args.Pr.List.Dir = cfg.DefaultPath
+	if args.Pr != nil && args.Pr.Refresh != nil && args.Pr.Refresh.Dir == "" {
+		args.Pr.Refresh.Dir = cfg.DefaultPath
 	}
 	if args.Mv != nil {
 		if args.Mv.Dir == "" {
@@ -112,6 +111,11 @@ func main() {
 		}
 	case args.Mv != nil:
 		if err := runMv(args.Mv, cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case args.Note != nil:
+		if err := runNote(args.Note); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -170,6 +174,17 @@ func runCreate(cmd *CreateCmd, cfg config.Config) error {
 		fmt.Printf("→ Worktree already exists at: %s\n", result.Path)
 	} else {
 		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
+	}
+
+	// Set note if provided
+	if cmd.Note != "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get current directory: %w", err)
+		}
+		if err := git.SetBranchNote(cwd, cmd.Branch, cmd.Note); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to set note: %v\n", err)
+		}
 	}
 
 	// Run post-create hooks
@@ -257,6 +272,17 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 		fmt.Printf("→ Worktree already exists at: %s\n", result.Path)
 	} else {
 		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
+	}
+
+	// Set note if provided
+	if cmd.Note != "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get current directory: %w", err)
+		}
+		if err := git.SetBranchNote(cwd, cmd.Branch, cmd.Note); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to set note: %v\n", err)
+		}
 	}
 
 	// Run post-create hooks (always run for open, ignore run_on_exists config)
@@ -511,13 +537,23 @@ func writeHelp(w *os.File, p *arg.Parser, args *Args) {
 		desc = args.Exec.Description()
 	case args.Mv != nil:
 		desc = args.Mv.Description()
+	case args.Note != nil:
+		if args.Note.Set != nil {
+			desc = args.Note.Set.Description()
+		} else if args.Note.Get != nil {
+			desc = args.Note.Get.Description()
+		} else if args.Note.Clear != nil {
+			desc = args.Note.Clear.Description()
+		} else {
+			desc = args.Note.Description()
+		}
 	case args.Pr != nil:
 		if args.Pr.Open != nil {
 			desc = args.Pr.Open.Description()
 		} else if args.Pr.Clone != nil {
 			desc = args.Pr.Clone.Description()
-		} else if args.Pr.List != nil {
-			desc = args.Pr.List.Description()
+		} else if args.Pr.Refresh != nil {
+			desc = args.Pr.Refresh.Description()
 		} else if args.Pr.Merge != nil {
 			desc = args.Pr.Merge.Description()
 		} else {
@@ -574,6 +610,7 @@ func writeRootHelp(w *os.File) {
 	fmt.Fprintln(w, "  list        List worktrees with stable IDs")
 	fmt.Fprintln(w, "  exec        Run command in worktree by ID")
 	fmt.Fprintln(w, "  mv          Move worktrees")
+	fmt.Fprintln(w, "  note        Manage branch notes")
 	fmt.Fprintln(w, "  pr          Work with PRs")
 	fmt.Fprintln(w, "  config      Manage configuration")
 	fmt.Fprintln(w, "  completion  Generate shell completions")
@@ -583,9 +620,9 @@ func writeRootHelp(w *os.File) {
 	fmt.Fprintln(w, "      --version  Show version")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Examples:")
-	fmt.Fprintln(w, "  wt create feature-x       Create worktree for new branch")
-	fmt.Fprintln(w, "  wt pr list && wt tidy -n  Fetch PR status, preview tidy")
-	fmt.Fprintln(w, "  wt pr open 123            Checkout PR #123 as worktree")
+	fmt.Fprintln(w, "  wt create feature-x          Create worktree for new branch")
+	fmt.Fprintln(w, "  wt pr refresh && wt tidy -n  Refresh PR status, preview tidy")
+	fmt.Fprintln(w, "  wt pr open 123               Checkout PR #123 as worktree")
 }
 
 // expandPath expands ~ to home directory
@@ -640,8 +677,8 @@ func runList(cmd *ListCmd) error {
 		return fmt.Errorf("failed to load cache: %w", err)
 	}
 
-	// List worktrees in directory
-	allWorktrees, err := git.ListWorktrees(scanPath)
+	// List worktrees using optimized lightweight function
+	allWorktrees, err := git.ListWorktreesLight(scanPath)
 	if err != nil {
 		return err
 	}
@@ -659,16 +696,20 @@ func runList(cmd *ListCmd) error {
 	// Sync cache with ALL worktrees to avoid losing IDs
 	pathToID := wtCache.SyncWorktrees(wtInfos)
 
-	// If in a git repo, filter to only show worktrees from that repo
+	// If in a git repo and not using --all, filter to only show worktrees from that repo
 	worktrees := allWorktrees
-	if currentRepo := git.GetCurrentRepoMainPath(); currentRepo != "" {
-		var filtered []git.Worktree
-		for _, wt := range allWorktrees {
-			if wt.MainRepo == currentRepo {
-				filtered = append(filtered, wt)
+	var currentRepo string
+	if !cmd.All {
+		currentRepo = git.GetCurrentRepoMainPath()
+		if currentRepo != "" {
+			var filtered []git.WorktreeLight
+			for _, wt := range allWorktrees {
+				if wt.MainRepo == currentRepo {
+					filtered = append(filtered, wt)
+				}
 			}
+			worktrees = filtered
 		}
-		worktrees = filtered
 	}
 
 	// Save updated cache
@@ -677,61 +718,48 @@ func runList(cmd *ListCmd) error {
 	}
 
 	if cmd.JSON {
-		// Build JSON output with IDs
+		// Build JSON output with IDs and PR info
+		type prJSON struct {
+			Number     int    `json:"number"`
+			State      string `json:"state"`
+			IsApproved bool   `json:"is_approved,omitempty"`
+			URL        string `json:"url,omitempty"`
+		}
 		type worktreeJSON struct {
-			ID           int        `json:"id"`
-			Path         string     `json:"path"`
-			Branch       string     `json:"branch"`
-			MainRepo     string     `json:"main_repo,omitempty"`
-			RepoName     string     `json:"repo_name,omitempty"`
-			OriginURL    string     `json:"origin_url"`
-			IsMerged     bool       `json:"is_merged,omitempty"`
-			CommitCount  int        `json:"commit_count,omitempty"`
-			Additions    int        `json:"additions,omitempty"`
-			Deletions    int        `json:"deletions,omitempty"`
-			IsDirty      bool       `json:"is_dirty,omitempty"`
-			HasUntracked bool       `json:"has_untracked,omitempty"`
-			LastCommit   string     `json:"last_commit,omitempty"`
-			RemovedAt    *time.Time `json:"removed_at,omitempty"`
+			ID         int     `json:"id"`
+			Path       string  `json:"path"`
+			Branch     string  `json:"branch"`
+			MainRepo   string  `json:"main_repo,omitempty"`
+			RepoName   string  `json:"repo_name,omitempty"`
+			OriginURL  string  `json:"origin_url"`
+			CommitHash string  `json:"commit_hash,omitempty"`
+			Note       string  `json:"note,omitempty"`
+			PR         *prJSON `json:"pr,omitempty"`
 		}
 		result := make([]worktreeJSON, 0, len(worktrees))
 		for _, wt := range worktrees {
-			result = append(result, worktreeJSON{
-				ID:           pathToID[wt.Path],
-				Path:         wt.Path,
-				Branch:       wt.Branch,
-				MainRepo:     wt.MainRepo,
-				RepoName:     wt.RepoName,
-				OriginURL:    wt.OriginURL,
-				IsMerged:     wt.IsMerged,
-				CommitCount:  wt.CommitCount,
-				Additions:    wt.Additions,
-				Deletions:    wt.Deletions,
-				IsDirty:      wt.IsDirty,
-				HasUntracked: wt.HasUntracked,
-				LastCommit:   wt.LastCommit,
-			})
-		}
-		// Include removed worktrees if --all
-		if cmd.All {
-			for key, entry := range wtCache.Worktrees {
-				if entry.RemovedAt != nil {
-					// Parse key to get origin and branch
-					parts := strings.SplitN(key, "::", 2)
-					var originURL, branch string
-					if len(parts) == 2 {
-						originURL = parts[0]
-						branch = parts[1]
+			wtJSON := worktreeJSON{
+				ID:         pathToID[wt.Path],
+				Path:       wt.Path,
+				Branch:     wt.Branch,
+				MainRepo:   wt.MainRepo,
+				RepoName:   wt.RepoName,
+				OriginURL:  wt.OriginURL,
+				CommitHash: wt.CommitHash,
+				Note:       wt.Note,
+			}
+			// Add PR info if available
+			if originCache, ok := wtCache.PRs[wt.OriginURL]; ok {
+				if pr, ok := originCache[wt.Branch]; ok && pr != nil && pr.Fetched && pr.Number > 0 {
+					wtJSON.PR = &prJSON{
+						Number:     pr.Number,
+						State:      pr.State,
+						IsApproved: pr.IsApproved,
+						URL:        pr.URL,
 					}
-					result = append(result, worktreeJSON{
-						ID:        entry.ID,
-						Path:      entry.Path,
-						Branch:    branch,
-						OriginURL: originURL,
-						RemovedAt: entry.RemovedAt,
-					})
 				}
 			}
+			result = append(result, wtJSON)
 		}
 		data, err := json.MarshalIndent(result, "", "  ")
 		if err != nil {
@@ -743,70 +771,124 @@ func runList(cmd *ListCmd) error {
 
 	// Build list of items to display
 	type displayItem struct {
-		ID        int
-		Path      string
-		Branch    string
-		RemovedAt *time.Time
+		ID         int
+		Path       string
+		Origin     string
+		Branch     string
+		CommitHash string
+		Note       string
+		OriginURL  string
 	}
 	items := make([]displayItem, 0, len(worktrees))
 	for _, wt := range worktrees {
 		items = append(items, displayItem{
-			ID:     pathToID[wt.Path],
-			Path:   wt.Path,
-			Branch: wt.Branch,
+			ID:         pathToID[wt.Path],
+			Path:       wt.Path,
+			Origin:     wt.RepoName,
+			Branch:     wt.Branch,
+			CommitHash: wt.CommitHash,
+			Note:       wt.Note,
+			OriginURL:  wt.OriginURL,
 		})
-	}
-	// Include removed worktrees if --all
-	if cmd.All {
-		for key, entry := range wtCache.Worktrees {
-			if entry.RemovedAt != nil {
-				parts := strings.SplitN(key, "::", 2)
-				var branch string
-				if len(parts) == 2 {
-					branch = parts[1]
-				}
-				items = append(items, displayItem{
-					ID:        entry.ID,
-					Path:      entry.Path,
-					Branch:    branch,
-					RemovedAt: entry.RemovedAt,
-				})
-			}
-		}
 	}
 
 	if len(items) == 0 {
+		// No worktrees found - show appropriate message
+		if currentRepo != "" && len(allWorktrees) > 0 {
+			// We're in a repo but no worktrees for this repo (others exist)
+			fmt.Printf("No worktrees found for current repository\n")
+			fmt.Printf("Use --all to show all %d worktrees\n", len(allWorktrees))
+		}
 		return nil
 	}
 
-	// Find max ID width and path length for alignment
+	// Find max widths for alignment
 	maxID := 0
-	maxPathLen := 0
+	maxOriginLen := 0
+	maxBranchLen := 0
+	maxPRLen := 0
 	for _, item := range items {
 		if item.ID > maxID {
 			maxID = item.ID
 		}
-		if len(item.Path) > maxPathLen {
-			maxPathLen = len(item.Path)
+		if len(item.Origin) > maxOriginLen {
+			maxOriginLen = len(item.Origin)
+		}
+		if len(item.Branch) > maxBranchLen {
+			maxBranchLen = len(item.Branch)
+		}
+		// Calculate PR display width
+		if originCache, ok := wtCache.PRs[item.OriginURL]; ok {
+			if pr, ok := originCache[item.Branch]; ok && pr != nil && pr.Fetched && pr.Number > 0 {
+				prLen := len(formatPRDisplay(pr))
+				if prLen > maxPRLen {
+					maxPRLen = prLen
+				}
+			}
 		}
 	}
 	idWidth := len(fmt.Sprintf("%d", maxID))
 
-	// Output with ID: ID  /path  commit [branch]
+	// Output: ID  origin  branch  commit  [PR]  [note]
 	for _, item := range items {
-		if item.RemovedAt != nil {
-			// Removed worktree
-			fmt.Printf("%*d  %-*s  [removed %s] [%s]\n", idWidth, item.ID, maxPathLen, item.Path, item.RemovedAt.Format("2006-01-02"), item.Branch)
-		} else {
-			hash, _ := git.GetShortCommitHash(item.Path)
-			if hash == "" {
-				hash = "???????"
+		hash := item.CommitHash
+		if hash == "" {
+			hash = "???????"
+		}
+
+		// Get PR info
+		var prDisplay string
+		if originCache, ok := wtCache.PRs[item.OriginURL]; ok {
+			if pr, ok := originCache[item.Branch]; ok && pr != nil && pr.Fetched && pr.Number > 0 {
+				prDisplay = formatPRDisplay(pr)
 			}
-			fmt.Printf("%*d  %-*s  %s [%s]\n", idWidth, item.ID, maxPathLen, item.Path, hash, item.Branch)
+		}
+
+		// Build output line
+		if prDisplay != "" {
+			if item.Note != "" {
+				fmt.Printf("%*d  %-*s  %-*s  %s  %-*s  %s\n", idWidth, item.ID, maxOriginLen, item.Origin, maxBranchLen, item.Branch, hash, maxPRLen, prDisplay, item.Note)
+			} else {
+				fmt.Printf("%*d  %-*s  %-*s  %s  %s\n", idWidth, item.ID, maxOriginLen, item.Origin, maxBranchLen, item.Branch, hash, prDisplay)
+			}
+		} else {
+			if item.Note != "" {
+				fmt.Printf("%*d  %-*s  %-*s  %s  %s\n", idWidth, item.ID, maxOriginLen, item.Origin, maxBranchLen, item.Branch, hash, item.Note)
+			} else {
+				fmt.Printf("%*d  %-*s  %-*s  %s\n", idWidth, item.ID, maxOriginLen, item.Origin, maxBranchLen, item.Branch, hash)
+			}
 		}
 	}
 
 	return nil
+}
+
+// formatPRDisplay formats PR info for display: #123 open ✓
+func formatPRDisplay(pr *forge.PRInfo) string {
+	if pr == nil || pr.Number == 0 {
+		return ""
+	}
+
+	// State text
+	var state string
+	switch pr.State {
+	case "MERGED":
+		state = "merged"
+	case "OPEN":
+		state = "open"
+	case "CLOSED":
+		state = "closed"
+	default:
+		state = pr.State
+	}
+
+	// Approval indicator
+	approval := ""
+	if pr.IsApproved {
+		approval = " ✓"
+	}
+
+	return fmt.Sprintf("#%d %s%s", pr.Number, state, approval)
 }
 
 func runExec(cmd *ExecCmd) error {
@@ -991,18 +1073,135 @@ func runMv(cmd *MvCmd, cfg config.Config) error {
 	return nil
 }
 
+// resolveNoteTarget resolves the branch and repo path for note operations.
+// If id > 0, looks up the worktree by ID in the cache.
+// If id == 0 and inside a worktree, uses the current branch.
+// Returns branch name, repo path, and any error.
+func resolveNoteTarget(id int, dir string) (branch string, repoPath string, err error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	inWorktree := git.IsWorktree(cwd)
+
+	// If ID provided, look up in cache
+	if id > 0 {
+		scanPath := dir
+		if scanPath == "" {
+			scanPath = "."
+		}
+		scanPath, err = expandPath(scanPath)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to expand path: %w", err)
+		}
+		scanPath, err = filepath.Abs(scanPath)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to resolve absolute path: %w", err)
+		}
+
+		// Load cache
+		wtCache, err := forge.LoadCache(scanPath)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to load cache: %w", err)
+		}
+
+		// Look up worktree by ID
+		branch, wtPath, found, removed := wtCache.GetBranchByID(id)
+		if !found {
+			return "", "", fmt.Errorf("worktree ID %d not found (run 'wt list' to see available IDs)", id)
+		}
+		if removed {
+			return "", "", fmt.Errorf("worktree %d was removed (was at %s)", id, wtPath)
+		}
+
+		// Get main repo from worktree path
+		repoPath, err = git.GetMainRepoPath(wtPath)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get main repo path: %w", err)
+		}
+
+		return branch, repoPath, nil
+	}
+
+	// No ID provided - must be inside a worktree
+	if !inWorktree {
+		return "", "", fmt.Errorf("worktree ID required when not inside a worktree (run 'wt list' to see IDs)")
+	}
+
+	// Use current branch
+	branch, err = git.GetCurrentBranch(cwd)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get current branch: %w", err)
+	}
+
+	repoPath, err = git.GetMainRepoPath(cwd)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get main repo path: %w", err)
+	}
+
+	return branch, repoPath, nil
+}
+
+func runNote(cmd *NoteCmd) error {
+	if err := git.CheckGit(); err != nil {
+		return err
+	}
+
+	switch {
+	case cmd.Set != nil:
+		branch, repoPath, err := resolveNoteTarget(cmd.Set.ID, cmd.Set.Dir)
+		if err != nil {
+			return err
+		}
+		if err := git.SetBranchNote(repoPath, branch, cmd.Set.Text); err != nil {
+			return fmt.Errorf("failed to set note: %w", err)
+		}
+		fmt.Printf("Note set on branch %s\n", branch)
+		return nil
+
+	case cmd.Get != nil:
+		branch, repoPath, err := resolveNoteTarget(cmd.Get.ID, cmd.Get.Dir)
+		if err != nil {
+			return err
+		}
+		note, err := git.GetBranchNote(repoPath, branch)
+		if err != nil {
+			return fmt.Errorf("failed to get note: %w", err)
+		}
+		if note != "" {
+			fmt.Println(note)
+		}
+		return nil
+
+	case cmd.Clear != nil:
+		branch, repoPath, err := resolveNoteTarget(cmd.Clear.ID, cmd.Clear.Dir)
+		if err != nil {
+			return err
+		}
+		if err := git.ClearBranchNote(repoPath, branch); err != nil {
+			return fmt.Errorf("failed to clear note: %w", err)
+		}
+		fmt.Printf("Note cleared from branch %s\n", branch)
+		return nil
+
+	default:
+		return fmt.Errorf("no subcommand specified (try: wt note set, wt note get, wt note clear)")
+	}
+}
+
 func runPr(cmd *PrCmd, cfg config.Config) error {
 	switch {
 	case cmd.Open != nil:
 		return runPrOpen(cmd.Open, cfg)
 	case cmd.Clone != nil:
 		return runPrClone(cmd.Clone, cfg)
-	case cmd.List != nil:
-		return runPrList(cmd.List, cfg)
+	case cmd.Refresh != nil:
+		return runPrRefresh(cmd.Refresh, cfg)
 	case cmd.Merge != nil:
 		return runPrMerge(cmd.Merge, cfg)
 	default:
-		return fmt.Errorf("no subcommand specified (try: wt pr open, wt pr clone, wt pr list, wt pr merge)")
+		return fmt.Errorf("no subcommand specified (try: wt pr open, wt pr clone, wt pr refresh, wt pr merge)")
 	}
 }
 
@@ -1218,6 +1417,17 @@ func runPrClone(cmd *PrCloneCmd, cfg config.Config) error {
 		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
 	}
 
+	// Set note if provided
+	if cmd.Note != "" {
+		absRepoPath, err := filepath.Abs(repoPath)
+		if err != nil {
+			return fmt.Errorf("failed to get absolute repo path: %w", err)
+		}
+		if err := git.SetBranchNote(absRepoPath, branch, cmd.Note); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to set note: %v\n", err)
+		}
+	}
+
 	// Run post-create hooks
 	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, result.AlreadyExists, hooks.CommandPR)
 	if err != nil {
@@ -1266,7 +1476,7 @@ func runPrClone(cmd *PrCloneCmd, cfg config.Config) error {
 	return nil
 }
 
-func runPrList(cmd *PrListCmd, cfg config.Config) error {
+func runPrRefresh(cmd *PrRefreshCmd, cfg config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
@@ -1286,7 +1496,7 @@ func runPrList(cmd *PrListCmd, cfg config.Config) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	fmt.Printf("Fetching PR status for worktrees in %s\n", scanPath)
+	fmt.Printf("Refreshing PR cache for worktrees in %s\n", scanPath)
 
 	// Start spinner
 	sp := ui.NewSpinner("Scanning worktrees...")

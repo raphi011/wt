@@ -34,6 +34,7 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 	maxStatusWidth := len("STATUS")
 	maxLastCommitWidth := len("LAST COMMIT")
 	maxDiffWidth := len("DIFF")
+	maxNoteWidth := len("NOTE")
 	maxPRWidth := len("PR")
 
 	// First pass: calculate widths and prepare row data
@@ -43,6 +44,7 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 		status     string
 		lastCommit string
 		diff       string
+		note       string
 		pr         string
 	}
 	var rowsData []rowData
@@ -80,6 +82,13 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 		if wt.Additions > 0 || wt.Deletions > 0 {
 			diff = fmt.Sprintf("+%d -%d", wt.Additions, wt.Deletions)
 			diffPlain = diff
+		}
+
+		// Format note (truncate if too long)
+		note := wt.Note
+		const maxNoteLen = 30
+		if len(note) > maxNoteLen {
+			note = note[:maxNoteLen-3] + "..."
 		}
 
 		// Format PR column
@@ -128,6 +137,9 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 		if len(diffPlain) > maxDiffWidth {
 			maxDiffWidth = len(diffPlain)
 		}
+		if len(note) > maxNoteWidth {
+			maxNoteWidth = len(note)
+		}
 		if len(prPlain) > maxPRWidth {
 			maxPRWidth = len(prPlain)
 		}
@@ -138,6 +150,7 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 			status:     status,
 			lastCommit: lastCommit,
 			diff:       diff,
+			note:       note,
 			pr:         prDisplay,
 		})
 	}
@@ -149,13 +162,14 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 		{Title: "STATUS", Width: maxStatusWidth + 2},
 		{Title: "LAST COMMIT", Width: maxLastCommitWidth + 2},
 		{Title: "DIFF", Width: maxDiffWidth + 2},
+		{Title: "NOTE", Width: maxNoteWidth + 2},
 		{Title: "PR", Width: maxPRWidth},
 	}
 
 	// Build rows
 	var rows []table.Row
 	for _, rd := range rowsData {
-		rows = append(rows, table.Row{rd.repo, rd.folder, rd.status, rd.lastCommit, rd.diff, rd.pr})
+		rows = append(rows, table.Row{rd.repo, rd.folder, rd.status, rd.lastCommit, rd.diff, rd.note, rd.pr})
 	}
 
 	t := table.New(
