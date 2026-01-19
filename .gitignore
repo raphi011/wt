@@ -33,3 +33,4 @@ go.work.sum
 /wt
 .claude/settings.local.json
 dist/
+logo-*.png
