@@ -1,0 +1,118 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/resolve"
+)
+
+// resolveNoteTarget resolves the branch and repo path for note operations.
+// If target is empty and inside a worktree, uses the current branch.
+// Otherwise, uses the shared resolver to look up by ID or branch name.
+// Returns branch name, repo path, and any error.
+func resolveNoteTarget(target string, dir string) (branch string, repoPath string, err error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	inWorktree := git.IsWorktree(cwd)
+
+	// If no target provided and inside a worktree, use current branch
+	if target == "" {
+		if !inWorktree {
+			return "", "", fmt.Errorf("target required when not inside a worktree (run 'wt list' to see IDs)")
+		}
+
+		branch, err = git.GetCurrentBranch(cwd)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get current branch: %w", err)
+		}
+
+		repoPath, err = git.GetMainRepoPath(cwd)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get main repo path: %w", err)
+		}
+
+		return branch, repoPath, nil
+	}
+
+	// Target provided - check if we're in a git repo (main repo, not worktree)
+	if git.IsInsideRepo() && !inWorktree {
+		// In main repo - target is branch name, use current repo
+		repoPath, err = filepath.Abs(".")
+		if err != nil {
+			return "", "", fmt.Errorf("failed to get repo path: %w", err)
+		}
+		return target, repoPath, nil
+	}
+
+	// Outside git context or in worktree with explicit target: use unified resolver
+	scanPath := dir
+	if scanPath == "" {
+		scanPath = "."
+	}
+	scanPath, err = expandPath(scanPath)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to expand path: %w", err)
+	}
+	scanPath, err = filepath.Abs(scanPath)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	resolved, err := resolve.ByIDOrBranch(target, scanPath)
+	if err != nil {
+		return "", "", err
+	}
+
+	return resolved.Branch, resolved.MainRepo, nil
+}
+
+func runNote(cmd *NoteCmd) error {
+	// Note: git.CheckGit() removed - we now support running outside git repos
+
+	switch {
+	case cmd.Set != nil:
+		branch, repoPath, err := resolveNoteTarget(cmd.Set.Target, cmd.Set.Dir)
+		if err != nil {
+			return err
+		}
+		if err := git.SetBranchNote(repoPath, branch, cmd.Set.Text); err != nil {
+			return fmt.Errorf("failed to set note: %w", err)
+		}
+		fmt.Printf("Note set on branch %s\n", branch)
+		return nil
+
+	case cmd.Get != nil:
+		branch, repoPath, err := resolveNoteTarget(cmd.Get.Target, cmd.Get.Dir)
+		if err != nil {
+			return err
+		}
+		note, err := git.GetBranchNote(repoPath, branch)
+		if err != nil {
+			return fmt.Errorf("failed to get note: %w", err)
+		}
+		if note != "" {
+			fmt.Println(note)
+		}
+		return nil
+
+	case cmd.Clear != nil:
+		branch, repoPath, err := resolveNoteTarget(cmd.Clear.Target, cmd.Clear.Dir)
+		if err != nil {
+			return err
+		}
+		if err := git.ClearBranchNote(repoPath, branch); err != nil {
+			return fmt.Errorf("failed to clear note: %w", err)
+		}
+		fmt.Printf("Note cleared from branch %s\n", branch)
+		return nil
+
+	default:
+		return fmt.Errorf("no subcommand specified (try: wt note set, wt note get, wt note clear)")
+	}
+}

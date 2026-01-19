@@ -197,10 +197,11 @@ func CreateWorktreeFrom(repoPath, basePath, branch, worktreeFmt string) (*Create
 			return nil, err
 		}
 		if wtPath != "" {
-			return nil, fmt.Errorf("branch %q is already checked out at %s", branch, wtPath)
+			// Branch already checked out - return existing path with AlreadyExists flag
+			return &CreateWorktreeResult{Path: wtPath, AlreadyExists: true}, nil
 		}
 		// Branch exists but not checked out - use OpenWorktreeFrom instead
-		return openWorktreeFrom(absRepoPath, basePath, branch, worktreeFmt)
+		return OpenWorktreeFrom(absRepoPath, basePath, branch, worktreeFmt)
 	}
 
 	// Get repo name from origin URL
@@ -253,8 +254,8 @@ func CreateWorktreeFrom(repoPath, basePath, branch, worktreeFmt string) (*Create
 	return &CreateWorktreeResult{Path: worktreePath, AlreadyExists: false}, nil
 }
 
-// openWorktreeFrom creates a worktree for an existing branch in a specified repo
-func openWorktreeFrom(absRepoPath, basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
+// OpenWorktreeFrom creates a worktree for an existing branch in a specified repo
+func OpenWorktreeFrom(absRepoPath, basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
 	// Get repo name from origin URL
 	gitOrigin, err := GetRepoNameFrom(absRepoPath)
 	if err != nil {

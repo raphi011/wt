@@ -39,6 +39,8 @@ internal/forge/          - Git hosting service abstraction (GitHub/GitLab)
   ├── detect.go          - Auto-detect forge from remote URL
   ├── github.go          - GitHub implementation (gh CLI)
   └── gitlab.go          - GitLab implementation (glab CLI)
+internal/resolve/        - Target resolution for commands
+  └── resolve.go         - ByIDOrBranch resolver (ID or branch name lookup)
 internal/ui/             - Terminal UI components
   ├── table.go           - Lipgloss table formatting with colors
   └── spinner.go         - Bubbletea spinner (unused currently)
@@ -94,6 +96,17 @@ Completions provide context-aware suggestions for branches, directories, and fla
 - **External**: Requires `git` in PATH; `gh` CLI for GitHub repos, `glab` CLI for GitLab repos
 
 ### Development Guidelines
+
+**Target Resolution Pattern** - Commands that operate on worktrees should support flexible target resolution using `internal/resolve.ByIDOrBranch()`:
+
+- **Inside git repo**: Use the provided argument as-is (branch name)
+- **Outside git repo**: Resolve argument using this priority:
+  1. If arg is integer AND matches worktree ID → use that worktree
+  2. If arg matches exactly one branch name → use that worktree
+  3. If arg matches multiple branches → error listing repos with IDs
+  4. No match → error with helpful message
+
+Commands using this pattern: `wt open`, `wt exec`, `wt note set/get/clear`, `wt pr merge`
 
 **Keep completions/config in sync** - When CLI commands, flags, or subcommands change, always update the shell completion scripts (fish, bash, zsh in `cmd/wt/main.go`) and any config generation commands to match.
 

@@ -24,7 +24,7 @@ Examples:
 
 // OpenCmd opens a worktree for an existing local branch.
 type OpenCmd struct {
-	Branch string `arg:"positional,required" placeholder:"BRANCH" help:"existing local branch name"`
+	Branch string `arg:"positional,required" placeholder:"BRANCH|ID" help:"branch name (in repo) or worktree ID/branch (outside repo)"`
 	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Note   string `arg:"--note" placeholder:"TEXT" help:"set a note on the branch"`
 	Hook   string `arg:"--hook" help:"run named hook instead of default"`
@@ -34,12 +34,14 @@ type OpenCmd struct {
 func (OpenCmd) Description() string {
 	return `Open a worktree for an existing local branch
 
-Unlike 'create', this command requires the branch to already exist locally.
-Use this when you want to work on a branch that was created elsewhere.
+Inside a git repo: opens a worktree for the specified branch.
+Outside a git repo: resolves ID or branch name from worktree cache.
 
 Examples:
-  wt open feature-branch              # Uses default path resolution
+  wt open feature-branch              # In repo: opens branch
   wt open feature-branch -d ~/Git     # Specify target directory
+  wt open 1 -d ~/Git/worktrees        # Outside repo: by worktree ID
+  wt open feature-x -d ~/Git/worktrees # Outside repo: by branch name
   wt open feature-branch --no-hook    # Skip post-create hook`
 }
 
@@ -96,81 +98,84 @@ Examples:
   wt list --json               # Output as JSON for scripting`
 }
 
-// ExecCmd runs a command in a worktree by ID.
+// ExecCmd runs a command in a worktree by ID or branch.
 type ExecCmd struct {
-	ID      int      `arg:"positional,required" placeholder:"ID" help:"worktree ID from wt list"`
+	Target  string   `arg:"positional,required" placeholder:"ID|BRANCH" help:"worktree ID or branch name"`
 	Command []string `arg:"positional" placeholder:"COMMAND" help:"command to run (after --)"`
 	Dir     string   `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 }
 
 func (ExecCmd) Description() string {
-	return `Run a command in a worktree by ID
+	return `Run a command in a worktree by ID or branch
 
 Use 'wt list' to see worktree IDs. The command runs in the worktree directory.
 
 Examples:
-  wt exec 1 -- gh pr view      # View PR for worktree #1
-  wt exec 2 -- git status      # Run git status in worktree #2
-  wt exec 1 -- code .          # Open worktree in VS Code`
+  wt exec 1 -- gh pr view            # By worktree ID
+  wt exec feature-x -- git status    # By branch name
+  wt exec 1 -- code .                # Open worktree in VS Code`
 }
 
 // NoteSetCmd sets a note on a branch.
 type NoteSetCmd struct {
-	ID   int    `arg:"positional" placeholder:"ID" help:"worktree ID (optional in worktree, required outside)"`
-	Text string `arg:"positional,required" placeholder:"TEXT" help:"note text"`
-	Dir  string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+	Target string `arg:"positional" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
+	Text   string `arg:"positional,required" placeholder:"TEXT" help:"note text"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
 }
 
 func (NoteSetCmd) Description() string {
 	return `Set a note on a branch
 
-When run inside a worktree, ID is optional (defaults to current branch).
-When run outside a worktree, ID is required.
+When run inside a worktree, target is optional (defaults to current branch).
+When run outside, specify a worktree ID or branch name.
 
 The note is stored in git config (branch.<name>.description) and displayed
 in 'wt list' and 'wt tidy' output.
 
 Examples:
   wt note set "Working on login flow"   # Inside worktree, current branch
-  wt note set 1 "Working on login"      # By worktree ID`
+  wt note set 1 "Working on login"      # By worktree ID
+  wt note set feature-x "In progress"   # By branch name`
 }
 
 // NoteGetCmd gets a note from a branch.
 type NoteGetCmd struct {
-	ID  int    `arg:"positional" placeholder:"ID" help:"worktree ID (optional in worktree, required outside)"`
-	Dir string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+	Target string `arg:"positional" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
 }
 
 func (NoteGetCmd) Description() string {
 	return `Get the note for a branch
 
-When run inside a worktree, ID is optional (defaults to current branch).
-When run outside a worktree, ID is required.
+When run inside a worktree, target is optional (defaults to current branch).
+When run outside, specify a worktree ID or branch name.
 
 Prints the note if set, or nothing if no note exists.
 
 Examples:
-  wt note get        # Inside worktree, current branch
-  wt note get 1      # By worktree ID`
+  wt note get            # Inside worktree, current branch
+  wt note get 1          # By worktree ID
+  wt note get feature-x  # By branch name`
 }
 
 // NoteClearCmd clears a note from a branch.
 type NoteClearCmd struct {
-	ID  int    `arg:"positional" placeholder:"ID" help:"worktree ID (optional in worktree, required outside)"`
-	Dir string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+	Target string `arg:"positional" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
+	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
 }
 
 func (NoteClearCmd) Description() string {
 	return `Clear the note from a branch
 
-When run inside a worktree, ID is optional (defaults to current branch).
-When run outside a worktree, ID is required.
+When run inside a worktree, target is optional (defaults to current branch).
+When run outside, specify a worktree ID or branch name.
 
 Removes the note from the branch. Safe to run even if no note exists.
 
 Examples:
-  wt note clear      # Inside worktree, current branch
-  wt note clear 1    # By worktree ID`
+  wt note clear            # Inside worktree, current branch
+  wt note clear 1          # By worktree ID
+  wt note clear feature-x  # By branch name`
 }
 
 // NoteCmd manages branch notes.
@@ -184,14 +189,15 @@ func (NoteCmd) Description() string {
 	return `Manage branch notes
 
 Notes are stored in git config and displayed in list/tidy output.
-Inside a worktree, operates on current branch. Outside, requires worktree ID.
+Inside a worktree, operates on current branch. Outside, specify ID or branch.
 
 Examples:
-  wt note set "Working on login"    # Inside worktree
-  wt note set 1 "Working on login"  # By worktree ID
-  wt note get                       # Inside worktree
-  wt note get 1                     # By worktree ID
-  wt note clear 1                   # By worktree ID`
+  wt note set "Working on login"      # Inside worktree
+  wt note set 1 "Working on login"    # By worktree ID
+  wt note set feature-x "In progress" # By branch name
+  wt note get                         # Inside worktree
+  wt note get feature-x               # By branch name
+  wt note clear 1                     # By worktree ID`
 }
 
 // CompletionCmd generates shell completion scripts.
@@ -351,6 +357,8 @@ Examples:
 
 // PrMergeCmd merges the PR for the current branch.
 type PrMergeCmd struct {
+	Target   string `arg:"positional" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
+	Dir      string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
 	Strategy string `arg:"-s,--strategy,env:WT_MERGE_STRATEGY" placeholder:"STRATEGY" help:"merge strategy: squash, rebase, or merge"`
 	Keep     bool   `arg:"-k,--keep" help:"keep worktree and branch after merge"`
 	Hook     string `arg:"--hook" help:"run named hook instead of default"`
@@ -358,20 +366,21 @@ type PrMergeCmd struct {
 }
 
 func (PrMergeCmd) Description() string {
-	return `Merge the PR for the current branch and clean up
+	return `Merge the PR for a branch and clean up
 
-Must be run from inside a git worktree. Merges the PR associated with the
-current branch, then removes the worktree and deletes the local branch.
+When run inside a worktree, target is optional (defaults to current branch).
+When run outside, specify a worktree ID or branch name.
 
+Merges the PR, removes the worktree, and deletes the local branch.
 Merge strategy can be set via flag, WT_MERGE_STRATEGY env, or config.
 Note: rebase strategy is not supported on GitLab.
 
 Examples:
-  wt pr merge                  # Merge PR, remove worktree, delete branch
-  wt pr merge --keep           # Merge PR only, keep worktree and branch
-  wt pr merge -s rebase        # Use rebase merge strategy
-  wt pr merge -s merge         # Use regular merge (merge commit)
-  wt pr merge --no-hook        # Skip post-merge hooks`
+  wt pr merge                    # Inside worktree: merge current branch's PR
+  wt pr merge 1 -d ~/Git         # By worktree ID
+  wt pr merge feature-x -d ~/Git # By branch name
+  wt pr merge --keep             # Merge PR only, keep worktree and branch
+  wt pr merge -s rebase          # Use rebase merge strategy`
 }
 
 // PrCmd works with PRs.

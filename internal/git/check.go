@@ -16,3 +16,10 @@ func CheckGit() error {
 	}
 	return nil
 }
+
+// IsInsideRepo returns true if the current working directory is inside a git repository
+func IsInsideRepo() bool {
+	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	err := cmd.Run()
+	return err == nil
+}
