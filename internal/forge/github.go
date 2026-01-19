@@ -49,7 +49,7 @@ func (g *GitHub) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 		"-R", repoURL,
 		"--head", branch,
 		"--state", "all",
-		"--json", "number,state,url",
+		"--json", "number,state,url,author,comments,reviewDecision",
 		"--limit", "1")
 
 	var stderr bytes.Buffer
@@ -67,20 +67,35 @@ func (g *GitHub) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 		Number int    `json:"number"`
 		State  string `json:"state"`
 		URL    string `json:"url"`
+		Author struct {
+			Login string `json:"login"`
+		} `json:"author"`
+		Comments       []any  `json:"comments"` // just need the count
+		ReviewDecision string `json:"reviewDecision"`
 	}
 	if err := json.Unmarshal(output, &prs); err != nil {
 		return nil, fmt.Errorf("failed to parse gh output: %w", err)
 	}
 
 	if len(prs) == 0 {
-		return nil, nil
+		// No PR found - return marker indicating we checked
+		return &PRInfo{
+			Fetched:  true,
+			CachedAt: time.Now(),
+		}, nil
 	}
 
+	pr := prs[0]
 	return &PRInfo{
-		Number:   prs[0].Number,
-		State:    prs[0].State, // GitHub already uses OPEN, MERGED, CLOSED
-		URL:      prs[0].URL,
-		CachedAt: time.Now(),
+		Number:       pr.Number,
+		State:        pr.State, // GitHub already uses OPEN, MERGED, CLOSED
+		URL:          pr.URL,
+		Author:       pr.Author.Login,
+		CommentCount: len(pr.Comments),
+		HasReviews:   pr.ReviewDecision != "",
+		IsApproved:   pr.ReviewDecision == "APPROVED",
+		CachedAt:     time.Now(),
+		Fetched:      true,
 	}, nil
 }
 

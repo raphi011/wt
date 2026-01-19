@@ -66,25 +66,41 @@ func (g *GitLab) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 		return nil, fmt.Errorf("glab command failed: %w", err)
 	}
 
-	// glab returns an array of PRs
+	// glab returns an array of MRs with various fields
 	var prs []struct {
-		IID      int    `json:"iid"`
-		State    string `json:"state"` // opened, merged, closed
-		WebURL   string `json:"web_url"`
+		IID    int    `json:"iid"`
+		State  string `json:"state"` // opened, merged, closed
+		WebURL string `json:"web_url"`
+		Author struct {
+			Username string `json:"username"`
+		} `json:"author"`
+		UserNotesCount int   `json:"user_notes_count"`
+		ApprovedBy     []any `json:"approved_by"` // just need to check if non-empty
+		Approved       bool  `json:"approved"`
 	}
 	if err := json.Unmarshal(output, &prs); err != nil {
 		return nil, fmt.Errorf("failed to parse glab output: %w", err)
 	}
 
 	if len(prs) == 0 {
-		return nil, nil
+		// No MR found - return marker indicating we checked
+		return &PRInfo{
+			Fetched:  true,
+			CachedAt: time.Now(),
+		}, nil
 	}
 
+	pr := prs[0]
 	return &PRInfo{
-		Number:   prs[0].IID,
-		State:    normalizeGitLabState(prs[0].State),
-		URL:      prs[0].WebURL,
-		CachedAt: time.Now(),
+		Number:       pr.IID,
+		State:        normalizeGitLabState(pr.State),
+		URL:          pr.WebURL,
+		Author:       pr.Author.Username,
+		CommentCount: pr.UserNotesCount,
+		HasReviews:   len(pr.ApprovedBy) > 0,
+		IsApproved:   pr.Approved,
+		CachedAt:     time.Now(),
+		Fetched:      true,
 	}, nil
 }
 

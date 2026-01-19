@@ -45,7 +45,6 @@ Examples:
 type TidyCmd struct {
 	Dir          string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	DryRun       bool   `arg:"-n,--dry-run" help:"preview without removing"`
-	RefreshPR    bool   `arg:"--refresh-pr" help:"force refresh PR cache"`
 	IncludeClean bool   `arg:"-c,--include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
 	Hook         string `arg:"--hook" help:"run named hook instead of default"`
 	NoHook       bool   `arg:"--no-hook" help:"skip post-removal hooks"`
@@ -55,7 +54,7 @@ func (TidyCmd) Description() string {
 	return `Tidy up merged git worktrees with PR status display
 
 Removes worktrees where the branch is merged AND working directory is clean.
-Shows a table with PR status (requires gh/glab CLI) before removal.
+Shows a table with cached PR status. Run 'wt pr list' first to fetch PR info.
 
 Hooks with on=["tidy"] run after each worktree removal. Hooks run with
 working directory set to the main repo (since worktree path is deleted).
@@ -65,11 +64,11 @@ or rebased PRs. For accurate detection, use GitHub/GitLab where PR status
 shows if the branch was merged.
 
 Examples:
-  wt tidy                      # Remove merged worktrees
+  wt pr list && wt tidy        # Fetch PR status, then tidy
+  wt tidy                      # Remove merged worktrees (uses cached PR info)
   wt tidy -n                   # Dry-run: preview without removing
   wt tidy -d ~/Git/worktrees   # Scan specific directory
   wt tidy -c                   # Also remove clean (0-commit) worktrees
-  wt tidy --refresh-pr         # Force refresh PR status from GitHub
   wt tidy --no-hook            # Skip post-removal hooks
   wt tidy --hook=cleanup       # Run 'cleanup' hook instead of default`
 }
@@ -216,10 +215,28 @@ Examples:
   wt pr clone 123 org/repo --no-hook    # Skip post-create hook`
 }
 
+// PrListCmd fetches PR status for worktrees.
+type PrListCmd struct {
+	Dir string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+}
+
+func (PrListCmd) Description() string {
+	return `Fetch PR status for all worktrees
+
+Queries GitHub/GitLab for PR info on each worktree branch and caches the results.
+Run this before 'wt tidy' to see accurate PR status in the table.
+
+Examples:
+  wt pr list                   # Fetch PR status for worktrees
+  wt pr list -d ~/Git          # Fetch for worktrees in specific directory
+  wt pr list && wt tidy -n     # Fetch status, then preview tidy`
+}
+
 // PrCmd works with PRs.
 type PrCmd struct {
 	Open  *PrOpenCmd  `arg:"subcommand:open" help:"checkout PR from existing local repo"`
 	Clone *PrCloneCmd `arg:"subcommand:clone" help:"clone repo and checkout PR"`
+	List  *PrListCmd  `arg:"subcommand:list" help:"fetch PR status for worktrees"`
 }
 
 func (PrCmd) Description() string {
@@ -227,7 +244,8 @@ func (PrCmd) Description() string {
 Examples:
   wt pr open 123             # PR from current repo
   wt pr open 123 myrepo      # PR from existing local repo
-  wt pr clone 123 org/repo   # Clone repo and checkout PR`
+  wt pr clone 123 org/repo   # Clone repo and checkout PR
+  wt pr list                 # Fetch PR status for worktrees`
 }
 
 // Args is the root command.

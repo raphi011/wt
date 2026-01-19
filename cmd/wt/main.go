@@ -66,6 +66,9 @@ func main() {
 	if args.Pr != nil && args.Pr.Clone != nil && args.Pr.Clone.Dir == "" {
 		args.Pr.Clone.Dir = cfg.DefaultPath
 	}
+	if args.Pr != nil && args.Pr.List != nil && args.Pr.List.Dir == "" {
+		args.Pr.List.Dir = cfg.DefaultPath
+	}
 	if args.Mv != nil {
 		if args.Mv.Dir == "" {
 			args.Mv.Dir = cfg.DefaultPath
@@ -361,9 +364,10 @@ func runTidy(cmd *TidyCmd, cfg config.Config) error {
 		}
 	}
 
-	// PR status handling (requires forge CLI - gh or glab)
+	// PR status handling - load from cache only (run 'wt pr list' to fetch)
 	prCache := make(forge.PRCache)
 	prMap := make(map[string]*forge.PRInfo)
+	prUnknown := make(map[string]bool)
 
 	// Load PR cache
 	prCache, err = forge.LoadPRCache(scanPath)
@@ -372,88 +376,16 @@ func runTidy(cmd *TidyCmd, cfg config.Config) error {
 		prCache = make(forge.PRCache)
 	}
 
-	// Clean cache (remove deleted origins/branches)
-	prCache = forge.CleanPRCache(prCache, worktrees)
-
-	// Determine which branches need fetching (uses cache expiration)
-	toFetch := forge.NeedsFetch(prCache, worktrees, cmd.RefreshPR)
-
-	// Fetch uncached PRs in parallel with rate limiting
-	if len(toFetch) > 0 {
-		sp.UpdateMessage(fmt.Sprintf("Fetching PR status (%d branches)...", len(toFetch)))
-		var prMutex sync.Mutex
-		var prWg sync.WaitGroup
-		semaphore := make(chan struct{}, maxConcurrentPRFetches)
-		var fetchErrors []string
-		var errMutex sync.Mutex
-
-		for _, wt := range toFetch {
-			prWg.Add(1)
-			go func(wt git.Worktree) {
-				defer prWg.Done()
-				semaphore <- struct{}{}        // Acquire
-				defer func() { <-semaphore }() // Release
-
-				if wt.OriginURL == "" {
-					return
-				}
-
-				// Detect forge for this repo
-				f := forge.Detect(wt.OriginURL, cfg.Hosts)
-
-				// Check if forge CLI is available (skip silently if not)
-				if err := f.Check(); err != nil {
-					return
-				}
-
-				// Use upstream branch name for PR lookup (may differ from local)
-				upstreamBranch := git.GetUpstreamBranch(wt.MainRepo, wt.Branch)
-				if upstreamBranch == "" {
-					return // No upstream = never pushed = no PR
-				}
-
-				pr, err := f.GetPRForBranch(wt.OriginURL, upstreamBranch)
-				if err != nil {
-					errMutex.Lock()
-					fetchErrors = append(fetchErrors, fmt.Sprintf("%s: %v", wt.Branch, err))
-					errMutex.Unlock()
-					return
-				}
-
-				prMutex.Lock()
-				if prCache[wt.OriginURL] == nil {
-					prCache[wt.OriginURL] = make(map[string]*forge.PRInfo)
-				}
-				prCache[wt.OriginURL][wt.Branch] = pr // nil is valid (no PR)
-				prMutex.Unlock()
-			}(wt)
-		}
-
-		prWg.Wait()
-
-		// Report errors (non-fatal)
-		if len(fetchErrors) > 0 {
-			sp.Stop()
-			for _, e := range fetchErrors {
-				fmt.Fprintf(os.Stderr, "Warning: PR fetch failed for %s\n", e)
-			}
-			sp = ui.NewSpinner("Continuing...")
-			sp.Start()
-		}
-
-		// Save updated cache
-		if err := forge.SavePRCache(scanPath, prCache); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to save PR cache: %v\n", err)
-		}
-	}
-
-	// Build PR map from cache for display
+	// Build PR map from cache for display, track unknown branches
 	for _, wt := range worktrees {
 		if originCache, ok := prCache[wt.OriginURL]; ok {
-			if pr, ok := originCache[wt.Branch]; ok {
+			if pr, ok := originCache[wt.Branch]; ok && pr != nil && pr.Fetched {
 				prMap[wt.Branch] = pr
+				continue
 			}
 		}
+		// Not in cache or not fetched - mark as unknown
+		prUnknown[wt.Branch] = true
 	}
 
 	// Update merge status for worktrees based on PR state
@@ -495,7 +427,7 @@ func runTidy(cmd *TidyCmd, cfg config.Config) error {
 	}
 
 	// Display table with cleaned worktrees marked
-	fmt.Print(ui.FormatWorktreesTable(worktrees, prMap, toRemoveMap, cmd.DryRun))
+	fmt.Print(ui.FormatWorktreesTable(worktrees, prMap, prUnknown, toRemoveMap, cmd.DryRun))
 
 	// Select hooks for tidy (before removing, so we can report errors early)
 	// alreadyExists=false since tidy hooks always run for removed worktrees
@@ -571,6 +503,8 @@ func writeHelp(w *os.File, p *arg.Parser, args *Args) {
 			desc = args.Pr.Open.Description()
 		} else if args.Pr.Clone != nil {
 			desc = args.Pr.Clone.Description()
+		} else if args.Pr.List != nil {
+			desc = args.Pr.List.Description()
 		} else {
 			desc = args.Pr.Description()
 		}
@@ -631,9 +565,9 @@ func writeRootHelp(w *os.File) {
 	fmt.Fprintln(w, "      --version  Show version")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Examples:")
-	fmt.Fprintln(w, "  wt create feature-x    Create worktree for new branch")
-	fmt.Fprintln(w, "  wt tidy -n             Preview merged worktrees to remove")
-	fmt.Fprintln(w, "  wt pr open 123         Checkout PR #123 as worktree")
+	fmt.Fprintln(w, "  wt create feature-x       Create worktree for new branch")
+	fmt.Fprintln(w, "  wt pr list && wt tidy -n  Fetch PR status, preview tidy")
+	fmt.Fprintln(w, "  wt pr open 123            Checkout PR #123 as worktree")
 }
 
 // expandPath expands ~ to home directory
@@ -848,8 +782,10 @@ func runPr(cmd *PrCmd, cfg config.Config) error {
 		return runPrOpen(cmd.Open, cfg)
 	case cmd.Clone != nil:
 		return runPrClone(cmd.Clone, cfg)
+	case cmd.List != nil:
+		return runPrList(cmd.List, cfg)
 	default:
-		return fmt.Errorf("no subcommand specified (try: wt pr open, wt pr clone)")
+		return fmt.Errorf("no subcommand specified (try: wt pr open, wt pr clone, wt pr list)")
 	}
 }
 
@@ -1108,6 +1044,143 @@ func runPrClone(cmd *PrCloneCmd, cfg config.Config) error {
 				fmt.Printf("  ✓ %s\n", match.Hook.Description)
 			}
 		}
+	}
+
+	return nil
+}
+
+func runPrList(cmd *PrListCmd, cfg config.Config) error {
+	if err := git.CheckGit(); err != nil {
+		return err
+	}
+
+	dir := cmd.Dir
+	if dir == "" {
+		dir = "."
+	}
+
+	// Expand path
+	scanPath, err := expandPath(dir)
+	if err != nil {
+		return fmt.Errorf("failed to expand path: %w", err)
+	}
+	scanPath, err = filepath.Abs(scanPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	fmt.Printf("Fetching PR status for worktrees in %s\n", scanPath)
+
+	// Start spinner
+	sp := ui.NewSpinner("Scanning worktrees...")
+	sp.Start()
+
+	// List worktrees
+	worktrees, err := git.ListWorktrees(scanPath)
+	if err != nil {
+		sp.Stop()
+		return err
+	}
+
+	if len(worktrees) == 0 {
+		sp.Stop()
+		fmt.Println("No worktrees found")
+		return nil
+	}
+
+	// Load existing cache
+	prCache, err := forge.LoadPRCache(scanPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to load PR cache: %v\n", err)
+		prCache = make(forge.PRCache)
+	}
+
+	// Filter to worktrees with upstream branches
+	var toFetch []git.Worktree
+	for _, wt := range worktrees {
+		if wt.OriginURL == "" {
+			continue
+		}
+		if git.GetUpstreamBranch(wt.MainRepo, wt.Branch) == "" {
+			continue
+		}
+		toFetch = append(toFetch, wt)
+	}
+
+	if len(toFetch) == 0 {
+		sp.Stop()
+		fmt.Println("No worktrees with upstream branches found")
+		return nil
+	}
+
+	sp.UpdateMessage(fmt.Sprintf("Fetching PR status (%d branches)...", len(toFetch)))
+
+	// Fetch PRs in parallel with rate limiting
+	var prMutex sync.Mutex
+	var prWg sync.WaitGroup
+	semaphore := make(chan struct{}, maxConcurrentPRFetches)
+	var fetchedCount, failedCount int
+	var countMutex sync.Mutex
+
+	for _, wt := range toFetch {
+		prWg.Add(1)
+		go func(wt git.Worktree) {
+			defer prWg.Done()
+			semaphore <- struct{}{}        // Acquire
+			defer func() { <-semaphore }() // Release
+
+			// Detect forge for this repo
+			f := forge.Detect(wt.OriginURL, cfg.Hosts)
+
+			// Check if forge CLI is available
+			if err := f.Check(); err != nil {
+				countMutex.Lock()
+				failedCount++
+				countMutex.Unlock()
+				return
+			}
+
+			// Use upstream branch name for PR lookup (may differ from local)
+			upstreamBranch := git.GetUpstreamBranch(wt.MainRepo, wt.Branch)
+			if upstreamBranch == "" {
+				return
+			}
+
+			pr, err := f.GetPRForBranch(wt.OriginURL, upstreamBranch)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: PR fetch failed for %s: %v\n", wt.Branch, err)
+				countMutex.Lock()
+				failedCount++
+				countMutex.Unlock()
+				return
+			}
+
+			prMutex.Lock()
+			if prCache[wt.OriginURL] == nil {
+				prCache[wt.OriginURL] = make(map[string]*forge.PRInfo)
+			}
+			prCache[wt.OriginURL][wt.Branch] = pr
+			prMutex.Unlock()
+
+			countMutex.Lock()
+			fetchedCount++
+			countMutex.Unlock()
+		}(wt)
+	}
+
+	prWg.Wait()
+	sp.Stop()
+
+	// Save updated cache
+	if err := forge.SavePRCache(scanPath, prCache); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to save PR cache: %v\n", err)
+	}
+
+	// Print summary
+	if failedCount > 0 {
+		fmt.Printf("Fetched: %d, Failed: %d\n", fetchedCount, failedCount)
+	} else {
+		fmt.Printf("Fetched: %d\n", fetchedCount)
 	}
 
 	return nil

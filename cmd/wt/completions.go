@@ -65,7 +65,7 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-d --dir -n --dry-run --refresh-pr -c --include-clean --hook --no-hook" -- "$cur"))
+            COMPREPLY=($(compgen -W "-d --dir -n --dry-run -c --include-clean --hook --no-hook" -- "$cur"))
             ;;
         list)
             case "$prev" in
@@ -90,7 +90,7 @@ _wt_completions() {
             ;;
         pr)
             if [[ $cword -eq 2 ]]; then
-                COMPREPLY=($(compgen -W "open clone" -- "$cur"))
+                COMPREPLY=($(compgen -W "open clone list" -- "$cur"))
             elif [[ "${words[2]}" == "open" ]]; then
                 case "$prev" in
                     -d|--dir)
@@ -117,6 +117,14 @@ _wt_completions() {
                         ;;
                 esac
                 COMPREPLY=($(compgen -W "-d --dir --forge --hook --no-hook" -- "$cur"))
+            elif [[ "${words[2]}" == "list" ]]; then
+                case "$prev" in
+                    -d|--dir)
+                        COMPREPLY=($(compgen -d -- "$cur"))
+                        return
+                        ;;
+                esac
+                COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
             fi
             ;;
         config)
@@ -195,7 +203,6 @@ _wt() {
                         '--dir[target directory]:directory:_files -/' \
                         '-n[preview without removing]' \
                         '--dry-run[preview without removing]' \
-                        '--refresh-pr[force refresh PR cache]' \
                         '-c[also remove clean worktrees]' \
                         '--include-clean[also remove clean worktrees]' \
                         '--hook[run named hook]:hook:' \
@@ -226,6 +233,7 @@ _wt() {
                             local subcommands=(
                                 'open:Checkout PR from existing local repo'
                                 'clone:Clone repo and checkout PR'
+                                'list:Fetch PR status for worktrees'
                             )
                             _describe 'subcommand' subcommands
                             ;;
@@ -249,6 +257,11 @@ _wt() {
                                         '--forge[forge type]:forge:(github gitlab)' \
                                         '--hook[run named hook]:hook:' \
                                         '--no-hook[skip post-create hook]'
+                                    ;;
+                                list)
+                                    _arguments \
+                                        '-d[target directory]:directory:_files -/' \
+                                        '--dir[target directory]:directory:_files -/'
                                     ;;
                             esac
                             ;;
@@ -335,7 +348,6 @@ complete -c wt -n "__fish_seen_subcommand_from open" -l no-hook -d "Skip post-cr
 # tidy: flags only (no positional args)
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s n -l dry-run -d "Preview without removing"
-complete -c wt -n "__fish_seen_subcommand_from tidy" -l refresh-pr -d "Force refresh PR cache"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s c -l include-clean -d "Also remove clean worktrees"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -l no-hook -d "Skip post-removal hooks"
@@ -351,8 +363,9 @@ complete -c wt -n "__fish_seen_subcommand_from mv" -s n -l dry-run -d "Show what
 complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move dirty worktrees"
 
 # pr: subcommands
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone" -a "open" -d "Checkout PR from existing local repo"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone" -a "clone" -d "Clone repo and checkout PR"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list" -a "open" -d "Checkout PR from existing local repo"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list" -a "clone" -d "Clone repo and checkout PR"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone list" -a "list" -d "Fetch PR status for worktrees"
 # pr open: PR number (first positional), then repo (second positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -a "(gh pr list --json number,title --jq '.[] | \"\\(.number)\t\\(.title)\"' 2>/dev/null)" -d "PR number"
 # Repo names from default_path (second positional after PR number)
@@ -365,6 +378,8 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_fr
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l forge -r -a "github gitlab" -d "Forge type"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l no-hook -d "Skip post-create hook"
+# pr list: flags only
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 
 # Helper function to list repos in default_path
 function __wt_list_repos

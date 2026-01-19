@@ -15,10 +15,15 @@ const CacheMaxAge = 24 * time.Hour
 
 // PRInfo represents pull request information
 type PRInfo struct {
-	Number   int       `json:"number"`
-	State    string    `json:"state"` // Normalized: OPEN, MERGED, CLOSED
-	URL      string    `json:"url"`
-	CachedAt time.Time `json:"cached_at"`
+	Number       int       `json:"number"`
+	State        string    `json:"state"`         // Normalized: OPEN, MERGED, CLOSED
+	URL          string    `json:"url"`
+	Author       string    `json:"author"`        // username/login
+	CommentCount int       `json:"comment_count"` // number of comments
+	HasReviews   bool      `json:"has_reviews"`   // any reviews submitted
+	IsApproved   bool      `json:"is_approved"`   // approved status
+	CachedAt     time.Time `json:"cached_at"`
+	Fetched      bool      `json:"fetched"` // true = API was queried (distinguishes "not fetched" from "no PR")
 }
 
 // IsStale returns true if the cache entry is older than CacheMaxAge
@@ -145,7 +150,8 @@ func NeedsFetch(cache PRCache, worktrees []git.Worktree, forceRefresh bool) []gi
 		}
 
 		pr := originCache[wt.Branch]
-		if pr == nil || pr.IsStale() {
+		// Need to fetch if: no entry, not marked as fetched (old cache), or stale
+		if pr == nil || !pr.Fetched || pr.IsStale() {
 			toFetch = append(toFetch, wt)
 		}
 	}

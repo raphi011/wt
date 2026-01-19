@@ -21,7 +21,7 @@ var (
 )
 
 // FormatWorktreesTable creates a formatted table for worktrees
-func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRInfo, toRemove map[string]bool, dryRun bool) string {
+func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRInfo, prUnknown map[string]bool, toRemove map[string]bool, dryRun bool) string {
 	if len(worktrees) == 0 {
 		return ""
 	}
@@ -82,15 +82,35 @@ func FormatWorktreesTable(worktrees []git.Worktree, prMap map[string]*forge.PRIn
 			diffPlain = diff
 		}
 
-		// Format PR (show URL)
+		// Format PR column
 		var prDisplay, prPlain string
-		if pr, ok := prMap[wt.Branch]; ok && pr != nil {
-			// Get forge for this worktree to format icon
+		if prUnknown[wt.Branch] {
+			// Not fetched yet - show ?
+			prDisplay = "?"
+			prPlain = "?"
+		} else if pr, ok := prMap[wt.Branch]; ok && pr != nil && pr.Number > 0 {
+			// PR exists - show details
 			f := forge.DetectFromRepo(wt.MainRepo, nil)
 			icon := f.FormatIcon(pr.State)
-			prDisplay = fmt.Sprintf("%s %s", icon, pr.URL)
-			prPlain = fmt.Sprintf("%s %s", icon, pr.URL)
+
+			// Format: icon author comments reviews url
+			parts := []string{icon}
+			if pr.Author != "" {
+				parts = append(parts, "@"+pr.Author)
+			}
+			if pr.CommentCount > 0 {
+				parts = append(parts, fmt.Sprintf("💬%d", pr.CommentCount))
+			}
+			if pr.IsApproved {
+				parts = append(parts, "✓")
+			} else if pr.HasReviews {
+				parts = append(parts, "◐") // partial/pending reviews
+			}
+			parts = append(parts, pr.URL)
+			prDisplay = strings.Join(parts, " ")
+			prPlain = prDisplay
 		}
+		// else: fetched but no PR - leave empty
 
 		// Track max widths using plain text (without ANSI codes)
 		if len(repoName) > maxRepoWidth {
