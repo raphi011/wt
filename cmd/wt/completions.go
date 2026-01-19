@@ -33,7 +33,7 @@ _wt_completions() {
         cword=$COMP_CWORD
     fi
 
-    local commands="create open tidy list exec mv note pr config completion"
+    local commands="create open tidy list exec mv note hook pr config completion"
 
     # Handle subcommand-specific completions
     case "${words[1]}" in
@@ -203,6 +203,23 @@ _wt_completions() {
                 fi
             fi
             ;;
+        hook)
+            if [[ $cword -eq 2 ]]; then
+                COMPREPLY=($(compgen -W "run" -- "$cur"))
+            elif [[ "${words[2]}" == "run" ]]; then
+                case "$prev" in
+                    -d|--dir)
+                        COMPREPLY=($(compgen -d -- "$cur"))
+                        return
+                        ;;
+                esac
+                # Complete hook names and worktree targets
+                local hooks=$(wt config hooks 2>/dev/null | awk '{print $1}')
+                local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                local branches=$(wt list 2>/dev/null | awk '{print $3}')
+                COMPREPLY=($(compgen -W "$hooks $ids $branches -d --dir" -- "$cur"))
+            fi
+            ;;
         config)
             if [[ $cword -eq 2 ]]; then
                 COMPREPLY=($(compgen -W "init show hooks" -- "$cur"))
@@ -253,6 +270,7 @@ _wt() {
                 'exec:Run command in worktree by ID'
                 'mv:Move worktrees to another directory'
                 'note:Manage branch notes'
+                'hook:Manage hooks'
                 'pr:Work with GitHub PRs'
                 'config:Manage configuration'
                 'completion:Generate completion script'
@@ -403,6 +421,30 @@ _wt() {
                             ;;
                     esac
                     ;;
+                hook)
+                    _arguments -C \
+                        '1: :->subcmd' \
+                        '*:: :->args'
+                    case $state in
+                        subcmd)
+                            local subcommands=(
+                                'run:Run a hook by name'
+                            )
+                            _describe 'subcommand' subcommands
+                            ;;
+                        args)
+                            case $words[1] in
+                                run)
+                                    _arguments \
+                                        '1:worktree ID or branch:__wt_worktree_targets' \
+                                        '2:hook name:__wt_hook_names' \
+                                        '-d[worktree directory]:directory:_files -/' \
+                                        '--dir[worktree directory]:directory:_files -/'
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
                 config)
                     _arguments -C \
                         '1: :->subcmd' \
@@ -472,6 +514,13 @@ __wt_worktree_targets() {
     _describe 'worktree ID or branch' targets
 }
 
+# Helper: complete hook names
+__wt_hook_names() {
+    local hooks
+    hooks=(${(f)"$(wt config hooks 2>/dev/null | awk '{print $1}')"})
+    _describe 'hook name' hooks
+}
+
 _wt "$@"
 `
 
@@ -479,16 +528,17 @@ const fishCompletions = `# wt completions - supports fish autosuggestions and ta
 complete -c wt -f
 
 # Subcommands (shown in completions and autosuggestions)
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "create" -d "Create new worktree"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "open" -d "Open worktree for existing branch"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "tidy" -d "Tidy up merged worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "list" -d "List worktrees with stable IDs"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "exec" -d "Run command in worktree by ID"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "mv" -d "Move worktrees to another directory"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "note" -d "Manage branch notes"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "pr" -d "Work with PRs"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "config" -d "Manage configuration"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note pr config completion" -a "completion" -d "Generate completion script"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "create" -d "Create new worktree"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "open" -d "Open worktree for existing branch"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "tidy" -d "Tidy up merged worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "list" -d "List worktrees with stable IDs"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "exec" -d "Run command in worktree by ID"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "mv" -d "Move worktrees to another directory"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "note" -d "Manage branch notes"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "hook" -d "Manage hooks"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "pr" -d "Work with PRs"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "config" -d "Manage configuration"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "completion" -d "Generate completion script"
 
 # create: branch name (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from create; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
@@ -533,6 +583,13 @@ complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcomm
 # note set/get/clear: worktree ID or branch (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
 complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for ID lookup"
+
+# hook: subcommands
+complete -c wt -n "__fish_seen_subcommand_from hook; and not __fish_seen_subcommand_from run" -a "run" -d "Run a hook by name"
+# hook run: worktree ID/branch (optional), then hook name (required), then flags
+complete -c wt -n "__fish_seen_subcommand_from hook; and __fish_seen_subcommand_from run" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
+complete -c wt -n "__fish_seen_subcommand_from hook; and __fish_seen_subcommand_from run" -a "(__wt_hook_names)" -d "Hook name"
+complete -c wt -n "__fish_seen_subcommand_from hook; and __fish_seen_subcommand_from run" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for target lookup"
 
 # pr: subcommands
 complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone refresh merge" -a "open" -d "Checkout PR from existing local repo"
@@ -588,6 +645,11 @@ end
 # Helper function to list worktree IDs and branch names
 function __wt_worktree_targets
     wt list 2>/dev/null | awk '{print $1; print $3}'
+end
+
+# Helper function to list hook names
+function __wt_hook_names
+    wt config hooks 2>/dev/null | awk '{print $1}'
 end
 
 # config: subcommands
