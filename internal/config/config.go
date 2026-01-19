@@ -13,8 +13,7 @@ import (
 type Hook struct {
 	Command     string   `toml:"command"`
 	Description string   `toml:"description"`
-	RunOnExists bool     `toml:"run_on_exists"` // default false
-	On          []string `toml:"on"`            // commands this hook runs on (empty = only via --hook)
+	On          []string `toml:"on"` // commands this hook runs on (empty = only via --hook)
 }
 
 // HooksConfig holds hook-related configuration
@@ -185,9 +184,6 @@ func parseHooksConfig(raw map[string]interface{}) HooksConfig {
 			if desc, ok := hookMap["description"].(string); ok {
 				hook.Description = desc
 			}
-			if roe, ok := hookMap["run_on_exists"].(bool); ok {
-				hook.RunOnExists = roe
-			}
 			if on, ok := hookMap["on"].([]interface{}); ok {
 				for _, v := range on {
 					if s, ok := v.(string); ok {
@@ -280,9 +276,6 @@ worktree_format = "{git-origin}-{branch-name}"
 # # no "on" - only runs via --hook=vscode
 #
 # Available "on" values: "create", "open", "pr", "tidy", "all"
-#
-# Other options:
-#   run_on_exists = false  # skip if worktree already existed (default: false)
 #
 # Hooks run with working directory set to the worktree path.
 # For "tidy" hooks, working directory is the main repo (worktree is deleted).

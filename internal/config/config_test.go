@@ -64,9 +64,8 @@ func TestParseHooksConfig(t *testing.T) {
 					"on":          []interface{}{"create", "open"},
 				},
 				"vscode": map[string]interface{}{
-					"command":       "code {path}",
-					"description":   "Open VS Code",
-					"run_on_exists": true,
+					"command":     "code {path}",
+					"description": "Open VS Code",
 				},
 			},
 			expected: HooksConfig{
@@ -74,13 +73,11 @@ func TestParseHooksConfig(t *testing.T) {
 					"kitty": {
 						Command:     "kitty @ launch --cwd={path}",
 						Description: "Open kitty tab",
-						RunOnExists: false,
 						On:          []string{"create", "open"},
 					},
 					"vscode": {
 						Command:     "code {path}",
 						Description: "Open VS Code",
-						RunOnExists: true,
 					},
 				},
 			},
@@ -130,9 +127,6 @@ func TestParseHooksConfig(t *testing.T) {
 				}
 				if gotHook.Description != expectedHook.Description {
 					t.Errorf("hook %q Description = %q, want %q", name, gotHook.Description, expectedHook.Description)
-				}
-				if gotHook.RunOnExists != expectedHook.RunOnExists {
-					t.Errorf("hook %q RunOnExists = %v, want %v", name, gotHook.RunOnExists, expectedHook.RunOnExists)
 				}
 			}
 		})

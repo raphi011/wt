@@ -122,7 +122,6 @@ func runConfigHooks(cmd *ConfigHooksCmd, cfg config.Config) error {
 			Name        string   `json:"name"`
 			Command     string   `json:"command"`
 			Description string   `json:"description,omitempty"`
-			RunOnExists bool     `json:"run_on_exists"`
 			On          []string `json:"on,omitempty"`
 		}
 
@@ -132,7 +131,6 @@ func runConfigHooks(cmd *ConfigHooksCmd, cfg config.Config) error {
 				Name:        name,
 				Command:     hook.Command,
 				Description: hook.Description,
-				RunOnExists: hook.RunOnExists,
 				On:          hook.On,
 			})
 		}

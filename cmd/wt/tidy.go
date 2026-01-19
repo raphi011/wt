@@ -141,8 +141,7 @@ func runTidy(cmd *TidyCmd, cfg config.Config) error {
 	fmt.Print(ui.FormatWorktreesTable(worktrees, prMap, prUnknown, toRemoveMap, cmd.DryRun))
 
 	// Select hooks for tidy (before removing, so we can report errors early)
-	// alreadyExists=false since tidy hooks always run for removed worktrees
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, false, hooks.CommandTidy)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandTidy)
 	if err != nil {
 		return err
 	}
@@ -156,26 +155,15 @@ func runTidy(cmd *TidyCmd, cfg config.Config) error {
 			}
 
 			// Run tidy hooks for this worktree
-			if len(hookMatches) > 0 {
-				ctx := hooks.Context{
-					Path:     wt.Path,
-					Branch:   wt.Branch,
-					Repo:     wt.RepoName,
-					Folder:   filepath.Base(wt.MainRepo),
-					MainRepo: wt.MainRepo,
-					Trigger:  string(hooks.CommandTidy),
-				}
-
-				for _, match := range hookMatches {
-					fmt.Printf("Running hook '%s' for %s...\n", match.Name, wt.Branch)
-					// Use RunWithDir with main repo since worktree path is deleted
-					if err := hooks.RunWithDir(match.Hook, ctx, wt.MainRepo); err != nil {
-						fmt.Fprintf(os.Stderr, "Warning: hook %q failed for %s: %v\n", match.Name, wt.Branch, err)
-					} else if match.Hook.Description != "" {
-						fmt.Printf("  ✓ %s\n", match.Hook.Description)
-					}
-				}
+			ctx := hooks.Context{
+				Path:     wt.Path,
+				Branch:   wt.Branch,
+				Repo:     wt.RepoName,
+				Folder:   filepath.Base(wt.MainRepo),
+				MainRepo: wt.MainRepo,
+				Trigger:  string(hooks.CommandTidy),
 			}
+			hooks.RunForEach(hookMatches, ctx, wt.MainRepo)
 		}
 
 		// Prune stale references

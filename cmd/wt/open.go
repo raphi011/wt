@@ -67,55 +67,25 @@ func runOpenInRepo(cmd *OpenCmd, cfg config.Config) error {
 		}
 	}
 
-	// Run post-create hooks (always run for open, ignore run_on_exists config)
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, false, hooks.CommandOpen)
+	// Run post-create hooks
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandOpen)
 	if err != nil {
 		return err
 	}
 
-	if len(hookMatches) > 0 {
-		// Get context for placeholder substitution
-		repoName, err := git.GetRepoName()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to get repo name for hook context: %v\n", err)
-		}
-		folderName, err := git.GetRepoFolderName()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to get folder name for hook context: %v\n", err)
-		}
-		mainRepo, mainRepoErr := git.GetMainRepoPath(result.Path)
-		if mainRepoErr != nil || mainRepo == "" {
-			// Fallback to current directory (should be the main repo when opening worktrees)
-			if mainRepoErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to get main repo path: %v (using current directory)\n", mainRepoErr)
-			}
-			mainRepo, err = filepath.Abs(".")
-			if err != nil {
-				return fmt.Errorf("failed to determine main repo path: %w", err)
-			}
-		}
-
-		ctx := hooks.Context{
-			Path:     result.Path,
-			Branch:   cmd.Branch,
-			Repo:     repoName,
-			Folder:   folderName,
-			MainRepo: mainRepo,
-			Trigger:  string(hooks.CommandOpen),
-		}
-
-		for _, match := range hookMatches {
-			fmt.Printf("Running hook '%s'...\n", match.Name)
-			if err := hooks.Run(match.Hook, ctx); err != nil {
-				return fmt.Errorf("hook %q failed: %w", match.Name, err)
-			}
-			if match.Hook.Description != "" {
-				fmt.Printf("  ✓ %s\n", match.Hook.Description)
-			}
-		}
+	ctx := hooks.Context{
+		Path:    result.Path,
+		Branch:  cmd.Branch,
+		Trigger: string(hooks.CommandOpen),
+	}
+	ctx.Repo, _ = git.GetRepoName()
+	ctx.Folder, _ = git.GetRepoFolderName()
+	ctx.MainRepo, _ = git.GetMainRepoPath(result.Path)
+	if ctx.MainRepo == "" {
+		ctx.MainRepo, _ = filepath.Abs(".")
 	}
 
-	return nil
+	return hooks.RunAll(hookMatches, ctx)
 }
 
 // runOpenOutsideRepo handles wt open when outside a git repository
@@ -163,34 +133,19 @@ func runOpenOutsideRepo(cmd *OpenCmd, cfg config.Config) error {
 	}
 
 	// Run post-create hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, false, hooks.CommandOpen)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandOpen)
 	if err != nil {
 		return err
 	}
 
-	if len(hookMatches) > 0 {
-		repoName, _ := git.GetRepoNameFrom(target.MainRepo)
-		folderName := filepath.Base(target.MainRepo)
-
-		ctx := hooks.Context{
-			Path:     result.Path,
-			Branch:   target.Branch,
-			Repo:     repoName,
-			Folder:   folderName,
-			MainRepo: target.MainRepo,
-			Trigger:  string(hooks.CommandOpen),
-		}
-
-		for _, match := range hookMatches {
-			fmt.Printf("Running hook '%s'...\n", match.Name)
-			if err := hooks.Run(match.Hook, ctx); err != nil {
-				return fmt.Errorf("hook %q failed: %w", match.Name, err)
-			}
-			if match.Hook.Description != "" {
-				fmt.Printf("  ✓ %s\n", match.Hook.Description)
-			}
-		}
+	ctx := hooks.Context{
+		Path:     result.Path,
+		Branch:   target.Branch,
+		MainRepo: target.MainRepo,
+		Folder:   filepath.Base(target.MainRepo),
+		Trigger:  string(hooks.CommandOpen),
 	}
+	ctx.Repo, _ = git.GetRepoNameFrom(target.MainRepo)
 
-	return nil
+	return hooks.RunAll(hookMatches, ctx)
 }

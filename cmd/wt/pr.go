@@ -115,51 +115,24 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 	}
 
 	// Run post-create hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, result.AlreadyExists, hooks.CommandPR)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandPR)
 	if err != nil {
 		return err
 	}
 
-	if len(hookMatches) > 0 {
-		// Get context for placeholder substitution
-		repoName, err := git.GetRepoNameFrom(repoPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to get repo name for hook context: %v\n", err)
-		}
-		folderName := filepath.Base(repoPath)
-		mainRepo, mainRepoErr := git.GetMainRepoPath(result.Path)
-		if mainRepoErr != nil || mainRepo == "" {
-			// Fallback to the repo path used for creating the worktree
-			if mainRepoErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to get main repo path: %v (using %s)\n", mainRepoErr, repoPath)
-			}
-			mainRepo, err = filepath.Abs(repoPath)
-			if err != nil {
-				return fmt.Errorf("failed to determine main repo path: %w", err)
-			}
-		}
-
-		ctx := hooks.Context{
-			Path:     result.Path,
-			Branch:   branch,
-			Repo:     repoName,
-			Folder:   folderName,
-			MainRepo: mainRepo,
-			Trigger:  string(hooks.CommandPR),
-		}
-
-		for _, match := range hookMatches {
-			fmt.Printf("Running hook '%s'...\n", match.Name)
-			if err := hooks.Run(match.Hook, ctx); err != nil {
-				return fmt.Errorf("hook %q failed: %w", match.Name, err)
-			}
-			if match.Hook.Description != "" {
-				fmt.Printf("  ✓ %s\n", match.Hook.Description)
-			}
-		}
+	ctx := hooks.Context{
+		Path:    result.Path,
+		Branch:  branch,
+		Folder:  filepath.Base(repoPath),
+		Trigger: string(hooks.CommandPR),
+	}
+	ctx.Repo, _ = git.GetRepoNameFrom(repoPath)
+	ctx.MainRepo, _ = git.GetMainRepoPath(result.Path)
+	if ctx.MainRepo == "" {
+		ctx.MainRepo, _ = filepath.Abs(repoPath)
 	}
 
-	return nil
+	return hooks.RunAll(hookMatches, ctx)
 }
 
 func runPrClone(cmd *PrCloneCmd, cfg config.Config) error {
@@ -258,51 +231,24 @@ func runPrClone(cmd *PrCloneCmd, cfg config.Config) error {
 	}
 
 	// Run post-create hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, result.AlreadyExists, hooks.CommandPR)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandPR)
 	if err != nil {
 		return err
 	}
 
-	if len(hookMatches) > 0 {
-		// Get context for placeholder substitution
-		repoName, err := git.GetRepoNameFrom(repoPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to get repo name for hook context: %v\n", err)
-		}
-		folderName := filepath.Base(repoPath)
-		mainRepo, mainRepoErr := git.GetMainRepoPath(result.Path)
-		if mainRepoErr != nil || mainRepo == "" {
-			// Fallback to the repo path used for creating the worktree
-			if mainRepoErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to get main repo path: %v (using %s)\n", mainRepoErr, repoPath)
-			}
-			mainRepo, err = filepath.Abs(repoPath)
-			if err != nil {
-				return fmt.Errorf("failed to determine main repo path: %w", err)
-			}
-		}
-
-		ctx := hooks.Context{
-			Path:     result.Path,
-			Branch:   branch,
-			Repo:     repoName,
-			Folder:   folderName,
-			MainRepo: mainRepo,
-			Trigger:  string(hooks.CommandPR),
-		}
-
-		for _, match := range hookMatches {
-			fmt.Printf("Running hook '%s'...\n", match.Name)
-			if err := hooks.Run(match.Hook, ctx); err != nil {
-				return fmt.Errorf("hook %q failed: %w", match.Name, err)
-			}
-			if match.Hook.Description != "" {
-				fmt.Printf("  ✓ %s\n", match.Hook.Description)
-			}
-		}
+	ctx := hooks.Context{
+		Path:    result.Path,
+		Branch:  branch,
+		Folder:  filepath.Base(repoPath),
+		Trigger: string(hooks.CommandPR),
+	}
+	ctx.Repo, _ = git.GetRepoNameFrom(repoPath)
+	ctx.MainRepo, _ = git.GetMainRepoPath(result.Path)
+	if ctx.MainRepo == "" {
+		ctx.MainRepo, _ = filepath.Abs(repoPath)
 	}
 
-	return nil
+	return hooks.RunAll(hookMatches, ctx)
 }
 
 func runPrRefresh(cmd *PrRefreshCmd, cfg config.Config) error {
@@ -566,40 +512,26 @@ func runPrMerge(cmd *PrMergeCmd, cfg config.Config) error {
 	}
 
 	// Run hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, false, hooks.CommandMerge)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandMerge)
 	if err != nil {
 		return err
 	}
 
-	if len(hookMatches) > 0 {
-		// Get repo info for hook context
-		repoName, _ := git.GetRepoNameFrom(mainRepo)
-		folderName := filepath.Base(mainRepo)
+	ctx := hooks.Context{
+		Path:     wtPath,
+		Branch:   branch,
+		MainRepo: mainRepo,
+		Folder:   filepath.Base(mainRepo),
+		Trigger:  string(hooks.CommandMerge),
+	}
+	ctx.Repo, _ = git.GetRepoNameFrom(mainRepo)
 
-		ctx := hooks.Context{
-			Path:     wtPath,
-			Branch:   branch,
-			Repo:     repoName,
-			Folder:   folderName,
-			MainRepo: mainRepo,
-			Trigger:  string(hooks.CommandMerge),
-		}
-
-		// If worktree was removed, run hooks from main repo
-		workDir := wtPath
-		if !cmd.Keep {
-			workDir = mainRepo
-		}
-
-		for _, match := range hookMatches {
-			fmt.Printf("Running hook '%s'...\n", match.Name)
-			if err := hooks.RunWithDir(match.Hook, ctx, workDir); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: hook %q failed: %v\n", match.Name, err)
-			} else if match.Hook.Description != "" {
-				fmt.Printf("  ✓ %s\n", match.Hook.Description)
-			}
-		}
+	// If worktree was removed, run hooks from main repo
+	workDir := wtPath
+	if !cmd.Keep {
+		workDir = mainRepo
 	}
 
+	hooks.RunAllNonFatal(hookMatches, ctx, workDir)
 	return nil
 }

@@ -49,7 +49,7 @@ type HookMatch struct {
 // Returns all matching hooks. If hookName is specified, only that hook runs.
 // Otherwise, all hooks with matching "on" conditions run.
 // Returns nil slice if no hooks should run, error if specified hook doesn't exist.
-func SelectHooks(cfg config.HooksConfig, hookName string, noHook bool, alreadyExists bool, cmdType CommandType) ([]HookMatch, error) {
+func SelectHooks(cfg config.HooksConfig, hookName string, noHook bool, cmdType CommandType) ([]HookMatch, error) {
 	if noHook {
 		return nil, nil
 	}
@@ -60,25 +60,21 @@ func SelectHooks(cfg config.HooksConfig, hookName string, noHook bool, alreadyEx
 		if !exists {
 			return nil, fmt.Errorf("unknown hook %q", hookName)
 		}
-		// Check run_on_exists
-		if alreadyExists && !hook.RunOnExists {
-			return nil, nil
-		}
 		return []HookMatch{{Hook: &hook, Name: hookName}}, nil
 	}
 
 	// Find all hooks with matching "on" conditions
-	return findMatchingHooks(cfg, cmdType, alreadyExists), nil
+	return findMatchingHooks(cfg, cmdType), nil
 }
 
 // findMatchingHooks returns all hooks that have the command type in their "on" list.
 // Hooks without "on" are skipped (they only run via explicit --hook=name).
-func findMatchingHooks(cfg config.HooksConfig, cmdType CommandType, alreadyExists bool) []HookMatch {
+func findMatchingHooks(cfg config.HooksConfig, cmdType CommandType) []HookMatch {
 	var matches []HookMatch
 
 	for name, hook := range cfg.Hooks {
 		// Only include hooks with explicit "on" conditions that match
-		if len(hook.On) > 0 && hookMatchesCommand(hook, cmdType) && (!alreadyExists || hook.RunOnExists) {
+		if len(hook.On) > 0 && hookMatchesCommand(hook, cmdType) {
 			hookCopy := hook
 			matches = append(matches, HookMatch{Hook: &hookCopy, Name: name})
 		}
@@ -98,26 +94,73 @@ func hookMatchesCommand(hook config.Hook, cmdType CommandType) bool {
 	return false
 }
 
-// Run executes the hook command with variable substitution.
-// Working directory is set to ctx.Path.
-func Run(hook *config.Hook, ctx Context) error {
-	return RunWithDir(hook, ctx, ctx.Path)
+// RunAll runs all matched hooks with the given context.
+// Prints "No hooks matched" if matches is empty, otherwise runs each hook.
+// Returns on first error.
+func RunAll(matches []HookMatch, ctx Context) error {
+	return runAll(matches, ctx, ctx.Path)
 }
 
-// RunWithDir executes the hook command with variable substitution.
-// Allows specifying a custom working directory (useful for tidy hooks
-// where the worktree path has been deleted).
-func RunWithDir(hook *config.Hook, ctx Context, workDir string) error {
+// runAll runs all matched hooks with a custom working directory.
+func runAll(matches []HookMatch, ctx Context, workDir string) error {
+	if len(matches) == 0 {
+		fmt.Println("No hooks matched")
+		return nil
+	}
+
+	for _, match := range matches {
+		if err := runHook(match.Name, match.Hook, ctx, workDir); err != nil {
+			return fmt.Errorf("hook %q failed: %w", match.Name, err)
+		}
+	}
+	return nil
+}
+
+// RunAllNonFatal runs all matched hooks, logging failures as warnings instead of returning errors.
+// Prints "No hooks matched" if matches is empty.
+func RunAllNonFatal(matches []HookMatch, ctx Context, workDir string) {
+	if len(matches) == 0 {
+		fmt.Println("No hooks matched")
+		return
+	}
+
+	for _, match := range matches {
+		if err := runHook(match.Name, match.Hook, ctx, workDir); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: hook %q failed: %v\n", match.Name, err)
+		}
+	}
+}
+
+// RunForEach runs all matched hooks for a single item (e.g., one worktree in a batch).
+// Logs failures as warnings with branch context. Does NOT print "no hooks matched".
+func RunForEach(matches []HookMatch, ctx Context, workDir string) {
+	for _, match := range matches {
+		if err := runHook(match.Name, match.Hook, ctx, workDir); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: hook %q failed for %s: %v\n", match.Name, ctx.Branch, err)
+		}
+	}
+}
+
+// runHook executes a single hook with variable substitution.
+func runHook(name string, hook *config.Hook, ctx Context, workDir string) error {
+	fmt.Printf("Running hook '%s'...\n", name)
+
 	cmd := SubstitutePlaceholders(hook.Command, ctx)
 
-	// Execute via shell for complex commands (pipes, &&, etc.)
 	shellCmd := exec.Command("sh", "-c", cmd)
 	shellCmd.Dir = workDir
 	shellCmd.Stdout = os.Stdout
 	shellCmd.Stderr = os.Stderr
 	shellCmd.Stdin = os.Stdin
 
-	return shellCmd.Run()
+	if err := shellCmd.Run(); err != nil {
+		return err
+	}
+
+	if hook.Description != "" {
+		fmt.Printf("  ✓ %s\n", hook.Description)
+	}
+	return nil
 }
 
 // SubstitutePlaceholders replaces {placeholder} with shell-quoted values from Context.
