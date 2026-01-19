@@ -67,8 +67,17 @@ internal/ui/             - Terminal UI components
 - `wt open <branch>` - Create worktree for existing local branch
 - `wt tidy` - Remove merged+clean worktrees, show table with PR status
 - `wt list [--json]` - List worktrees in directory
+- `wt exec <id|branch> -- <cmd>` - Run command in worktree by ID or branch
+- `wt mv` - Move worktrees to different directory
+- `wt note set/get/clear` - Manage branch notes
+- `wt hook run [target] <hook>` - Run configured hook by name
 - `wt pr open <number> [repo]` - Create worktree for GitHub PR
+- `wt pr clone <number> <repo>` - Clone repo and create worktree for PR
+- `wt pr refresh` - Refresh PR status cache
+- `wt pr merge [target]` - Merge PR and clean up worktree
 - `wt config init` - Create default config file
+- `wt config show` - Show effective configuration
+- `wt config hooks` - List available hooks
 - `wt completion <shell>` - Generate shell completions (fish, bash, zsh)
 
 ### Shell Completions
