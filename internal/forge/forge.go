@@ -211,6 +211,21 @@ func (c *Cache) GetBranchByID(id int) (branch string, path string, found bool, r
 	return "", "", false, false
 }
 
+// GetBranchByPRNumber looks up PR info by PR number for a given origin URL
+// Returns the branch name if found and cache is not stale, empty string otherwise
+func (c *Cache) GetBranchByPRNumber(originURL string, prNumber int) string {
+	branches, ok := c.PRs[originURL]
+	if !ok {
+		return ""
+	}
+	for branch, pr := range branches {
+		if pr != nil && pr.Number == prNumber && !pr.IsStale() {
+			return branch
+		}
+	}
+	return ""
+}
+
 // WorktreeInfo contains the minimal info needed to sync the cache
 type WorktreeInfo struct {
 	Path      string

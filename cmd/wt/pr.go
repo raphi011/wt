@@ -90,11 +90,20 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 		return err
 	}
 
-	// Fetch PR branch name
-	fmt.Printf("Fetching PR #%d...\n", cmd.Number)
-	branch, err := f.GetPRBranch(originURL, cmd.Number)
-	if err != nil {
-		return fmt.Errorf("failed to get PR branch: %w", err)
+	// Try cache first to avoid network request
+	var branch string
+	cache, err := forge.LoadCache(basePath)
+	if err == nil {
+		branch = cache.GetBranchByPRNumber(originURL, cmd.Number)
+	}
+
+	if branch == "" {
+		// Cache miss - fetch from network
+		fmt.Printf("Fetching PR #%d...\n", cmd.Number)
+		branch, err = f.GetPRBranch(originURL, cmd.Number)
+		if err != nil {
+			return fmt.Errorf("failed to get PR branch: %w", err)
+		}
 	}
 
 	absPath, err := filepath.Abs(basePath)
