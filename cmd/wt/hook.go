@@ -21,20 +21,8 @@ func runHookCmd(cmd *HookCmd, cfg config.Config) error {
 }
 
 func runHookRun(cmd *HookRunCmd, cfg config.Config) error {
-	target := cmd.Target
 	hookName := cmd.Hook
-
-	// Handle go-arg positional ordering:
-	// When only one arg is given, it goes to Target (first positional).
-	// If Hook is empty, check if Target is actually a hook name.
-	if hookName == "" {
-		if target == "" {
-			return fmt.Errorf("hook name is required")
-		}
-		// Only one arg provided - it's in Target, but should be Hook
-		hookName = target
-		target = ""
-	}
+	target := cmd.Target
 
 	// Validate hook exists
 	hook, exists := cfg.Hooks.Hooks[hookName]

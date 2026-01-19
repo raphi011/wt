@@ -186,7 +186,22 @@ _wt_completions() {
         note)
             if [[ $cword -eq 2 ]]; then
                 COMPREPLY=($(compgen -W "set get clear" -- "$cur"))
-            elif [[ "${words[2]}" == "set" ]] || [[ "${words[2]}" == "get" ]] || [[ "${words[2]}" == "clear" ]]; then
+            elif [[ "${words[2]}" == "set" ]]; then
+                case "$prev" in
+                    -d|--dir)
+                        COMPREPLY=($(compgen -d -- "$cur"))
+                        return
+                        ;;
+                esac
+                if [[ $cword -eq 4 ]]; then
+                    # Complete worktree IDs and branch names (second positional after text)
+                    local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                    local branches=$(wt list 2>/dev/null | awk '{print $3}')
+                    COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
+                else
+                    COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
+                fi
+            elif [[ "${words[2]}" == "get" ]] || [[ "${words[2]}" == "clear" ]]; then
                 case "$prev" in
                     -d|--dir)
                         COMPREPLY=($(compgen -d -- "$cur"))
@@ -213,11 +228,18 @@ _wt_completions() {
                         return
                         ;;
                 esac
-                # Complete hook names and worktree targets
-                local hooks=$(wt config hooks 2>/dev/null | awk '{print $1}')
-                local ids=$(wt list 2>/dev/null | awk '{print $1}')
-                local branches=$(wt list 2>/dev/null | awk '{print $3}')
-                COMPREPLY=($(compgen -W "$hooks $ids $branches -d --dir" -- "$cur"))
+                if [[ $cword -eq 3 ]]; then
+                    # Complete hook names (first positional)
+                    local hooks=$(wt config hooks 2>/dev/null | awk '{print $1}')
+                    COMPREPLY=($(compgen -W "$hooks" -- "$cur"))
+                elif [[ $cword -eq 4 ]]; then
+                    # Complete worktree IDs and branch names (second positional, optional)
+                    local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                    local branches=$(wt list 2>/dev/null | awk '{print $3}')
+                    COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
+                else
+                    COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
+                fi
             fi
             ;;
         config)
@@ -406,8 +428,8 @@ _wt() {
                             case $words[1] in
                                 set)
                                     _arguments \
-                                        '1:worktree ID or branch:__wt_worktree_targets' \
-                                        '2:note text:' \
+                                        '1:note text:' \
+                                        '2:worktree ID or branch:__wt_worktree_targets' \
                                         '-d[worktree directory]:directory:_files -/' \
                                         '--dir[worktree directory]:directory:_files -/'
                                     ;;
@@ -436,8 +458,8 @@ _wt() {
                             case $words[1] in
                                 run)
                                     _arguments \
-                                        '1:worktree ID or branch:__wt_worktree_targets' \
-                                        '2:hook name:__wt_hook_names' \
+                                        '1:hook name:__wt_hook_names' \
+                                        '2:worktree ID or branch:__wt_worktree_targets' \
                                         '-d[worktree directory]:directory:_files -/' \
                                         '--dir[worktree directory]:directory:_files -/'
                                     ;;
@@ -586,9 +608,9 @@ complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_
 
 # hook: subcommands
 complete -c wt -n "__fish_seen_subcommand_from hook; and not __fish_seen_subcommand_from run" -a "run" -d "Run a hook by name"
-# hook run: worktree ID/branch (optional), then hook name (required), then flags
-complete -c wt -n "__fish_seen_subcommand_from hook; and __fish_seen_subcommand_from run" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
+# hook run: hook name (required first), then worktree ID/branch (optional), then flags
 complete -c wt -n "__fish_seen_subcommand_from hook; and __fish_seen_subcommand_from run" -a "(__wt_hook_names)" -d "Hook name"
+complete -c wt -n "__fish_seen_subcommand_from hook; and __fish_seen_subcommand_from run" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
 complete -c wt -n "__fish_seen_subcommand_from hook; and __fish_seen_subcommand_from run" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for target lookup"
 
 # pr: subcommands

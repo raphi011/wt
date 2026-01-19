@@ -118,8 +118,8 @@ Examples:
 
 // NoteSetCmd sets a note on a branch.
 type NoteSetCmd struct {
-	Target string `arg:"positional" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
 	Text   string `arg:"positional,required" placeholder:"TEXT" help:"note text"`
+	Target string `arg:"positional" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
 	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
 }
 
@@ -134,8 +134,8 @@ in 'wt list' and 'wt tidy' output.
 
 Examples:
   wt note set "Working on login flow"   # Inside worktree, current branch
-  wt note set 1 "Working on login"      # By worktree ID
-  wt note set feature-x "In progress"   # By branch name`
+  wt note set "Working on login" 1      # By worktree ID
+  wt note set "In progress" feature-x   # By branch name`
 }
 
 // NoteGetCmd gets a note from a branch.
@@ -193,8 +193,8 @@ Inside a worktree, operates on current branch. Outside, specify ID or branch.
 
 Examples:
   wt note set "Working on login"      # Inside worktree
-  wt note set 1 "Working on login"    # By worktree ID
-  wt note set feature-x "In progress" # By branch name
+  wt note set "Working on login" 1    # By worktree ID
+  wt note set "In progress" feature-x # By branch name
   wt note get                         # Inside worktree
   wt note get feature-x               # By branch name
   wt note clear 1                     # By worktree ID`
@@ -270,8 +270,8 @@ Examples:
 
 // HookRunCmd runs a hook by name for a worktree.
 type HookRunCmd struct {
+	Hook   string `arg:"positional,required" placeholder:"HOOK" help:"hook name to run"`
 	Target string `arg:"positional" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
-	Hook   string `arg:"positional" placeholder:"HOOK" help:"hook name to run"`
 	Dir    string `arg:"-d,--dir,env:WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
 }
 
@@ -283,9 +283,9 @@ When run outside, specify a worktree ID or branch name.
 
 Examples:
   wt hook run kitty              # Inside worktree: run for current
-  wt hook run 1 kitty            # By worktree ID
-  wt hook run feature-x kitty    # By branch name
-  wt hook run 1 kitty -d ~/Git   # Specify directory for lookup`
+  wt hook run kitty 1            # By worktree ID
+  wt hook run kitty feature-x    # By branch name
+  wt hook run kitty 1 -d ~/Git   # Specify directory for lookup`
 }
 
 // HookCmd manages hooks.
@@ -297,7 +297,7 @@ func (HookCmd) Description() string {
 	return `Manage hooks
 Examples:
   wt hook run kitty              # Run hook for current worktree
-  wt hook run 1 kitty            # Run hook for worktree ID 1`
+  wt hook run kitty 1            # Run hook for worktree ID 1`
 }
 
 // MvCmd moves worktrees to a different directory with optional renaming.
