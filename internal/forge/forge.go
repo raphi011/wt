@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/raphi011/wt/internal/git"
 )
 
 // CacheMaxAge is the maximum age of cached PR info before it's considered stale
@@ -283,65 +281,3 @@ func SavePRCache(scanDir string, prCache PRCache) error {
 	return SaveCache(scanDir, cache)
 }
 
-// CleanPRCache removes cache entries for origins/branches that no longer exist
-func CleanPRCache(cache PRCache, worktrees []git.Worktree) PRCache {
-	existing := make(map[string]map[string]bool)
-	for _, wt := range worktrees {
-		if wt.OriginURL == "" {
-			continue
-		}
-		if existing[wt.OriginURL] == nil {
-			existing[wt.OriginURL] = make(map[string]bool)
-		}
-		existing[wt.OriginURL][wt.Branch] = true
-	}
-
-	cleaned := make(PRCache)
-	for origin, branches := range cache {
-		if existingBranches, ok := existing[origin]; ok {
-			for branch, pr := range branches {
-				if existingBranches[branch] && pr != nil {
-					if cleaned[origin] == nil {
-						cleaned[origin] = make(map[string]*PRInfo)
-					}
-					cleaned[origin][branch] = pr
-				}
-			}
-		}
-	}
-
-	return cleaned
-}
-
-// NeedsFetch returns worktrees that need PR info fetched (not cached or stale)
-func NeedsFetch(cache PRCache, worktrees []git.Worktree, forceRefresh bool) []git.Worktree {
-	var toFetch []git.Worktree
-	for _, wt := range worktrees {
-		if wt.OriginURL == "" {
-			continue
-		}
-
-		// Skip branches without upstream (never pushed = no PR possible)
-		if git.GetUpstreamBranch(wt.MainRepo, wt.Branch) == "" {
-			continue
-		}
-
-		if forceRefresh {
-			toFetch = append(toFetch, wt)
-			continue
-		}
-
-		originCache, ok := cache[wt.OriginURL]
-		if !ok {
-			toFetch = append(toFetch, wt)
-			continue
-		}
-
-		pr := originCache[wt.Branch]
-		// Need to fetch if: no entry, not marked as fetched (old cache), or stale
-		if pr == nil || !pr.Fetched || pr.IsStale() {
-			toFetch = append(toFetch, wt)
-		}
-	}
-	return toFetch
-}

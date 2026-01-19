@@ -25,12 +25,8 @@ func runMv(cmd *MvCmd, _ *config.Config) error {
 		return fmt.Errorf("invalid format: %w", err)
 	}
 
-	// Expand and validate destination path
-	destPath, err := expandPath(cmd.Dir)
-	if err != nil {
-		return fmt.Errorf("failed to expand destination path: %w", err)
-	}
-	destPath, err = filepath.Abs(destPath)
+	// Validate destination path
+	destPath, err := filepath.Abs(cmd.Dir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}

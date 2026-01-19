@@ -12,8 +12,8 @@ type CreateCmd struct {
 	Branch string `arg:"" required:"" placeholder:"BRANCH" help:"branch name"`
 	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Note   string `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook   string `name:"hook" help:"run named hook instead of default"`
-	NoHook bool   `name:"no-hook" help:"skip post-create hook"`
+	Hook   string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook bool   `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
 }
 
 func (c *CreateCmd) Help() string {
@@ -38,8 +38,8 @@ type OpenCmd struct {
 	Branch string `arg:"" required:"" placeholder:"BRANCH|ID" help:"branch name (in repo) or worktree ID/branch (outside repo)"`
 	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Note   string `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook   string `name:"hook" help:"run named hook instead of default"`
-	NoHook bool   `name:"no-hook" help:"skip post-create hook"`
+	Hook   string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook bool   `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
 }
 
 func (c *OpenCmd) Help() string {
@@ -63,10 +63,10 @@ func (c *OpenCmd) Run(ctx *Context) error {
 // TidyCmd removes merged and clean worktrees.
 type TidyCmd struct {
 	Dir          string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	DryRun       bool   `short:"n" name:"dry-run" help:"preview without removing"`
+	DryRun       bool   `short:"n" name:"dry-run" negatable:"" help:"preview without removing"`
 	IncludeClean bool   `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
-	Hook         string `name:"hook" help:"run named hook instead of default"`
-	NoHook       bool   `name:"no-hook" help:"skip post-removal hooks"`
+	Hook         string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook       bool   `name:"no-hook" help:"skip post-removal hooks" xor:"hook-ctrl"`
 }
 
 func (c *TidyCmd) Help() string {
@@ -262,7 +262,7 @@ func (c *CompletionCmd) Run(ctx *Context) error {
 
 // ConfigInitCmd creates the default config file.
 type ConfigInitCmd struct {
-	Force bool `short:"f" name:"force" help:"overwrite existing config file"`
+	Force bool `short:"f" name:"force" negatable:"" help:"overwrite existing config file"`
 }
 
 func (c *ConfigInitCmd) Help() string {
@@ -363,8 +363,8 @@ Examples:
 type MvCmd struct {
 	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"destination directory (flag > WT_DEFAULT_PATH > config)"`
 	Format string `name:"format" placeholder:"FORMAT" help:"worktree naming format"`
-	DryRun bool   `short:"n" name:"dry-run" help:"show what would be moved"`
-	Force  bool   `short:"f" name:"force" help:"force move dirty worktrees"`
+	DryRun bool   `short:"n" name:"dry-run" negatable:"" help:"show what would be moved"`
+	Force  bool   `short:"f" name:"force" negatable:"" help:"force move dirty worktrees"`
 }
 
 func (c *MvCmd) Help() string {
@@ -389,8 +389,8 @@ type PrOpenCmd struct {
 	Number int    `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
 	Repo   string `arg:"" optional:"" placeholder:"REPO" help:"repository name to find locally"`
 	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	Hook   string `name:"hook" help:"run named hook instead of default"`
-	NoHook bool   `name:"no-hook" help:"skip post-create hook"`
+	Hook   string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook bool   `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
 }
 
 func (c *PrOpenCmd) Help() string {
@@ -418,8 +418,8 @@ type PrCloneCmd struct {
 	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Forge  string `name:"forge" env:"WT_FORGE" placeholder:"FORGE" help:"forge: github or gitlab (flag > env > clone rules > config)"`
 	Note   string `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook   string `name:"hook" help:"run named hook instead of default"`
-	NoHook bool   `name:"no-hook" help:"skip post-create hook"`
+	Hook   string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook bool   `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
 }
 
 func (c *PrCloneCmd) Help() string {
@@ -468,8 +468,8 @@ type PrMergeCmd struct {
 	Dir      string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
 	Strategy string `short:"s" name:"strategy" env:"WT_MERGE_STRATEGY" placeholder:"STRATEGY" help:"merge strategy: squash, rebase, or merge"`
 	Keep     bool   `short:"k" name:"keep" help:"keep worktree and branch after merge"`
-	Hook     string `name:"hook" help:"run named hook instead of default"`
-	NoHook   bool   `name:"no-hook" help:"skip post-merge hook"`
+	Hook     string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook   bool   `name:"no-hook" help:"skip post-merge hook" xor:"hook-ctrl"`
 }
 
 func (c *PrMergeCmd) Help() string {
@@ -517,17 +517,24 @@ type VersionFlag bool
 
 // CLI is the root command.
 type CLI struct {
-	Create     CreateCmd     `cmd:"" help:"create a new worktree"`
-	Open       OpenCmd       `cmd:"" help:"open worktree for existing branch"`
-	Tidy       TidyCmd       `cmd:"" help:"tidy up merged worktrees"`
-	List       ListCmd       `cmd:"" default:"withargs" help:"list worktrees"`
-	Exec       ExecCmd       `cmd:"" help:"run command in worktree by ID"`
-	Mv         MvCmd         `cmd:"" help:"move worktrees to another directory"`
-	Note       NoteCmd       `cmd:"" help:"manage branch notes"`
-	Hook       HookCmd       `cmd:"" help:"manage hooks"`
-	Pr         PrCmd         `cmd:"" help:"work with PRs"`
-	Config     ConfigCmd     `cmd:"" help:"manage configuration"`
-	Completion CompletionCmd `cmd:"" help:"generate completion script"`
+	// Core commands (ungrouped - shown first)
+	Create CreateCmd `cmd:"" help:"create a new worktree"`
+	Open   OpenCmd   `cmd:"" help:"open worktree for existing branch"`
+	List   ListCmd   `cmd:"" default:"withargs" help:"list worktrees"`
+	Tidy   TidyCmd   `cmd:"" help:"tidy up merged worktrees"`
+
+	// PR commands
+	Pr PrCmd `cmd:"" help:"work with PRs" group:"pr"`
+
+	// Utility commands
+	Exec ExecCmd `cmd:"" help:"run command in worktree by ID" group:"util"`
+	Mv   MvCmd   `cmd:"" help:"move worktrees to another directory" group:"util"`
+	Note NoteCmd `cmd:"" help:"manage branch notes" group:"util"`
+	Hook HookCmd `cmd:"" help:"manage hooks" group:"util"`
+
+	// Configuration commands
+	Config     ConfigCmd     `cmd:"" help:"manage configuration" group:"config"`
+	Completion CompletionCmd `cmd:"" help:"generate completion script" group:"config"`
 
 	Version VersionFlag `name:"version" help:"show version"`
 }

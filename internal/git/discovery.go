@@ -108,24 +108,3 @@ func isGitRepo(path string) bool {
 	return info.IsDir() || info.Mode().IsRegular()
 }
 
-// ListRepoNames returns names of all git repos in basePath (direct children only)
-func ListRepoNames(basePath string) []string {
-	entries, err := os.ReadDir(basePath)
-	if err != nil {
-		return nil
-	}
-
-	var repos []string
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		repoPath := filepath.Join(basePath, entry.Name())
-		if isGitRepo(repoPath) {
-			repos = append(repos, entry.Name())
-		}
-	}
-
-	return repos
-}

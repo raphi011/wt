@@ -80,6 +80,24 @@ func ValidateDefaultPath(path string) error {
 	return nil
 }
 
+// expandPath expands ~ to the user's home directory
+func expandPath(path string) (string, error) {
+	if path == "" {
+		return "", nil
+	}
+	if len(path) >= 2 && path[:2] == "~/" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("expand ~: %w", err)
+		}
+		return filepath.Join(home, path[2:]), nil
+	}
+	if path == "~" {
+		return os.UserHomeDir()
+	}
+	return path, nil
+}
+
 // configPath returns the path to the config file
 func configPath() (string, error) {
 	home, err := os.UserHomeDir()
@@ -133,6 +151,15 @@ func Load() (Config, error) {
 	// Validate default_path (must be absolute or start with ~)
 	if err := ValidateDefaultPath(cfg.DefaultPath); err != nil {
 		return Default(), err
+	}
+
+	// Expand ~ in default_path (shell doesn't expand in config files)
+	if cfg.DefaultPath != "" {
+		expanded, err := expandPath(cfg.DefaultPath)
+		if err != nil {
+			return Default(), fmt.Errorf("expand default_path: %w", err)
+		}
+		cfg.DefaultPath = expanded
 	}
 
 	// Validate clone.forge (only "github", "gitlab", or empty allowed)

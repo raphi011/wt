@@ -35,17 +35,13 @@ func runOpenInRepo(cmd *OpenCmd, cfg *config.Config) error {
 		dir = "."
 	}
 
-	basePath, err := expandPath(dir)
-	if err != nil {
-		return fmt.Errorf("failed to expand path: %w", err)
-	}
-	absPath, err := filepath.Abs(basePath)
+	absPath, err := filepath.Abs(dir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 	fmt.Printf("Opening worktree for branch %s in %s\n", cmd.Branch, absPath)
 
-	result, err := git.OpenWorktree(basePath, cmd.Branch, cfg.WorktreeFormat)
+	result, err := git.OpenWorktree(dir, cmd.Branch, cfg.WorktreeFormat)
 	if err != nil {
 		return err
 	}
@@ -96,10 +92,7 @@ func runOpenOutsideRepo(cmd *OpenCmd, cfg *config.Config) error {
 		return fmt.Errorf("directory required when outside git repo (-d flag or WT_DEFAULT_PATH)")
 	}
 
-	scanDir, err := expandPath(scanDir)
-	if err != nil {
-		return fmt.Errorf("failed to expand path: %w", err)
-	}
+	var err error
 	scanDir, err = filepath.Abs(scanDir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)

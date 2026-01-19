@@ -522,13 +522,6 @@ __wt_local_branches() {
     _describe 'branch' branches
 }
 
-# Helper: complete worktree IDs
-__wt_worktree_ids() {
-    local ids
-    ids=(${(f)"$(wt list 2>/dev/null | awk '{print $1}')"})
-    _describe 'worktree ID' ids
-}
-
 # Helper: complete worktree IDs and branch names
 __wt_worktree_targets() {
     local targets
@@ -657,11 +650,6 @@ function __wt_list_repos
             end
         end
     end
-end
-
-# Helper function to list worktree IDs
-function __wt_worktree_ids
-    wt list 2>/dev/null | awk '{print $1}'
 end
 
 # Helper function to list worktree IDs and branch names

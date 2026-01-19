@@ -176,23 +176,6 @@ func GetLastCommitRelative(path string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-// HasUntrackedFiles checks if the worktree has untracked files
-func HasUntrackedFiles(path string) bool {
-	cmd := exec.Command("git", "-C", path, "status", "--porcelain")
-	output, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "??") {
-			return true
-		}
-	}
-	return false
-}
-
 // GetDiffStats returns additions and deletions for uncommitted changes
 // Also returns true for hasUntracked if there are untracked files
 func GetDiffStats(path string) (additions, deletions int, hasUntracked bool, err error) {

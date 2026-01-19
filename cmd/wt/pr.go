@@ -34,11 +34,6 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 		dir = "."
 	}
 
-	basePath, err := expandPath(dir)
-	if err != nil {
-		return fmt.Errorf("failed to expand path: %w", err)
-	}
-
 	// Determine which repo to use (local only - never clones)
 	var repoPath string
 	if cmd.Repo == "" {
@@ -49,17 +44,17 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 		_, name := git.ParseRepoArg(cmd.Repo)
 
 		// Try to find repo locally
-		foundPath, err := git.FindRepoByName(basePath, name)
+		foundPath, err := git.FindRepoByName(dir, name)
 		if err == nil {
 			repoPath = foundPath
 			fmt.Printf("Using repo at %s\n", repoPath)
 		} else {
 			// Not found: error with suggestions and hint to use pr clone
-			similar := git.FindSimilarRepos(basePath, name)
+			similar := git.FindSimilarRepos(dir, name)
 			if len(similar) > 0 {
-				return fmt.Errorf("repository %q not found in %s\nDid you mean: %s\nTo clone a new repo, use: wt pr clone %d %s", name, basePath, strings.Join(similar, ", "), cmd.Number, cmd.Repo)
+				return fmt.Errorf("repository %q not found in %s\nDid you mean: %s\nTo clone a new repo, use: wt pr clone %d %s", name, dir, strings.Join(similar, ", "), cmd.Number, cmd.Repo)
 			}
-			return fmt.Errorf("repository %q not found in %s\nTo clone a new repo, use: wt pr clone %d %s", name, basePath, cmd.Number, cmd.Repo)
+			return fmt.Errorf("repository %q not found in %s\nTo clone a new repo, use: wt pr clone %d %s", name, dir, cmd.Number, cmd.Repo)
 		}
 	}
 
@@ -77,7 +72,7 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 
 	// Try cache first to avoid network request
 	var branch string
-	cache, err := forge.LoadCache(basePath)
+	cache, err := forge.LoadCache(dir)
 	if err == nil {
 		branch = cache.GetBranchByPRNumber(originURL, cmd.Number)
 	}
@@ -91,13 +86,13 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 		}
 	}
 
-	absPath, err := filepath.Abs(basePath)
+	absPath, err := filepath.Abs(dir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
 
-	result, err := git.CreateWorktreeFrom(repoPath, basePath, branch, cfg.WorktreeFormat)
+	result, err := git.CreateWorktreeFrom(repoPath, dir, branch, cfg.WorktreeFormat)
 	if err != nil {
 		return err
 	}
@@ -154,13 +149,8 @@ func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 		dir = "."
 	}
 
-	basePath, err := expandPath(dir)
-	if err != nil {
-		return fmt.Errorf("failed to expand path: %w", err)
-	}
-
 	// Check if repo already exists locally
-	if existingPath, err := git.FindRepoByName(basePath, name); err == nil {
+	if existingPath, err := git.FindRepoByName(dir, name); err == nil {
 		return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr open %d %s' instead", name, existingPath, cmd.Number, name)
 	}
 
@@ -176,8 +166,8 @@ func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 	}
 
 	// Clone the repo
-	fmt.Printf("Cloning %s to %s (using %s)...\n", repoSpec, basePath, forgeName)
-	repoPath, err := f.CloneRepo(repoSpec, basePath)
+	fmt.Printf("Cloning %s to %s (using %s)...\n", repoSpec, dir, forgeName)
+	repoPath, err := f.CloneRepo(repoSpec, dir)
 	if err != nil {
 		return fmt.Errorf("failed to clone repo: %w", err)
 	}
@@ -196,13 +186,13 @@ func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 		return fmt.Errorf("failed to get PR branch: %w", err)
 	}
 
-	absPath, err := filepath.Abs(basePath)
+	absPath, err := filepath.Abs(dir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
 
-	result, err := git.CreateWorktreeFrom(repoPath, basePath, branch, cfg.WorktreeFormat)
+	result, err := git.CreateWorktreeFrom(repoPath, dir, branch, cfg.WorktreeFormat)
 	if err != nil {
 		return err
 	}
@@ -255,12 +245,7 @@ func runPrRefresh(cmd *PrRefreshCmd, cfg *config.Config) error {
 		dir = "."
 	}
 
-	// Expand path
-	scanPath, err := expandPath(dir)
-	if err != nil {
-		return fmt.Errorf("failed to expand path: %w", err)
-	}
-	scanPath, err = filepath.Abs(scanPath)
+	scanPath, err := filepath.Abs(dir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
@@ -415,10 +400,6 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {
 		scanDir := cmd.Dir
 		if scanDir == "" {
 			scanDir = "."
-		}
-		scanDir, err = expandPath(scanDir)
-		if err != nil {
-			return fmt.Errorf("failed to expand path: %w", err)
 		}
 		scanDir, err = filepath.Abs(scanDir)
 		if err != nil {

@@ -21,12 +21,7 @@ func runList(cmd *ListCmd) error {
 		dir = "."
 	}
 
-	// Expand path
-	scanPath, err := expandPath(dir)
-	if err != nil {
-		return fmt.Errorf("failed to expand path: %w", err)
-	}
-	scanPath, err = filepath.Abs(scanPath)
+	scanPath, err := filepath.Abs(dir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}

@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/alecthomas/kong"
 
@@ -25,6 +24,11 @@ func main() {
 		kong.UsageOnError(),
 		kong.ConfigureHelp(kong.HelpOptions{
 			Compact: true,
+		}),
+		kong.ExplicitGroups([]kong.Group{
+			{Key: "pr", Title: "PR Commands"},
+			{Key: "util", Title: "Utilities"},
+			{Key: "config", Title: "Configuration"},
 		}),
 		kong.Vars{
 			"version": versionString(),
@@ -87,21 +91,3 @@ func (v VersionFlag) BeforeApply(app *kong.Kong, vars kong.Vars) error {
 	return nil
 }
 
-// expandPath expands ~ to home directory
-func expandPath(path string) (string, error) {
-	if len(path) >= 2 && path[:2] == "~/" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get home directory: %w", err)
-		}
-		return filepath.Join(home, path[2:]), nil
-	}
-	if path == "~" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get home directory: %w", err)
-		}
-		return home, nil
-	}
-	return path, nil
-}

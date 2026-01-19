@@ -55,10 +55,6 @@ func resolveNoteTarget(target string, dir string) (branch string, repoPath strin
 	if scanPath == "" {
 		scanPath = "."
 	}
-	scanPath, err = expandPath(scanPath)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to expand path: %w", err)
-	}
 	scanPath, err = filepath.Abs(scanPath)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to resolve absolute path: %w", err)

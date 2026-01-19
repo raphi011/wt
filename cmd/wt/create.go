@@ -26,17 +26,13 @@ func runCreate(cmd *CreateCmd, cfg *config.Config) error {
 		dir = "."
 	}
 
-	basePath, err := expandPath(dir)
-	if err != nil {
-		return fmt.Errorf("failed to expand path: %w", err)
-	}
-	absPath, err := filepath.Abs(basePath)
+	absPath, err := filepath.Abs(dir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 	fmt.Printf("Creating worktree for branch %s in %s\n", cmd.Branch, absPath)
 
-	result, err := git.CreateWorktree(basePath, cmd.Branch, cfg.WorktreeFormat)
+	result, err := git.CreateWorktree(dir, cmd.Branch, cfg.WorktreeFormat)
 	if err != nil {
 		return err
 	}

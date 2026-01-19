@@ -83,10 +83,6 @@ func resolveHookTarget(target string, dir string) (hooks.Context, error) {
 	if scanPath == "" {
 		scanPath = "."
 	}
-	scanPath, err = expandPath(scanPath)
-	if err != nil {
-		return hooks.Context{}, fmt.Errorf("failed to expand path: %w", err)
-	}
 	scanPath, err = filepath.Abs(scanPath)
 	if err != nil {
 		return hooks.Context{}, fmt.Errorf("failed to resolve absolute path: %w", err)
