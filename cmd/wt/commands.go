@@ -520,7 +520,7 @@ type CLI struct {
 	Create     CreateCmd     `cmd:"" help:"create a new worktree"`
 	Open       OpenCmd       `cmd:"" help:"open worktree for existing branch"`
 	Tidy       TidyCmd       `cmd:"" help:"tidy up merged worktrees"`
-	List       ListCmd       `cmd:"" help:"list worktrees"`
+	List       ListCmd       `cmd:"" default:"withargs" help:"list worktrees"`
 	Exec       ExecCmd       `cmd:"" help:"run command in worktree by ID"`
 	Mv         MvCmd         `cmd:"" help:"move worktrees to another directory"`
 	Note       NoteCmd       `cmd:"" help:"manage branch notes"`
