@@ -163,11 +163,20 @@ func runCreate(cmd *CreateCmd, cfg config.Config) error {
 
 	if len(hookMatches) > 0 {
 		// Get context for placeholder substitution
-		repoName, _ := git.GetRepoName()
-		folderName, _ := git.GetRepoFolderName()
-		mainRepo, err := git.GetMainRepoPath(result.Path)
-		if err != nil || mainRepo == "" {
-			// Fallback for newly created worktrees
+		repoName, err := git.GetRepoName()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to get repo name for hook context: %v\n", err)
+		}
+		folderName, err := git.GetRepoFolderName()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to get folder name for hook context: %v\n", err)
+		}
+		mainRepo, mainRepoErr := git.GetMainRepoPath(result.Path)
+		if mainRepoErr != nil || mainRepo == "" {
+			// Fallback to current directory (should be the main repo when creating worktrees)
+			if mainRepoErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to get main repo path: %v (using current directory)\n", mainRepoErr)
+			}
 			mainRepo, err = filepath.Abs(".")
 			if err != nil {
 				return fmt.Errorf("failed to determine main repo path: %w", err)
@@ -241,11 +250,20 @@ func runOpen(cmd *OpenCmd, cfg config.Config) error {
 
 	if len(hookMatches) > 0 {
 		// Get context for placeholder substitution
-		repoName, _ := git.GetRepoName()
-		folderName, _ := git.GetRepoFolderName()
-		mainRepo, err := git.GetMainRepoPath(result.Path)
-		if err != nil || mainRepo == "" {
-			// Fallback for newly created worktrees
+		repoName, err := git.GetRepoName()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to get repo name for hook context: %v\n", err)
+		}
+		folderName, err := git.GetRepoFolderName()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to get folder name for hook context: %v\n", err)
+		}
+		mainRepo, mainRepoErr := git.GetMainRepoPath(result.Path)
+		if mainRepoErr != nil || mainRepo == "" {
+			// Fallback to current directory (should be the main repo when opening worktrees)
+			if mainRepoErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to get main repo path: %v (using current directory)\n", mainRepoErr)
+			}
 			mainRepo, err = filepath.Abs(".")
 			if err != nil {
 				return fmt.Errorf("failed to determine main repo path: %w", err)
@@ -931,11 +949,17 @@ func runPrOpen(cmd *PrOpenCmd, cfg config.Config) error {
 
 	if len(hookMatches) > 0 {
 		// Get context for placeholder substitution
-		repoName, _ := git.GetRepoNameFrom(repoPath)
+		repoName, err := git.GetRepoNameFrom(repoPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to get repo name for hook context: %v\n", err)
+		}
 		folderName := filepath.Base(repoPath)
-		mainRepo, err := git.GetMainRepoPath(result.Path)
-		if err != nil || mainRepo == "" {
-			// Fallback for newly created worktrees
+		mainRepo, mainRepoErr := git.GetMainRepoPath(result.Path)
+		if mainRepoErr != nil || mainRepo == "" {
+			// Fallback to the repo path used for creating the worktree
+			if mainRepoErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to get main repo path: %v (using %s)\n", mainRepoErr, repoPath)
+			}
 			mainRepo, err = filepath.Abs(repoPath)
 			if err != nil {
 				return fmt.Errorf("failed to determine main repo path: %w", err)

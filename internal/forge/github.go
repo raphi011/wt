@@ -127,7 +127,10 @@ func (g *GitHub) CloneRepo(repoSpec, destPath string) (string, error) {
 	if len(parts) != 2 {
 		return "", fmt.Errorf("invalid repo spec %q: expected org/repo format", repoSpec)
 	}
-	repoName := parts[1]
+	org, repoName := parts[0], parts[1]
+	if org == "" || repoName == "" {
+		return "", fmt.Errorf("invalid repo spec %q: org and repo must not be empty", repoSpec)
+	}
 	clonePath := filepath.Join(destPath, repoName)
 
 	cmd := exec.Command("gh", "repo", "clone", repoSpec, clonePath)

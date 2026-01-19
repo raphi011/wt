@@ -321,6 +321,10 @@ func getBranchWorktreeFrom(repoPath, branch string) (string, error) {
 		} else if strings.HasPrefix(line, "branch refs/heads/") {
 			wtBranch := strings.TrimPrefix(line, "branch refs/heads/")
 			if wtBranch == branch {
+				if currentPath == "" {
+					// Branch found but path not parsed - malformed output
+					return "", fmt.Errorf("malformed git worktree output: found branch %q without worktree path", branch)
+				}
 				return currentPath, nil
 			}
 		} else if line == "" {

@@ -137,6 +137,20 @@ func (g *GitLab) CloneRepo(repoSpec, destPath string) (string, error) {
 		return "", fmt.Errorf("invalid repo spec %q: expected group/repo format", repoSpec)
 	}
 	repoName := parts[len(parts)-1]
+	if repoName == "" {
+		return "", fmt.Errorf("invalid repo spec %q: repo name must not be empty", repoSpec)
+	}
+	// Validate at least one non-empty group
+	hasGroup := false
+	for i := 0; i < len(parts)-1; i++ {
+		if parts[i] != "" {
+			hasGroup = true
+			break
+		}
+	}
+	if !hasGroup {
+		return "", fmt.Errorf("invalid repo spec %q: group must not be empty", repoSpec)
+	}
 	clonePath := filepath.Join(destPath, repoName)
 
 	cmd := exec.Command("glab", "repo", "clone", repoSpec, clonePath)

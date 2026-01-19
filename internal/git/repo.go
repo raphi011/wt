@@ -32,13 +32,14 @@ func GetRepoNameFrom(repoPath string) (string, error) {
 	// Remove .git suffix
 	url = strings.TrimSuffix(url, ".git")
 
-	// Extract last part of path
+	// Extract last part of path (repo name)
 	parts := strings.Split(url, "/")
-	if len(parts) == 0 {
-		return "", fmt.Errorf("invalid git origin URL")
+	repoName := parts[len(parts)-1]
+	if repoName == "" {
+		return "", fmt.Errorf("invalid git origin URL: could not extract repo name from %q", url)
 	}
 
-	return parts[len(parts)-1], nil
+	return repoName, nil
 }
 
 // GetRepoFolderName returns the actual folder name of the git repo on disk
@@ -228,11 +229,20 @@ func GetDiffStats(path string) (additions, deletions int, hasUntracked bool, err
 			continue
 		}
 		// Format: "additions\tdeletions\tfilename"
+		// Binary files show "-" instead of numbers
 		fields := strings.Fields(line)
 		if len(fields) >= 2 {
+			// Skip binary files (marked with "-")
+			if fields[0] == "-" || fields[1] == "-" {
+				continue
+			}
 			var add, del int
-			fmt.Sscanf(fields[0], "%d", &add)
-			fmt.Sscanf(fields[1], "%d", &del)
+			if _, err := fmt.Sscanf(fields[0], "%d", &add); err != nil {
+				continue // Skip lines with invalid format
+			}
+			if _, err := fmt.Sscanf(fields[1], "%d", &del); err != nil {
+				continue
+			}
 			additions += add
 			deletions += del
 		}
@@ -265,12 +275,27 @@ func GetMainRepoPath(worktreePath string) (string, error) {
 	}
 
 	// Parse: "gitdir: /path/to/repo/.git/worktrees/name"
+	// Only the first line matters; any additional lines are ignored
 	line := strings.TrimSpace(string(content))
+	if idx := strings.Index(line, "\n"); idx != -1 {
+		line = strings.TrimSpace(line[:idx])
+	}
 	if !strings.HasPrefix(line, "gitdir: ") {
-		return "", fmt.Errorf("invalid .git file format")
+		return "", fmt.Errorf("invalid .git file format: expected 'gitdir: <path>'")
 	}
 
 	gitdir := strings.TrimPrefix(line, "gitdir: ")
+	if gitdir == "" {
+		return "", fmt.Errorf("invalid .git file format: empty gitdir path")
+	}
+
+	// Handle relative paths (gitdir can be relative to the worktree)
+	if !filepath.IsAbs(gitdir) {
+		gitdir = filepath.Join(worktreePath, gitdir)
+	}
+
+	// Clean the path to resolve any .. or . components
+	gitdir = filepath.Clean(gitdir)
 
 	// Walk up from gitdir to find the .git directory, then get its parent
 	// gitdir is like: /path/to/repo/.git/worktrees/name
@@ -398,6 +423,10 @@ func GetBranchWorktree(branch string) (string, error) {
 		} else if strings.HasPrefix(line, "branch refs/heads/") {
 			wtBranch := strings.TrimPrefix(line, "branch refs/heads/")
 			if wtBranch == branch {
+				if currentPath == "" {
+					// Branch found but path not parsed - malformed output
+					return "", fmt.Errorf("malformed git worktree output: found branch %q without worktree path", branch)
+				}
 				return currentPath, nil
 			}
 		} else if line == "" {
