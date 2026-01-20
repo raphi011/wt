@@ -22,11 +22,10 @@ func shellQuote(s string) string {
 type CommandType string
 
 const (
-	CommandCreate CommandType = "create"
-	CommandOpen   CommandType = "open"
-	CommandPR     CommandType = "pr"
-	CommandTidy   CommandType = "tidy"
-	CommandMerge  CommandType = "merge"
+	CommandAdd   CommandType = "add"
+	CommandPR    CommandType = "pr"
+	CommandPrune CommandType = "prune"
+	CommandMerge CommandType = "merge"
 )
 
 // Context holds the values for placeholder substitution
@@ -36,7 +35,7 @@ type Context struct {
 	Repo     string // repo name from git origin
 	Folder   string // main repo folder name
 	MainRepo string // main repo path
-	Trigger  string // command that triggered the hook (create, open, pr, tidy)
+	Trigger  string // command that triggered the hook (add, pr, prune, merge)
 }
 
 // HookMatch represents a hook that matched the current command

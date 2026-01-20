@@ -240,18 +240,24 @@ type CreateWorktreeResult struct {
 	AlreadyExists bool
 }
 
-// CreateWorktree creates a new git worktree at basePath/<formatted-name>
-// The worktreeFmt parameter uses placeholders like {git-origin}, {branch-name}, {folder-name}
-// Returns the result including whether the worktree already existed
-// Returns an error if the branch already exists (use OpenWorktree instead)
-func CreateWorktree(basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
+// AddWorktree creates a git worktree at basePath/<formatted-name>
+// If createNew is true, creates a new branch (-b flag); otherwise checks out existing branch
+func AddWorktree(basePath, branch, worktreeFmt string, createNew bool) (*CreateWorktreeResult, error) {
+	if createNew {
+		return createWorktreeInternal(basePath, branch, worktreeFmt)
+	}
+	return openWorktreeInternal(basePath, branch, worktreeFmt)
+}
+
+// createWorktreeInternal creates a new git worktree with a new branch
+func createWorktreeInternal(basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
 	// Check if branch already exists
 	exists, err := BranchExists(branch)
 	if err != nil {
 		return nil, err
 	}
 	if exists {
-		return nil, fmt.Errorf("branch %q already exists (use 'wt open' to checkout existing branch)", branch)
+		return nil, fmt.Errorf("branch %q already exists (use 'wt add' without -b to checkout existing branch)", branch)
 	}
 
 	// Get repo name from origin URL
@@ -468,16 +474,15 @@ func getBranchWorktreeFrom(repoPath, branch string) (string, error) {
 	return "", nil
 }
 
-// OpenWorktree creates a worktree for an existing local branch
-// Returns error if branch doesn't exist or is already checked out
-func OpenWorktree(basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
+// openWorktreeInternal creates a worktree for an existing local branch
+func openWorktreeInternal(basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
 	// Check if branch exists
 	exists, err := BranchExists(branch)
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("branch %q does not exist (use 'wt create' to create a new branch)", branch)
+		return nil, fmt.Errorf("branch %q does not exist (use 'wt add -b' to create a new branch)", branch)
 	}
 
 	// Check if branch is already checked out in another worktree

@@ -54,18 +54,18 @@ internal/ui/             - Terminal UI components
 
 **Worktree naming convention** - Worktrees are created as `<repo-name>-<branch>` (e.g., `wt-feature-branch`). The repo name is extracted from git origin URL.
 
-**Path handling** - User must specify base directory for `wt create`. The tool fails if the directory doesn't exist (no automatic mkdir). Common patterns:
-- `wt create . branch` - Create in current dir
-- `wt create .. branch` - Create next to repo
-- `wt create ~/Git/worktrees branch` - Create in central location
+**Path handling** - User must specify base directory for `wt add`. The tool fails if the directory doesn't exist (no automatic mkdir). Common patterns:
+- `wt add . branch` - Add in current dir
+- `wt add .. branch` - Add next to repo
+- `wt add ~/Git/worktrees branch` - Add in central location
 
 **MR/PR status** - Uses `gh pr list` or `glab mr list` to fetch merge request info (auto-detected). States: merged, open, closed.
 
 ### CLI Commands
 
-- `wt create <branch>` - Create worktree for new branch
-- `wt open <branch>` - Create worktree for existing local branch
-- `wt tidy` - Remove merged+clean worktrees, show table with PR status (use -r/--refresh to fetch latest)
+- `wt add <branch>` - Add worktree for existing branch
+- `wt add -b <branch>` - Add worktree for new branch
+- `wt prune` - Remove merged+clean worktrees, show table with PR status (use -r/--refresh to fetch latest)
 - `wt list [--json]` - List worktrees in directory
 - `wt exec <id|branch> -- <cmd>` - Run command in worktree by ID or branch
 - `wt mv` - Move worktrees to different directory
@@ -114,7 +114,7 @@ Completions provide context-aware suggestions for branches, directories, and fla
   3. If arg matches multiple branches → error listing repos with IDs
   4. No match → error with helpful message
 
-Commands using this pattern: `wt open`, `wt exec`, `wt note set/get/clear`, `wt pr merge`
+Commands using this pattern: `wt add`, `wt exec`, `wt note set/get/clear`, `wt pr merge`, `wt prune`
 
 **Keep completions/config in sync** - When CLI commands, flags, or subcommands change, always update the shell completion scripts (fish, bash, zsh in `cmd/wt/main.go`) and any config generation commands to match.
 
@@ -124,7 +124,7 @@ Commands using this pattern: `wt open`, `wt exec`, `wt note set/get/clear`, `wt 
 - `-f, --force` - force operation (override safety checks)
 - `-c, --include-clean` - include clean worktrees (0 commits, no changes)
 - `--json` - output as JSON
-- `--hook` / `--no-hook` - control hook execution (for create, open, pr open, tidy)
+- `--hook` / `--no-hook` - control hook execution (for add, pr open, prune)
 
 ### Commit Messages
 
@@ -177,9 +177,9 @@ Tap repo: `raphi011/homebrew-tap` with cask in `Casks/wt.rb`
 
 ### Testing Locally
 
-The tool must be run from within a git repository for `wt create` to work (needs origin URL). For testing:
+The tool must be run from within a git repository for `wt add -b` to work (needs origin URL). For testing:
 
 ```bash
 cd ~/Git/wt  # Must be in a git repo
-./wt create .. test-branch  # Creates ~/Git/wt-test-branch
+./wt add -b .. test-branch  # Creates ~/Git/wt-test-branch
 ```

@@ -7,75 +7,55 @@ type Context struct {
 	Config *config.Config
 }
 
-// CreateCmd creates a new worktree for a new or existing remote branch.
-type CreateCmd struct {
-	Branch string `arg:"" required:"" placeholder:"BRANCH" help:"branch name"`
-	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	Note   string `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook   string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
-	NoHook bool   `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
+// AddCmd adds a worktree for an existing or new branch.
+type AddCmd struct {
+	Branch    string `arg:"" required:"" placeholder:"BRANCH|ID" help:"branch name (in repo) or worktree ID/branch (outside repo)"`
+	Dir       string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	NewBranch bool   `short:"b" name:"new-branch" help:"create a new branch"`
+	Note      string `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
+	Hook      string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook    bool   `name:"no-hook" help:"skip post-add hook" xor:"hook-ctrl"`
 }
 
-func (c *CreateCmd) Help() string {
-	return `Creates a new branch and worktree at <dir>/<repo>-<branch>. If the branch already exists
-remotely, it will be checked out instead.
+func (c *AddCmd) Help() string {
+	return `Add a worktree for a branch. Use -b to create a new branch.
 
-Examples:
-  wt create feature-branch              # Uses default path resolution
-  wt create feature-branch -d ~/Git     # Specify target directory
-  wt create feature-branch --no-hook    # Skip post-create hook
-  wt create feature-branch --hook=ide   # Run 'ide' hook instead of default`
-}
-
-func (c *CreateCmd) Run(ctx *Context) error {
-	return runCreate(c, ctx.Config)
-}
-
-// OpenCmd opens a worktree for an existing local branch.
-type OpenCmd struct {
-	Branch string `arg:"" required:"" placeholder:"BRANCH|ID" help:"branch name (in repo) or worktree ID/branch (outside repo)"`
-	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	Note   string `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook   string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
-	NoHook bool   `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
-}
-
-func (c *OpenCmd) Help() string {
-	return `Inside a git repo: opens a worktree for the specified branch.
+Inside a git repo: adds a worktree for the specified branch.
 Outside a git repo: resolves ID or branch name from worktree cache.
 
 Examples:
-  wt open feature-branch              # In repo: opens branch
-  wt open feature-branch -d ~/Git     # Specify target directory
-  wt open 1 -d ~/Git/worktrees        # Outside repo: by worktree ID
-  wt open feature-x -d ~/Git/worktrees # Outside repo: by branch name
-  wt open feature-branch --no-hook    # Skip post-create hook`
+  wt add feature-branch              # Existing branch
+  wt add -b feature-branch           # Create new branch
+  wt add feature-branch -d ~/Git     # Specify target directory
+  wt add 1 -d ~/Git/worktrees        # Outside repo: by worktree ID
+  wt add feature-x -d ~/Git/worktrees # Outside repo: by branch name
+  wt add feature-branch --no-hook    # Skip post-add hook`
 }
 
-func (c *OpenCmd) Run(ctx *Context) error {
-	return runOpen(c, ctx.Config)
+func (c *AddCmd) Run(ctx *Context) error {
+	return runAdd(c, ctx.Config)
 }
 
-// TidyCmd removes merged and clean worktrees.
-type TidyCmd struct {
+// PruneCmd removes merged and clean worktrees.
+type PruneCmd struct {
 	Target       string `arg:"" optional:"" placeholder:"ID|BRANCH" help:"specific worktree to remove (by ID or branch name)"`
 	Dir          string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	DryRun       bool   `short:"n" name:"dry-run" negatable:"" help:"preview without removing"`
 	Force        bool   `short:"f" name:"force" help:"force remove even if not merged or has uncommitted changes"`
 	IncludeClean bool   `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
-	Refresh      bool   `short:"r" name:"refresh" help:"fetch origin and refresh PR status before tidying"`
+	Refresh      bool   `short:"r" name:"refresh" help:"fetch origin and refresh PR status before pruning"`
 	ResetCache   bool   `name:"reset-cache" help:"clear all cached data (PR info, worktree history) and reset IDs from 1"`
 	Hook         string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook       bool   `name:"no-hook" help:"skip post-removal hooks" xor:"hook-ctrl"`
 }
 
-func (c *TidyCmd) Help() string {
+func (c *PruneCmd) Help() string {
 	return `Without arguments, removes all worktrees where the branch is merged AND
 working directory is clean. With a target, removes only that specific worktree.
 
 Shows a table with cached PR status. Use --refresh to fetch latest PR info.
 
-Hooks with on=["tidy"] run after each worktree removal. Hooks run with
+Hooks with on=["prune"] run after each worktree removal. Hooks run with
 working directory set to the main repo (since worktree path is deleted).
 
 Merge detection uses git merge-base locally, which may miss squash-merged
@@ -83,21 +63,21 @@ or rebased PRs. For accurate detection, use GitHub/GitLab where PR status
 shows if the branch was merged.
 
 Examples:
-  wt tidy -r                   # Refresh PR status and tidy
-  wt tidy                      # Remove merged worktrees (uses cached PR info)
-  wt tidy -n                   # Dry-run: preview without removing
-  wt tidy -d ~/Git/worktrees   # Scan specific directory
-  wt tidy -c                   # Also remove clean (0-commit) worktrees
-  wt tidy feature-x            # Remove specific worktree by branch name
-  wt tidy 1                    # Remove specific worktree by ID
-  wt tidy feature-x -f         # Force remove even if not merged/dirty
-  wt tidy --no-hook            # Skip post-removal hooks
-  wt tidy --hook=cleanup       # Run 'cleanup' hook instead of default
-  wt tidy --reset-cache        # Clear PR cache and reset IDs from 1`
+  wt prune -r                   # Refresh PR status and prune
+  wt prune                      # Remove merged worktrees (uses cached PR info)
+  wt prune -n                   # Dry-run: preview without removing
+  wt prune -d ~/Git/worktrees   # Scan specific directory
+  wt prune -c                   # Also remove clean (0-commit) worktrees
+  wt prune feature-x            # Remove specific worktree by branch name
+  wt prune 1                    # Remove specific worktree by ID
+  wt prune feature-x -f         # Force remove even if not merged/dirty
+  wt prune --no-hook            # Skip post-removal hooks
+  wt prune --hook=cleanup       # Run 'cleanup' hook instead of default
+  wt prune --reset-cache        # Clear PR cache and reset IDs from 1`
 }
 
-func (c *TidyCmd) Run(ctx *Context) error {
-	return runTidy(c, ctx.Config)
+func (c *PruneCmd) Run(ctx *Context) error {
+	return runPrune(c, ctx.Config)
 }
 
 // ListCmd lists worktrees in a directory.
@@ -183,7 +163,7 @@ func (c *NoteSetCmd) Help() string {
 When run outside, specify a worktree ID or branch name.
 
 The note is stored in git config (branch.<name>.description) and displayed
-in 'wt list' and 'wt tidy' output.
+in 'wt list' and 'wt prune' output.
 
 Examples:
   wt note set "Working on login flow"   # Inside worktree, current branch
@@ -512,10 +492,9 @@ type VersionFlag bool
 // CLI is the root command.
 type CLI struct {
 	// Core commands (ungrouped - shown first)
-	Create CreateCmd `cmd:"" help:"Create a new worktree"`
-	Open   OpenCmd   `cmd:"" help:"Open worktree for existing branch"`
-	List   ListCmd   `cmd:"" default:"withargs" help:"List worktrees"`
-	Tidy   TidyCmd   `cmd:"" help:"Tidy up merged worktrees"`
+	Add   AddCmd   `cmd:"" help:"Add worktree for branch"`
+	List  ListCmd  `cmd:"" default:"withargs" help:"List worktrees"`
+	Prune PruneCmd `cmd:"" help:"Prune merged worktrees"`
 
 	// PR commands
 	Pr PrCmd `cmd:"" help:"Work with PRs" group:"pr"`

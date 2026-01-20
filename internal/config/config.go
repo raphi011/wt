@@ -285,7 +285,7 @@ worktree_format = "{git-origin}-{branch-name}"
 # [hooks.kitty]
 # command = "kitty @ launch --type=tab --cwd={path}"
 # description = "Open new kitty tab"
-# on = ["create", "open"]  # auto-run for create and open commands
+# on = ["add"]  # auto-run for add command
 #
 # [hooks.pr-setup]
 # command = "cd {path} && npm install && code {path}"
@@ -295,24 +295,24 @@ worktree_format = "{git-origin}-{branch-name}"
 # [hooks.cleanup]
 # command = "echo 'Removed {branch} from {repo}'"
 # description = "Log removed branches"
-# on = ["tidy"]  # auto-run when removing worktrees
+# on = ["prune"]  # auto-run when removing worktrees
 #
 # [hooks.vscode]
 # command = "code {path}"
 # description = "Open VS Code"
 # # no "on" - only runs via --hook=vscode
 #
-# Available "on" values: "create", "open", "pr", "tidy", "all"
+# Available "on" values: "add", "pr", "prune", "merge", "all"
 #
 # Hooks run with working directory set to the worktree path.
-# For "tidy" hooks, working directory is the main repo (worktree is deleted).
+# For "prune" hooks, working directory is the main repo (worktree is deleted).
 # Available placeholders:
 #   {path}      - absolute worktree path
 #   {branch}    - branch name
 #   {repo}      - repo name from git origin
 #   {folder}    - main repo folder name
 #   {main-repo} - main repo path
-#   {trigger}   - command that triggered the hook (create, open, pr, tidy)
+#   {trigger}   - command that triggered the hook (add, pr, prune, merge)
 
 # Clone settings - configure forge and default org for cloning repos
 # Used by "wt pr clone" when cloning a new repository

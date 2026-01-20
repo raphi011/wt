@@ -62,9 +62,8 @@ func applyConfigDefaults(cli *CLI, cfg *config.Config) {
 
 	// Apply defaults based on which command was selected
 	// Kong has already parsed the command, so we check each field
-	setDir(&cli.Create.Dir)
-	setDir(&cli.Open.Dir)
-	setDir(&cli.Tidy.Dir)
+	setDir(&cli.Add.Dir)
+	setDir(&cli.Prune.Dir)
 	setDir(&cli.List.Dir)
 	setDir(&cli.Exec.Dir)
 	setDir(&cli.Cd.Dir)

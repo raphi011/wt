@@ -12,7 +12,7 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runOpen(cmd *OpenCmd, cfg *config.Config) error {
+func runAdd(cmd *AddCmd, cfg *config.Config) error {
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
@@ -20,16 +20,19 @@ func runOpen(cmd *OpenCmd, cfg *config.Config) error {
 
 	// Check if we're inside a git repo
 	if git.IsInsideRepo() {
-		// Inside repo: use branch name directly (original behavior)
-		return runOpenInRepo(cmd, cfg)
+		return runAddInRepo(cmd, cfg)
 	}
 
 	// Outside repo: resolve by ID or branch name
-	return runOpenOutsideRepo(cmd, cfg)
+	return runAddOutsideRepo(cmd, cfg)
 }
 
-// runOpenInRepo handles wt open when inside a git repository
-func runOpenInRepo(cmd *OpenCmd, cfg *config.Config) error {
+// runAddInRepo handles wt add when inside a git repository
+func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
+	if err := git.CheckGit(); err != nil {
+		return err
+	}
+
 	dir := cmd.Dir
 	if dir == "" {
 		dir = "."
@@ -39,9 +42,17 @@ func runOpenInRepo(cmd *OpenCmd, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
-	fmt.Printf("Opening worktree for branch %s in %s\n", cmd.Branch, absPath)
 
-	result, err := git.OpenWorktree(dir, cmd.Branch, cfg.WorktreeFormat)
+	var result *git.CreateWorktreeResult
+
+	if cmd.NewBranch {
+		fmt.Printf("Creating worktree for new branch %s in %s\n", cmd.Branch, absPath)
+		result, err = git.AddWorktree(dir, cmd.Branch, cfg.WorktreeFormat, true)
+	} else {
+		fmt.Printf("Adding worktree for branch %s in %s\n", cmd.Branch, absPath)
+		result, err = git.AddWorktree(dir, cmd.Branch, cfg.WorktreeFormat, false)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -63,8 +74,8 @@ func runOpenInRepo(cmd *OpenCmd, cfg *config.Config) error {
 		}
 	}
 
-	// Run post-create hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandOpen)
+	// Run post-add hooks
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandAdd)
 	if err != nil {
 		return err
 	}
@@ -72,7 +83,7 @@ func runOpenInRepo(cmd *OpenCmd, cfg *config.Config) error {
 	ctx := hooks.Context{
 		Path:    result.Path,
 		Branch:  cmd.Branch,
-		Trigger: string(hooks.CommandOpen),
+		Trigger: string(hooks.CommandAdd),
 	}
 	ctx.Repo, _ = git.GetRepoName()
 	ctx.Folder, _ = git.GetRepoFolderName()
@@ -84,9 +95,13 @@ func runOpenInRepo(cmd *OpenCmd, cfg *config.Config) error {
 	return hooks.RunAll(hookMatches, ctx)
 }
 
-// runOpenOutsideRepo handles wt open when outside a git repository
+// runAddOutsideRepo handles wt add when outside a git repository
 // Resolves the argument as either a worktree ID or branch name
-func runOpenOutsideRepo(cmd *OpenCmd, cfg *config.Config) error {
+func runAddOutsideRepo(cmd *AddCmd, cfg *config.Config) error {
+	if cmd.NewBranch {
+		return fmt.Errorf("cannot create new branch (-b) outside git repo")
+	}
+
 	scanDir := cmd.Dir
 	if scanDir == "" {
 		return fmt.Errorf("directory required when outside git repo (-d flag or WT_DEFAULT_PATH)")
@@ -104,7 +119,7 @@ func runOpenOutsideRepo(cmd *OpenCmd, cfg *config.Config) error {
 		return err
 	}
 
-	fmt.Printf("Opening worktree for branch %s in %s\n", target.Branch, scanDir)
+	fmt.Printf("Adding worktree for branch %s in %s\n", target.Branch, scanDir)
 
 	// Use OpenWorktreeFrom since we have the main repo path
 	result, err := git.OpenWorktreeFrom(target.MainRepo, scanDir, target.Branch, cfg.WorktreeFormat)
@@ -125,8 +140,8 @@ func runOpenOutsideRepo(cmd *OpenCmd, cfg *config.Config) error {
 		}
 	}
 
-	// Run post-create hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandOpen)
+	// Run post-add hooks
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandAdd)
 	if err != nil {
 		return err
 	}
@@ -136,7 +151,7 @@ func runOpenOutsideRepo(cmd *OpenCmd, cfg *config.Config) error {
 		Branch:   target.Branch,
 		MainRepo: target.MainRepo,
 		Folder:   filepath.Base(target.MainRepo),
-		Trigger:  string(hooks.CommandOpen),
+		Trigger:  string(hooks.CommandAdd),
 	}
 	ctx.Repo, _ = git.GetRepoNameFrom(target.MainRepo)
 

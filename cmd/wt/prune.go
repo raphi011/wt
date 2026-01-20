@@ -19,7 +19,7 @@ import (
 // maxConcurrentPRFetches limits parallel gh API calls to avoid rate limiting
 const maxConcurrentPRFetches = 5
 
-func runTidy(cmd *TidyCmd, cfg *config.Config) error {
+func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
@@ -39,20 +39,20 @@ func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 		if cmd.ResetCache {
 			return fmt.Errorf("--reset-cache cannot be used with a target")
 		}
-		return runTidyTarget(cmd, cfg, scanPath)
+		return runPruneTarget(cmd, cfg, scanPath)
 	}
 
 	if cmd.DryRun {
-		fmt.Printf("Cleaning worktrees in %s (dry run)\n", scanPath)
+		fmt.Printf("Pruning worktrees in %s (dry run)\n", scanPath)
 	} else {
-		fmt.Printf("Cleaning worktrees in %s\n", scanPath)
+		fmt.Printf("Pruning worktrees in %s\n", scanPath)
 	}
 
 	// Start spinner
 	sp := ui.NewSpinner("Scanning worktrees...")
 	sp.Start()
 
-	// List worktrees (include dirty check for tidy decisions)
+	// List worktrees (include dirty check for prune decisions)
 	worktrees, err := git.ListWorktrees(scanPath, true)
 	if err != nil {
 		sp.Stop()
@@ -183,8 +183,8 @@ func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 		fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
 	}
 
-	// Select hooks for tidy (before removing, so we can report errors early)
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandTidy)
+	// Select hooks for prune (before removing, so we can report errors early)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandPrune)
 	if err != nil {
 		return err
 	}
@@ -197,14 +197,14 @@ func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 				continue // Skip hooks for failed removals
 			}
 
-			// Run tidy hooks for this worktree
+			// Run prune hooks for this worktree
 			ctx := hooks.Context{
 				Path:     wt.Path,
 				Branch:   wt.Branch,
 				Repo:     wt.RepoName,
 				Folder:   filepath.Base(wt.MainRepo),
 				MainRepo: wt.MainRepo,
-				Trigger:  string(hooks.CommandTidy),
+				Trigger:  string(hooks.CommandPrune),
 			}
 			hooks.RunForEach(hookMatches, ctx, wt.MainRepo)
 		}
@@ -225,8 +225,8 @@ func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 	return nil
 }
 
-// runTidyTarget handles removal of a single targeted worktree
-func runTidyTarget(cmd *TidyCmd, cfg *config.Config, scanPath string) error {
+// runPruneTarget handles removal of a single targeted worktree
+func runPruneTarget(cmd *PruneCmd, cfg *config.Config, scanPath string) error {
 	// Resolve target
 	target, err := resolve.ByIDOrBranch(cmd.Target, scanPath)
 	if err != nil {
@@ -256,7 +256,7 @@ func runTidyTarget(cmd *TidyCmd, cfg *config.Config, scanPath string) error {
 	}
 
 	// Select hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandTidy)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandPrune)
 	if err != nil {
 		return err
 	}
@@ -273,7 +273,7 @@ func runTidyTarget(cmd *TidyCmd, cfg *config.Config, scanPath string) error {
 		Repo:     wt.RepoName,
 		Folder:   filepath.Base(wt.MainRepo),
 		MainRepo: wt.MainRepo,
-		Trigger:  string(hooks.CommandTidy),
+		Trigger:  string(hooks.CommandPrune),
 	}
 	hooks.RunForEach(hookMatches, ctx, wt.MainRepo)
 

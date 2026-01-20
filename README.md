@@ -43,13 +43,13 @@ Requires `git` in PATH. For GitHub repos: `gh` CLI. For GitLab repos: `glab` CLI
 ## Usage
 
 ```bash
-# Create worktree (creates new branch if needed)
-wt create feature-branch              # in cwd
-wt create feature-branch -d ~/Git     # in specific dir
+# Add worktree for existing branch
+wt add feature-branch                 # in cwd
+wt add feature-branch -d ~/Git        # in specific dir
 
-# Open worktree for existing local branch
-wt open existing-branch               # in cwd
-wt open existing-branch -d ~/Git      # in specific dir
+# Add worktree with new branch
+wt add -b feature-branch              # creates new branch
+wt add -b feature-branch -d ~/Git     # in specific dir
 
 # Open worktree for a GitHub PR or GitLab MR
 wt pr open 123                        # PR/MR from current repo
@@ -58,17 +58,17 @@ wt pr open 123 org/repo               # clone if not found locally
 wt pr open 123 -d ~/Git               # specify base directory
 
 # Hooks (auto-run based on "on" config, or explicit)
-wt create branch                      # runs hooks with on=["create"]
-wt create branch --hook=vscode        # run specific hook
-wt create branch --no-hook            # skip all hooks
+wt add branch                         # runs hooks with on=["add"]
+wt add branch --hook=vscode           # run specific hook
+wt add branch --no-hook               # skip all hooks
 
-# Tidy up merged worktrees
-wt tidy                               # in cwd (uses cached PR info)
-wt tidy -r                            # refresh PR status first, then tidy
-wt tidy -d ~/Git/worktrees            # in specific dir
-wt tidy -n                            # dry run
-wt tidy -c                            # also remove clean (0 commits ahead)
-wt tidy --no-hook                     # skip post-removal hooks
+# Prune merged worktrees
+wt prune                              # in cwd (uses cached PR info)
+wt prune -r                           # refresh PR status first, then prune
+wt prune -d ~/Git/worktrees           # in specific dir
+wt prune -n                           # dry run
+wt prune -c                           # also remove clean (0 commits ahead)
+wt prune --no-hook                    # skip post-removal hooks
 
 # List worktrees
 wt list                               # in cwd (filters to current repo if in one)

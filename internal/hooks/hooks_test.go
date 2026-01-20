@@ -13,7 +13,7 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		Repo:     "myrepo",
 		Folder:   "repo",
 		MainRepo: "/home/user/repo",
-		Trigger:  "create",
+		Trigger:  "add",
 	}
 
 	tests := []struct {
@@ -34,7 +34,7 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		{
 			name:     "all placeholders",
 			command:  "{path} {branch} {repo} {folder} {main-repo} {trigger}",
-			expected: "'/home/user/worktrees/repo-branch' 'feature-branch' 'myrepo' 'repo' '/home/user/repo' 'create'",
+			expected: "'/home/user/worktrees/repo-branch' 'feature-branch' 'myrepo' 'repo' '/home/user/repo' 'add'",
 		},
 		{
 			name:     "no placeholders",
@@ -49,7 +49,7 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		{
 			name:     "trigger placeholder",
 			command:  "echo triggered by {trigger}",
-			expected: "echo triggered by 'create'",
+			expected: "echo triggered by 'add'",
 		},
 	}
 
@@ -112,7 +112,7 @@ func TestSelectHooks(t *testing.T) {
 			"kitty": {
 				Command:     "kitty @ launch --cwd={path}",
 				Description: "Open kitty tab",
-				On:          []string{"create", "open"},
+				On:          []string{"add"},
 			},
 			"vscode": {
 				Command:     "code {path}",
@@ -136,14 +136,8 @@ func TestSelectHooks(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:        "hook with on=create runs for create",
-			cmdType:     CommandCreate,
-			expectCount: 1,
-			expectNames: []string{"kitty"},
-		},
-		{
-			name:        "hook with on=create,open runs for open",
-			cmdType:     CommandOpen,
+			name:        "hook with on=add runs for add",
+			cmdType:     CommandAdd,
 			expectCount: 1,
 			expectNames: []string{"kitty"},
 		},
@@ -156,20 +150,20 @@ func TestSelectHooks(t *testing.T) {
 		{
 			name:        "explicit hook runs regardless of on condition",
 			hookFlag:    "vscode",
-			cmdType:     CommandCreate,
+			cmdType:     CommandAdd,
 			expectCount: 1,
 			expectNames: []string{"vscode"},
 		},
 		{
 			name:        "no-hook skips all",
 			noHook:      true,
-			cmdType:     CommandCreate,
+			cmdType:     CommandAdd,
 			expectCount: 0,
 		},
 		{
 			name:        "unknown hook errors",
 			hookFlag:    "nonexistent",
-			cmdType:     CommandCreate,
+			cmdType:     CommandAdd,
 			expectError: true,
 		},
 	}
@@ -215,7 +209,7 @@ func TestSelectHooks_NoOnCondition(t *testing.T) {
 	}
 
 	// Without explicit --hook, hooks without "on" don't run
-	matches, err := SelectHooks(hooksConfig, "", false, CommandCreate)
+	matches, err := SelectHooks(hooksConfig, "", false, CommandAdd)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -224,7 +218,7 @@ func TestSelectHooks_NoOnCondition(t *testing.T) {
 	}
 
 	// With explicit --hook, it runs
-	matches, err = SelectHooks(hooksConfig, "vscode", false, CommandCreate)
+	matches, err = SelectHooks(hooksConfig, "vscode", false, CommandAdd)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -238,7 +232,7 @@ func TestSelectHooks_EmptyConfig(t *testing.T) {
 		Hooks: map[string]config.Hook{},
 	}
 
-	matches, err := SelectHooks(hooksConfig, "", false, CommandCreate)
+	matches, err := SelectHooks(hooksConfig, "", false, CommandAdd)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -252,7 +246,7 @@ func TestSelectHooks_OnCondition(t *testing.T) {
 		Hooks: map[string]config.Hook{
 			"editor": {
 				Command: "code {path}",
-				On:      []string{"create", "open"},
+				On:      []string{"add"},
 			},
 			"pr-setup": {
 				Command: "npm install && code {path}",
@@ -272,14 +266,8 @@ func TestSelectHooks_OnCondition(t *testing.T) {
 		expectNames []string
 	}{
 		{
-			name:        "on=create,open runs for create",
-			cmdType:     CommandCreate,
-			expectCount: 1,
-			expectNames: []string{"editor"},
-		},
-		{
-			name:        "on=create,open runs for open",
-			cmdType:     CommandOpen,
+			name:        "on=add runs for add",
+			cmdType:     CommandAdd,
 			expectCount: 1,
 			expectNames: []string{"editor"},
 		},
@@ -324,7 +312,7 @@ func TestSelectHooks_OnConditionNoMatch(t *testing.T) {
 	}
 
 	// Hook with on=pr doesn't match "create"
-	matches, err := SelectHooks(hooksConfig, "", false, CommandCreate)
+	matches, err := SelectHooks(hooksConfig, "", false, CommandAdd)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -338,17 +326,17 @@ func TestSelectHooks_MultipleMatches(t *testing.T) {
 		Hooks: map[string]config.Hook{
 			"editor": {
 				Command: "code {path}",
-				On:      []string{"create"},
+				On:      []string{"add"},
 			},
 			"setup": {
 				Command: "npm install",
-				On:      []string{"create"},
+				On:      []string{"add"},
 			},
 		},
 	}
 
-	// Both hooks match "create", should return both
-	matches, err := SelectHooks(hooksConfig, "", false, CommandCreate)
+	// Both hooks match "add", should return both
+	matches, err := SelectHooks(hooksConfig, "", false, CommandAdd)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -368,7 +356,7 @@ func TestSelectHooks_OnAll(t *testing.T) {
 	}
 
 	// "all" should match all command types
-	for _, cmdType := range []CommandType{CommandCreate, CommandOpen, CommandPR, CommandTidy} {
+	for _, cmdType := range []CommandType{CommandAdd, CommandPR, CommandPrune} {
 		matches, err := SelectHooks(hooksConfig, "", false, cmdType)
 		if err != nil {
 			t.Errorf("unexpected error for %s: %v", cmdType, err)
@@ -379,39 +367,39 @@ func TestSelectHooks_OnAll(t *testing.T) {
 	}
 }
 
-func TestSelectHooks_TidyCommand(t *testing.T) {
+func TestSelectHooks_PruneCommand(t *testing.T) {
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
 			"cleanup": {
 				Command:     "echo 'Removed {branch}'",
 				Description: "Log removal",
-				On:          []string{"tidy"},
+				On:          []string{"prune"},
 			},
 			"editor": {
 				Command: "code {path}",
-				On:      []string{"create", "open"},
+				On:      []string{"add"},
 			},
 		},
 	}
 
-	// Tidy hook runs for tidy command
-	matches, err := SelectHooks(hooksConfig, "", false, CommandTidy)
+	// Prune hook runs for prune command
+	matches, err := SelectHooks(hooksConfig, "", false, CommandPrune)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if len(matches) != 1 {
-		t.Errorf("expected 1 hook for tidy, got %d", len(matches))
+		t.Errorf("expected 1 hook for prune, got %d", len(matches))
 	}
 	if len(matches) > 0 && matches[0].Name != "cleanup" {
 		t.Errorf("expected cleanup hook, got %s", matches[0].Name)
 	}
 
-	// Tidy hook does NOT run for create command
-	matches, err = SelectHooks(hooksConfig, "", false, CommandCreate)
+	// Prune hook does NOT run for add command
+	matches, err = SelectHooks(hooksConfig, "", false, CommandAdd)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if len(matches) != 1 || matches[0].Name != "editor" {
-		t.Errorf("expected only editor hook for create, got %v", matches)
+		t.Errorf("expected only editor hook for add, got %v", matches)
 	}
 }

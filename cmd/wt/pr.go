@@ -98,7 +98,7 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
 	}
 
-	// Run post-create hooks
+	// Run post-add hooks
 	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandPR)
 	if err != nil {
 		return err
@@ -209,7 +209,7 @@ func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 		}
 	}
 
-	// Run post-create hooks
+	// Run post-add hooks
 	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandPR)
 	if err != nil {
 		return err
@@ -298,7 +298,7 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {
 		return fmt.Errorf("no PR found for branch %q", branch)
 	}
 	if pr.State == "MERGED" {
-		return fmt.Errorf("PR #%d is already merged (use 'wt tidy' to clean up)", pr.Number)
+		return fmt.Errorf("PR #%d is already merged (use 'wt prune' to clean up)", pr.Number)
 	}
 	if pr.State == "CLOSED" {
 		return fmt.Errorf("PR #%d is closed", pr.Number)
