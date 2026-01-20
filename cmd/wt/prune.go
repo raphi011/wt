@@ -65,10 +65,10 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 		return nil
 	}
 
-	// If in a git repo and not using --all, filter to only prune worktrees from that repo
+	// If in a git repo and not using --global, filter to only prune worktrees from that repo
 	worktrees := allWorktrees
 	var currentRepo string
-	if !cmd.All {
+	if !cmd.Global {
 		currentRepo = git.GetCurrentRepoMainPath()
 		if currentRepo != "" {
 			var filtered []git.Worktree
@@ -84,7 +84,7 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 	if len(worktrees) == 0 {
 		sp.Stop()
 		fmt.Printf("No worktrees found for current repository\n")
-		fmt.Printf("Use --all to prune all %d worktrees\n", len(allWorktrees))
+		fmt.Printf("Use --global to prune all %d worktrees\n", len(allWorktrees))
 		return nil
 	}
 
@@ -195,6 +195,11 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 		return err
 	}
 
+	env, err := hooks.ParseEnv(cmd.Env)
+	if err != nil {
+		return err
+	}
+
 	// Remove worktrees
 	if !cmd.DryRun && len(toRemove) > 0 {
 		for _, wt := range toRemove {
@@ -211,6 +216,7 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 				Folder:   filepath.Base(wt.MainRepo),
 				MainRepo: wt.MainRepo,
 				Trigger:  string(hooks.CommandPrune),
+				Env:      env,
 			}
 			hooks.RunForEach(hookMatches, ctx, wt.MainRepo)
 		}
@@ -296,6 +302,11 @@ func runPruneTargetByID(id int, cmd *PruneCmd, cfg *config.Config, scanPath stri
 		return err
 	}
 
+	env, err := hooks.ParseEnv(cmd.Env)
+	if err != nil {
+		return err
+	}
+
 	// Remove worktree
 	if err := git.RemoveWorktree(*wt, cmd.Force); err != nil {
 		return fmt.Errorf("failed to remove worktree: %w", err)
@@ -309,6 +320,7 @@ func runPruneTargetByID(id int, cmd *PruneCmd, cfg *config.Config, scanPath stri
 		Folder:   filepath.Base(wt.MainRepo),
 		MainRepo: wt.MainRepo,
 		Trigger:  string(hooks.CommandPrune),
+		Env:      env,
 	}
 	hooks.RunForEach(hookMatches, ctx, wt.MainRepo)
 

@@ -69,10 +69,10 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 		sp.Stop()
 	}
 
-	// If in a git repo and not using --all, filter to only show worktrees from that repo
+	// If in a git repo and not using --global, filter to only show worktrees from that repo
 	worktrees := allWorktrees
 	var currentRepo string
-	if !cmd.All {
+	if !cmd.Global {
 		currentRepo = git.GetCurrentRepoMainPath()
 		if currentRepo != "" {
 			var filtered []git.Worktree
@@ -156,13 +156,13 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 		if currentRepo != "" && len(allWorktrees) > 0 {
 			// We're in a repo but no worktrees for this repo (others exist)
 			fmt.Printf("No worktrees found for current repository\n")
-			fmt.Printf("Use --all to show all %d worktrees\n", len(allWorktrees))
+			fmt.Printf("Use --global to show all %d worktrees\n", len(allWorktrees))
 		}
 		return nil
 	}
 
 	if currentRepo != "" && len(allWorktrees) != len(worktrees) {
-		fmt.Printf("Listing worktrees for %s (%d of %d). Use --all to show all\n\n", worktrees[0].RepoName, len(worktrees), len(allWorktrees))
+		fmt.Printf("Listing worktrees for %s (%d of %d). Use --global to show all\n\n", worktrees[0].RepoName, len(worktrees), len(allWorktrees))
 	} else {
 		fmt.Printf("Listing worktrees in %s (%d)\n\n", scanPath, len(worktrees))
 	}

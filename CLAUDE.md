@@ -126,6 +126,8 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 - `-n, --dry-run` - preview without making changes
 - `-f, --force` - force operation (override safety checks)
 - `-c, --include-clean` - include clean worktrees (0 commits, no changes)
+- `-g, --global` - operate on all repos (not just current)
+- `-a, --arg` - set hook variable KEY=VALUE (repeatable)
 - `--json` - output as JSON
 - `--hook` / `--no-hook` - control hook execution (for add, pr open, prune)
 

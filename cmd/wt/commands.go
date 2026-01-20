@@ -16,6 +16,7 @@ type AddCmd struct {
 	Note       string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
 	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook     bool     `name:"no-hook" help:"skip post-add hook" xor:"hook-ctrl"`
+	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (repeatable)"`
 }
 
 func (c *AddCmd) Help() string {
@@ -39,16 +40,17 @@ func (c *AddCmd) Run(ctx *Context) error {
 
 // PruneCmd removes merged and clean worktrees.
 type PruneCmd struct {
-	ID           []int  `short:"i" name:"id" help:"worktree(s) to remove (by ID, repeatable)"`
-	Dir          string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	DryRun       bool   `short:"n" name:"dry-run" negatable:"" help:"preview without removing"`
-	Force        bool   `short:"f" name:"force" help:"force remove even if not merged or has uncommitted changes"`
-	IncludeClean bool   `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
-	All          bool   `short:"a" name:"all" help:"prune all worktrees (not just current repo)"`
-	Refresh      bool   `short:"r" name:"refresh" help:"fetch origin and refresh PR status before pruning"`
-	ResetCache   bool   `name:"reset-cache" help:"clear all cached data (PR info, worktree history) and reset IDs from 1"`
-	Hook         string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
-	NoHook       bool   `name:"no-hook" help:"skip post-removal hooks" xor:"hook-ctrl"`
+	ID           []int    `short:"i" name:"id" help:"worktree(s) to remove (by ID, repeatable)"`
+	Dir          string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	DryRun       bool     `short:"n" name:"dry-run" negatable:"" help:"preview without removing"`
+	Force        bool     `short:"f" name:"force" help:"force remove even if not merged or has uncommitted changes"`
+	IncludeClean bool     `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
+	Global       bool     `short:"g" name:"global" help:"prune all worktrees (not just current repo)"`
+	Refresh      bool     `short:"r" name:"refresh" help:"fetch origin and refresh PR status before pruning"`
+	ResetCache   bool     `name:"reset-cache" help:"clear all cached data (PR info, worktree history) and reset IDs from 1"`
+	Hook         string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook       bool     `name:"no-hook" help:"skip post-removal hooks" xor:"hook-ctrl"`
+	Env          []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (repeatable)"`
 }
 
 func (c *PruneCmd) Help() string {
@@ -56,7 +58,7 @@ func (c *PruneCmd) Help() string {
 working directory is clean. With --id, removes only that specific worktree.
 
 When run inside a git repository, only prunes worktrees for that repo.
-Use --all to prune worktrees from all repos in the directory.
+Use --global to prune worktrees from all repos in the directory.
 
 Uses cached merge status and PR info. Use --refresh to fetch from origin and
 update PR status from GitHub/GitLab.
@@ -71,7 +73,7 @@ shows if the branch was merged.
 Examples:
   wt prune -r                   # Fetch origin + PR status, then prune
   wt prune                      # Remove merged worktrees (uses cached PR info)
-  wt prune --all                # Prune all repos (not just current)
+  wt prune --global              # Prune all repos (not just current)
   wt prune -n                   # Dry-run: preview without removing
   wt prune -d ~/Git/worktrees   # Scan specific directory
   wt prune -c                   # Also remove clean (0-commit) worktrees
@@ -91,7 +93,7 @@ func (c *PruneCmd) Run(ctx *Context) error {
 type ListCmd struct {
 	Dir     string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	JSON    bool   `name:"json" help:"output as JSON"`
-	All     bool   `short:"a" name:"all" help:"show all worktrees (not just current repo)"`
+	Global  bool   `short:"g" name:"global" help:"show all worktrees (not just current repo)"`
 	Sort    string `short:"s" name:"sort" default:"id" enum:"id,repo,branch" help:"sort by: id, repo, branch"`
 	Refresh bool   `short:"r" name:"refresh" help:"fetch origin and refresh PR status before listing"`
 }
@@ -100,13 +102,13 @@ func (c *ListCmd) Help() string {
 	return `List all git worktrees with stable IDs
 
 When run inside a git repository, only shows worktrees for that repo.
-Use --all to show worktrees from all repos in the directory.
+Use --global to show worktrees from all repos in the directory.
 IDs are stable across runs - use them with 'wt exec'.
 
 Examples:
   wt list                      # List worktrees for current repo
   wt list -r                   # Refresh PR status before listing
-  wt list --all                # List all worktrees (all repos)
+  wt list --global              # List all worktrees (all repos)
   wt list -d ~/Git/worktrees   # List from specific directory
   wt list --json               # Output as JSON for scripting
   wt list --sort=repo          # Sort by repository name`
@@ -356,6 +358,7 @@ type HookCmd struct {
 	Hooks []string `arg:"" required:"" placeholder:"HOOK" help:"hook name(s) to run"`
 	ID    []int    `short:"i" name:"id" help:"worktree ID(s) (optional in worktree, repeatable)"`
 	Dir   string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
+	Env   []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (repeatable)"`
 }
 
 func (c *HookCmd) Help() string {
@@ -401,11 +404,12 @@ func (c *MvCmd) Run(ctx *Context) error {
 
 // PrOpenCmd creates a worktree for a PR from an existing local repo.
 type PrOpenCmd struct {
-	Number int    `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
-	Repo   string `arg:"" optional:"" placeholder:"REPO" help:"repository name to find locally"`
-	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	Hook   string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
-	NoHook bool   `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
+	Number int      `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
+	Repo   string   `arg:"" optional:"" placeholder:"REPO" help:"repository name to find locally"`
+	Dir    string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Hook   string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook bool     `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
+	Env    []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (repeatable)"`
 }
 
 func (c *PrOpenCmd) Help() string {
@@ -428,13 +432,14 @@ func (c *PrOpenCmd) Run(ctx *Context) error {
 
 // PrCloneCmd clones a repo and creates a worktree for a PR.
 type PrCloneCmd struct {
-	Number int    `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
-	Repo   string `arg:"" required:"" placeholder:"REPO" help:"repository (org/repo or repo if [clone] org configured)"`
-	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	Forge  string `name:"forge" env:"WT_FORGE" placeholder:"FORGE" help:"forge: github or gitlab (flag > env > clone rules > config)"`
-	Note   string `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook   string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
-	NoHook bool   `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
+	Number int      `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
+	Repo   string   `arg:"" required:"" placeholder:"REPO" help:"repository (org/repo or repo if [clone] org configured)"`
+	Dir    string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Forge  string   `name:"forge" env:"WT_FORGE" placeholder:"FORGE" help:"forge: github or gitlab (flag > env > clone rules > config)"`
+	Note   string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
+	Hook   string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook bool     `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
+	Env    []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (repeatable)"`
 }
 
 func (c *PrCloneCmd) Help() string {
@@ -459,12 +464,13 @@ func (c *PrCloneCmd) Run(ctx *Context) error {
 
 // PrMergeCmd merges the PR for the current branch.
 type PrMergeCmd struct {
-	ID       int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Dir      string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
-	Strategy string `short:"s" name:"strategy" env:"WT_MERGE_STRATEGY" placeholder:"STRATEGY" help:"merge strategy: squash, rebase, or merge"`
-	Keep     bool   `short:"k" name:"keep" help:"keep worktree and branch after merge"`
-	Hook     string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
-	NoHook   bool   `name:"no-hook" help:"skip post-merge hook" xor:"hook-ctrl"`
+	ID       int      `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
+	Dir      string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
+	Strategy string   `short:"s" name:"strategy" env:"WT_MERGE_STRATEGY" placeholder:"STRATEGY" help:"merge strategy: squash, rebase, or merge"`
+	Keep     bool     `short:"k" name:"keep" help:"keep worktree and branch after merge"`
+	Hook     string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook   bool     `name:"no-hook" help:"skip post-merge hook" xor:"hook-ctrl"`
+	Env      []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (repeatable)"`
 }
 
 func (c *PrMergeCmd) Help() string {

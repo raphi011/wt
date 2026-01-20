@@ -72,7 +72,7 @@ _wt_completions() {
                 local branches=$(git branch --all --format='%(refname:short)' 2>/dev/null | sed 's|origin/||' | sort -u)
                 COMPREPLY=($(compgen -W "$branches" -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "-b --new-branch -r --repository -d --dir --note --hook --no-hook" -- "$cur"))
+                COMPREPLY=($(compgen -W "-b --new-branch -r --repository -d --dir --note --hook --no-hook -a --arg" -- "$cur"))
             fi
             ;;
         prune)
@@ -91,7 +91,7 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-i --id -d --dir -n --dry-run -f --force -c --include-clean -a --all -r --refresh --reset-cache --hook --no-hook" -- "$cur"))
+            COMPREPLY=($(compgen -W "-i --id -d --dir -n --dry-run -f --force -c --include-clean -g --global -r --refresh --reset-cache --hook --no-hook -a --arg" -- "$cur"))
             ;;
         list)
             case "$prev" in
@@ -104,7 +104,7 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-d --dir --json -a --all -s --sort -r --refresh" -- "$cur"))
+            COMPREPLY=($(compgen -W "-d --dir --json -g --global -s --sort -r --refresh" -- "$cur"))
             ;;
         show)
             case "$prev" in
@@ -176,7 +176,7 @@ _wt_completions() {
                         return
                         ;;
                 esac
-                COMPREPLY=($(compgen -W "-d --dir --hook --no-hook" -- "$cur"))
+                COMPREPLY=($(compgen -W "-d --dir --hook --no-hook -a --arg" -- "$cur"))
             elif [[ "${words[2]}" == "clone" ]]; then
                 case "$prev" in
                     -d|--dir)
@@ -191,7 +191,7 @@ _wt_completions() {
                         return
                         ;;
                 esac
-                COMPREPLY=($(compgen -W "-d --dir --forge --note --hook --no-hook" -- "$cur"))
+                COMPREPLY=($(compgen -W "-d --dir --forge --note --hook --no-hook -a --arg" -- "$cur"))
             elif [[ "${words[2]}" == "merge" ]]; then
                 case "$prev" in
                     -d|--dir)
@@ -212,7 +212,7 @@ _wt_completions() {
                         return
                         ;;
                 esac
-                COMPREPLY=($(compgen -W "-i --id -d --dir -s --strategy -k --keep --hook --no-hook" -- "$cur"))
+                COMPREPLY=($(compgen -W "-i --id -d --dir -s --strategy -k --keep --hook --no-hook -a --arg" -- "$cur"))
             fi
             ;;
         note)
@@ -254,7 +254,7 @@ _wt_completions() {
             esac
             # Complete hook names for all positional args (supports multiple hooks)
             local hooks=$(wt config hooks 2>/dev/null | awk '{print $1}')
-            COMPREPLY=($(compgen -W "$hooks -i --id -d --dir" -- "$cur"))
+            COMPREPLY=($(compgen -W "$hooks -i --id -d --dir -a --arg" -- "$cur"))
             ;;
         config)
             if [[ $cword -eq 2 ]]; then
@@ -327,7 +327,9 @@ _wt() {
                         '--dir[target directory]:directory:_files -/' \
                         '--note[set note on branch]:note:' \
                         '--hook[run named hook]:hook:' \
-                        '--no-hook[skip post-add hook]'
+                        '--no-hook[skip post-add hook]' \
+                        '*-a[set hook variable KEY=VALUE]:arg:' \
+                        '*--arg[set hook variable KEY=VALUE]:arg:'
                     ;;
                 prune)
                     _arguments \
@@ -341,21 +343,23 @@ _wt() {
                         '--force[force remove even if not merged/dirty]' \
                         '-c[also remove clean worktrees]' \
                         '--include-clean[also remove clean worktrees]' \
-                        '-a[prune all worktrees, not just current repo]' \
-                        '--all[prune all worktrees, not just current repo]' \
+                        '-g[prune all worktrees, not just current repo]' \
+                        '--global[prune all worktrees, not just current repo]' \
                         '-r[fetch origin and refresh PR status]' \
                         '--refresh[fetch origin and refresh PR status]' \
                         '--reset-cache[clear cache and reset IDs from 1]' \
                         '--hook[run named hook]:hook:' \
-                        '--no-hook[skip post-removal hooks]'
+                        '--no-hook[skip post-removal hooks]' \
+                        '*-a[set hook variable KEY=VALUE]:arg:' \
+                        '*--arg[set hook variable KEY=VALUE]:arg:'
                     ;;
                 list)
                     _arguments \
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/' \
                         '--json[output as JSON]' \
-                        '-a[show all worktrees]' \
-                        '--all[show all worktrees]' \
+                        '-g[show all worktrees]' \
+                        '--global[show all worktrees]' \
                         '-s[sort by]:field:(id repo branch)' \
                         '--sort[sort by]:field:(id repo branch)' \
                         '-r[fetch origin and refresh PR status]' \
@@ -419,7 +423,9 @@ _wt() {
                                         '-d[target directory]:directory:_files -/' \
                                         '--dir[target directory]:directory:_files -/' \
                                         '--hook[run named hook]:hook:' \
-                                        '--no-hook[skip post-add hook]'
+                                        '--no-hook[skip post-add hook]' \
+                                        '*-a[set hook variable KEY=VALUE]:arg:' \
+                                        '*--arg[set hook variable KEY=VALUE]:arg:'
                                     ;;
                                 clone)
                                     _arguments \
@@ -430,7 +436,9 @@ _wt() {
                                         '--forge[forge type]:forge:(github gitlab)' \
                                         '--note[set note on branch]:note:' \
                                         '--hook[run named hook]:hook:' \
-                                        '--no-hook[skip post-add hook]'
+                                        '--no-hook[skip post-add hook]' \
+                                        '*-a[set hook variable KEY=VALUE]:arg:' \
+                                        '*--arg[set hook variable KEY=VALUE]:arg:'
                                     ;;
                                 merge)
                                     _arguments \
@@ -443,7 +451,9 @@ _wt() {
                                         '-k[keep worktree and branch after merge]' \
                                         '--keep[keep worktree and branch after merge]' \
                                         '--hook[run named hook]:hook:' \
-                                        '--no-hook[skip post-merge hook]'
+                                        '--no-hook[skip post-merge hook]' \
+                                        '*-a[set hook variable KEY=VALUE]:arg:' \
+                                        '*--arg[set hook variable KEY=VALUE]:arg:'
                                     ;;
                             esac
                             ;;
@@ -494,7 +504,9 @@ _wt() {
                         '-i[worktree ID]:id:__wt_worktree_ids' \
                         '--id[worktree ID]:id:__wt_worktree_ids' \
                         '-d[worktree directory]:directory:_files -/' \
-                        '--dir[worktree directory]:directory:_files -/'
+                        '--dir[worktree directory]:directory:_files -/' \
+                        '*-a[set hook variable KEY=VALUE]:arg:' \
+                        '*--arg[set hook variable KEY=VALUE]:arg:'
                     ;;
                 config)
                     _arguments -C \
@@ -614,6 +626,7 @@ complete -c wt -n "__fish_seen_subcommand_from add" -s d -l dir -r -a "(__fish_c
 complete -c wt -n "__fish_seen_subcommand_from add" -l note -r -d "Set note on branch"
 complete -c wt -n "__fish_seen_subcommand_from add" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from add" -l no-hook -d "Skip post-add hook"
+complete -c wt -n "__fish_seen_subcommand_from add" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 
 # prune: --id flag, then other flags
 complete -c wt -n "__fish_seen_subcommand_from prune" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID to remove"
@@ -621,16 +634,17 @@ complete -c wt -n "__fish_seen_subcommand_from prune" -s d -l dir -r -a "(__fish
 complete -c wt -n "__fish_seen_subcommand_from prune" -s n -l dry-run -d "Preview without removing"
 complete -c wt -n "__fish_seen_subcommand_from prune" -s f -l force -d "Force remove even if not merged/dirty"
 complete -c wt -n "__fish_seen_subcommand_from prune" -s c -l include-clean -d "Also remove clean worktrees"
-complete -c wt -n "__fish_seen_subcommand_from prune" -s a -l all -d "Prune all worktrees (not just current repo)"
+complete -c wt -n "__fish_seen_subcommand_from prune" -s g -l global -d "Prune all worktrees (not just current repo)"
 complete -c wt -n "__fish_seen_subcommand_from prune" -s r -l refresh -d "Fetch origin and refresh PR status"
 complete -c wt -n "__fish_seen_subcommand_from prune" -l reset-cache -d "Clear cache and reset IDs from 1"
 complete -c wt -n "__fish_seen_subcommand_from prune" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from prune" -l no-hook -d "Skip post-removal hooks"
+complete -c wt -n "__fish_seen_subcommand_from prune" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 
 # list: flags only (no positional args)
 complete -c wt -n "__fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
-complete -c wt -n "__fish_seen_subcommand_from list" -s a -l all -d "Show all worktrees (not just current repo)"
+complete -c wt -n "__fish_seen_subcommand_from list" -s g -l global -d "Show all worktrees (not just current repo)"
 complete -c wt -n "__fish_seen_subcommand_from list" -s s -l sort -r -a "id repo branch" -d "Sort by field"
 complete -c wt -n "__fish_seen_subcommand_from list" -s r -l refresh -d "Fetch origin and refresh PR status"
 
@@ -670,6 +684,7 @@ complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_
 complete -c wt -n "__fish_seen_subcommand_from hook" -a "(__wt_hook_names)" -d "Hook name"
 complete -c wt -n "__fish_seen_subcommand_from hook" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from hook" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for target lookup"
+complete -c wt -n "__fish_seen_subcommand_from hook" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 
 # pr: subcommands
 complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone merge" -a "open" -d "Checkout PR from existing local repo"
@@ -682,12 +697,14 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_fr
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -l no-hook -d "Skip post-add hook"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 # pr clone: PR number (first positional), then org/repo (second positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l forge -r -a "github gitlab" -d "Forge type"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l note -r -d "Set note on branch"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l no-hook -d "Skip post-add hook"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 # pr merge: --id flag (optional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory"
@@ -695,6 +712,7 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_fr
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s k -l keep -d "Keep worktree and branch after merge"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -l no-hook -d "Skip post-merge hook"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 
 # Helper function to list repos in default_path
 function __wt_list_repos
