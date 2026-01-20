@@ -217,13 +217,9 @@ _wt_completions() {
                     return
                     ;;
             esac
-            if [[ $cword -eq 2 ]]; then
-                # Complete hook names (first positional)
-                local hooks=$(wt config hooks 2>/dev/null | awk '{print $1}')
-                COMPREPLY=($(compgen -W "$hooks" -- "$cur"))
-            else
-                COMPREPLY=($(compgen -W "-i --id -d --dir" -- "$cur"))
-            fi
+            # Complete hook names for all positional args (supports multiple hooks)
+            local hooks=$(wt config hooks 2>/dev/null | awk '{print $1}')
+            COMPREPLY=($(compgen -W "$hooks -i --id -d --dir" -- "$cur"))
             ;;
         config)
             if [[ $cword -eq 2 ]]; then
@@ -593,8 +589,8 @@ complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcomm
 complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for ID lookup"
 
-# hook: hook name (required first), then --id (optional), then flags
-complete -c wt -n "__fish_seen_subcommand_from hook; and not __fish_seen_argument" -a "(__wt_hook_names)" -d "Hook name"
+# hook: multiple hook names supported, then --id (optional), then flags
+complete -c wt -n "__fish_seen_subcommand_from hook" -a "(__wt_hook_names)" -d "Hook name"
 complete -c wt -n "__fish_seen_subcommand_from hook" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from hook" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for target lookup"
 

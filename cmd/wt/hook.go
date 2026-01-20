@@ -12,30 +12,38 @@ import (
 )
 
 func runHookRun(cmd *HookCmd, cfg *config.Config) error {
-	hookName := cmd.Hook
-
-	// Validate hook exists
-	hook, exists := cfg.Hooks.Hooks[hookName]
-	if !exists {
-		// List available hooks
+	// Validate all hooks exist upfront
+	var missing []string
+	for _, name := range cmd.Hooks {
+		if _, exists := cfg.Hooks.Hooks[name]; !exists {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
 		var available []string
 		for name := range cfg.Hooks.Hooks {
 			available = append(available, name)
 		}
 		if len(available) == 0 {
-			return fmt.Errorf("unknown hook %q (no hooks configured)", hookName)
+			return fmt.Errorf("unknown hook(s) %v (no hooks configured)", missing)
 		}
-		return fmt.Errorf("unknown hook %q (available: %v)", hookName, available)
+		return fmt.Errorf("unknown hook(s) %v (available: %v)", missing, available)
 	}
 
-	// Resolve target
+	// Resolve target once
 	ctx, err := resolveHookTarget(cmd.ID, cmd.Dir)
 	if err != nil {
 		return err
 	}
 
-	// Run the hook
-	return hooks.RunSingle(hookName, &hook, ctx)
+	// Run hooks sequentially
+	for _, name := range cmd.Hooks {
+		hook := cfg.Hooks.Hooks[name]
+		if err := hooks.RunSingle(name, &hook, ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // resolveHookTarget resolves the worktree context for hook execution.

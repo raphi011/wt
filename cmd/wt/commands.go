@@ -324,11 +324,11 @@ Examples:
   wt config hooks          # List available hooks`
 }
 
-// HookCmd runs a hook by name for a worktree.
+// HookCmd runs one or more hooks by name for a worktree.
 type HookCmd struct {
-	Hook string `arg:"" required:"" placeholder:"HOOK" help:"hook name to run"`
-	ID   int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Dir  string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
+	Hooks []string `arg:"" required:"" placeholder:"HOOK" help:"hook name(s) to run"`
+	ID    int      `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
+	Dir   string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
 }
 
 func (c *HookCmd) Help() string {
@@ -336,9 +336,10 @@ func (c *HookCmd) Help() string {
 When run outside, specify a worktree ID.
 
 Examples:
-  wt hook kitty              # Inside worktree: run for current
+  wt hook kitty              # Single hook
+  wt hook kitty idea         # Multiple hooks
   wt hook kitty -i 1         # By worktree ID
-  wt hook kitty -i 1 -d ~/Git   # Specify directory for lookup`
+  wt hook kitty idea -i 1 -d ~/Git   # Multiple hooks with ID`
 }
 
 func (c *HookCmd) Run(ctx *Context) error {
