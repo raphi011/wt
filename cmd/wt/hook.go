@@ -31,7 +31,7 @@ func runHookRun(cmd *HookCmd, cfg *config.Config) error {
 	}
 
 	// Parse env variables
-	env, err := hooks.ParseEnv(cmd.Env)
+	env, err := hooks.ParseEnvWithStdin(cmd.Env)
 	if err != nil {
 		return err
 	}

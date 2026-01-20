@@ -99,7 +99,7 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
 		return err
 	}
 
-	env, err := hooks.ParseEnv(cmd.Env)
+	env, err := hooks.ParseEnvWithStdin(cmd.Env)
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 		return err
 	}
 
-	env, err := hooks.ParseEnv(cmd.Env)
+	env, err := hooks.ParseEnvWithStdin(cmd.Env)
 	if err != nil {
 		return err
 	}

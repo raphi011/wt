@@ -16,7 +16,7 @@ type AddCmd struct {
 	Note       string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
 	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook     bool     `name:"no-hook" help:"skip post-add hook" xor:"hook-ctrl"`
-	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (repeatable)"`
+	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
 func (c *AddCmd) Help() string {
@@ -50,7 +50,7 @@ type PruneCmd struct {
 	ResetCache   bool     `name:"reset-cache" help:"clear all cached data (PR info, worktree history) and reset IDs from 1"`
 	Hook         string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook       bool     `name:"no-hook" help:"skip post-removal hooks" xor:"hook-ctrl"`
-	Env          []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (repeatable)"`
+	Env          []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
 func (c *PruneCmd) Help() string {
@@ -358,7 +358,7 @@ type HookCmd struct {
 	Hooks []string `arg:"" required:"" placeholder:"HOOK" help:"hook name(s) to run"`
 	ID    []int    `short:"i" name:"id" help:"worktree ID(s) (optional in worktree, repeatable)"`
 	Dir   string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
-	Env   []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (repeatable)"`
+	Env   []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
 func (c *HookCmd) Help() string {
@@ -409,7 +409,7 @@ type PrOpenCmd struct {
 	Dir    string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Hook   string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook bool     `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
-	Env    []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (repeatable)"`
+	Env    []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
 func (c *PrOpenCmd) Help() string {
@@ -439,7 +439,7 @@ type PrCloneCmd struct {
 	Note   string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
 	Hook   string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook bool     `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
-	Env    []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (repeatable)"`
+	Env    []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
 func (c *PrCloneCmd) Help() string {
@@ -470,7 +470,7 @@ type PrMergeCmd struct {
 	Keep     bool     `short:"k" name:"keep" help:"keep worktree and branch after merge"`
 	Hook     string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook   bool     `name:"no-hook" help:"skip post-merge hook" xor:"hook-ctrl"`
-	Env      []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (repeatable)"`
+	Env      []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
 func (c *PrMergeCmd) Help() string {

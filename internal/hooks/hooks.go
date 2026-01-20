@@ -2,11 +2,13 @@ package hooks
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 
+	"github.com/mattn/go-isatty"
 	"github.com/raphi011/wt/internal/config"
 )
 
@@ -186,6 +188,61 @@ func ParseEnv(envSlice []string) (map[string]string, error) {
 		}
 		result[key] = value
 	}
+	return result, nil
+}
+
+// readStdinIfPiped reads all content from stdin if it's piped (not a TTY).
+// Returns empty string and nil if stdin is a TTY (interactive).
+func readStdinIfPiped() (string, error) {
+	if isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd()) {
+		return "", nil
+	}
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return "", fmt.Errorf("failed to read stdin: %w", err)
+	}
+	return string(data), nil
+}
+
+// ParseEnvWithStdin parses a slice of "key=value" strings into a map.
+// If any value is "-", reads stdin content and assigns it to all such keys.
+// Returns an error if stdin is requested but not piped or empty.
+func ParseEnvWithStdin(envSlice []string) (map[string]string, error) {
+	result := make(map[string]string)
+	var stdinKeys []string
+
+	// First pass: parse all entries and identify stdin keys
+	for _, e := range envSlice {
+		idx := strings.Index(e, "=")
+		if idx == -1 {
+			return nil, fmt.Errorf("invalid env format %q: expected KEY=VALUE", e)
+		}
+		key := e[:idx]
+		value := e[idx+1:]
+		if key == "" {
+			return nil, fmt.Errorf("invalid env format %q: key cannot be empty", e)
+		}
+		if value == "-" {
+			stdinKeys = append(stdinKeys, key)
+		} else {
+			result[key] = value
+		}
+	}
+
+	// If any keys need stdin, read it once
+	if len(stdinKeys) > 0 {
+		content, err := readStdinIfPiped()
+		if err != nil {
+			return nil, err
+		}
+		if content == "" {
+			return nil, fmt.Errorf("stdin not piped: KEY=- requires piped input")
+		}
+		for _, key := range stdinKeys {
+			result[key] = content
+		}
+	}
+
 	return result, nil
 }
 

@@ -195,7 +195,7 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 		return err
 	}
 
-	env, err := hooks.ParseEnv(cmd.Env)
+	env, err := hooks.ParseEnvWithStdin(cmd.Env)
 	if err != nil {
 		return err
 	}
@@ -302,7 +302,7 @@ func runPruneTargetByID(id int, cmd *PruneCmd, cfg *config.Config, scanPath stri
 		return err
 	}
 
-	env, err := hooks.ParseEnv(cmd.Env)
+	env, err := hooks.ParseEnvWithStdin(cmd.Env)
 	if err != nil {
 		return err
 	}

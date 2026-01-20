@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
@@ -465,6 +466,101 @@ func TestParseEnv(t *testing.T) {
 			if tt.expectError {
 				if err == nil {
 					t.Error("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if len(result) != len(tt.expected) {
+				t.Errorf("expected %d entries, got %d", len(tt.expected), len(result))
+				return
+			}
+
+			for k, v := range tt.expected {
+				if result[k] != v {
+					t.Errorf("expected %q=%q, got %q=%q", k, v, k, result[k])
+				}
+			}
+		})
+	}
+}
+
+func TestParseEnvWithStdin(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       []string
+		expected    map[string]string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:     "empty slice",
+			input:    []string{},
+			expected: map[string]string{},
+		},
+		{
+			name:  "regular key=value without stdin",
+			input: []string{"prompt=hello world"},
+			expected: map[string]string{
+				"prompt": "hello world",
+			},
+		},
+		{
+			name:  "multiple regular key=value",
+			input: []string{"mode=ask", "verbose=true"},
+			expected: map[string]string{
+				"mode":    "ask",
+				"verbose": "true",
+			},
+		},
+		{
+			name:  "value with equals sign",
+			input: []string{"expr=1+1=2"},
+			expected: map[string]string{
+				"expr": "1+1=2",
+			},
+		},
+		{
+			name:        "missing equals sign",
+			input:       []string{"invalid"},
+			expectError: true,
+			errorMsg:    "invalid env format",
+		},
+		{
+			name:        "empty key",
+			input:       []string{"=value"},
+			expectError: true,
+			errorMsg:    "key cannot be empty",
+		},
+		{
+			name:        "stdin requested but not piped",
+			input:       []string{"content=-"},
+			expectError: true,
+			errorMsg:    "stdin not piped",
+		},
+		{
+			name:        "mixed regular and stdin (stdin not available)",
+			input:       []string{"mode=ask", "content=-"},
+			expectError: true,
+			errorMsg:    "stdin not piped",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ParseEnvWithStdin(tt.input)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+					return
+				}
+				if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("expected error containing %q, got %q", tt.errorMsg, err.Error())
 				}
 				return
 			}

@@ -104,7 +104,7 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 		return err
 	}
 
-	env, err := hooks.ParseEnv(cmd.Env)
+	env, err := hooks.ParseEnvWithStdin(cmd.Env)
 	if err != nil {
 		return err
 	}
@@ -221,7 +221,7 @@ func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 		return err
 	}
 
-	env, err := hooks.ParseEnv(cmd.Env)
+	env, err := hooks.ParseEnvWithStdin(cmd.Env)
 	if err != nil {
 		return err
 	}
@@ -367,7 +367,7 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {
 		return err
 	}
 
-	env, err := hooks.ParseEnv(cmd.Env)
+	env, err := hooks.ParseEnvWithStdin(cmd.Env)
 	if err != nil {
 		return err
 	}
