@@ -17,9 +17,7 @@ type CreateCmd struct {
 }
 
 func (c *CreateCmd) Help() string {
-	return `Create a new git worktree at <dir>/<repo>-<branch>
-
-Creates a new branch and worktree in one step. If the branch already exists
+	return `Creates a new branch and worktree at <dir>/<repo>-<branch>. If the branch already exists
 remotely, it will be checked out instead.
 
 Examples:
@@ -43,9 +41,7 @@ type OpenCmd struct {
 }
 
 func (c *OpenCmd) Help() string {
-	return `Open a worktree for an existing local branch
-
-Inside a git repo: opens a worktree for the specified branch.
+	return `Inside a git repo: opens a worktree for the specified branch.
 Outside a git repo: resolves ID or branch name from worktree cache.
 
 Examples:
@@ -67,6 +63,7 @@ type TidyCmd struct {
 	DryRun       bool   `short:"n" name:"dry-run" negatable:"" help:"preview without removing"`
 	Force        bool   `short:"f" name:"force" help:"force remove even if not merged or has uncommitted changes"`
 	IncludeClean bool   `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
+	ResetCache   bool   `name:"reset-cache" help:"clear all cached data (PR info, worktree history) and reset IDs from 1"`
 	Hook         string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook       bool   `name:"no-hook" help:"skip post-removal hooks" xor:"hook-ctrl"`
 }
@@ -94,7 +91,8 @@ Examples:
   wt tidy 1                    # Remove specific worktree by ID
   wt tidy feature-x -f         # Force remove even if not merged/dirty
   wt tidy --no-hook            # Skip post-removal hooks
-  wt tidy --hook=cleanup       # Run 'cleanup' hook instead of default`
+  wt tidy --hook=cleanup       # Run 'cleanup' hook instead of default
+  wt tidy --reset-cache        # Clear PR cache and reset IDs from 1`
 }
 
 func (c *TidyCmd) Run(ctx *Context) error {

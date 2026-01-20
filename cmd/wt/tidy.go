@@ -32,6 +32,9 @@ func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 
 	// If a target is specified, handle single worktree removal
 	if cmd.Target != "" {
+		if cmd.ResetCache {
+			return fmt.Errorf("--reset-cache cannot be used with a target")
+		}
 		return runTidyTarget(cmd, cfg, scanPath)
 	}
 
@@ -85,6 +88,12 @@ func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 	wtCache, err := forge.LoadCache(scanPath)
 	if err != nil {
 		return fmt.Errorf("failed to load cache: %w", err)
+	}
+
+	// Reset cache if requested (before sync so worktrees get fresh IDs)
+	if cmd.ResetCache {
+		wtCache.Reset()
+		fmt.Println("Cache reset: PR info cleared, IDs will be reassigned from 1")
 	}
 
 	// Convert worktrees to WorktreeInfo for cache sync

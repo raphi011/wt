@@ -258,6 +258,14 @@ func (c *Cache) SyncWorktrees(worktrees []WorktreeInfo) map[string]int {
 	return pathToID
 }
 
+// Reset clears all cached data and resets NextID to 1.
+// Active worktrees will get new IDs on next sync.
+func (c *Cache) Reset() {
+	c.PRs = make(PRCache)
+	c.Worktrees = make(map[string]*WorktreeIDEntry)
+	c.NextID = 1
+}
+
 // LoadPRCache loads the PR cache from disk (legacy compatibility)
 func LoadPRCache(scanDir string) (PRCache, error) {
 	cache, err := LoadCache(scanDir)

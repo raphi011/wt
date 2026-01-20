@@ -89,7 +89,7 @@ _wt_completions() {
                 local branches=$(wt list 2>/dev/null | awk '{print $3}')
                 COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "-d --dir -n --dry-run -f --force -c --include-clean --hook --no-hook" -- "$cur"))
+                COMPREPLY=($(compgen -W "-d --dir -n --dry-run -f --force -c --include-clean --reset-cache --hook --no-hook" -- "$cur"))
             fi
             ;;
         list)
@@ -354,6 +354,7 @@ _wt() {
                         '--force[force remove even if not merged/dirty]' \
                         '-c[also remove clean worktrees]' \
                         '--include-clean[also remove clean worktrees]' \
+                        '--reset-cache[clear cache and reset IDs from 1]' \
                         '--hook[run named hook]:hook:' \
                         '--no-hook[skip post-removal hooks]'
                     ;;
@@ -611,6 +612,7 @@ complete -c wt -n "__fish_seen_subcommand_from tidy" -s d -l dir -r -a "(__fish_
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s n -l dry-run -d "Preview without removing"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s f -l force -d "Force remove even if not merged/dirty"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s c -l include-clean -d "Also remove clean worktrees"
+complete -c wt -n "__fish_seen_subcommand_from tidy" -l reset-cache -d "Clear cache and reset IDs from 1"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -l no-hook -d "Skip post-removal hooks"
 
