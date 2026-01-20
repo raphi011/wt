@@ -33,7 +33,7 @@ _wt_completions() {
         cword=$COMP_CWORD
     fi
 
-    local commands="create open tidy list exec mv note hook pr config completion"
+    local commands="create open tidy list exec cd mv note hook pr config completion"
 
     # Handle subcommand-specific completions
     case "${words[1]}" in
@@ -115,6 +115,22 @@ _wt_completions() {
                 COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
             else
                 COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
+            fi
+            ;;
+        cd)
+            case "$prev" in
+                -d|--dir)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    return
+                    ;;
+            esac
+            if [[ $cword -eq 2 ]]; then
+                # Complete worktree IDs and branch names
+                local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                local branches=$(wt list 2>/dev/null | awk '{print $3}')
+                COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -W "-d --dir -p --project" -- "$cur"))
             fi
             ;;
         mv)
@@ -297,6 +313,7 @@ _wt() {
                 'tidy:Tidy up merged worktrees'
                 'list:List worktrees with stable IDs'
                 'exec:Run command in worktree by ID'
+                'cd:Print worktree path for shell scripting'
                 'mv:Move worktrees to another directory'
                 'note:Manage branch notes'
                 'hook:Manage hooks'
@@ -353,6 +370,14 @@ _wt() {
                         '1:worktree ID or branch:__wt_worktree_targets' \
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/'
+                    ;;
+                cd)
+                    _arguments \
+                        '1:worktree ID or branch:__wt_worktree_targets' \
+                        '-d[directory to scan]:directory:_files -/' \
+                        '--dir[directory to scan]:directory:_files -/' \
+                        '-p[print main repository path]' \
+                        '--project[print main repository path]'
                     ;;
                 mv)
                     _arguments \
@@ -553,17 +578,18 @@ const fishCompletions = `# wt completions - supports fish autosuggestions and ta
 complete -c wt -f
 
 # Subcommands (shown in completions and autosuggestions)
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "create" -d "Create new worktree"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "open" -d "Open worktree for existing branch"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "tidy" -d "Tidy up merged worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "list" -d "List worktrees with stable IDs"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "exec" -d "Run command in worktree by ID"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "mv" -d "Move worktrees to another directory"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "note" -d "Manage branch notes"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "hook" -d "Manage hooks"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "pr" -d "Work with PRs"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "config" -d "Manage configuration"
-complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec mv note hook pr config completion" -a "completion" -d "Generate completion script"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec cd mv note hook pr config completion" -a "create" -d "Create new worktree"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec cd mv note hook pr config completion" -a "open" -d "Open worktree for existing branch"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec cd mv note hook pr config completion" -a "tidy" -d "Tidy up merged worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec cd mv note hook pr config completion" -a "list" -d "List worktrees with stable IDs"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec cd mv note hook pr config completion" -a "exec" -d "Run command in worktree by ID"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec cd mv note hook pr config completion" -a "cd" -d "Print worktree path"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec cd mv note hook pr config completion" -a "mv" -d "Move worktrees to another directory"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec cd mv note hook pr config completion" -a "note" -d "Manage branch notes"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec cd mv note hook pr config completion" -a "hook" -d "Manage hooks"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec cd mv note hook pr config completion" -a "pr" -d "Work with PRs"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec cd mv note hook pr config completion" -a "config" -d "Manage configuration"
+complete -c wt -n "not __fish_seen_subcommand_from create open tidy list exec cd mv note hook pr config completion" -a "completion" -d "Generate completion script"
 
 # create: branch name (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from create; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
@@ -596,6 +622,11 @@ complete -c wt -n "__fish_seen_subcommand_from list" -s a -l all -d "Show all wo
 # exec: worktree ID or branch (positional), then -- command
 complete -c wt -n "__fish_seen_subcommand_from exec; and not __fish_seen_argument" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
 complete -c wt -n "__fish_seen_subcommand_from exec" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
+
+# cd: worktree ID or branch (positional), then flags
+complete -c wt -n "__fish_seen_subcommand_from cd; and not __fish_seen_argument" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
+complete -c wt -n "__fish_seen_subcommand_from cd" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
+complete -c wt -n "__fish_seen_subcommand_from cd" -s p -l project -d "Print main repository path"
 
 # mv: flags only (no positional args)
 complete -c wt -n "__fish_seen_subcommand_from mv" -s d -l dir -r -a "(__fish_complete_directories)" -d "Destination directory"

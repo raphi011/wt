@@ -148,6 +148,26 @@ func (c *ExecCmd) Run(ctx *Context) error {
 	return runExec(c)
 }
 
+// CdCmd prints the path of a worktree for shell scripting.
+type CdCmd struct {
+	Target  string `arg:"" required:"" placeholder:"ID|BRANCH" help:"worktree ID or branch name"`
+	Dir     string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"directory to scan for worktrees"`
+	Project bool   `short:"p" name:"project" help:"print main repository path instead of worktree path"`
+}
+
+func (c *CdCmd) Help() string {
+	return `Print the path of a worktree for shell scripting.
+
+Examples:
+  cd $(wt cd feature-branch)
+  cd $(wt cd 3)
+  cd $(wt cd -p feature-branch)  # cd to main repo`
+}
+
+func (c *CdCmd) Run(ctx *Context) error {
+	return runCd(c)
+}
+
 // NoteSetCmd sets a note on a branch.
 type NoteSetCmd struct {
 	Text   string `arg:"" required:"" placeholder:"TEXT" help:"note text"`
@@ -521,6 +541,7 @@ type CLI struct {
 
 	// Utility commands
 	Exec ExecCmd `cmd:"" help:"Run command in worktree by ID" group:"util"`
+	Cd   CdCmd   `cmd:"" help:"Print worktree path" group:"util"`
 	Mv   MvCmd   `cmd:"" help:"Move worktrees to another directory" group:"util"`
 	Note NoteCmd `cmd:"" help:"Manage branch notes" group:"util"`
 	Hook HookCmd `cmd:"" help:"Manage hooks" group:"util"`
