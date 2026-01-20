@@ -49,7 +49,7 @@ func (g *GitHub) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 		"-R", repoURL,
 		"--head", branch,
 		"--state", "all",
-		"--json", "number,state,url,author,comments,reviewDecision",
+		"--json", "number,state,isDraft,url,author,comments,reviewDecision",
 		"--limit", "1")
 
 	var stderr bytes.Buffer
@@ -64,10 +64,11 @@ func (g *GitHub) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 	}
 
 	var prs []struct {
-		Number int    `json:"number"`
-		State  string `json:"state"`
-		URL    string `json:"url"`
-		Author struct {
+		Number  int    `json:"number"`
+		State   string `json:"state"`
+		IsDraft bool   `json:"isDraft"`
+		URL     string `json:"url"`
+		Author  struct {
 			Login string `json:"login"`
 		} `json:"author"`
 		Comments       []any  `json:"comments"` // just need the count
@@ -89,6 +90,7 @@ func (g *GitHub) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 	return &PRInfo{
 		Number:       pr.Number,
 		State:        pr.State, // GitHub already uses OPEN, MERGED, CLOSED
+		IsDraft:      pr.IsDraft,
 		URL:          pr.URL,
 		Author:       pr.Author.Login,
 		CommentCount: len(pr.Comments),
@@ -198,6 +200,8 @@ func (g *GitHub) FormatState(state string) string {
 		return "merged"
 	case "OPEN":
 		return "open"
+	case "DRAFT":
+		return "draft"
 	case "CLOSED":
 		return "closed"
 	default:

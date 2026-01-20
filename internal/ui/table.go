@@ -86,6 +86,9 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, prM
 			// PR exists - show details
 			f := forge.DetectFromRepo(wt.MainRepo, nil)
 			state := f.FormatState(pr.State)
+			if pr.IsDraft && pr.State == "OPEN" {
+				state = "draft"
+			}
 
 			// Format: state author comments reviews url
 			parts := []string{state}

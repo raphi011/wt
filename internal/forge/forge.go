@@ -16,6 +16,7 @@ const CacheMaxAge = 24 * time.Hour
 type PRInfo struct {
 	Number       int       `json:"number"`
 	State        string    `json:"state"`         // Normalized: OPEN, MERGED, CLOSED
+	IsDraft      bool      `json:"is_draft"`      // true if PR is a draft
 	URL          string    `json:"url"`
 	Author       string    `json:"author"`        // username/login
 	CommentCount int       `json:"comment_count"` // number of comments

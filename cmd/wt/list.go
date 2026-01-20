@@ -98,6 +98,7 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 		type prJSON struct {
 			Number     int    `json:"number"`
 			State      string `json:"state"`
+			IsDraft    bool   `json:"is_draft,omitempty"`
 			IsApproved bool   `json:"is_approved,omitempty"`
 			URL        string `json:"url,omitempty"`
 		}
@@ -136,6 +137,7 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 					wtJSON.PR = &prJSON{
 						Number:     pr.Number,
 						State:      pr.State,
+						IsDraft:    pr.IsDraft,
 						IsApproved: pr.IsApproved,
 						URL:        pr.URL,
 					}

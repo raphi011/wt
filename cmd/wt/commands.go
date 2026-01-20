@@ -43,6 +43,7 @@ type PruneCmd struct {
 	DryRun       bool   `short:"n" name:"dry-run" negatable:"" help:"preview without removing"`
 	Force        bool   `short:"f" name:"force" help:"force remove even if not merged or has uncommitted changes"`
 	IncludeClean bool   `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
+	All          bool   `short:"a" name:"all" help:"prune all worktrees (not just current repo)"`
 	Refresh      bool   `short:"r" name:"refresh" help:"fetch origin and refresh PR status before pruning"`
 	ResetCache   bool   `name:"reset-cache" help:"clear all cached data (PR info, worktree history) and reset IDs from 1"`
 	Hook         string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
@@ -53,7 +54,11 @@ func (c *PruneCmd) Help() string {
 	return `Without arguments, removes all worktrees where the branch is merged AND
 working directory is clean. With a target, removes only that specific worktree.
 
-Shows a table with cached PR status. Use --refresh to fetch latest PR info.
+When run inside a git repository, only prunes worktrees for that repo.
+Use --all to prune worktrees from all repos in the directory.
+
+Uses cached merge status and PR info. Use --refresh to fetch from origin and
+update PR status from GitHub/GitLab.
 
 Hooks with on=["prune"] run after each worktree removal. Hooks run with
 working directory set to the main repo (since worktree path is deleted).
@@ -63,8 +68,9 @@ or rebased PRs. For accurate detection, use GitHub/GitLab where PR status
 shows if the branch was merged.
 
 Examples:
-  wt prune -r                   # Refresh PR status and prune
+  wt prune -r                   # Fetch origin + PR status, then prune
   wt prune                      # Remove merged worktrees (uses cached PR info)
+  wt prune --all                # Prune all repos (not just current)
   wt prune -n                   # Dry-run: preview without removing
   wt prune -d ~/Git/worktrees   # Scan specific directory
   wt prune -c                   # Also remove clean (0-commit) worktrees

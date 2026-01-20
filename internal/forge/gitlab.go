@@ -70,6 +70,7 @@ func (g *GitLab) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 	var prs []struct {
 		IID    int    `json:"iid"`
 		State  string `json:"state"` // opened, merged, closed
+		Draft  bool   `json:"draft"`
 		WebURL string `json:"web_url"`
 		Author struct {
 			Username string `json:"username"`
@@ -94,6 +95,7 @@ func (g *GitLab) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 	return &PRInfo{
 		Number:       pr.IID,
 		State:        normalizeGitLabState(pr.State),
+		IsDraft:      pr.Draft,
 		URL:          pr.WebURL,
 		Author:       pr.Author.Username,
 		CommentCount: pr.UserNotesCount,
@@ -222,6 +224,8 @@ func (g *GitLab) FormatState(state string) string {
 		return "merged"
 	case "OPEN":
 		return "open"
+	case "DRAFT":
+		return "draft"
 	case "CLOSED":
 		return "closed"
 	default:

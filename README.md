@@ -63,8 +63,9 @@ wt add branch --hook=vscode           # run specific hook
 wt add branch --no-hook               # skip all hooks
 
 # Prune merged worktrees
-wt prune                              # in cwd (uses cached PR info)
-wt prune -r                           # refresh PR status first, then prune
+wt prune                              # in cwd (uses cached info, filters to current repo)
+wt prune -r                           # fetch origin + PR status first, then prune
+wt prune --all                        # prune all repos (not just current)
 wt prune -d ~/Git/worktrees           # in specific dir
 wt prune -n                           # dry run
 wt prune -c                           # also remove clean (0 commits ahead)
@@ -72,6 +73,7 @@ wt prune --no-hook                    # skip post-removal hooks
 
 # List worktrees
 wt list                               # in cwd (filters to current repo if in one)
+wt list --all                         # list all repos (not just current)
 wt list -d ~/Git/worktrees
 wt list --json
 

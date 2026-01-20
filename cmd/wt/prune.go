@@ -52,33 +52,40 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 	sp := ui.NewSpinner("Scanning worktrees...")
 	sp.Start()
 
-	// List worktrees (include dirty check for prune decisions)
-	worktrees, err := git.ListWorktrees(scanPath, true)
+	// List all worktrees (include dirty check for prune decisions)
+	allWorktrees, err := git.ListWorktrees(scanPath, true)
 	if err != nil {
 		sp.Stop()
 		return err
 	}
 
-	if len(worktrees) == 0 {
+	if len(allWorktrees) == 0 {
 		sp.Stop()
 		fmt.Println("No worktrees found")
 		return nil
 	}
 
-	// Group by repo for fetching
-	grouped := git.GroupWorktreesByRepo(worktrees)
+	// If in a git repo and not using --all, filter to only prune worktrees from that repo
+	worktrees := allWorktrees
+	var currentRepo string
+	if !cmd.All {
+		currentRepo = git.GetCurrentRepoMainPath()
+		if currentRepo != "" {
+			var filtered []git.Worktree
+			for _, wt := range allWorktrees {
+				if wt.MainRepo == currentRepo {
+					filtered = append(filtered, wt)
+				}
+			}
+			worktrees = filtered
+		}
+	}
 
-	// Fetch default branch for each repo
-	for repoName, wts := range grouped {
-		if len(wts) == 0 {
-			continue
-		}
-		defaultBranch := git.GetDefaultBranch(wts[0].MainRepo)
-		sp.UpdateMessage(fmt.Sprintf("Fetching origin/%s for %s...", defaultBranch, repoName))
-		if err := git.FetchDefaultBranch(wts[0].MainRepo); err != nil {
-			// Non-fatal: log warning but continue
-			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
-		}
+	if len(worktrees) == 0 {
+		sp.Stop()
+		fmt.Printf("No worktrees found for current repository\n")
+		fmt.Printf("Use --all to prune all %d worktrees\n", len(allWorktrees))
+		return nil
 	}
 
 	// Acquire lock on cache
@@ -100,9 +107,9 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 		fmt.Println("Cache reset: PR info cleared, IDs will be reassigned from 1")
 	}
 
-	// Convert worktrees to WorktreeInfo for cache sync
-	wtInfos := make([]forge.WorktreeInfo, len(worktrees))
-	for i, wt := range worktrees {
+	// Convert ALL worktrees to WorktreeInfo for cache sync (to preserve IDs)
+	wtInfos := make([]forge.WorktreeInfo, len(allWorktrees))
+	for i, wt := range allWorktrees {
 		wtInfos[i] = forge.WorktreeInfo{
 			Path:      wt.Path,
 			Branch:    wt.Branch,
@@ -110,11 +117,27 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 		}
 	}
 
-	// Sync cache to get IDs
+	// Sync cache to get IDs (sync all, even if we're only pruning a subset)
 	pathToID := wtCache.SyncWorktrees(wtInfos)
 
-	// Refresh PR status if requested
+	// Refresh: fetch remotes and PR status
 	if cmd.Refresh {
+		// Group by repo for fetching
+		grouped := git.GroupWorktreesByRepo(worktrees)
+
+		// Fetch default branch for each repo
+		for repoName, wts := range grouped {
+			if len(wts) == 0 {
+				continue
+			}
+			defaultBranch := git.GetDefaultBranch(wts[0].MainRepo)
+			sp.UpdateMessage(fmt.Sprintf("Fetching origin/%s for %s...", defaultBranch, repoName))
+			if err := git.FetchDefaultBranch(wts[0].MainRepo); err != nil {
+				// Non-fatal: log warning but continue
+				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+			}
+		}
+
 		sp.UpdateMessage("Fetching PR status...")
 		refreshPRStatus(worktrees, wtCache, cfg, sp)
 	}
