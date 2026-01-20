@@ -33,7 +33,7 @@ _wt_completions() {
         cword=$COMP_CWORD
     fi
 
-    local commands="add prune list exec cd mv note hook pr config completion"
+    local commands="add prune list show exec cd mv note hook pr config completion"
 
     # Handle subcommand-specific completions
     case "${words[1]}" in
@@ -85,6 +85,21 @@ _wt_completions() {
                     ;;
             esac
             COMPREPLY=($(compgen -W "-d --dir --json -a --all -s --sort -r --refresh" -- "$cur"))
+            ;;
+        show)
+            case "$prev" in
+                -d|--dir)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    return
+                    ;;
+                -i|--id)
+                    # Complete worktree IDs only
+                    local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                    COMPREPLY=($(compgen -W "$ids" -- "$cur"))
+                    return
+                    ;;
+            esac
+            COMPREPLY=($(compgen -W "-i --id -d --dir -r --refresh --json" -- "$cur"))
             ;;
         exec)
             case "$prev" in
@@ -267,6 +282,7 @@ _wt() {
                 'add:Add worktree for branch'
                 'prune:Prune merged worktrees'
                 'list:List worktrees with stable IDs'
+                'show:Show worktree details'
                 'exec:Run command in worktree by ID'
                 'cd:Print worktree path for shell scripting'
                 'mv:Move worktrees to another directory'
@@ -322,6 +338,16 @@ _wt() {
                         '--sort[sort by]:field:(id repo branch)' \
                         '-r[fetch origin and refresh PR status]' \
                         '--refresh[fetch origin and refresh PR status]'
+                    ;;
+                show)
+                    _arguments \
+                        '-i[worktree ID]:id:__wt_worktree_ids' \
+                        '--id[worktree ID]:id:__wt_worktree_ids' \
+                        '-d[directory to scan]:directory:_files -/' \
+                        '--dir[directory to scan]:directory:_files -/' \
+                        '-r[refresh PR status from API]' \
+                        '--refresh[refresh PR status from API]' \
+                        '--json[output as JSON]'
                     ;;
                 exec)
                     _arguments \
@@ -524,17 +550,18 @@ const fishCompletions = `# wt completions - supports fish autosuggestions and ta
 complete -c wt -f
 
 # Subcommands (shown in completions and autosuggestions)
-complete -c wt -n "not __fish_seen_subcommand_from add prune list exec cd mv note hook pr config completion" -a "add" -d "Add worktree for branch"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list exec cd mv note hook pr config completion" -a "prune" -d "Prune merged worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list exec cd mv note hook pr config completion" -a "list" -d "List worktrees with stable IDs"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list exec cd mv note hook pr config completion" -a "exec" -d "Run command in worktree by ID"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list exec cd mv note hook pr config completion" -a "cd" -d "Print worktree path"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list exec cd mv note hook pr config completion" -a "mv" -d "Move worktrees to another directory"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list exec cd mv note hook pr config completion" -a "note" -d "Manage branch notes"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list exec cd mv note hook pr config completion" -a "hook" -d "Manage hooks"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list exec cd mv note hook pr config completion" -a "pr" -d "Work with PRs"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list exec cd mv note hook pr config completion" -a "config" -d "Manage configuration"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list exec cd mv note hook pr config completion" -a "completion" -d "Generate completion script"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "add" -d "Add worktree for branch"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "prune" -d "Prune merged worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "list" -d "List worktrees with stable IDs"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "show" -d "Show worktree details"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "exec" -d "Run command in worktree by ID"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "cd" -d "Print worktree path"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "mv" -d "Move worktrees to another directory"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "note" -d "Manage branch notes"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "hook" -d "Manage hooks"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "pr" -d "Work with PRs"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "config" -d "Manage configuration"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "completion" -d "Generate completion script"
 
 # add: branch name (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from add; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
@@ -562,6 +589,12 @@ complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
 complete -c wt -n "__fish_seen_subcommand_from list" -s a -l all -d "Show all worktrees (not just current repo)"
 complete -c wt -n "__fish_seen_subcommand_from list" -s s -l sort -r -a "id repo branch" -d "Sort by field"
 complete -c wt -n "__fish_seen_subcommand_from list" -s r -l refresh -d "Fetch origin and refresh PR status"
+
+# show: --id flag (optional), then other flags
+complete -c wt -n "__fish_seen_subcommand_from show" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+complete -c wt -n "__fish_seen_subcommand_from show" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
+complete -c wt -n "__fish_seen_subcommand_from show" -s r -l refresh -d "Refresh PR status from API"
+complete -c wt -n "__fish_seen_subcommand_from show" -l json -d "Output as JSON"
 
 # exec: --id flag (required), then -- command
 complete -c wt -n "__fish_seen_subcommand_from exec" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"

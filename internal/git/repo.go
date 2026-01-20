@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // GetRepoName extracts the repository name from the origin URL
@@ -511,4 +512,105 @@ func DeleteLocalBranch(repoPath, branch string, force bool) error {
 		return fmt.Errorf("failed to delete branch: %w", err)
 	}
 	return nil
+}
+
+// DiffStats contains diff statistics
+type DiffStats struct {
+	Additions int
+	Deletions int
+	Files     int
+}
+
+// GetDiffStats returns additions, deletions, and files changed vs default branch
+func GetDiffStats(repoPath, branch string) (DiffStats, error) {
+	defaultBranch := GetDefaultBranch(repoPath)
+	cmd := exec.Command("git", "-C", repoPath, "diff", "--numstat", fmt.Sprintf("origin/%s...%s", defaultBranch, branch))
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		if stderr.Len() > 0 {
+			return DiffStats{}, fmt.Errorf("failed to get diff stats: %s", strings.TrimSpace(stderr.String()))
+		}
+		return DiffStats{}, err
+	}
+
+	var stats DiffStats
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) >= 2 {
+			var add, del int
+			// Handle binary files which show "-" instead of numbers
+			if parts[0] != "-" {
+				fmt.Sscanf(parts[0], "%d", &add)
+			}
+			if parts[1] != "-" {
+				fmt.Sscanf(parts[1], "%d", &del)
+			}
+			stats.Additions += add
+			stats.Deletions += del
+			stats.Files++
+		}
+	}
+	return stats, nil
+}
+
+// GetCommitsBehind returns number of commits behind the default branch
+func GetCommitsBehind(repoPath, branch string) (int, error) {
+	defaultBranch := GetDefaultBranch(repoPath)
+	cmd := exec.Command("git", "-C", repoPath, "rev-list", "--count", fmt.Sprintf("%s..origin/%s", branch, defaultBranch))
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		if stderr.Len() > 0 {
+			return 0, fmt.Errorf("failed to count commits behind: %s", strings.TrimSpace(stderr.String()))
+		}
+		return 0, err
+	}
+
+	var count int
+	_, err = fmt.Sscanf(strings.TrimSpace(string(output)), "%d", &count)
+	return count, err
+}
+
+// GetBranchCreatedTime returns when the branch was created (first commit on branch)
+// Falls back to first commit time if reflog is unavailable
+func GetBranchCreatedTime(repoPath, branch string) (time.Time, error) {
+	// Try reflog first - most reliable for local branches
+	cmd := exec.Command("git", "-C", repoPath, "reflog", "show", "--date=iso", "--format=%gd", branch)
+	output, err := cmd.Output()
+	if err == nil {
+		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+		if len(lines) > 0 {
+			// Last line is oldest entry (branch creation)
+			lastLine := lines[len(lines)-1]
+			// Parse ISO date format
+			t, err := time.Parse("2006-01-02 15:04:05 -0700", lastLine)
+			if err == nil {
+				return t, nil
+			}
+		}
+	}
+
+	// Fallback: get the merge-base commit date (when branch diverged from default)
+	defaultBranch := GetDefaultBranch(repoPath)
+	cmd = exec.Command("git", "-C", repoPath, "merge-base", fmt.Sprintf("origin/%s", defaultBranch), branch)
+	output, err = cmd.Output()
+	if err == nil {
+		mergeBase := strings.TrimSpace(string(output))
+		cmd = exec.Command("git", "-C", repoPath, "log", "-1", "--format=%ci", mergeBase)
+		output, err = cmd.Output()
+		if err == nil {
+			t, err := time.Parse("2006-01-02 15:04:05 -0700", strings.TrimSpace(string(output)))
+			if err == nil {
+				return t, nil
+			}
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("could not determine branch creation time")
 }

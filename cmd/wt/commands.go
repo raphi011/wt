@@ -115,6 +115,31 @@ func (c *ListCmd) Run(ctx *Context) error {
 	return runList(c, ctx.Config)
 }
 
+// ShowCmd shows detailed status for a single worktree.
+type ShowCmd struct {
+	Dir     string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"directory to scan for worktrees"`
+	ID      int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
+	Refresh bool   `short:"r" name:"refresh" help:"refresh PR status from API"`
+	JSON    bool   `name:"json" help:"output as JSON"`
+}
+
+func (c *ShowCmd) Help() string {
+	return `Show detailed status for a single worktree.
+
+When run inside a worktree, --id is optional (defaults to current worktree).
+When run outside, specify a worktree ID.
+
+Examples:
+  wt show              # Inside worktree, show current
+  wt show -i 3         # By worktree ID
+  wt show --refresh    # Refresh PR status from API
+  wt show --json       # Output as JSON`
+}
+
+func (c *ShowCmd) Run(ctx *Context) error {
+	return runShow(c, ctx.Config)
+}
+
 // ExecCmd runs a command in a worktree by ID.
 type ExecCmd struct {
 	ID      int      `short:"i" name:"id" required:"" help:"worktree ID"`
@@ -484,6 +509,7 @@ type CLI struct {
 	// Core commands (ungrouped - shown first)
 	Add   AddCmd   `cmd:"" help:"Add worktree for branch"`
 	List  ListCmd  `cmd:"" default:"withargs" help:"List worktrees"`
+	Show  ShowCmd  `cmd:"" help:"Show worktree details"`
 	Prune PruneCmd `cmd:"" help:"Prune merged worktrees"`
 
 	// PR commands

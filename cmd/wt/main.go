@@ -65,6 +65,7 @@ func applyConfigDefaults(cli *CLI, cfg *config.Config) {
 	setDir(&cli.Add.Dir)
 	setDir(&cli.Prune.Dir)
 	setDir(&cli.List.Dir)
+	setDir(&cli.Show.Dir)
 	setDir(&cli.Exec.Dir)
 	setDir(&cli.Cd.Dir)
 	setDir(&cli.Mv.Dir)
