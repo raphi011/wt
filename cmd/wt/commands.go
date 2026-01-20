@@ -9,27 +9,28 @@ type Context struct {
 
 // AddCmd adds a worktree for an existing or new branch.
 type AddCmd struct {
-	Branch    string `arg:"" optional:"" placeholder:"BRANCH" help:"branch name (required inside repo)"`
-	ID        int    `short:"i" name:"id" help:"worktree ID (required outside repo)"`
-	Dir       string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	NewBranch bool   `short:"b" name:"new-branch" help:"create a new branch"`
-	Note      string `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook      string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
-	NoHook    bool   `name:"no-hook" help:"skip post-add hook" xor:"hook-ctrl"`
+	Branch     string   `arg:"" optional:"" placeholder:"BRANCH" help:"branch name"`
+	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) to create worktree in (repeatable, comma-separated)"`
+	Dir        string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	NewBranch  bool     `short:"b" name:"new-branch" help:"create a new branch"`
+	Note       string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
+	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook     bool     `name:"no-hook" help:"skip post-add hook" xor:"hook-ctrl"`
 }
 
 func (c *AddCmd) Help() string {
 	return `Add a worktree for a branch. Use -b to create a new branch.
 
 Inside a git repo: adds a worktree for the specified branch.
-Outside a git repo: opens existing worktree by ID.
+Use -r to create worktrees across multiple repositories.
 
 Examples:
-  wt add feature-branch              # Existing branch
-  wt add -b feature-branch           # Create new branch
+  wt add feature-branch              # Existing branch in current repo
+  wt add -b feature-branch           # Create new branch in current repo
   wt add feature-branch -d ~/Git     # Specify target directory
-  wt add -i 1 -d ~/Git/worktrees     # Outside repo: by worktree ID
-  wt add feature-branch --no-hook    # Skip post-add hook`
+  wt add feature-branch --no-hook    # Skip post-add hook
+  wt add -b feature -r palladium -r natrium -d ~/Git  # Multiple repos
+  wt add -b feature -r palladium,natrium -d ~/Git     # Comma syntax`
 }
 
 func (c *AddCmd) Run(ctx *Context) error {

@@ -9,8 +9,17 @@ import (
 	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
-	"github.com/raphi011/wt/internal/resolve"
 )
+
+// successResult holds the result of a successful worktree creation
+type successResult struct {
+	Path     string
+	Branch   string
+	RepoName string
+	MainRepo string
+	Folder   string
+	Existed  bool
+}
 
 func runAdd(cmd *AddCmd, cfg *config.Config) error {
 	// Validate worktree format
@@ -18,22 +27,26 @@ func runAdd(cmd *AddCmd, cfg *config.Config) error {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
 	}
 
-	// Check if we're inside a git repo
-	if git.IsInsideRepo() {
-		if cmd.ID != 0 {
-			return fmt.Errorf("--id cannot be used inside a git repo; use branch name instead")
-		}
+	insideRepo := git.IsInsideRepo()
+
+	// If -r specified, use multi-repo mode
+	if len(cmd.Repository) > 0 {
+		return runAddMultiRepo(cmd, cfg, insideRepo)
+	}
+
+	// No -r specified
+	if insideRepo {
 		if cmd.Branch == "" {
 			return fmt.Errorf("branch name required inside git repo")
 		}
 		return runAddInRepo(cmd, cfg)
 	}
 
-	// Outside repo: resolve by ID
-	return runAddOutsideRepo(cmd, cfg)
+	// Outside repo without -r
+	return fmt.Errorf("--repository (-r) required when outside git repo")
 }
 
-// runAddInRepo handles wt add when inside a git repository
+// runAddInRepo handles wt add when inside a git repository (single repo mode)
 func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
@@ -101,20 +114,19 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
 	return hooks.RunAll(hookMatches, ctx)
 }
 
-// runAddOutsideRepo handles wt add when outside a git repository
-// Resolves the worktree by ID
-func runAddOutsideRepo(cmd *AddCmd, cfg *config.Config) error {
-	if cmd.NewBranch {
-		return fmt.Errorf("cannot create new branch (-b) outside git repo")
+// runAddMultiRepo handles wt add with -r flag for multiple repositories
+func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
+	if cmd.Branch == "" {
+		return fmt.Errorf("branch name required with --repository")
 	}
 
-	if cmd.ID == 0 {
-		return fmt.Errorf("--id required when outside git repo (run 'wt list' to see IDs)")
-	}
-
+	// Determine scan directory
 	scanDir := cmd.Dir
 	if scanDir == "" {
-		return fmt.Errorf("directory required when outside git repo (-d flag or WT_DEFAULT_PATH)")
+		if !insideRepo {
+			return fmt.Errorf("directory required when outside git repo (-d flag or WT_DEFAULT_PATH)")
+		}
+		scanDir = "."
 	}
 
 	var err error
@@ -123,18 +135,78 @@ func runAddOutsideRepo(cmd *AddCmd, cfg *config.Config) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	// Resolve target by ID
-	target, err := resolve.ByID(cmd.ID, scanDir)
+	var results []successResult
+	var errs []error
+
+	// If inside repo, include current repo first
+	if insideRepo {
+		if err := git.CheckGit(); err != nil {
+			errs = append(errs, fmt.Errorf("(current repo): %w", err))
+		} else {
+			result, err := createWorktreeInCurrentRepo(cmd, cfg, scanDir)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("(current repo): %w", err))
+			} else {
+				results = append(results, *result)
+			}
+		}
+	}
+
+	// Process each specified repository
+	for _, repoName := range cmd.Repository {
+		repoPath, err := git.FindRepoByName(scanDir, repoName)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
+			continue
+		}
+
+		result, err := createWorktreeForRepo(repoPath, cmd, cfg, scanDir)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
+		} else {
+			results = append(results, *result)
+		}
+	}
+
+	// Run hooks for each successful creation
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandAdd)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Adding worktree for branch %s in %s\n", target.Branch, scanDir)
+	for _, r := range results {
+		ctx := hooks.Context{
+			Path:     r.Path,
+			Branch:   r.Branch,
+			Repo:     r.RepoName,
+			Folder:   r.Folder,
+			MainRepo: r.MainRepo,
+			Trigger:  string(hooks.CommandAdd),
+		}
+		hooks.RunForEach(hookMatches, ctx, r.Path)
+	}
 
-	// Use OpenWorktreeFrom since we have the main repo path
-	result, err := git.OpenWorktreeFrom(target.MainRepo, scanDir, target.Branch, cfg.WorktreeFormat)
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to add worktrees:\n%w", joinErrors(errs))
+	}
+	return nil
+}
+
+// createWorktreeInCurrentRepo creates a worktree in the current git repository
+func createWorktreeInCurrentRepo(cmd *AddCmd, cfg *config.Config, targetDir string) (*successResult, error) {
+	var result *git.CreateWorktreeResult
+	var err error
+
+	if cmd.NewBranch {
+		fmt.Printf("Creating worktree for new branch %s (current repo) in %s\n", cmd.Branch, targetDir)
+		result, err = git.AddWorktree(targetDir, cmd.Branch, cfg.WorktreeFormat, true)
+	} else {
+		fmt.Printf("Adding worktree for branch %s (current repo) in %s\n", cmd.Branch, targetDir)
+		result, err = git.AddWorktree(targetDir, cmd.Branch, cfg.WorktreeFormat, false)
+	}
+
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if result.AlreadyExists {
@@ -145,25 +217,71 @@ func runAddOutsideRepo(cmd *AddCmd, cfg *config.Config) error {
 
 	// Set note if provided
 	if cmd.Note != "" {
-		if err := git.SetBranchNote(target.MainRepo, target.Branch, cmd.Note); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to set note: %v\n", err)
+		cwd, err := os.Getwd()
+		if err == nil {
+			if err := git.SetBranchNote(cwd, cmd.Branch, cmd.Note); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to set note for current repo: %v\n", err)
+			}
 		}
 	}
 
-	// Run post-add hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandAdd)
-	if err != nil {
-		return err
+	repoName, _ := git.GetRepoName()
+	folder, _ := git.GetRepoFolderName()
+	mainRepo, _ := git.GetMainRepoPath(result.Path)
+	if mainRepo == "" {
+		mainRepo, _ = filepath.Abs(".")
 	}
 
-	ctx := hooks.Context{
+	return &successResult{
 		Path:     result.Path,
-		Branch:   target.Branch,
-		MainRepo: target.MainRepo,
-		Folder:   filepath.Base(target.MainRepo),
-		Trigger:  string(hooks.CommandAdd),
-	}
-	ctx.Repo, _ = git.GetRepoNameFrom(target.MainRepo)
-
-	return hooks.RunAll(hookMatches, ctx)
+		Branch:   cmd.Branch,
+		RepoName: repoName,
+		MainRepo: mainRepo,
+		Folder:   folder,
+		Existed:  result.AlreadyExists,
+	}, nil
 }
+
+// createWorktreeForRepo creates a worktree for a specified repository
+func createWorktreeForRepo(repoPath string, cmd *AddCmd, cfg *config.Config, targetDir string) (*successResult, error) {
+	var result *git.CreateWorktreeResult
+	var err error
+
+	repoName, _ := git.GetRepoNameFrom(repoPath)
+	folder := filepath.Base(repoPath)
+
+	if cmd.NewBranch {
+		fmt.Printf("Creating worktree for new branch %s in %s (%s)\n", cmd.Branch, targetDir, repoName)
+		result, err = git.CreateWorktreeFrom(repoPath, targetDir, cmd.Branch, cfg.WorktreeFormat)
+	} else {
+		fmt.Printf("Adding worktree for branch %s in %s (%s)\n", cmd.Branch, targetDir, repoName)
+		result, err = git.OpenWorktreeFrom(repoPath, targetDir, cmd.Branch, cfg.WorktreeFormat)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if result.AlreadyExists {
+		fmt.Printf("→ Worktree already exists at: %s\n", result.Path)
+	} else {
+		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
+	}
+
+	// Set note if provided
+	if cmd.Note != "" {
+		if err := git.SetBranchNote(repoPath, cmd.Branch, cmd.Note); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to set note for %s: %v\n", repoName, err)
+		}
+	}
+
+	return &successResult{
+		Path:     result.Path,
+		Branch:   cmd.Branch,
+		RepoName: repoName,
+		MainRepo: repoPath,
+		Folder:   folder,
+		Existed:  result.AlreadyExists,
+	}, nil
+}
+

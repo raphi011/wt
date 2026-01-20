@@ -43,6 +43,26 @@ _wt_completions() {
                     COMPREPLY=($(compgen -d -- "$cur"))
                     return
                     ;;
+                -r|--repository)
+                    # Complete repo names from default_path
+                    local dir="$WT_DEFAULT_PATH"
+                    if [[ -z "$dir" ]]; then
+                        local config_file=~/.config/wt/config.toml
+                        if [[ -f "$config_file" ]]; then
+                            dir=$(grep '^default_path' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                        fi
+                    fi
+                    if [[ -d "$dir" ]]; then
+                        local repos=""
+                        for d in "$dir"/*/; do
+                            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                                repos="$repos $(basename "$d")"
+                            fi
+                        done
+                        COMPREPLY=($(compgen -W "$repos" -- "$cur"))
+                    fi
+                    return
+                    ;;
                 --hook|--note)
                     return
                     ;;
@@ -52,7 +72,7 @@ _wt_completions() {
                 local branches=$(git branch --all --format='%(refname:short)' 2>/dev/null | sed 's|origin/||' | sort -u)
                 COMPREPLY=($(compgen -W "$branches" -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "-b --new-branch -d --dir --note --hook --no-hook" -- "$cur"))
+                COMPREPLY=($(compgen -W "-b --new-branch -r --repository -d --dir --note --hook --no-hook" -- "$cur"))
             fi
             ;;
         prune)
@@ -301,6 +321,8 @@ _wt() {
                         '1:branch:__wt_all_branches' \
                         '-b[create new branch]' \
                         '--new-branch[create new branch]' \
+                        '*-r[repository name]:repository:__wt_repo_names' \
+                        '*--repository[repository name]:repository:__wt_repo_names' \
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/' \
                         '--note[set note on branch]:note:' \
@@ -543,6 +565,27 @@ __wt_hook_names() {
     _describe 'hook name' hooks
 }
 
+# Helper: complete repo names in default_path
+__wt_repo_names() {
+    local dir repos
+    dir="$WT_DEFAULT_PATH"
+    if [[ -z "$dir" ]]; then
+        local config_file=~/.config/wt/config.toml
+        if [[ -f "$config_file" ]]; then
+            dir=$(grep '^default_path' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+        fi
+    fi
+    if [[ -d "$dir" ]]; then
+        repos=()
+        for d in "$dir"/*/; do
+            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                repos+=(${d:h:t})
+            fi
+        done
+        _describe 'repository' repos
+    fi
+}
+
 _wt "$@"
 `
 
@@ -566,6 +609,7 @@ complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd m
 # add: branch name (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from add; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
 complete -c wt -n "__fish_seen_subcommand_from add" -s b -l new-branch -d "Create new branch"
+complete -c wt -n "__fish_seen_subcommand_from add" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from add" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
 complete -c wt -n "__fish_seen_subcommand_from add" -l note -r -d "Set note on branch"
 complete -c wt -n "__fish_seen_subcommand_from add" -l hook -d "Run named hook instead of default"
