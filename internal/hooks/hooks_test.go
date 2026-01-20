@@ -403,3 +403,187 @@ func TestSelectHooks_PruneCommand(t *testing.T) {
 		t.Errorf("expected only editor hook for add, got %v", matches)
 	}
 }
+
+func TestParseEnv(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       []string
+		expected    map[string]string
+		expectError bool
+	}{
+		{
+			name:     "empty slice",
+			input:    []string{},
+			expected: map[string]string{},
+		},
+		{
+			name:  "single key=value",
+			input: []string{"prompt=hello world"},
+			expected: map[string]string{
+				"prompt": "hello world",
+			},
+		},
+		{
+			name:  "multiple key=value",
+			input: []string{"prompt=hello", "mode=ask", "verbose=true"},
+			expected: map[string]string{
+				"prompt":  "hello",
+				"mode":    "ask",
+				"verbose": "true",
+			},
+		},
+		{
+			name:  "value with equals sign",
+			input: []string{"expr=1+1=2"},
+			expected: map[string]string{
+				"expr": "1+1=2",
+			},
+		},
+		{
+			name:  "empty value",
+			input: []string{"empty="},
+			expected: map[string]string{
+				"empty": "",
+			},
+		},
+		{
+			name:        "missing equals sign",
+			input:       []string{"invalid"},
+			expectError: true,
+		},
+		{
+			name:        "empty key",
+			input:       []string{"=value"},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ParseEnv(tt.input)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if len(result) != len(tt.expected) {
+				t.Errorf("expected %d entries, got %d", len(tt.expected), len(result))
+				return
+			}
+
+			for k, v := range tt.expected {
+				if result[k] != v {
+					t.Errorf("expected %q=%q, got %q=%q", k, v, k, result[k])
+				}
+			}
+		})
+	}
+}
+
+func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
+	tests := []struct {
+		name     string
+		command  string
+		ctx      Context
+		expected string
+	}{
+		{
+			name:    "env variable substitution",
+			command: "echo {prompt}",
+			ctx: Context{
+				Env: map[string]string{"prompt": "hello world"},
+			},
+			expected: "echo 'hello world'",
+		},
+		{
+			name:    "env variable with default - value provided",
+			command: "echo {prompt:-default message}",
+			ctx: Context{
+				Env: map[string]string{"prompt": "custom message"},
+			},
+			expected: "echo 'custom message'",
+		},
+		{
+			name:    "env variable with default - no value",
+			command: "echo {prompt:-default message}",
+			ctx: Context{
+				Env: map[string]string{},
+			},
+			expected: "echo 'default message'",
+		},
+		{
+			name:    "env variable with default - nil env",
+			command: "echo {prompt:-fallback}",
+			ctx: Context{
+				Env: nil,
+			},
+			expected: "echo 'fallback'",
+		},
+		{
+			name:    "env variable without default - missing",
+			command: "echo {prompt}",
+			ctx: Context{
+				Env: map[string]string{},
+			},
+			expected: "echo ''",
+		},
+		{
+			name:    "multiple env variables",
+			command: "cmd --mode={mode} --prompt={prompt}",
+			ctx: Context{
+				Env: map[string]string{"mode": "ask", "prompt": "help me"},
+			},
+			expected: "cmd --mode='ask' --prompt='help me'",
+		},
+		{
+			name:    "mixed static and env placeholders",
+			command: "claude --cwd={path} {prompt:-help}",
+			ctx: Context{
+				Path: "/home/user/worktree",
+				Env:  map[string]string{"prompt": "implement feature"},
+			},
+			expected: "claude --cwd='/home/user/worktree' 'implement feature'",
+		},
+		{
+			name:    "env variable with special characters",
+			command: "echo {msg}",
+			ctx: Context{
+				Env: map[string]string{"msg": "it's a test"},
+			},
+			expected: "echo 'it'\\''s a test'",
+		},
+		{
+			name:    "env variable with empty default",
+			command: "cmd {opt:-}",
+			ctx: Context{
+				Env: map[string]string{},
+			},
+			expected: "cmd ''",
+		},
+		{
+			name:    "underscore in variable name",
+			command: "echo {my_var}",
+			ctx: Context{
+				Env: map[string]string{"my_var": "value"},
+			},
+			expected: "echo 'value'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := SubstitutePlaceholders(tt.command, tt.ctx)
+			if result != tt.expected {
+				t.Errorf("SubstitutePlaceholders(%q) = %q, want %q", tt.command, result, tt.expected)
+			}
+		})
+	}
+}

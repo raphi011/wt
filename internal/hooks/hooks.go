@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/raphi011/wt/internal/config"
@@ -30,12 +31,13 @@ const (
 
 // Context holds the values for placeholder substitution
 type Context struct {
-	Path     string // absolute worktree path
-	Branch   string // branch name
-	Repo     string // repo name from git origin
-	Folder   string // main repo folder name
-	MainRepo string // main repo path
-	Trigger  string // command that triggered the hook (add, pr, prune, merge)
+	Path     string            // absolute worktree path
+	Branch   string            // branch name
+	Repo     string            // repo name from git origin
+	Folder   string            // main repo folder name
+	MainRepo string            // main repo path
+	Trigger  string            // command that triggered the hook (add, pr, prune, merge)
+	Env      map[string]string // custom variables from -e key=value flags
 }
 
 // HookMatch represents a hook that matched the current command
@@ -168,9 +170,36 @@ func runHook(name string, hook *config.Hook, ctx Context, workDir string) error 
 	return nil
 }
 
+// ParseEnv parses a slice of "key=value" strings into a map.
+// Returns an error if any entry doesn't contain "=".
+func ParseEnv(envSlice []string) (map[string]string, error) {
+	result := make(map[string]string)
+	for _, e := range envSlice {
+		idx := strings.Index(e, "=")
+		if idx == -1 {
+			return nil, fmt.Errorf("invalid env format %q: expected KEY=VALUE", e)
+		}
+		key := e[:idx]
+		value := e[idx+1:]
+		if key == "" {
+			return nil, fmt.Errorf("invalid env format %q: key cannot be empty", e)
+		}
+		result[key] = value
+	}
+	return result, nil
+}
+
+// envPlaceholderRegex matches {key} or {key:-default} patterns for env variables.
+// This is used after static replacements to expand custom env placeholders.
+var envPlaceholderRegex = regexp.MustCompile(`\{([a-zA-Z_][a-zA-Z0-9_]*)(?::-([^}]*))?\}`)
+
 // SubstitutePlaceholders replaces {placeholder} with shell-quoted values from Context.
 // Values are properly escaped to prevent command injection.
+//
+// Static placeholders: {path}, {branch}, {repo}, {folder}, {main-repo}, {trigger}
+// Env placeholders: {key} or {key:-default} where key comes from Context.Env
 func SubstitutePlaceholders(command string, ctx Context) string {
+	// First, handle static replacements
 	replacements := map[string]string{
 		"{path}":      shellQuote(ctx.Path),
 		"{branch}":    shellQuote(ctx.Branch),
@@ -184,6 +213,27 @@ func SubstitutePlaceholders(command string, ctx Context) string {
 	for placeholder, value := range replacements {
 		result = strings.ReplaceAll(result, placeholder, value)
 	}
+
+	// Then, handle env placeholders with optional defaults: {key} or {key:-default}
+	result = envPlaceholderRegex.ReplaceAllStringFunc(result, func(match string) string {
+		// Parse the match to extract key and optional default
+		submatch := envPlaceholderRegex.FindStringSubmatch(match)
+		if submatch == nil {
+			return match
+		}
+		key := submatch[1]
+		defaultVal := submatch[2] // empty string if no default specified
+
+		// Look up value in env map
+		if ctx.Env != nil {
+			if val, ok := ctx.Env[key]; ok {
+				return shellQuote(val)
+			}
+		}
+
+		// Use default if specified, otherwise empty string
+		return shellQuote(defaultVal)
+	})
 
 	return result
 }
