@@ -38,7 +38,7 @@ func (c *AddCmd) Run(ctx *Context) error {
 
 // PruneCmd removes merged and clean worktrees.
 type PruneCmd struct {
-	ID           int    `short:"i" name:"id" help:"specific worktree to remove (by ID)"`
+	ID           []int  `short:"i" name:"id" help:"worktree(s) to remove (by ID, repeatable)"`
 	Dir          string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	DryRun       bool   `short:"n" name:"dry-run" negatable:"" help:"preview without removing"`
 	Force        bool   `short:"f" name:"force" help:"force remove even if not merged or has uncommitted changes"`
@@ -75,6 +75,7 @@ Examples:
   wt prune -d ~/Git/worktrees   # Scan specific directory
   wt prune -c                   # Also remove clean (0-commit) worktrees
   wt prune -i 1                 # Remove specific worktree by ID
+  wt prune -i 1 -i 2 -i 3       # Remove multiple worktrees by ID
   wt prune -i 1 -f              # Force remove even if not merged/dirty
   wt prune --no-hook            # Skip post-removal hooks
   wt prune --hook=cleanup       # Run 'cleanup' hook instead of default

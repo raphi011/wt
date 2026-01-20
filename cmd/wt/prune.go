@@ -34,12 +34,12 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	// If an ID is specified, handle single worktree removal
-	if cmd.ID != 0 {
+	// If IDs are specified, handle targeted worktree removal
+	if len(cmd.ID) > 0 {
 		if cmd.ResetCache {
 			return fmt.Errorf("--reset-cache cannot be used with --id")
 		}
-		return runPruneTarget(cmd, cfg, scanPath)
+		return runPruneTargets(cmd, cfg, scanPath)
 	}
 
 	if cmd.DryRun {
@@ -248,10 +248,39 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 	return nil
 }
 
-// runPruneTarget handles removal of a single targeted worktree
-func runPruneTarget(cmd *PruneCmd, cfg *config.Config, scanPath string) error {
+// runPruneTargets handles removal of multiple targeted worktrees by ID
+func runPruneTargets(cmd *PruneCmd, cfg *config.Config, scanPath string) error {
+	var errs []error
+	for _, id := range cmd.ID {
+		if err := runPruneTargetByID(id, cmd, cfg, scanPath); err != nil {
+			errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to prune some worktrees:\n%w", joinErrors(errs))
+	}
+	return nil
+}
+
+// joinErrors joins multiple errors with newlines
+func joinErrors(errs []error) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	if len(errs) == 1 {
+		return errs[0]
+	}
+	msg := errs[0].Error()
+	for _, e := range errs[1:] {
+		msg += "\n" + e.Error()
+	}
+	return fmt.Errorf("%s", msg)
+}
+
+// runPruneTargetByID handles removal of a single targeted worktree by ID
+func runPruneTargetByID(id int, cmd *PruneCmd, cfg *config.Config, scanPath string) error {
 	// Resolve target by ID
-	target, err := resolve.ByID(cmd.ID, scanPath)
+	target, err := resolve.ByID(id, scanPath)
 	if err != nil {
 		return err
 	}
