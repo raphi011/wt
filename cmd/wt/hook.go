@@ -30,19 +30,26 @@ func runHookRun(cmd *HookCmd, cfg *config.Config) error {
 		return fmt.Errorf("unknown hook(s) %v (available: %v)", missing, available)
 	}
 
+	// Parse env variables
+	env, err := hooks.ParseEnv(cmd.Env)
+	if err != nil {
+		return err
+	}
+
 	// If no IDs provided, use current worktree (optional behavior)
 	if len(cmd.ID) == 0 {
 		ctx, err := resolveHookTargetCurrent()
 		if err != nil {
 			return err
 		}
+		ctx.Env = env
 		return runHooksForContext(cmd.Hooks, cfg, ctx)
 	}
 
 	// Execute for each ID
 	var errs []error
 	for _, id := range cmd.ID {
-		if err := runHookForID(id, cmd.Hooks, cmd.Dir, cfg); err != nil {
+		if err := runHookForID(id, cmd.Hooks, cmd.Dir, cfg, env); err != nil {
 			errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
 		}
 	}
@@ -52,11 +59,12 @@ func runHookRun(cmd *HookCmd, cfg *config.Config) error {
 	return nil
 }
 
-func runHookForID(id int, hookNames []string, dir string, cfg *config.Config) error {
+func runHookForID(id int, hookNames []string, dir string, cfg *config.Config, env map[string]string) error {
 	ctx, err := resolveHookTargetByID(id, dir)
 	if err != nil {
 		return err
 	}
+	ctx.Env = env
 	return runHooksForContext(hookNames, cfg, ctx)
 }
 

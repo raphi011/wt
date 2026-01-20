@@ -104,11 +104,17 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 		return err
 	}
 
+	env, err := hooks.ParseEnv(cmd.Env)
+	if err != nil {
+		return err
+	}
+
 	ctx := hooks.Context{
 		Path:    result.Path,
 		Branch:  branch,
 		Folder:  filepath.Base(repoPath),
 		Trigger: string(hooks.CommandPR),
+		Env:     env,
 	}
 	ctx.Repo, _ = git.GetRepoNameFrom(repoPath)
 	ctx.MainRepo, _ = git.GetMainRepoPath(result.Path)
@@ -215,11 +221,17 @@ func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 		return err
 	}
 
+	env, err := hooks.ParseEnv(cmd.Env)
+	if err != nil {
+		return err
+	}
+
 	ctx := hooks.Context{
 		Path:    result.Path,
 		Branch:  branch,
 		Folder:  filepath.Base(repoPath),
 		Trigger: string(hooks.CommandPR),
+		Env:     env,
 	}
 	ctx.Repo, _ = git.GetRepoNameFrom(repoPath)
 	ctx.MainRepo, _ = git.GetMainRepoPath(result.Path)
@@ -355,12 +367,18 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {
 		return err
 	}
 
+	env, err := hooks.ParseEnv(cmd.Env)
+	if err != nil {
+		return err
+	}
+
 	ctx := hooks.Context{
 		Path:     wtPath,
 		Branch:   branch,
 		MainRepo: mainRepo,
 		Folder:   filepath.Base(mainRepo),
 		Trigger:  string(hooks.CommandMerge),
+		Env:      env,
 	}
 	ctx.Repo, _ = git.GetRepoNameFrom(mainRepo)
 

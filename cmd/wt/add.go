@@ -99,10 +99,16 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
 		return err
 	}
 
+	env, err := hooks.ParseEnv(cmd.Env)
+	if err != nil {
+		return err
+	}
+
 	ctx := hooks.Context{
 		Path:    result.Path,
 		Branch:  cmd.Branch,
 		Trigger: string(hooks.CommandAdd),
+		Env:     env,
 	}
 	ctx.Repo, _ = git.GetRepoName()
 	ctx.Folder, _ = git.GetRepoFolderName()
@@ -174,6 +180,11 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 		return err
 	}
 
+	env, err := hooks.ParseEnv(cmd.Env)
+	if err != nil {
+		return err
+	}
+
 	for _, r := range results {
 		ctx := hooks.Context{
 			Path:     r.Path,
@@ -182,6 +193,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 			Folder:   r.Folder,
 			MainRepo: r.MainRepo,
 			Trigger:  string(hooks.CommandAdd),
+			Env:      env,
 		}
 		hooks.RunForEach(hookMatches, ctx, r.Path)
 	}
