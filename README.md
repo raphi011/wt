@@ -146,7 +146,28 @@ description = "Open VS Code"
 | `{repo}` | Repo name from origin |
 | `{folder}` | Main repo folder name |
 | `{main-repo}` | Main repo path |
-| `{trigger}` | Command that triggered the hook (create, open, pr, tidy) |
+| `{trigger}` | Command that triggered the hook (add, pr, prune, merge) |
+| `{key}` | Custom variable from `--arg key=value` |
+| `{key:-default}` | Custom variable with fallback if not provided |
+
+### Custom Hook Variables
+
+Pass dynamic values to hooks using `--arg`:
+
+```bash
+wt hook claude --arg prompt="implement feature X"
+wt add -b feature --arg task="JIRA-123"
+```
+
+Example hook using custom variables:
+
+```toml
+[hooks.claude]
+command = "kitty @ launch --cwd={path} -- claude {prompt:-help me}"
+description = "Open Claude with custom prompt"
+```
+
+The `{prompt:-help me}` syntax provides a default value ("help me") when `--arg prompt=...` is not specified.
 
 ### Clone Rules (for `wt pr open`)
 
