@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
@@ -13,11 +12,7 @@ import (
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/resolve"
-	"github.com/raphi011/wt/internal/ui"
 )
-
-// maxConcurrentPRFetches limits parallel gh API calls to avoid rate limiting
-const maxConcurrentPRFetches = 5
 
 func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
@@ -233,138 +228,6 @@ func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 	}
 
 	return hooks.RunAll(hookMatches, ctx)
-}
-
-func runPrRefresh(cmd *PrRefreshCmd, cfg *config.Config) error {
-	if err := git.CheckGit(); err != nil {
-		return err
-	}
-
-	dir := cmd.Dir
-	if dir == "" {
-		dir = "."
-	}
-
-	scanPath, err := filepath.Abs(dir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve absolute path: %w", err)
-	}
-
-	fmt.Printf("Refreshing PR cache for worktrees in %s\n", scanPath)
-
-	// Start spinner
-	sp := ui.NewSpinner("Scanning worktrees...")
-	sp.Start()
-
-	// List worktrees
-	worktrees, err := git.ListWorktrees(scanPath)
-	if err != nil {
-		sp.Stop()
-		return err
-	}
-
-	if len(worktrees) == 0 {
-		sp.Stop()
-		fmt.Println("No worktrees found")
-		return nil
-	}
-
-	// Load existing cache
-	prCache, err := forge.LoadPRCache(scanPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to load PR cache: %v\n", err)
-		prCache = make(forge.PRCache)
-	}
-
-	// Filter to worktrees with upstream branches
-	var toFetch []git.Worktree
-	for _, wt := range worktrees {
-		if wt.OriginURL == "" {
-			continue
-		}
-		if git.GetUpstreamBranch(wt.MainRepo, wt.Branch) == "" {
-			continue
-		}
-		toFetch = append(toFetch, wt)
-	}
-
-	if len(toFetch) == 0 {
-		sp.Stop()
-		fmt.Println("No worktrees with upstream branches found")
-		return nil
-	}
-
-	sp.UpdateMessage(fmt.Sprintf("Fetching PR status (%d branches)...", len(toFetch)))
-
-	// Fetch PRs in parallel with rate limiting
-	var prMutex sync.Mutex
-	var prWg sync.WaitGroup
-	semaphore := make(chan struct{}, maxConcurrentPRFetches)
-	var fetchedCount, failedCount int
-	var countMutex sync.Mutex
-
-	for _, wt := range toFetch {
-		prWg.Add(1)
-		go func(wt git.Worktree) {
-			defer prWg.Done()
-			semaphore <- struct{}{}        // Acquire
-			defer func() { <-semaphore }() // Release
-
-			// Detect forge for this repo
-			f := forge.Detect(wt.OriginURL, cfg.Hosts)
-
-			// Check if forge CLI is available
-			if err := f.Check(); err != nil {
-				countMutex.Lock()
-				failedCount++
-				countMutex.Unlock()
-				return
-			}
-
-			// Use upstream branch name for PR lookup (may differ from local)
-			upstreamBranch := git.GetUpstreamBranch(wt.MainRepo, wt.Branch)
-			if upstreamBranch == "" {
-				return
-			}
-
-			pr, err := f.GetPRForBranch(wt.OriginURL, upstreamBranch)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: PR fetch failed for %s: %v\n", wt.Branch, err)
-				countMutex.Lock()
-				failedCount++
-				countMutex.Unlock()
-				return
-			}
-
-			prMutex.Lock()
-			if prCache[wt.OriginURL] == nil {
-				prCache[wt.OriginURL] = make(map[string]*forge.PRInfo)
-			}
-			prCache[wt.OriginURL][wt.Branch] = pr
-			prMutex.Unlock()
-
-			countMutex.Lock()
-			fetchedCount++
-			countMutex.Unlock()
-		}(wt)
-	}
-
-	prWg.Wait()
-	sp.Stop()
-
-	// Save updated cache
-	if err := forge.SavePRCache(scanPath, prCache); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to save PR cache: %v\n", err)
-	}
-
-	// Print summary
-	if failedCount > 0 {
-		fmt.Printf("Fetched: %d, Failed: %d\n", fetchedCount, failedCount)
-	} else {
-		fmt.Printf("Fetched: %d\n", fetchedCount)
-	}
-
-	return nil
 }
 
 func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {

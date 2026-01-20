@@ -62,17 +62,13 @@ wt create branch                      # runs hooks with on=["create"]
 wt create branch --hook=vscode        # run specific hook
 wt create branch --no-hook            # skip all hooks
 
-# Fetch PR status for worktrees
-wt pr list                            # fetch PR info for all worktrees
-wt pr list -d ~/Git/worktrees         # in specific dir
-
 # Tidy up merged worktrees
 wt tidy                               # in cwd (uses cached PR info)
+wt tidy -r                            # refresh PR status first, then tidy
 wt tidy -d ~/Git/worktrees            # in specific dir
 wt tidy -n                            # dry run
 wt tidy -c                            # also remove clean (0 commits ahead)
 wt tidy --no-hook                     # skip post-removal hooks
-wt pr list && wt tidy                 # fetch PR status first, then tidy
 
 # List worktrees
 wt list                               # in cwd (filters to current repo if in one)

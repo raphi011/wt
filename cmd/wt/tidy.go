@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 
 	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/config"
@@ -14,6 +15,9 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 	"github.com/raphi011/wt/internal/ui"
 )
+
+// maxConcurrentPRFetches limits parallel gh API calls to avoid rate limiting
+const maxConcurrentPRFetches = 5
 
 func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
@@ -109,7 +113,13 @@ func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 	// Sync cache to get IDs
 	pathToID := wtCache.SyncWorktrees(wtInfos)
 
-	// PR status handling - load from cache only (run 'wt pr list' to fetch)
+	// Refresh PR status if requested
+	if cmd.Refresh {
+		sp.UpdateMessage("Fetching PR status...")
+		refreshPRStatus(worktrees, wtCache, cfg, sp)
+	}
+
+	// PR status handling - load from cache only (use --refresh to fetch)
 	prMap := make(map[string]*forge.PRInfo)
 	prUnknown := make(map[string]bool)
 
@@ -296,4 +306,85 @@ func formatNotRemovableReason(wt *git.Worktree, includeCleanSet bool) string {
 		commitWord = "commits"
 	}
 	return fmt.Sprintf("not merged (%d %s ahead of default branch), use -f to force", wt.CommitCount, commitWord)
+}
+
+// refreshPRStatus fetches PR status for all worktrees in parallel and updates the cache
+func refreshPRStatus(worktrees []git.Worktree, wtCache *forge.Cache, cfg *config.Config, sp *ui.Spinner) {
+	// Filter to worktrees with upstream branches
+	var toFetch []git.Worktree
+	for _, wt := range worktrees {
+		if wt.OriginURL == "" {
+			continue
+		}
+		if git.GetUpstreamBranch(wt.MainRepo, wt.Branch) == "" {
+			continue
+		}
+		toFetch = append(toFetch, wt)
+	}
+
+	if len(toFetch) == 0 {
+		return
+	}
+
+	sp.UpdateMessage(fmt.Sprintf("Fetching PR status (%d branches)...", len(toFetch)))
+
+	// Fetch PRs in parallel with rate limiting
+	var prMutex sync.Mutex
+	var prWg sync.WaitGroup
+	semaphore := make(chan struct{}, maxConcurrentPRFetches)
+	var fetchedCount, failedCount int
+	var countMutex sync.Mutex
+
+	for _, wt := range toFetch {
+		prWg.Add(1)
+		go func(wt git.Worktree) {
+			defer prWg.Done()
+			semaphore <- struct{}{}        // Acquire
+			defer func() { <-semaphore }() // Release
+
+			// Detect forge for this repo
+			f := forge.Detect(wt.OriginURL, cfg.Hosts)
+
+			// Check if forge CLI is available
+			if err := f.Check(); err != nil {
+				countMutex.Lock()
+				failedCount++
+				countMutex.Unlock()
+				return
+			}
+
+			// Use upstream branch name for PR lookup (may differ from local)
+			upstreamBranch := git.GetUpstreamBranch(wt.MainRepo, wt.Branch)
+			if upstreamBranch == "" {
+				return
+			}
+
+			pr, err := f.GetPRForBranch(wt.OriginURL, upstreamBranch)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: PR fetch failed for %s: %v\n", wt.Branch, err)
+				countMutex.Lock()
+				failedCount++
+				countMutex.Unlock()
+				return
+			}
+
+			prMutex.Lock()
+			if wtCache.PRs[wt.OriginURL] == nil {
+				wtCache.PRs[wt.OriginURL] = make(map[string]*forge.PRInfo)
+			}
+			wtCache.PRs[wt.OriginURL][wt.Branch] = pr
+			prMutex.Unlock()
+
+			countMutex.Lock()
+			fetchedCount++
+			countMutex.Unlock()
+		}(wt)
+	}
+
+	prWg.Wait()
+
+	// Print summary (spinner still running)
+	if failedCount > 0 {
+		sp.UpdateMessage(fmt.Sprintf("Fetched: %d, Failed: %d", fetchedCount, failedCount))
+	}
 }

@@ -89,7 +89,7 @@ _wt_completions() {
                 local branches=$(wt list 2>/dev/null | awk '{print $3}')
                 COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "-d --dir -n --dry-run -f --force -c --include-clean --reset-cache --hook --no-hook" -- "$cur"))
+                COMPREPLY=($(compgen -W "-d --dir -n --dry-run -f --force -c --include-clean -r --refresh --reset-cache --hook --no-hook" -- "$cur"))
             fi
             ;;
         list)
@@ -151,7 +151,7 @@ _wt_completions() {
             ;;
         pr)
             if [[ $cword -eq 2 ]]; then
-                COMPREPLY=($(compgen -W "open clone refresh merge" -- "$cur"))
+                COMPREPLY=($(compgen -W "open clone merge" -- "$cur"))
             elif [[ "${words[2]}" == "open" ]]; then
                 case "$prev" in
                     -d|--dir)
@@ -178,14 +178,6 @@ _wt_completions() {
                         ;;
                 esac
                 COMPREPLY=($(compgen -W "-d --dir --forge --note --hook --no-hook" -- "$cur"))
-            elif [[ "${words[2]}" == "refresh" ]]; then
-                case "$prev" in
-                    -d|--dir)
-                        COMPREPLY=($(compgen -d -- "$cur"))
-                        return
-                        ;;
-                esac
-                COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
             elif [[ "${words[2]}" == "merge" ]]; then
                 case "$prev" in
                     -d|--dir)
@@ -358,6 +350,8 @@ _wt() {
                         '--force[force remove even if not merged/dirty]' \
                         '-c[also remove clean worktrees]' \
                         '--include-clean[also remove clean worktrees]' \
+                        '-r[fetch origin and refresh PR status]' \
+                        '--refresh[fetch origin and refresh PR status]' \
                         '--reset-cache[clear cache and reset IDs from 1]' \
                         '--hook[run named hook]:hook:' \
                         '--no-hook[skip post-removal hooks]'
@@ -407,7 +401,6 @@ _wt() {
                             local subcommands=(
                                 'open:Checkout PR from existing local repo'
                                 'clone:Clone repo and checkout PR'
-                                'refresh:Refresh PR status cache'
                                 'merge:Merge PR and clean up worktree'
                             )
                             _describe 'subcommand' subcommands
@@ -433,11 +426,6 @@ _wt() {
                                         '--note[set note on branch]:note:' \
                                         '--hook[run named hook]:hook:' \
                                         '--no-hook[skip post-create hook]'
-                                    ;;
-                                refresh)
-                                    _arguments \
-                                        '-d[target directory]:directory:_files -/' \
-                                        '--dir[target directory]:directory:_files -/'
                                     ;;
                                 merge)
                                     _arguments \
@@ -620,6 +608,7 @@ complete -c wt -n "__fish_seen_subcommand_from tidy" -s d -l dir -r -a "(__fish_
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s n -l dry-run -d "Preview without removing"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s f -l force -d "Force remove even if not merged/dirty"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -s c -l include-clean -d "Also remove clean worktrees"
+complete -c wt -n "__fish_seen_subcommand_from tidy" -s r -l refresh -d "Fetch origin and refresh PR status"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -l reset-cache -d "Clear cache and reset IDs from 1"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from tidy" -l no-hook -d "Skip post-removal hooks"
@@ -662,10 +651,9 @@ complete -c wt -n "__fish_seen_subcommand_from hook; and __fish_seen_subcommand_
 complete -c wt -n "__fish_seen_subcommand_from hook; and __fish_seen_subcommand_from run" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for target lookup"
 
 # pr: subcommands
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone refresh merge" -a "open" -d "Checkout PR from existing local repo"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone refresh merge" -a "clone" -d "Clone repo and checkout PR"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone refresh merge" -a "refresh" -d "Refresh PR status cache"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone refresh merge" -a "merge" -d "Merge PR and clean up worktree"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone merge" -a "open" -d "Checkout PR from existing local repo"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone merge" -a "clone" -d "Clone repo and checkout PR"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone merge" -a "merge" -d "Merge PR and clean up worktree"
 # pr open: PR number (first positional), then repo (second positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -a "(gh pr list --json number,title --jq '.[] | \"\\(.number)\t\\(.title)\"' 2>/dev/null)" -d "PR number"
 # Repo names from default_path (second positional after PR number)
@@ -679,8 +667,6 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_fr
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l note -r -d "Set note on branch"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l no-hook -d "Skip post-create hook"
-# pr refresh: flags only
-complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from refresh" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 # pr merge: worktree ID or branch (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge; and not __fish_seen_argument" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory"

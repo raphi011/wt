@@ -63,6 +63,7 @@ type TidyCmd struct {
 	DryRun       bool   `short:"n" name:"dry-run" negatable:"" help:"preview without removing"`
 	Force        bool   `short:"f" name:"force" help:"force remove even if not merged or has uncommitted changes"`
 	IncludeClean bool   `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
+	Refresh      bool   `short:"r" name:"refresh" help:"fetch origin and refresh PR status before tidying"`
 	ResetCache   bool   `name:"reset-cache" help:"clear all cached data (PR info, worktree history) and reset IDs from 1"`
 	Hook         string `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook       bool   `name:"no-hook" help:"skip post-removal hooks" xor:"hook-ctrl"`
@@ -72,7 +73,7 @@ func (c *TidyCmd) Help() string {
 	return `Without arguments, removes all worktrees where the branch is merged AND
 working directory is clean. With a target, removes only that specific worktree.
 
-Shows a table with cached PR status. Run 'wt pr refresh' to update PR info.
+Shows a table with cached PR status. Use --refresh to fetch latest PR info.
 
 Hooks with on=["tidy"] run after each worktree removal. Hooks run with
 working directory set to the main repo (since worktree path is deleted).
@@ -82,7 +83,7 @@ or rebased PRs. For accurate detection, use GitHub/GitLab where PR status
 shows if the branch was merged.
 
 Examples:
-  wt pr refresh && wt tidy     # Refresh PR status, then tidy
+  wt tidy -r                   # Refresh PR status and tidy
   wt tidy                      # Remove merged worktrees (uses cached PR info)
   wt tidy -n                   # Dry-run: preview without removing
   wt tidy -d ~/Git/worktrees   # Scan specific directory
@@ -458,26 +459,6 @@ func (c *PrCloneCmd) Run(ctx *Context) error {
 	return runPrClone(c, ctx.Config)
 }
 
-// PrRefreshCmd fetches PR status for worktrees.
-type PrRefreshCmd struct {
-	Dir string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-}
-
-func (c *PrRefreshCmd) Help() string {
-	return `Refresh PR status cache for all worktrees
-
-Queries GitHub/GitLab for PR info on each worktree branch and caches the results.
-Run this to update PR info shown in 'wt list' and 'wt tidy'.
-
-Examples:
-  wt pr refresh                # Refresh PR status for worktrees
-  wt pr refresh -d ~/Git       # Refresh for worktrees in specific directory`
-}
-
-func (c *PrRefreshCmd) Run(ctx *Context) error {
-	return runPrRefresh(c, ctx.Config)
-}
-
 // PrMergeCmd merges the PR for the current branch.
 type PrMergeCmd struct {
 	Target   string `arg:"" optional:"" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
@@ -512,10 +493,9 @@ func (c *PrMergeCmd) Run(ctx *Context) error {
 
 // PrCmd works with PRs.
 type PrCmd struct {
-	Open    PrOpenCmd    `cmd:"" help:"Checkout PR from existing local repo"`
-	Clone   PrCloneCmd   `cmd:"" help:"Clone repo and checkout PR"`
-	Refresh PrRefreshCmd `cmd:"" help:"Refresh PR status cache"`
-	Merge   PrMergeCmd   `cmd:"" help:"Merge PR and clean up worktree"`
+	Open  PrOpenCmd  `cmd:"" help:"Checkout PR from existing local repo"`
+	Clone PrCloneCmd `cmd:"" help:"Clone repo and checkout PR"`
+	Merge PrMergeCmd `cmd:"" help:"Merge PR and clean up worktree"`
 }
 
 func (c *PrCmd) Help() string {
@@ -523,7 +503,6 @@ func (c *PrCmd) Help() string {
   wt pr open 123             # PR from current repo
   wt pr open 123 myrepo      # PR from existing local repo
   wt pr clone 123 org/repo   # Clone repo and checkout PR
-  wt pr refresh              # Refresh PR status cache
   wt pr merge                # Merge PR and clean up worktree`
 }
 
