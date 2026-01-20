@@ -145,12 +145,20 @@ Format: `type(scope)!: description` - scope optional, `!` for breaking changes.
 
 Releases are automated via GoReleaser in CI. **Do not use `gh release create` manually** - it won't generate the proper changelog.
 
+**Important**: This repo requires push access to `raphi011/wt`. If using a work machine with different GitHub credentials, you may need to switch accounts or configure SSH keys for the personal account.
+
 ```bash
-# 1. Ensure all changes are committed and pushed
+# 1. Check current version
+git tag --sort=-v:refname | head -1
+
+# 2. Determine next version based on commits since last tag
+git log $(git describe --tags --abbrev=0)..HEAD --oneline
+
+# 3. Ensure all changes are committed and pushed
 git push origin main
 
-# 2. Create and push a tag (triggers GoReleaser CI)
-git tag v0.X.0
+# 4. Create annotated tag and push (triggers GoReleaser CI)
+git tag -a v0.X.0 -m "v0.X.0"
 git push origin v0.X.0
 ```
 
