@@ -101,9 +101,11 @@ func (c *TidyCmd) Run(ctx *Context) error {
 
 // ListCmd lists worktrees in a directory.
 type ListCmd struct {
-	Dir  string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	JSON bool   `name:"json" help:"output as JSON"`
-	All  bool   `short:"a" name:"all" help:"show all worktrees (not just current repo)"`
+	Dir     string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	JSON    bool   `name:"json" help:"output as JSON"`
+	All     bool   `short:"a" name:"all" help:"show all worktrees (not just current repo)"`
+	Sort    string `short:"s" name:"sort" default:"id" enum:"id,repo,branch" help:"sort by: id, repo, branch"`
+	Reverse bool   `short:"r" name:"reverse" help:"reverse sort order (descending)"`
 }
 
 func (c *ListCmd) Help() string {
@@ -117,7 +119,9 @@ Examples:
   wt list                      # List worktrees for current repo
   wt list --all                # List all worktrees (all repos)
   wt list -d ~/Git/worktrees   # List from specific directory
-  wt list --json               # Output as JSON for scripting`
+  wt list --json               # Output as JSON for scripting
+  wt list --sort=repo          # Sort by repository name
+  wt list -s branch -r         # Sort by branch, descending`
 }
 
 func (c *ListCmd) Run(ctx *Context) error {

@@ -98,8 +98,12 @@ _wt_completions() {
                     COMPREPLY=($(compgen -d -- "$cur"))
                     return
                     ;;
+                -s|--sort)
+                    COMPREPLY=($(compgen -W "id repo branch" -- "$cur"))
+                    return
+                    ;;
             esac
-            COMPREPLY=($(compgen -W "-d --dir --json -a --all" -- "$cur"))
+            COMPREPLY=($(compgen -W "-d --dir --json -a --all -s --sort -r --reverse" -- "$cur"))
             ;;
         exec)
             case "$prev" in
@@ -364,7 +368,11 @@ _wt() {
                         '--dir[target directory]:directory:_files -/' \
                         '--json[output as JSON]' \
                         '-a[show all worktrees]' \
-                        '--all[show all worktrees]'
+                        '--all[show all worktrees]' \
+                        '-s[sort by]:field:(id repo branch)' \
+                        '--sort[sort by]:field:(id repo branch)' \
+                        '-r[reverse sort order]' \
+                        '--reverse[reverse sort order]'
                     ;;
                 exec)
                     _arguments \
@@ -620,6 +628,8 @@ complete -c wt -n "__fish_seen_subcommand_from tidy" -l no-hook -d "Skip post-re
 complete -c wt -n "__fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
 complete -c wt -n "__fish_seen_subcommand_from list" -s a -l all -d "Show all worktrees (not just current repo)"
+complete -c wt -n "__fish_seen_subcommand_from list" -s s -l sort -r -a "id repo branch" -d "Sort by field"
+complete -c wt -n "__fish_seen_subcommand_from list" -s r -l reverse -d "Reverse sort order"
 
 # exec: worktree ID or branch (positional), then -- command
 complete -c wt -n "__fish_seen_subcommand_from exec; and not __fish_seen_argument" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"

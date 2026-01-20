@@ -81,6 +81,9 @@ func runList(cmd *ListCmd) error {
 		fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
 	}
 
+	// Sort worktrees for JSON output
+	sortWorktrees(worktrees, pathToID, cmd.Sort, cmd.Reverse)
+
 	if cmd.JSON {
 		// Build JSON output with IDs and PR info
 		type prJSON struct {
@@ -183,14 +186,32 @@ func runList(cmd *ListCmd) error {
 		}
 	}
 
-	// Sort worktrees by repo name
-	sort.Slice(worktrees, func(i, j int) bool {
-		return worktrees[i].RepoName < worktrees[j].RepoName
-	})
+	// Sort worktrees
+	sortWorktrees(worktrees, pathToID, cmd.Sort, cmd.Reverse)
 
 	// Display table (no items marked for removal in list)
 	toRemoveMap := make(map[string]bool)
 	fmt.Print(ui.FormatWorktreesTable(worktrees, pathToID, prMap, prUnknown, toRemoveMap, false))
 
 	return nil
+}
+
+func sortWorktrees(wts []git.Worktree, pathToID map[string]int, sortBy string, reverse bool) {
+	sort.Slice(wts, func(i, j int) bool {
+		var less bool
+		switch sortBy {
+		case "id":
+			less = pathToID[wts[i].Path] < pathToID[wts[j].Path]
+		case "repo":
+			less = wts[i].RepoName < wts[j].RepoName
+		case "branch":
+			less = wts[i].Branch < wts[j].Branch
+		default:
+			less = pathToID[wts[i].Path] < pathToID[wts[j].Path]
+		}
+		if reverse {
+			return !less
+		}
+		return less
+	})
 }
