@@ -20,10 +20,16 @@ func runAdd(cmd *AddCmd, cfg *config.Config) error {
 
 	// Check if we're inside a git repo
 	if git.IsInsideRepo() {
+		if cmd.ID != 0 {
+			return fmt.Errorf("--id cannot be used inside a git repo; use branch name instead")
+		}
+		if cmd.Branch == "" {
+			return fmt.Errorf("branch name required inside git repo")
+		}
 		return runAddInRepo(cmd, cfg)
 	}
 
-	// Outside repo: resolve by ID or branch name
+	// Outside repo: resolve by ID
 	return runAddOutsideRepo(cmd, cfg)
 }
 
@@ -96,10 +102,14 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
 }
 
 // runAddOutsideRepo handles wt add when outside a git repository
-// Resolves the argument as either a worktree ID or branch name
+// Resolves the worktree by ID
 func runAddOutsideRepo(cmd *AddCmd, cfg *config.Config) error {
 	if cmd.NewBranch {
 		return fmt.Errorf("cannot create new branch (-b) outside git repo")
+	}
+
+	if cmd.ID == 0 {
+		return fmt.Errorf("--id required when outside git repo (run 'wt list' to see IDs)")
 	}
 
 	scanDir := cmd.Dir
@@ -113,8 +123,8 @@ func runAddOutsideRepo(cmd *AddCmd, cfg *config.Config) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	// Resolve target by ID or branch name
-	target, err := resolve.ByIDOrBranch(cmd.Branch, scanDir)
+	// Resolve target by ID
+	target, err := resolve.ByID(cmd.ID, scanDir)
 	if err != nil {
 		return err
 	}

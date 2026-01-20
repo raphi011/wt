@@ -10,10 +10,10 @@ import (
 )
 
 // resolveNoteTarget resolves the branch and repo path for note operations.
-// If target is empty and inside a worktree, uses the current branch.
-// Otherwise, uses the shared resolver to look up by ID or branch name.
+// If id is 0 and inside a worktree, uses the current branch.
+// Otherwise, uses the ID resolver.
 // Returns branch name, repo path, and any error.
-func resolveNoteTarget(target string, dir string) (branch string, repoPath string, err error) {
+func resolveNoteTarget(id int, dir string) (branch string, repoPath string, err error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get current directory: %w", err)
@@ -21,10 +21,10 @@ func resolveNoteTarget(target string, dir string) (branch string, repoPath strin
 
 	inWorktree := git.IsWorktree(cwd)
 
-	// If no target provided and inside a worktree, use current branch
-	if target == "" {
+	// If no ID provided and inside a worktree, use current branch
+	if id == 0 {
 		if !inWorktree {
-			return "", "", fmt.Errorf("target required when not inside a worktree (run 'wt list' to see IDs)")
+			return "", "", fmt.Errorf("--id required when not inside a worktree (run 'wt list' to see IDs)")
 		}
 
 		branch, err = git.GetCurrentBranch(cwd)
@@ -40,7 +40,7 @@ func resolveNoteTarget(target string, dir string) (branch string, repoPath strin
 		return branch, repoPath, nil
 	}
 
-	// Use unified resolver to handle both IDs and branch names
+	// Resolve by ID
 	scanPath := dir
 	if scanPath == "" {
 		scanPath = "."
@@ -50,7 +50,7 @@ func resolveNoteTarget(target string, dir string) (branch string, repoPath strin
 		return "", "", fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	resolved, err := resolve.ByIDOrBranch(target, scanPath)
+	resolved, err := resolve.ByID(id, scanPath)
 	if err != nil {
 		return "", "", err
 	}
@@ -59,7 +59,7 @@ func resolveNoteTarget(target string, dir string) (branch string, repoPath strin
 }
 
 func runNoteSet(cmd *NoteSetCmd) error {
-	branch, repoPath, err := resolveNoteTarget(cmd.Target, cmd.Dir)
+	branch, repoPath, err := resolveNoteTarget(cmd.ID, cmd.Dir)
 	if err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func runNoteSet(cmd *NoteSetCmd) error {
 }
 
 func runNoteGet(cmd *NoteGetCmd) error {
-	branch, repoPath, err := resolveNoteTarget(cmd.Target, cmd.Dir)
+	branch, repoPath, err := resolveNoteTarget(cmd.ID, cmd.Dir)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func runNoteGet(cmd *NoteGetCmd) error {
 }
 
 func runNoteClear(cmd *NoteClearCmd) error {
-	branch, repoPath, err := resolveNoteTarget(cmd.Target, cmd.Dir)
+	branch, repoPath, err := resolveNoteTarget(cmd.ID, cmd.Dir)
 	if err != nil {
 		return err
 	}

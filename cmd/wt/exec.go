@@ -33,11 +33,11 @@ func runExec(cmd *ExecCmd) error {
 
 	// Validate command is provided
 	if len(command) == 0 {
-		return fmt.Errorf("no command specified (use: wt exec <id|branch> -- <command>)")
+		return fmt.Errorf("no command specified (use: wt exec -i <id> -- <command>)")
 	}
 
-	// Resolve target by ID or branch name
-	target, err := resolve.ByIDOrBranch(cmd.Target, scanPath)
+	// Resolve target by ID
+	target, err := resolve.ByID(cmd.ID, scanPath)
 	if err != nil {
 		return err
 	}

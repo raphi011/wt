@@ -40,7 +40,7 @@ internal/forge/          - Git hosting service abstraction (GitHub/GitLab)
   ├── github.go          - GitHub implementation (gh CLI)
   └── gitlab.go          - GitLab implementation (glab CLI)
 internal/resolve/        - Target resolution for commands
-  └── resolve.go         - ByIDOrBranch resolver (ID or branch name lookup)
+  └── resolve.go         - ByID resolver (numeric ID lookup)
 internal/ui/             - Terminal UI components
   ├── table.go           - Lipgloss table formatting with colors
   └── spinner.go         - Bubbletea spinner (unused currently)
@@ -63,17 +63,20 @@ internal/ui/             - Terminal UI components
 
 ### CLI Commands
 
-- `wt add <branch>` - Add worktree for existing branch
+- `wt add <branch>` - Add worktree for existing branch (inside repo)
 - `wt add -b <branch>` - Add worktree for new branch
+- `wt add -i <id>` - Open worktree by ID (outside repo)
 - `wt prune` - Remove merged+clean worktrees, show table with PR status (use -r/--refresh to fetch latest)
+- `wt prune -i <id>` - Remove specific worktree by ID
 - `wt list [--json]` - List worktrees in directory
-- `wt exec <id|branch> -- <cmd>` - Run command in worktree by ID or branch
+- `wt exec -i <id> -- <cmd>` - Run command in worktree by ID
+- `wt cd -i <id>` - Print worktree path by ID
 - `wt mv` - Move worktrees to different directory
-- `wt note set/get/clear` - Manage branch notes
-- `wt hook <hook> [target]` - Run configured hook by name
+- `wt note set/get/clear [-i <id>]` - Manage branch notes (optional ID outside worktree)
+- `wt hook <hook> [-i <id>]` - Run configured hook by name
 - `wt pr open <number> [repo]` - Create worktree for GitHub PR
 - `wt pr clone <number> <repo>` - Clone repo and create worktree for PR
-- `wt pr merge [target]` - Merge PR and clean up worktree
+- `wt pr merge [-i <id>]` - Merge PR and clean up worktree
 - `wt config init` - Create default config file
 - `wt config show` - Show effective configuration
 - `wt config hooks` - List available hooks
@@ -105,20 +108,18 @@ Completions provide context-aware suggestions for branches, directories, and fla
 
 ### Development Guidelines
 
-**Target Resolution Pattern** - Commands that operate on worktrees should support flexible target resolution using `internal/resolve.ByIDOrBranch()`:
+**Target Resolution Pattern** - Commands that operate on worktrees use `--id` (`-i`) flag with `internal/resolve.ByID()`:
 
-- **Inside git repo**: Use the provided argument as-is (branch name)
-- **Outside git repo**: Resolve argument using this priority:
-  1. If arg is integer AND matches worktree ID → use that worktree
-  2. If arg matches exactly one branch name → use that worktree
-  3. If arg matches multiple branches → error listing repos with IDs
-  4. No match → error with helpful message
+- **Required ID**: `wt exec`, `wt cd` - always require `-i <id>`
+- **Optional ID**: `wt note`, `wt hook`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current branch; outside requires `-i`
+- **Special case**: `wt add` - inside repo uses branch name positional arg; outside repo requires `-i <id>`
 
-Commands using this pattern: `wt add`, `wt exec`, `wt note set/get/clear`, `wt pr merge`, `wt prune`
+Commands using this pattern: `wt add` (outside repo), `wt exec`, `wt cd`, `wt note set/get/clear`, `wt hook`, `wt pr merge`, `wt prune`
 
 **Keep completions/config in sync** - When CLI commands, flags, or subcommands change, always update the shell completion scripts (fish, bash, zsh in `cmd/wt/main.go`) and any config generation commands to match.
 
 **Reuse flags consistently** - When adding flags that serve the same purpose across commands, use identical names/shortcuts. Standard flags:
+- `-i, --id` - worktree ID for targeting
 - `-d, --dir` - target directory (with `env:WT_DEFAULT_PATH`)
 - `-n, --dry-run` - preview without making changes
 - `-f, --force` - force operation (override safety checks)

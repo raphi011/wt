@@ -238,15 +238,15 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {
 	var branch, mainRepo, wtPath string
 	var err error
 
-	// Resolve target: if Target is empty and in worktree, use current branch
+	// Resolve target: if ID is 0 and in worktree, use current branch
 	// Otherwise use the resolver
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	if cmd.Target == "" && git.IsWorktree(cwd) {
-		// Inside worktree, no target specified - use current branch
+	if cmd.ID == 0 && git.IsWorktree(cwd) {
+		// Inside worktree, no ID specified - use current branch
 		branch, err = git.GetCurrentBranch(cwd)
 		if err != nil {
 			return fmt.Errorf("failed to get current branch: %w", err)
@@ -256,10 +256,10 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {
 			return fmt.Errorf("failed to get main repo path: %w", err)
 		}
 		wtPath = cwd
-	} else if cmd.Target == "" {
-		return fmt.Errorf("target required when not inside a worktree (use ID or branch name)")
+	} else if cmd.ID == 0 {
+		return fmt.Errorf("--id required when not inside a worktree (run 'wt list' to see IDs)")
 	} else {
-		// Resolve target by ID or branch name
+		// Resolve target by ID
 		scanDir := cmd.Dir
 		if scanDir == "" {
 			scanDir = "."
@@ -269,7 +269,7 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {
 			return fmt.Errorf("failed to resolve absolute path: %w", err)
 		}
 
-		target, err := resolve.ByIDOrBranch(cmd.Target, scanDir)
+		target, err := resolve.ByID(cmd.ID, scanDir)
 		if err != nil {
 			return err
 		}

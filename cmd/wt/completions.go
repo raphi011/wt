@@ -61,18 +61,17 @@ _wt_completions() {
                     COMPREPLY=($(compgen -d -- "$cur"))
                     return
                     ;;
+                -i|--id)
+                    # Complete worktree IDs only
+                    local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                    COMPREPLY=($(compgen -W "$ids" -- "$cur"))
+                    return
+                    ;;
                 --hook)
                     return
                     ;;
             esac
-            if [[ $cword -eq 2 ]] && [[ "$cur" != -* ]]; then
-                # Complete worktree IDs and branch names (optional target)
-                local ids=$(wt list 2>/dev/null | awk '{print $1}')
-                local branches=$(wt list 2>/dev/null | awk '{print $3}')
-                COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
-            else
-                COMPREPLY=($(compgen -W "-d --dir -n --dry-run -f --force -c --include-clean -a --all -r --refresh --reset-cache --hook --no-hook" -- "$cur"))
-            fi
+            COMPREPLY=($(compgen -W "-i --id -d --dir -n --dry-run -f --force -c --include-clean -a --all -r --refresh --reset-cache --hook --no-hook" -- "$cur"))
             ;;
         list)
             case "$prev" in
@@ -93,15 +92,14 @@ _wt_completions() {
                     COMPREPLY=($(compgen -d -- "$cur"))
                     return
                     ;;
+                -i|--id)
+                    # Complete worktree IDs only
+                    local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                    COMPREPLY=($(compgen -W "$ids" -- "$cur"))
+                    return
+                    ;;
             esac
-            if [[ $cword -eq 2 ]]; then
-                # Complete worktree IDs and branch names
-                local ids=$(wt list 2>/dev/null | awk '{print $1}')
-                local branches=$(wt list 2>/dev/null | awk '{print $3}')
-                COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
-            else
-                COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
-            fi
+            COMPREPLY=($(compgen -W "-i --id -d --dir" -- "$cur"))
             ;;
         cd)
             case "$prev" in
@@ -109,15 +107,14 @@ _wt_completions() {
                     COMPREPLY=($(compgen -d -- "$cur"))
                     return
                     ;;
+                -i|--id)
+                    # Complete worktree IDs only
+                    local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                    COMPREPLY=($(compgen -W "$ids" -- "$cur"))
+                    return
+                    ;;
             esac
-            if [[ $cword -eq 2 ]]; then
-                # Complete worktree IDs and branch names
-                local ids=$(wt list 2>/dev/null | awk '{print $1}')
-                local branches=$(wt list 2>/dev/null | awk '{print $3}')
-                COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
-            else
-                COMPREPLY=($(compgen -W "-d --dir -p --project" -- "$cur"))
-            fi
+            COMPREPLY=($(compgen -W "-i --id -d --dir -p --project" -- "$cur"))
             ;;
         mv)
             case "$prev" in
@@ -166,6 +163,12 @@ _wt_completions() {
                         COMPREPLY=($(compgen -d -- "$cur"))
                         return
                         ;;
+                    -i|--id)
+                        # Complete worktree IDs only
+                        local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                        COMPREPLY=($(compgen -W "$ids" -- "$cur"))
+                        return
+                        ;;
                     -s|--strategy)
                         COMPREPLY=($(compgen -W "squash rebase merge" -- "$cur"))
                         return
@@ -174,14 +177,7 @@ _wt_completions() {
                         return
                         ;;
                 esac
-                if [[ $cword -eq 3 ]]; then
-                    # Complete worktree IDs and branch names
-                    local ids=$(wt list 2>/dev/null | awk '{print $1}')
-                    local branches=$(wt list 2>/dev/null | awk '{print $3}')
-                    COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
-                else
-                    COMPREPLY=($(compgen -W "-d --dir -s --strategy -k --keep --hook --no-hook" -- "$cur"))
-                fi
+                COMPREPLY=($(compgen -W "-i --id -d --dir -s --strategy -k --keep --hook --no-hook" -- "$cur"))
             fi
             ;;
         note)
@@ -193,30 +189,28 @@ _wt_completions() {
                         COMPREPLY=($(compgen -d -- "$cur"))
                         return
                         ;;
+                    -i|--id)
+                        # Complete worktree IDs only
+                        local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                        COMPREPLY=($(compgen -W "$ids" -- "$cur"))
+                        return
+                        ;;
                 esac
-                if [[ $cword -eq 4 ]]; then
-                    # Complete worktree IDs and branch names (second positional after text)
-                    local ids=$(wt list 2>/dev/null | awk '{print $1}')
-                    local branches=$(wt list 2>/dev/null | awk '{print $3}')
-                    COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
-                else
-                    COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
-                fi
+                COMPREPLY=($(compgen -W "-i --id -d --dir" -- "$cur"))
             elif [[ "${words[2]}" == "get" ]] || [[ "${words[2]}" == "clear" ]]; then
                 case "$prev" in
                     -d|--dir)
                         COMPREPLY=($(compgen -d -- "$cur"))
                         return
                         ;;
+                    -i|--id)
+                        # Complete worktree IDs only
+                        local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                        COMPREPLY=($(compgen -W "$ids" -- "$cur"))
+                        return
+                        ;;
                 esac
-                if [[ $cword -eq 3 ]]; then
-                    # Complete worktree IDs and branch names
-                    local ids=$(wt list 2>/dev/null | awk '{print $1}')
-                    local branches=$(wt list 2>/dev/null | awk '{print $3}')
-                    COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
-                else
-                    COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
-                fi
+                COMPREPLY=($(compgen -W "-i --id -d --dir" -- "$cur"))
             fi
             ;;
         hook)
@@ -225,18 +219,19 @@ _wt_completions() {
                     COMPREPLY=($(compgen -d -- "$cur"))
                     return
                     ;;
+                -i|--id)
+                    # Complete worktree IDs only
+                    local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                    COMPREPLY=($(compgen -W "$ids" -- "$cur"))
+                    return
+                    ;;
             esac
             if [[ $cword -eq 2 ]]; then
                 # Complete hook names (first positional)
                 local hooks=$(wt config hooks 2>/dev/null | awk '{print $1}')
                 COMPREPLY=($(compgen -W "$hooks" -- "$cur"))
-            elif [[ $cword -eq 3 ]]; then
-                # Complete worktree IDs and branch names (second positional, optional)
-                local ids=$(wt list 2>/dev/null | awk '{print $1}')
-                local branches=$(wt list 2>/dev/null | awk '{print $3}')
-                COMPREPLY=($(compgen -W "$ids $branches" -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
+                COMPREPLY=($(compgen -W "-i --id -d --dir" -- "$cur"))
             fi
             ;;
         config)
@@ -311,7 +306,8 @@ _wt() {
                     ;;
                 prune)
                     _arguments \
-                        '1:worktree ID or branch:__wt_worktree_targets' \
+                        '-i[worktree ID to remove]:id:__wt_worktree_ids' \
+                        '--id[worktree ID to remove]:id:__wt_worktree_ids' \
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/' \
                         '-n[preview without removing]' \
@@ -342,13 +338,15 @@ _wt() {
                     ;;
                 exec)
                     _arguments \
-                        '1:worktree ID or branch:__wt_worktree_targets' \
+                        '-i[worktree ID]:id:__wt_worktree_ids' \
+                        '--id[worktree ID]:id:__wt_worktree_ids' \
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/'
                     ;;
                 cd)
                     _arguments \
-                        '1:worktree ID or branch:__wt_worktree_targets' \
+                        '-i[worktree ID]:id:__wt_worktree_ids' \
+                        '--id[worktree ID]:id:__wt_worktree_ids' \
                         '-d[directory to scan]:directory:_files -/' \
                         '--dir[directory to scan]:directory:_files -/' \
                         '-p[print main repository path]' \
@@ -401,7 +399,8 @@ _wt() {
                                     ;;
                                 merge)
                                     _arguments \
-                                        '1:worktree ID or branch:__wt_worktree_targets' \
+                                        '-i[worktree ID]:id:__wt_worktree_ids' \
+                                        '--id[worktree ID]:id:__wt_worktree_ids' \
                                         '-d[worktree directory]:directory:_files -/' \
                                         '--dir[worktree directory]:directory:_files -/' \
                                         '-s[merge strategy]:strategy:(squash rebase merge)' \
@@ -433,13 +432,15 @@ _wt() {
                                 set)
                                     _arguments \
                                         '1:note text:' \
-                                        '2:worktree ID or branch:__wt_worktree_targets' \
+                                        '-i[worktree ID]:id:__wt_worktree_ids' \
+                                        '--id[worktree ID]:id:__wt_worktree_ids' \
                                         '-d[worktree directory]:directory:_files -/' \
                                         '--dir[worktree directory]:directory:_files -/'
                                     ;;
                                 get|clear)
                                     _arguments \
-                                        '1:worktree ID or branch:__wt_worktree_targets' \
+                                        '-i[worktree ID]:id:__wt_worktree_ids' \
+                                        '--id[worktree ID]:id:__wt_worktree_ids' \
                                         '-d[worktree directory]:directory:_files -/' \
                                         '--dir[worktree directory]:directory:_files -/'
                                     ;;
@@ -450,7 +451,8 @@ _wt() {
                 hook)
                     _arguments \
                         '1:hook name:__wt_hook_names' \
-                        '2:worktree ID or branch:__wt_worktree_targets' \
+                        '-i[worktree ID]:id:__wt_worktree_ids' \
+                        '--id[worktree ID]:id:__wt_worktree_ids' \
                         '-d[worktree directory]:directory:_files -/' \
                         '--dir[worktree directory]:directory:_files -/'
                     ;;
@@ -509,11 +511,11 @@ __wt_local_branches() {
     _describe 'branch' branches
 }
 
-# Helper: complete worktree IDs and branch names
-__wt_worktree_targets() {
-    local targets
-    targets=(${(f)"$(wt list 2>/dev/null | awk '{print $1; print $3}')"})
-    _describe 'worktree ID or branch' targets
+# Helper: complete worktree IDs only
+__wt_worktree_ids() {
+    local ids
+    ids=(${(f)"$(wt list 2>/dev/null | awk '{print $1}')"})
+    _describe 'worktree ID' ids
 }
 
 # Helper: complete hook names
@@ -550,8 +552,8 @@ complete -c wt -n "__fish_seen_subcommand_from add" -l note -r -d "Set note on b
 complete -c wt -n "__fish_seen_subcommand_from add" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from add" -l no-hook -d "Skip post-add hook"
 
-# prune: optional target (ID or branch), then flags
-complete -c wt -n "__fish_seen_subcommand_from prune; and not __fish_seen_argument" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
+# prune: --id flag, then other flags
+complete -c wt -n "__fish_seen_subcommand_from prune" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID to remove"
 complete -c wt -n "__fish_seen_subcommand_from prune" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from prune" -s n -l dry-run -d "Preview without removing"
 complete -c wt -n "__fish_seen_subcommand_from prune" -s f -l force -d "Force remove even if not merged/dirty"
@@ -569,12 +571,12 @@ complete -c wt -n "__fish_seen_subcommand_from list" -s a -l all -d "Show all wo
 complete -c wt -n "__fish_seen_subcommand_from list" -s s -l sort -r -a "id repo branch" -d "Sort by field"
 complete -c wt -n "__fish_seen_subcommand_from list" -s r -l refresh -d "Fetch origin and refresh PR status"
 
-# exec: worktree ID or branch (positional), then -- command
-complete -c wt -n "__fish_seen_subcommand_from exec; and not __fish_seen_argument" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
+# exec: --id flag (required), then -- command
+complete -c wt -n "__fish_seen_subcommand_from exec" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from exec" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 
-# cd: worktree ID or branch (positional), then flags
-complete -c wt -n "__fish_seen_subcommand_from cd; and not __fish_seen_argument" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
+# cd: --id flag (required), then flags
+complete -c wt -n "__fish_seen_subcommand_from cd" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s p -l project -d "Print main repository path"
 
@@ -588,13 +590,13 @@ complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move 
 complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "set" -d "Set a note on a branch"
 complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "get" -d "Get the note for a branch"
 complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "clear" -d "Clear the note from a branch"
-# note set/get/clear: worktree ID or branch (positional), then flags
-complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
+# note set/get/clear: --id flag (optional), then flags
+complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for ID lookup"
 
-# hook: hook name (required first), then worktree ID/branch (optional), then flags
+# hook: hook name (required first), then --id (optional), then flags
 complete -c wt -n "__fish_seen_subcommand_from hook; and not __fish_seen_argument" -a "(__wt_hook_names)" -d "Hook name"
-complete -c wt -n "__fish_seen_subcommand_from hook" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
+complete -c wt -n "__fish_seen_subcommand_from hook" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from hook" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for target lookup"
 
 # pr: subcommands
@@ -614,8 +616,8 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_fr
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l note -r -d "Set note on branch"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l no-hook -d "Skip post-add hook"
-# pr merge: worktree ID or branch (positional), then flags
-complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge; and not __fish_seen_argument" -a "(__wt_worktree_targets)" -d "Worktree ID or branch"
+# pr merge: --id flag (optional), then flags
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s s -l strategy -r -a "squash rebase merge" -d "Merge strategy"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s k -l keep -d "Keep worktree and branch after merge"
@@ -640,9 +642,9 @@ function __wt_list_repos
     end
 end
 
-# Helper function to list worktree IDs and branch names
-function __wt_worktree_targets
-    wt list 2>/dev/null | awk '{print $1; print $3}'
+# Helper function to list worktree IDs only
+function __wt_worktree_ids
+    wt list 2>/dev/null | awk '{print $1}'
 end
 
 # Helper function to list hook names

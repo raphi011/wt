@@ -34,10 +34,10 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	// If a target is specified, handle single worktree removal
-	if cmd.Target != "" {
+	// If an ID is specified, handle single worktree removal
+	if cmd.ID != 0 {
 		if cmd.ResetCache {
-			return fmt.Errorf("--reset-cache cannot be used with a target")
+			return fmt.Errorf("--reset-cache cannot be used with --id")
 		}
 		return runPruneTarget(cmd, cfg, scanPath)
 	}
@@ -250,8 +250,8 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 
 // runPruneTarget handles removal of a single targeted worktree
 func runPruneTarget(cmd *PruneCmd, cfg *config.Config, scanPath string) error {
-	// Resolve target
-	target, err := resolve.ByIDOrBranch(cmd.Target, scanPath)
+	// Resolve target by ID
+	target, err := resolve.ByID(cmd.ID, scanPath)
 	if err != nil {
 		return err
 	}

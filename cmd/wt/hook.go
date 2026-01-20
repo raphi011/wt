@@ -13,7 +13,6 @@ import (
 
 func runHookRun(cmd *HookCmd, cfg *config.Config) error {
 	hookName := cmd.Hook
-	target := cmd.Target
 
 	// Validate hook exists
 	hook, exists := cfg.Hooks.Hooks[hookName]
@@ -30,7 +29,7 @@ func runHookRun(cmd *HookCmd, cfg *config.Config) error {
 	}
 
 	// Resolve target
-	ctx, err := resolveHookTarget(target, cmd.Dir)
+	ctx, err := resolveHookTarget(cmd.ID, cmd.Dir)
 	if err != nil {
 		return err
 	}
@@ -40,9 +39,9 @@ func runHookRun(cmd *HookCmd, cfg *config.Config) error {
 }
 
 // resolveHookTarget resolves the worktree context for hook execution.
-// If target is empty and inside a worktree, uses the current worktree.
-// Otherwise, uses the shared resolver to look up by ID or branch name.
-func resolveHookTarget(target string, dir string) (hooks.Context, error) {
+// If id is 0 and inside a worktree, uses the current worktree.
+// Otherwise, uses the ID resolver.
+func resolveHookTarget(id int, dir string) (hooks.Context, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return hooks.Context{}, fmt.Errorf("failed to get current directory: %w", err)
@@ -50,10 +49,10 @@ func resolveHookTarget(target string, dir string) (hooks.Context, error) {
 
 	inWorktree := git.IsWorktree(cwd)
 
-	// If no target provided and inside a worktree, use current worktree
-	if target == "" {
+	// If no ID provided and inside a worktree, use current worktree
+	if id == 0 {
 		if !inWorktree {
-			return hooks.Context{}, fmt.Errorf("target required when not inside a worktree (run 'wt list' to see IDs)")
+			return hooks.Context{}, fmt.Errorf("--id required when not inside a worktree (run 'wt list' to see IDs)")
 		}
 
 		branch, err := git.GetCurrentBranch(cwd)
@@ -78,7 +77,7 @@ func resolveHookTarget(target string, dir string) (hooks.Context, error) {
 		return ctx, nil
 	}
 
-	// Target provided - resolve via ID or branch
+	// ID provided - resolve via ID
 	scanPath := dir
 	if scanPath == "" {
 		scanPath = "."
@@ -88,7 +87,7 @@ func resolveHookTarget(target string, dir string) (hooks.Context, error) {
 		return hooks.Context{}, fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	resolved, err := resolve.ByIDOrBranch(target, scanPath)
+	resolved, err := resolve.ByID(id, scanPath)
 	if err != nil {
 		return hooks.Context{}, err
 	}

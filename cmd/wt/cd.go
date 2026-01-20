@@ -24,7 +24,7 @@ func runCd(cmd *CdCmd) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	target, err := resolve.ByIDOrBranch(cmd.Target, scanPath)
+	target, err := resolve.ByID(cmd.ID, scanPath)
 	if err != nil {
 		return err
 	}
