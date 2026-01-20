@@ -33,7 +33,7 @@ _wt_completions() {
         cword=$COMP_CWORD
     fi
 
-    local commands="add prune list show exec cd mv note hook pr config completion"
+    local commands="add prune list show exec cd mv note label hook pr config completion"
 
     # Handle subcommand-specific completions
     case "${words[1]}" in
@@ -63,6 +63,29 @@ _wt_completions() {
                     fi
                     return
                     ;;
+                -l|--label)
+                    # Complete labels from repos in default_path
+                    local dir="$WT_DEFAULT_PATH"
+                    if [[ -z "$dir" ]]; then
+                        local config_file=~/.config/wt/config.toml
+                        if [[ -f "$config_file" ]]; then
+                            dir=$(grep '^default_path' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                        fi
+                    fi
+                    if [[ -d "$dir" ]]; then
+                        local labels=""
+                        for d in "$dir"/*/; do
+                            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                                local repo_labels=$(git -C "$d" config --local wt.labels 2>/dev/null)
+                                if [[ -n "$repo_labels" ]]; then
+                                    labels="$labels $(echo "$repo_labels" | tr ',' ' ')"
+                                fi
+                            fi
+                        done
+                        COMPREPLY=($(compgen -W "$(echo "$labels" | tr ' ' '\n' | sort -u)" -- "$cur"))
+                    fi
+                    return
+                    ;;
                 --hook|--note)
                     return
                     ;;
@@ -72,7 +95,7 @@ _wt_completions() {
                 local branches=$(git branch --all --format='%(refname:short)' 2>/dev/null | sed 's|origin/||' | sort -u)
                 COMPREPLY=($(compgen -W "$branches" -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "-b --new-branch -r --repository -d --dir --note --hook --no-hook -a --arg" -- "$cur"))
+                COMPREPLY=($(compgen -W "-b --new-branch -r --repository -l --label -d --dir --note --hook --no-hook -a --arg" -- "$cur"))
             fi
             ;;
         prune)
@@ -239,6 +262,26 @@ _wt_completions() {
                 COMPREPLY=($(compgen -W "-i --id -d --dir" -- "$cur"))
             fi
             ;;
+        label)
+            # label list is default, so flags work directly on label
+            case "$prev" in
+                -d|--dir)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    return
+                    ;;
+            esac
+            if [[ $cword -eq 2 ]]; then
+                COMPREPLY=($(compgen -W "add remove list clear -d --dir -a --all" -- "$cur"))
+            elif [[ "${words[2]}" == "add" ]] || [[ "${words[2]}" == "remove" ]]; then
+                COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
+            elif [[ "${words[2]}" == "list" ]]; then
+                COMPREPLY=($(compgen -W "-d --dir -a --all" -- "$cur"))
+            elif [[ "${words[2]}" == "clear" ]]; then
+                COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
+            else
+                COMPREPLY=($(compgen -W "-d --dir -a --all" -- "$cur"))
+            fi
+            ;;
         hook)
             case "$prev" in
                 -d|--dir)
@@ -307,6 +350,7 @@ _wt() {
                 'cd:Print worktree path for shell scripting'
                 'mv:Move worktrees to another directory'
                 'note:Manage branch notes'
+                'label:Manage repository labels'
                 'hook:Manage hooks'
                 'pr:Work with GitHub PRs'
                 'config:Manage configuration'
@@ -323,6 +367,8 @@ _wt() {
                         '--new-branch[create new branch]' \
                         '*-r[repository name]:repository:__wt_repo_names' \
                         '*--repository[repository name]:repository:__wt_repo_names' \
+                        '*-l[target repos by label]:label:__wt_label_names' \
+                        '*--label[target repos by label]:label:__wt_label_names' \
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/' \
                         '--note[set note on branch]:note:' \
@@ -498,6 +544,49 @@ _wt() {
                             ;;
                     esac
                     ;;
+                label)
+                    # label list is default, so flags work directly
+                    _arguments -C \
+                        '-d[repository directory]:directory:_files -/' \
+                        '--dir[repository directory]:directory:_files -/' \
+                        '-a[list all labels across repos]' \
+                        '--all[list all labels across repos]' \
+                        '1: :->subcmd' \
+                        '*:: :->args'
+                    case $state in
+                        subcmd)
+                            local subcommands=(
+                                'add:Add a label to a repository'
+                                'remove:Remove a label from a repository'
+                                'list:List labels for a repository'
+                                'clear:Clear all labels from a repository'
+                            )
+                            _describe 'subcommand' subcommands
+                            ;;
+                        args)
+                            case $words[1] in
+                                add|remove)
+                                    _arguments \
+                                        '1:label:' \
+                                        '-d[repository directory]:directory:_files -/' \
+                                        '--dir[repository directory]:directory:_files -/'
+                                    ;;
+                                list)
+                                    _arguments \
+                                        '-d[repository directory]:directory:_files -/' \
+                                        '--dir[repository directory]:directory:_files -/' \
+                                        '-a[list all labels across repos]' \
+                                        '--all[list all labels across repos]'
+                                    ;;
+                                clear)
+                                    _arguments \
+                                        '-d[repository directory]:directory:_files -/' \
+                                        '--dir[repository directory]:directory:_files -/'
+                                    ;;
+                            esac
+                            ;;
+                    esac
+                    ;;
                 hook)
                     _arguments \
                         '1:hook name:__wt_hook_names' \
@@ -598,6 +687,31 @@ __wt_repo_names() {
     fi
 }
 
+# Helper: complete label names from repos in default_path
+__wt_label_names() {
+    local dir labels
+    dir="$WT_DEFAULT_PATH"
+    if [[ -z "$dir" ]]; then
+        local config_file=~/.config/wt/config.toml
+        if [[ -f "$config_file" ]]; then
+            dir=$(grep '^default_path' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+        fi
+    fi
+    if [[ -d "$dir" ]]; then
+        labels=()
+        for d in "$dir"/*/; do
+            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                local repo_labels=$(git -C "$d" config --local wt.labels 2>/dev/null)
+                if [[ -n "$repo_labels" ]]; then
+                    labels+=(${(s:,:)repo_labels})
+                fi
+            fi
+        done
+        labels=(${(u)labels})  # unique
+        _describe 'label' labels
+    fi
+}
+
 _wt "$@"
 `
 
@@ -605,23 +719,25 @@ const fishCompletions = `# wt completions - supports fish autosuggestions and ta
 complete -c wt -f
 
 # Subcommands (shown in completions and autosuggestions)
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "add" -d "Add worktree for branch"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "prune" -d "Prune merged worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "list" -d "List worktrees with stable IDs"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "show" -d "Show worktree details"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "exec" -d "Run command in worktree by ID"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "cd" -d "Print worktree path"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "mv" -d "Move worktrees to another directory"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "note" -d "Manage branch notes"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "hook" -d "Manage hooks"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "pr" -d "Work with PRs"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "config" -d "Manage configuration"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note hook pr config completion" -a "completion" -d "Generate completion script"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note label hook pr config completion" -a "add" -d "Add worktree for branch"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note label hook pr config completion" -a "prune" -d "Prune merged worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note label hook pr config completion" -a "list" -d "List worktrees with stable IDs"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note label hook pr config completion" -a "show" -d "Show worktree details"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note label hook pr config completion" -a "exec" -d "Run command in worktree by ID"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note label hook pr config completion" -a "cd" -d "Print worktree path"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note label hook pr config completion" -a "mv" -d "Move worktrees to another directory"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note label hook pr config completion" -a "note" -d "Manage branch notes"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note label hook pr config completion" -a "label" -d "Manage repository labels"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note label hook pr config completion" -a "hook" -d "Manage hooks"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note label hook pr config completion" -a "pr" -d "Work with PRs"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note label hook pr config completion" -a "config" -d "Manage configuration"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show exec cd mv note label hook pr config completion" -a "completion" -d "Generate completion script"
 
 # add: branch name (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from add; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
 complete -c wt -n "__fish_seen_subcommand_from add" -s b -l new-branch -d "Create new branch"
 complete -c wt -n "__fish_seen_subcommand_from add" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from add" -s l -l label -r -a "(__wt_list_labels)" -d "Target repos by label (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from add" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
 complete -c wt -n "__fish_seen_subcommand_from add" -l note -r -d "Set note on branch"
 complete -c wt -n "__fish_seen_subcommand_from add" -l hook -d "Run named hook instead of default"
@@ -679,6 +795,19 @@ complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcomm
 # note set/get/clear: --id flag (optional), then flags
 complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for ID lookup"
+
+# label: subcommands (list is default, so flags work directly on label)
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -a "add" -d "Add a label to a repository"
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -a "remove" -d "Remove a label from a repository"
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -a "list" -d "List labels for a repository"
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -a "clear" -d "Clear all labels from a repository"
+# label: --dir and --all flags work directly (list is default)
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -s d -l dir -r -a "(__fish_complete_directories)" -d "Repository directory"
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -s a -l all -d "List all labels across repos"
+# label add/remove/list/clear: --dir flag (optional)
+complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from add remove clear" -s d -l dir -r -a "(__fish_complete_directories)" -d "Repository directory"
+complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Repository directory"
+complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list" -s a -l all -d "List all labels across repos"
 
 # hook: multiple hook names supported, then --id (optional), then flags
 complete -c wt -n "__fish_seen_subcommand_from hook" -a "(__wt_hook_names)" -d "Hook name"
@@ -740,6 +869,27 @@ end
 # Helper function to list hook names
 function __wt_hook_names
     wt config hooks 2>/dev/null | awk '{print $1}'
+end
+
+# Helper function to list labels from repos in default_path
+function __wt_list_labels
+    set -l dir "$WT_DEFAULT_PATH"
+    if test -z "$dir"
+        set -l config_file ~/.config/wt/config.toml
+        if test -f "$config_file"
+            set dir (grep '^default_path' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | string replace '~' "$HOME")
+        end
+    end
+    if test -d "$dir"
+        for d in $dir/*/
+            if test -d "$d/.git" -o -f "$d/.git"
+                set -l repo_labels (git -C "$d" config --local wt.labels 2>/dev/null)
+                if test -n "$repo_labels"
+                    string split ',' $repo_labels
+                end
+            end
+        end | sort -u
+    end
 end
 
 # config: subcommands

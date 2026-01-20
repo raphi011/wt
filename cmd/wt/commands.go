@@ -11,6 +11,7 @@ type Context struct {
 type AddCmd struct {
 	Branch     string   `arg:"" optional:"" placeholder:"BRANCH" help:"branch name"`
 	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) to create worktree in (repeatable, comma-separated)"`
+	Label      []string `short:"l" name:"label" sep:"," help:"target repos by label (repeatable, comma-separated)"`
 	Dir        string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	NewBranch  bool     `short:"b" name:"new-branch" help:"create a new branch"`
 	Note       string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
@@ -23,15 +24,16 @@ func (c *AddCmd) Help() string {
 	return `Add a worktree for a branch. Use -b to create a new branch.
 
 Inside a git repo: adds a worktree for the specified branch.
-Use -r to create worktrees across multiple repositories.
+Use -r to target repos by name, -l to target repos by label.
 
 Examples:
   wt add feature-branch              # Existing branch in current repo
   wt add -b feature-branch           # Create new branch in current repo
   wt add feature-branch -d ~/Git     # Specify target directory
   wt add feature-branch --no-hook    # Skip post-add hook
-  wt add -b feature -r palladium -r natrium -d ~/Git  # Multiple repos
-  wt add -b feature -r palladium,natrium -d ~/Git     # Comma syntax`
+  wt add -b feature -r repo1 -r repo2 -d ~/Git    # By repo name
+  wt add -b feature -l backend -d ~/Git           # By label
+  wt add -b feature -l backend -r extra -d ~/Git  # Mixed`
 }
 
 func (c *AddCmd) Run(ctx *Context) error {
@@ -267,6 +269,101 @@ Examples:
   wt note get                         # Inside worktree
   wt note get -i 1                    # By worktree ID
   wt note clear -i 1                  # By worktree ID`
+}
+
+// LabelAddCmd adds a label to a repository.
+type LabelAddCmd struct {
+	Label string `arg:"" required:"" placeholder:"LABEL" help:"label to add"`
+	Dir   string `short:"d" name:"dir" placeholder:"DIR" help:"repository directory (optional inside repo)"`
+}
+
+func (c *LabelAddCmd) Help() string {
+	return `Add a label to the current repository (or --dir).
+Labels are stored in git config (wt.labels) and can be used with 'wt add -l'.
+
+Examples:
+  wt label add backend      # Add label to current repo
+  wt label add -d ~/code/api backend`
+}
+
+func (c *LabelAddCmd) Run(ctx *Context) error {
+	return runLabelAdd(c)
+}
+
+// LabelRemoveCmd removes a label from a repository.
+type LabelRemoveCmd struct {
+	Label string `arg:"" required:"" placeholder:"LABEL" help:"label to remove"`
+	Dir   string `short:"d" name:"dir" placeholder:"DIR" help:"repository directory (optional inside repo)"`
+}
+
+func (c *LabelRemoveCmd) Help() string {
+	return `Remove a label from the current repository (or --dir).
+
+Examples:
+  wt label remove backend      # Remove from current repo
+  wt label remove -d ~/code/api backend`
+}
+
+func (c *LabelRemoveCmd) Run(ctx *Context) error {
+	return runLabelRemove(c)
+}
+
+// LabelListCmd lists labels for a repository.
+type LabelListCmd struct {
+	Dir string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"repository directory (or scan directory with --all)"`
+	All bool   `short:"a" name:"all" help:"list all labels from repos in directory"`
+}
+
+func (c *LabelListCmd) Help() string {
+	return `List labels for the current repository, or all repos with --all.
+
+Examples:
+  wt label list             # Labels for current repo
+  wt label list -a          # All labels from repos in current dir
+  wt label list -a -d ~/code`
+}
+
+func (c *LabelListCmd) Run(ctx *Context) error {
+	return runLabelList(c)
+}
+
+// LabelClearCmd clears all labels from a repository.
+type LabelClearCmd struct {
+	Dir string `short:"d" name:"dir" placeholder:"DIR" help:"repository directory (optional inside repo)"`
+}
+
+func (c *LabelClearCmd) Help() string {
+	return `Clear all labels from the current repository (or --dir).
+
+Examples:
+  wt label clear            # Clear labels from current repo
+  wt label clear -d ~/code/api`
+}
+
+func (c *LabelClearCmd) Run(ctx *Context) error {
+	return runLabelClear(c)
+}
+
+// LabelCmd manages repository labels.
+type LabelCmd struct {
+	Add    LabelAddCmd    `cmd:"" help:"Add a label to a repository"`
+	Remove LabelRemoveCmd `cmd:"" help:"Remove a label from a repository"`
+	List   LabelListCmd   `cmd:"" default:"withargs" help:"List labels (default)"`
+	Clear  LabelClearCmd  `cmd:"" help:"Clear all labels from a repository"`
+}
+
+func (c *LabelCmd) Help() string {
+	return `Labels are stored in git config (wt.labels) and can target repos with 'wt add -l'.
+
+Examples:
+  wt label add backend        # Add label to current repo
+  wt label remove backend     # Remove label
+  wt label list               # List labels for current repo
+  wt label list -a            # List all labels across repos
+  wt label clear              # Clear all labels
+
+Use with wt add:
+  wt add -b feature -l backend   # Create worktree in all repos with 'backend' label`
 }
 
 // CompletionCmd generates shell completion scripts.
@@ -527,8 +624,9 @@ type CLI struct {
 	Exec ExecCmd `cmd:"" help:"Run command in worktree by ID" group:"util"`
 	Cd   CdCmd   `cmd:"" help:"Print worktree path" group:"util"`
 	Mv   MvCmd   `cmd:"" help:"Move worktrees to another directory" group:"util"`
-	Note NoteCmd `cmd:"" help:"Manage branch notes" group:"util"`
-	Hook HookCmd `cmd:"" help:"Manage hooks" group:"util"`
+	Note  NoteCmd  `cmd:"" help:"Manage branch notes" group:"util"`
+	Label LabelCmd `cmd:"" help:"Manage repository labels" group:"util"`
+	Hook  HookCmd  `cmd:"" help:"Manage hooks" group:"util"`
 
 	// Configuration commands
 	Config     ConfigCmd     `cmd:"" help:"Manage configuration" group:"config"`

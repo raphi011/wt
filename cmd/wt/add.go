@@ -29,12 +29,12 @@ func runAdd(cmd *AddCmd, cfg *config.Config) error {
 
 	insideRepo := git.IsInsideRepo()
 
-	// If -r specified, use multi-repo mode
-	if len(cmd.Repository) > 0 {
+	// If -r or -l specified, use multi-repo mode
+	if len(cmd.Repository) > 0 || len(cmd.Label) > 0 {
 		return runAddMultiRepo(cmd, cfg, insideRepo)
 	}
 
-	// No -r specified
+	// No -r or -l specified
 	if insideRepo {
 		if cmd.Branch == "" {
 			return fmt.Errorf("branch name required inside git repo")
@@ -42,8 +42,8 @@ func runAdd(cmd *AddCmd, cfg *config.Config) error {
 		return runAddInRepo(cmd, cfg)
 	}
 
-	// Outside repo without -r
-	return fmt.Errorf("--repository (-r) required when outside git repo")
+	// Outside repo without -r or -l
+	return fmt.Errorf("--repository (-r) or --label (-l) required when outside git repo")
 }
 
 // runAddInRepo handles wt add when inside a git repository (single repo mode)
@@ -120,10 +120,10 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
 	return hooks.RunAll(hookMatches, ctx)
 }
 
-// runAddMultiRepo handles wt add with -r flag for multiple repositories
+// runAddMultiRepo handles wt add with -r or -l flags for multiple repositories
 func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 	if cmd.Branch == "" {
-		return fmt.Errorf("branch name required with --repository")
+		return fmt.Errorf("branch name required with --repository or --label")
 	}
 
 	// Determine scan directory
@@ -144,8 +144,9 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 	var results []successResult
 	var errs []error
 
-	// If inside repo, include current repo first
-	if insideRepo {
+	// If inside repo with -r flag, include current repo first (original behavior)
+	// With -l only, we don't auto-include current repo (only labeled repos)
+	if insideRepo && len(cmd.Repository) > 0 {
 		if err := git.CheckGit(); err != nil {
 			errs = append(errs, fmt.Errorf("(current repo): %w", err))
 		} else {
@@ -158,15 +159,42 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 		}
 	}
 
-	// Process each specified repository
+	// Collect repo paths: from -r (by name) and -l (by label)
+	repoPaths := make(map[string]bool) // dedupe by path
+
+	// Process -r flags (repository names)
 	for _, repoName := range cmd.Repository {
 		repoPath, err := git.FindRepoByName(scanDir, repoName)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
 			continue
 		}
+		repoPaths[repoPath] = true
+	}
 
+	// Process -l flags (labels)
+	for _, label := range cmd.Label {
+		paths, err := git.FindReposByLabel(scanDir, label)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("label %q: %w", label, err))
+			continue
+		}
+		if len(paths) == 0 {
+			errs = append(errs, fmt.Errorf("label %q: no repos found with this label", label))
+			continue
+		}
+		for _, p := range paths {
+			repoPaths[p] = true
+		}
+	}
+
+	// Process each unique repository
+	for repoPath := range repoPaths {
 		result, err := createWorktreeForRepo(repoPath, cmd, cfg, scanDir)
+		repoName, _ := git.GetRepoNameFrom(repoPath)
+		if repoName == "" {
+			repoName = filepath.Base(repoPath)
+		}
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
 		} else {

@@ -108,3 +108,25 @@ func isGitRepo(path string) bool {
 	return info.IsDir() || info.Mode().IsRegular()
 }
 
+// FindAllRepos returns paths to all git repositories in basePath (direct children only)
+func FindAllRepos(basePath string) ([]string, error) {
+	entries, err := os.ReadDir(basePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read directory %s: %w", basePath, err)
+	}
+
+	var repos []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		repoPath := filepath.Join(basePath, entry.Name())
+		if isGitRepo(repoPath) {
+			repos = append(repos, repoPath)
+		}
+	}
+
+	return repos, nil
+}
+

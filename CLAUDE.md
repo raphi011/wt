@@ -65,7 +65,8 @@ internal/ui/             - Terminal UI components
 
 - `wt add <branch>` - Add worktree for existing branch (inside repo)
 - `wt add -b <branch>` - Add worktree for new branch
-- `wt add -b <branch> -r <repo> [-r <repo>...]` - Create branch across multiple repos
+- `wt add -b <branch> -r <repo> [-r <repo>...]` - Create branch across multiple repos (by name)
+- `wt add -b <branch> -l <label> [-l <label>...]` - Create branch across repos with label
 - `wt prune` - Remove merged+clean worktrees, show table with PR status (use -r/--refresh to fetch latest)
 - `wt prune -i <id>` - Remove specific worktree by ID
 - `wt list [--json]` - List worktrees in directory
@@ -74,6 +75,7 @@ internal/ui/             - Terminal UI components
 - `wt cd -i <id>` - Print worktree path by ID
 - `wt mv` - Move worktrees to different directory
 - `wt note set/get/clear [-i <id>]` - Manage branch notes (optional ID outside worktree)
+- `wt label add/remove/list/clear` - Manage repository labels (stored in git config as wt.labels)
 - `wt hook <hook> [-i <id>...]` - Run configured hook by name (multi-ID supported)
 - `wt pr open <number> [repo]` - Create worktree for GitHub PR
 - `wt pr clone <number> <repo>` - Clone repo and create worktree for PR
@@ -113,7 +115,7 @@ Completions provide context-aware suggestions for branches, directories, and fla
 
 - **Required ID**: `wt exec`, `wt cd` - always require `-i <id>` (exec supports multiple)
 - **Optional ID**: `wt note`, `wt hook`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current branch; outside requires `-i` (hook/prune support multiple)
-- **Special case**: `wt add` - inside repo uses branch name; outside repo requires `-r <repo>` to specify target repos
+- **Special case**: `wt add` - inside repo uses branch name; outside repo requires `-r <repo>` or `-l <label>` to specify target repos
 
 Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt hook`, `wt pr merge`, `wt prune`
 
@@ -122,6 +124,7 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 **Reuse flags consistently** - When adding flags that serve the same purpose across commands, use identical names/shortcuts. Standard flags:
 - `-i, --id` - worktree ID for targeting
 - `-r, --repository` - repository name for multi-repo operations (wt add)
+- `-l, --label` - target repos by label for multi-repo operations (wt add)
 - `-d, --dir` - target directory (with `env:WT_DEFAULT_PATH`)
 - `-n, --dry-run` - preview without making changes
 - `-f, --force` - force operation (override safety checks)
