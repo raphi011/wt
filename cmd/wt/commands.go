@@ -323,37 +323,26 @@ Examples:
   wt config hooks          # List available hooks`
 }
 
-// HookRunCmd runs a hook by name for a worktree.
-type HookRunCmd struct {
+// HookCmd runs a hook by name for a worktree.
+type HookCmd struct {
 	Hook   string `arg:"" required:"" placeholder:"HOOK" help:"hook name to run"`
 	Target string `arg:"" optional:"" placeholder:"ID|BRANCH" help:"worktree ID or branch (optional in worktree)"`
 	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
 }
 
-func (c *HookRunCmd) Help() string {
+func (c *HookCmd) Help() string {
 	return `When run inside a worktree, target is optional (defaults to current worktree).
 When run outside, specify a worktree ID or branch name.
 
 Examples:
-  wt hook run kitty              # Inside worktree: run for current
-  wt hook run kitty 1            # By worktree ID
-  wt hook run kitty feature-x    # By branch name
-  wt hook run kitty 1 -d ~/Git   # Specify directory for lookup`
+  wt hook kitty              # Inside worktree: run for current
+  wt hook kitty 1            # By worktree ID
+  wt hook kitty feature-x    # By branch name
+  wt hook kitty 1 -d ~/Git   # Specify directory for lookup`
 }
 
-func (c *HookRunCmd) Run(ctx *Context) error {
+func (c *HookCmd) Run(ctx *Context) error {
 	return runHookRun(c, ctx.Config)
-}
-
-// HookCmd manages hooks.
-type HookCmd struct {
-	Run HookRunCmd `cmd:"" help:"Run a hook by name"`
-}
-
-func (c *HookCmd) Help() string {
-	return `Examples:
-  wt hook run kitty              # Run hook for current worktree
-  wt hook run kitty 1            # Run hook for worktree ID 1`
 }
 
 // MvCmd moves worktrees to a different directory with optional renaming.

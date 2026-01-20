@@ -11,7 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runHookRun(cmd *HookRunCmd, cfg *config.Config) error {
+func runHookRun(cmd *HookCmd, cfg *config.Config) error {
 	hookName := cmd.Hook
 	target := cmd.Target
 

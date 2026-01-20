@@ -72,7 +72,7 @@ func applyConfigDefaults(cli *CLI, cfg *config.Config) {
 	setDir(&cli.Note.Set.Dir)
 	setDir(&cli.Note.Get.Dir)
 	setDir(&cli.Note.Clear.Dir)
-	setDir(&cli.Hook.Run.Dir)
+	setDir(&cli.Hook.Dir)
 	setDir(&cli.Pr.Open.Dir)
 	setDir(&cli.Pr.Clone.Dir)
 	setDir(&cli.Pr.Merge.Dir)

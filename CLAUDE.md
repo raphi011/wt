@@ -70,7 +70,7 @@ internal/ui/             - Terminal UI components
 - `wt exec <id|branch> -- <cmd>` - Run command in worktree by ID or branch
 - `wt mv` - Move worktrees to different directory
 - `wt note set/get/clear` - Manage branch notes
-- `wt hook run [target] <hook>` - Run configured hook by name
+- `wt hook <hook> [target]` - Run configured hook by name
 - `wt pr open <number> [repo]` - Create worktree for GitHub PR
 - `wt pr clone <number> <repo>` - Clone repo and create worktree for PR
 - `wt pr merge [target]` - Merge PR and clean up worktree

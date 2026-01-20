@@ -141,7 +141,7 @@ func RunForEach(matches []HookMatch, ctx Context, workDir string) {
 }
 
 // RunSingle runs a single hook by name with the given context.
-// Used by `wt hook run` to execute a specific hook manually.
+// Used by `wt hook` to execute a specific hook manually.
 func RunSingle(name string, hook *config.Hook, ctx Context) error {
 	return runHook(name, hook, ctx, ctx.Path)
 }
