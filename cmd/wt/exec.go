@@ -36,8 +36,22 @@ func runExec(cmd *ExecCmd) error {
 		return fmt.Errorf("no command specified (use: wt exec -i <id> -- <command>)")
 	}
 
+	// Execute for each ID
+	var errs []error
+	for _, id := range cmd.ID {
+		if err := runExecForID(id, command, scanPath); err != nil {
+			errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to execute in some worktrees:\n%w", joinErrors(errs))
+	}
+	return nil
+}
+
+func runExecForID(id int, command []string, scanPath string) error {
 	// Resolve target by ID
-	target, err := resolve.ByID(cmd.ID, scanPath)
+	target, err := resolve.ByID(id, scanPath)
 	if err != nil {
 		return err
 	}

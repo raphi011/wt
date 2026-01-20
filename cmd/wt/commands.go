@@ -140,21 +140,21 @@ func (c *ShowCmd) Run(ctx *Context) error {
 	return runShow(c, ctx.Config)
 }
 
-// ExecCmd runs a command in a worktree by ID.
+// ExecCmd runs a command in one or more worktrees by ID.
 type ExecCmd struct {
-	ID      int      `short:"i" name:"id" required:"" help:"worktree ID"`
+	ID      []int    `short:"i" name:"id" required:"" help:"worktree ID(s) (repeatable)"`
 	Command []string `arg:"" optional:"" passthrough:"" placeholder:"COMMAND" help:"command to run (after --)"`
 	Dir     string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 }
 
 func (c *ExecCmd) Help() string {
-	return `Run a command in a worktree by ID
+	return `Run a command in one or more worktrees by ID
 
-Use 'wt list' to see worktree IDs. The command runs in the worktree directory.
+Use 'wt list' to see worktree IDs. The command runs in each worktree directory.
 
 Examples:
   wt exec -i 1 -- gh pr view         # By worktree ID
-  wt exec -i 1 -- git status         # Check status
+  wt exec -i 1 -i 2 -- git status    # Multiple worktrees
   wt exec -i 1 -- code .             # Open worktree in VS Code`
 }
 
@@ -353,18 +353,19 @@ Examples:
 // HookCmd runs one or more hooks by name for a worktree.
 type HookCmd struct {
 	Hooks []string `arg:"" required:"" placeholder:"HOOK" help:"hook name(s) to run"`
-	ID    int      `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
+	ID    []int    `short:"i" name:"id" help:"worktree ID(s) (optional in worktree, repeatable)"`
 	Dir   string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
 }
 
 func (c *HookCmd) Help() string {
 	return `When run inside a worktree, --id is optional (defaults to current worktree).
-When run outside, specify a worktree ID.
+When run outside, specify a worktree ID. Multiple IDs can be specified.
 
 Examples:
-  wt hook kitty              # Single hook
+  wt hook kitty              # Single hook (current worktree)
   wt hook kitty idea         # Multiple hooks
   wt hook kitty -i 1         # By worktree ID
+  wt hook kitty -i 1 -i 2    # Multiple worktrees
   wt hook kitty idea -i 1 -d ~/Git   # Multiple hooks with ID`
 }
 
@@ -508,7 +509,7 @@ type VersionFlag bool
 type CLI struct {
 	// Core commands (ungrouped - shown first)
 	Add   AddCmd   `cmd:"" help:"Add worktree for branch"`
-	List  ListCmd  `cmd:"" default:"withargs" help:"List worktrees"`
+	List  ListCmd  `cmd:"" help:"List worktrees"`
 	Show  ShowCmd  `cmd:"" help:"Show worktree details"`
 	Prune PruneCmd `cmd:"" help:"Prune merged worktrees"`
 
