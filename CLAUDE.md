@@ -70,11 +70,11 @@ internal/ui/             - Terminal UI components
 - `wt prune -i <id>` - Remove specific worktree by ID
 - `wt list [--json]` - List worktrees in directory
 - `wt show [-i <id>]` - Show detailed status for a worktree (commits, changes, PR info)
-- `wt exec -i <id> -- <cmd>` - Run command in worktree by ID
+- `wt exec -i <id> [-i <id>...] -- <cmd>` - Run command in worktree(s) by ID
 - `wt cd -i <id>` - Print worktree path by ID
 - `wt mv` - Move worktrees to different directory
 - `wt note set/get/clear [-i <id>]` - Manage branch notes (optional ID outside worktree)
-- `wt hook <hook> [-i <id>]` - Run configured hook by name
+- `wt hook <hook> [-i <id>...]` - Run configured hook by name (multi-ID supported)
 - `wt pr open <number> [repo]` - Create worktree for GitHub PR
 - `wt pr clone <number> <repo>` - Clone repo and create worktree for PR
 - `wt pr merge [-i <id>]` - Merge PR and clean up worktree
@@ -111,8 +111,8 @@ Completions provide context-aware suggestions for branches, directories, and fla
 
 **Target Resolution Pattern** - Commands that operate on worktrees use `--id` (`-i`) flag with `internal/resolve.ByID()`:
 
-- **Required ID**: `wt exec`, `wt cd` - always require `-i <id>`
-- **Optional ID**: `wt note`, `wt hook`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current branch; outside requires `-i`
+- **Required ID**: `wt exec`, `wt cd` - always require `-i <id>` (exec supports multiple)
+- **Optional ID**: `wt note`, `wt hook`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current branch; outside requires `-i` (hook/prune support multiple)
 - **Special case**: `wt add` - inside repo uses branch name positional arg; outside repo requires `-i <id>`
 
 Commands using this pattern: `wt add` (outside repo), `wt exec`, `wt cd`, `wt note set/get/clear`, `wt hook`, `wt pr merge`, `wt prune`
