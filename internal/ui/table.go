@@ -12,7 +12,7 @@ import (
 )
 
 // FormatWorktreesTable creates a formatted table for worktrees
-func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, prMap map[string]*forge.PRInfo, prUnknown map[string]bool, toRemove map[string]bool, dryRun bool) string {
+func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, cache *forge.Cache, toRemove map[string]bool, dryRun bool) string {
 	if len(worktrees) == 0 {
 		return ""
 	}
@@ -76,13 +76,14 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, prM
 
 		// Format PR column
 		var prCol string
+		pr := cache.GetPRForBranch(wt.OriginURL, wt.Branch)
 		if !wt.HasUpstream {
 			// No upstream branch - can't have a PR
 			prCol = "-"
-		} else if prUnknown[wt.Branch] {
+		} else if pr == nil || !pr.Fetched {
 			// Not fetched yet - show ?
 			prCol = "?"
-		} else if pr, ok := prMap[wt.Branch]; ok && pr != nil && pr.Number > 0 {
+		} else if pr.Number > 0 {
 			// PR exists - show details
 			f := forge.DetectFromRepo(wt.MainRepo, nil)
 			state := f.FormatState(pr.State)

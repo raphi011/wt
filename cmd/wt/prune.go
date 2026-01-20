@@ -142,28 +142,11 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 		refreshPRStatus(worktrees, wtCache, cfg, sp)
 	}
 
-	// PR status handling - load from cache only (use --refresh to fetch)
-	prMap := make(map[string]*forge.PRInfo)
-	prUnknown := make(map[string]bool)
-
-	// Build PR map from cache for display, track unknown branches
-	for _, wt := range worktrees {
-		if originCache, ok := wtCache.PRs[wt.OriginURL]; ok {
-			if pr, ok := originCache[wt.Branch]; ok && pr != nil && pr.Fetched {
-				prMap[wt.Branch] = pr
-				continue
-			}
-		}
-		// Not in cache or not fetched - mark as unknown
-		prUnknown[wt.Branch] = true
-	}
-
-	// Update merge status for worktrees based on PR state
+	// Update merge status for worktrees based on cached PR state
 	for i := range worktrees {
-		if pr, ok := prMap[worktrees[i].Branch]; ok && pr != nil {
-			if pr.State == "MERGED" {
-				worktrees[i].IsMerged = true
-			}
+		pr := wtCache.GetPRForBranch(worktrees[i].OriginURL, worktrees[i].Branch)
+		if pr != nil && pr.Fetched && pr.State == "MERGED" {
+			worktrees[i].IsMerged = true
 		}
 	}
 
@@ -198,7 +181,7 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 
 	// Display table with only purgeable worktrees
 	if len(toRemove) > 0 {
-		fmt.Print(ui.FormatWorktreesTable(toRemove, pathToID, prMap, prUnknown, toRemoveMap, cmd.DryRun))
+		fmt.Print(ui.FormatWorktreesTable(toRemove, pathToID, wtCache, toRemoveMap, cmd.DryRun))
 	}
 
 	// Save updated cache
@@ -421,10 +404,7 @@ func refreshPRStatus(worktrees []git.Worktree, wtCache *forge.Cache, cfg *config
 			}
 
 			prMutex.Lock()
-			if wtCache.PRs[wt.OriginURL] == nil {
-				wtCache.PRs[wt.OriginURL] = make(map[string]*forge.PRInfo)
-			}
-			wtCache.PRs[wt.OriginURL][wt.Branch] = pr
+			wtCache.SetPRForBranch(wt.OriginURL, wt.Branch, pr)
 			prMutex.Unlock()
 
 			countMutex.Lock()

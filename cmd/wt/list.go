@@ -132,15 +132,13 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 				Note:        wt.Note,
 			}
 			// Add PR info if available
-			if originCache, ok := wtCache.PRs[wt.OriginURL]; ok {
-				if pr, ok := originCache[wt.Branch]; ok && pr != nil && pr.Fetched && pr.Number > 0 {
-					wtJSON.PR = &prJSON{
-						Number:     pr.Number,
-						State:      pr.State,
-						IsDraft:    pr.IsDraft,
-						IsApproved: pr.IsApproved,
-						URL:        pr.URL,
-					}
+			if pr := wtCache.GetPRForBranch(wt.OriginURL, wt.Branch); pr != nil && pr.Fetched && pr.Number > 0 {
+				wtJSON.PR = &prJSON{
+					Number:     pr.Number,
+					State:      pr.State,
+					IsDraft:    pr.IsDraft,
+					IsApproved: pr.IsApproved,
+					URL:        pr.URL,
 				}
 			}
 			result = append(result, wtJSON)
@@ -169,26 +167,11 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 		fmt.Printf("Listing worktrees in %s (%d)\n\n", scanPath, len(worktrees))
 	}
 
-	// Build PR map from cache for display, track unknown branches
-	prMap := make(map[string]*forge.PRInfo)
-	prUnknown := make(map[string]bool)
-	for _, wt := range worktrees {
-		if originCache, ok := wtCache.PRs[wt.OriginURL]; ok {
-			if pr, ok := originCache[wt.Branch]; ok && pr != nil && pr.Fetched {
-				prMap[wt.Branch] = pr
-				continue
-			}
-		}
-		// Not in cache or not fetched - mark as unknown
-		prUnknown[wt.Branch] = true
-	}
-
-	// Update merge status for worktrees based on PR state
+	// Update merge status for worktrees based on cached PR state
 	for i := range worktrees {
-		if pr, ok := prMap[worktrees[i].Branch]; ok && pr != nil {
-			if pr.State == "MERGED" {
-				worktrees[i].IsMerged = true
-			}
+		pr := wtCache.GetPRForBranch(worktrees[i].OriginURL, worktrees[i].Branch)
+		if pr != nil && pr.Fetched && pr.State == "MERGED" {
+			worktrees[i].IsMerged = true
 		}
 	}
 
@@ -197,7 +180,7 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 
 	// Display table (no items marked for removal in list)
 	toRemoveMap := make(map[string]bool)
-	fmt.Print(ui.FormatWorktreesTable(worktrees, pathToID, prMap, prUnknown, toRemoveMap, false))
+	fmt.Print(ui.FormatWorktreesTable(worktrees, pathToID, wtCache, toRemoveMap, false))
 
 	return nil
 }

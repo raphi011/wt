@@ -68,6 +68,7 @@ type WorktreeIDEntry struct {
 	ID        int        `json:"id"`
 	Path      string     `json:"path"`
 	RemovedAt *time.Time `json:"removed_at,omitempty"` // nil if still exists
+	PR        *PRInfo    `json:"pr,omitempty"`         // embedded PR info
 }
 
 // Cache is the unified cache structure stored in .wt-cache.json
@@ -139,6 +140,18 @@ func LoadCache(scanDir string) (*Cache, error) {
 	if cache.NextID < 1 {
 		cache.NextID = 1
 	}
+
+	// Migrate old PRs into worktree entries
+	for originURL, branches := range cache.PRs {
+		for branch, prInfo := range branches {
+			key := MakeWorktreeKey(originURL, branch)
+			if entry, ok := cache.Worktrees[key]; ok && entry.PR == nil {
+				entry.PR = prInfo
+			}
+		}
+	}
+	// Clear old PRs map after migration (omitted on save via omitempty)
+	cache.PRs = nil
 
 	return &cache, nil
 }
@@ -213,16 +226,43 @@ func (c *Cache) GetBranchByID(id int) (branch string, path string, found bool, r
 // GetBranchByPRNumber looks up PR info by PR number for a given origin URL
 // Returns the branch name if found and cache is not stale, empty string otherwise
 func (c *Cache) GetBranchByPRNumber(originURL string, prNumber int) string {
-	branches, ok := c.PRs[originURL]
-	if !ok {
-		return ""
-	}
-	for branch, pr := range branches {
-		if pr != nil && pr.Number == prNumber && !pr.IsStale() {
-			return branch
+	// Search in embedded PRs
+	for key, entry := range c.Worktrees {
+		if entry.PR != nil && entry.PR.Number == prNumber && !entry.PR.IsStale() {
+			// Extract origin from key and compare
+			parts := strings.SplitN(key, "::", 2)
+			if len(parts) == 2 && parts[0] == originURL {
+				return parts[1] // branch name
+			}
 		}
 	}
 	return ""
+}
+
+// GetPRForBranch returns the cached PR for a given origin URL and branch
+// Returns nil if not found or not fetched
+func (c *Cache) GetPRForBranch(originURL, branch string) *PRInfo {
+	key := MakeWorktreeKey(originURL, branch)
+	if entry, ok := c.Worktrees[key]; ok {
+		return entry.PR
+	}
+	return nil
+}
+
+// SetPRForBranch stores PR info for a given origin URL and branch
+// Creates the worktree entry if it doesn't exist
+func (c *Cache) SetPRForBranch(originURL, branch string, pr *PRInfo) {
+	key := MakeWorktreeKey(originURL, branch)
+	if entry, ok := c.Worktrees[key]; ok {
+		entry.PR = pr
+	} else {
+		// Create entry if it doesn't exist (edge case)
+		c.Worktrees[key] = &WorktreeIDEntry{
+			ID: c.NextID,
+			PR: pr,
+		}
+		c.NextID++
+	}
 }
 
 // WorktreeInfo contains the minimal info needed to sync the cache
@@ -262,31 +302,8 @@ func (c *Cache) SyncWorktrees(worktrees []WorktreeInfo) map[string]int {
 // Reset clears all cached data and resets NextID to 1.
 // Active worktrees will get new IDs on next sync.
 func (c *Cache) Reset() {
-	c.PRs = make(PRCache)
+	c.PRs = nil
 	c.Worktrees = make(map[string]*WorktreeIDEntry)
 	c.NextID = 1
-}
-
-// LoadPRCache loads the PR cache from disk (legacy compatibility)
-func LoadPRCache(scanDir string) (PRCache, error) {
-	cache, err := LoadCache(scanDir)
-	if err != nil {
-		return nil, err
-	}
-	return cache.PRs, nil
-}
-
-// SavePRCache saves the PR cache to disk (legacy compatibility)
-func SavePRCache(scanDir string, prCache PRCache) error {
-	// Load existing cache to preserve worktree IDs
-	cache, err := LoadCache(scanDir)
-	if err != nil {
-		cache = &Cache{
-			Worktrees: make(map[string]*WorktreeIDEntry),
-			NextID:    1,
-		}
-	}
-	cache.PRs = prCache
-	return SaveCache(scanDir, cache)
 }
 

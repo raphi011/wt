@@ -100,10 +100,8 @@ func runShow(cmd *ShowCmd, cfg *config.Config) error {
 			if err := forge.SaveCache(scanPath, wtCache); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
 			}
-		} else if originCache, ok := wtCache.PRs[originURL]; ok {
-			if pr, ok := originCache[info.Branch]; ok && pr != nil && pr.Fetched {
-				prInfo = pr
-			}
+		} else if pr := wtCache.GetPRForBranch(originURL, info.Branch); pr != nil && pr.Fetched {
+			prInfo = pr
 		}
 	}
 
@@ -273,13 +271,7 @@ func fetchPRForBranch(originURL, mainRepo, branch string, wtCache *forge.Cache, 
 	}
 
 	// Cache the result
-	if wtCache.PRs == nil {
-		wtCache.PRs = make(forge.PRCache)
-	}
-	if wtCache.PRs[originURL] == nil {
-		wtCache.PRs[originURL] = make(map[string]*forge.PRInfo)
-	}
-	wtCache.PRs[originURL][branch] = pr
+	wtCache.SetPRForBranch(originURL, branch, pr)
 
 	return pr
 }
