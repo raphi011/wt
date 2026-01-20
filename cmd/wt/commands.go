@@ -106,7 +106,7 @@ type ListCmd struct {
 	JSON    bool   `name:"json" help:"output as JSON"`
 	All     bool   `short:"a" name:"all" help:"show all worktrees (not just current repo)"`
 	Sort    string `short:"s" name:"sort" default:"id" enum:"id,repo,branch" help:"sort by: id, repo, branch"`
-	Reverse bool   `short:"r" name:"reverse" help:"reverse sort order (descending)"`
+	Refresh bool   `short:"r" name:"refresh" help:"fetch origin and refresh PR status before listing"`
 }
 
 func (c *ListCmd) Help() string {
@@ -118,15 +118,15 @@ IDs are stable across runs - use them with 'wt exec'.
 
 Examples:
   wt list                      # List worktrees for current repo
+  wt list -r                   # Refresh PR status before listing
   wt list --all                # List all worktrees (all repos)
   wt list -d ~/Git/worktrees   # List from specific directory
   wt list --json               # Output as JSON for scripting
-  wt list --sort=repo          # Sort by repository name
-  wt list -s branch -r         # Sort by branch, descending`
+  wt list --sort=repo          # Sort by repository name`
 }
 
 func (c *ListCmd) Run(ctx *Context) error {
-	return runList(c)
+	return runList(c, ctx.Config)
 }
 
 // ExecCmd runs a command in a worktree by ID or branch.

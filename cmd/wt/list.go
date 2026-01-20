@@ -8,12 +8,13 @@ import (
 	"sort"
 
 	"github.com/raphi011/wt/internal/cache"
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/ui"
 )
 
-func runList(cmd *ListCmd) error {
+func runList(cmd *ListCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
@@ -41,8 +42,8 @@ func runList(cmd *ListCmd) error {
 		return fmt.Errorf("failed to load cache: %w", err)
 	}
 
-	// List worktrees with full info (same as tidy, but no fetch)
-	allWorktrees, err := git.ListWorktrees(scanPath)
+	// List worktrees (no dirty check needed for list)
+	allWorktrees, err := git.ListWorktrees(scanPath, false)
 	if err != nil {
 		return err
 	}
@@ -59,6 +60,14 @@ func runList(cmd *ListCmd) error {
 
 	// Sync cache with ALL worktrees to avoid losing IDs
 	pathToID := wtCache.SyncWorktrees(wtInfos)
+
+	// Refresh PR status if requested
+	if cmd.Refresh {
+		sp := ui.NewSpinner("Fetching PR status...")
+		sp.Start()
+		refreshPRStatus(allWorktrees, wtCache, cfg, sp)
+		sp.Stop()
+	}
 
 	// If in a git repo and not using --all, filter to only show worktrees from that repo
 	worktrees := allWorktrees
@@ -82,7 +91,7 @@ func runList(cmd *ListCmd) error {
 	}
 
 	// Sort worktrees for JSON output
-	sortWorktrees(worktrees, pathToID, cmd.Sort, cmd.Reverse)
+	sortWorktrees(worktrees, pathToID, cmd.Sort)
 
 	if cmd.JSON {
 		// Build JSON output with IDs and PR info
@@ -101,9 +110,6 @@ func runList(cmd *ListCmd) error {
 			OriginURL   string  `json:"origin_url"`
 			IsMerged    bool    `json:"is_merged"`
 			CommitCount int     `json:"commit_count"`
-			Additions   int     `json:"additions"`
-			Deletions   int     `json:"deletions"`
-			IsDirty     bool    `json:"is_dirty"`
 			HasUpstream bool    `json:"has_upstream"`
 			LastCommit  string  `json:"last_commit,omitempty"`
 			Note        string  `json:"note,omitempty"`
@@ -112,6 +118,7 @@ func runList(cmd *ListCmd) error {
 		result := make([]worktreeJSON, 0, len(worktrees))
 		for _, wt := range worktrees {
 			wtJSON := worktreeJSON{
+				ID:          pathToID[wt.Path],
 				Path:        wt.Path,
 				Branch:      wt.Branch,
 				MainRepo:    wt.MainRepo,
@@ -119,9 +126,6 @@ func runList(cmd *ListCmd) error {
 				OriginURL:   wt.OriginURL,
 				IsMerged:    wt.IsMerged,
 				CommitCount: wt.CommitCount,
-				Additions:   wt.Additions,
-				Deletions:   wt.Deletions,
-				IsDirty:     wt.IsDirty,
 				HasUpstream: wt.HasUpstream,
 				LastCommit:  wt.LastCommit,
 				Note:        wt.Note,
@@ -187,7 +191,7 @@ func runList(cmd *ListCmd) error {
 	}
 
 	// Sort worktrees
-	sortWorktrees(worktrees, pathToID, cmd.Sort, cmd.Reverse)
+	sortWorktrees(worktrees, pathToID, cmd.Sort)
 
 	// Display table (no items marked for removal in list)
 	toRemoveMap := make(map[string]bool)
@@ -196,22 +200,17 @@ func runList(cmd *ListCmd) error {
 	return nil
 }
 
-func sortWorktrees(wts []git.Worktree, pathToID map[string]int, sortBy string, reverse bool) {
+func sortWorktrees(wts []git.Worktree, pathToID map[string]int, sortBy string) {
 	sort.Slice(wts, func(i, j int) bool {
-		var less bool
 		switch sortBy {
 		case "id":
-			less = pathToID[wts[i].Path] < pathToID[wts[j].Path]
+			return pathToID[wts[i].Path] < pathToID[wts[j].Path]
 		case "repo":
-			less = wts[i].RepoName < wts[j].RepoName
+			return wts[i].RepoName < wts[j].RepoName
 		case "branch":
-			less = wts[i].Branch < wts[j].Branch
+			return wts[i].Branch < wts[j].Branch
 		default:
-			less = pathToID[wts[i].Path] < pathToID[wts[j].Path]
+			return pathToID[wts[i].Path] < pathToID[wts[j].Path]
 		}
-		if reverse {
-			return !less
-		}
-		return less
 	})
 }

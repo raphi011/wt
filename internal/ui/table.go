@@ -25,7 +25,6 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, prM
 	maxBranchWidth := len("BRANCH")
 	maxStatusWidth := len("STATUS")
 	maxLastCommitWidth := len("LAST COMMIT")
-	maxDiffWidth := len("DIFF")
 	maxNoteWidth := len("NOTE")
 	maxPRWidth := len("PR")
 
@@ -36,7 +35,6 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, prM
 		branch     string
 		status     string
 		lastCommit string
-		diff       string
 		note       string
 		pr         string
 	}
@@ -68,17 +66,6 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, prM
 
 		// Last commit time
 		lastCommit := wt.LastCommit
-
-		// Format diff (show additions/deletions and/or untracked indicator)
-		var diff string
-		if wt.Additions > 0 || wt.Deletions > 0 {
-			diff = fmt.Sprintf("+%d -%d", wt.Additions, wt.Deletions)
-			if wt.HasUntracked {
-				diff += " ?"
-			}
-		} else if wt.HasUntracked {
-			diff = "?"
-		}
 
 		// Format note (truncate if too long)
 		note := wt.Note
@@ -136,9 +123,6 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, prM
 		if len(lastCommit) > maxLastCommitWidth {
 			maxLastCommitWidth = len(lastCommit)
 		}
-		if len(diff) > maxDiffWidth {
-			maxDiffWidth = len(diff)
-		}
 		if len(note) > maxNoteWidth {
 			maxNoteWidth = len(note)
 		}
@@ -152,7 +136,6 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, prM
 			branch:     branch,
 			status:     status,
 			lastCommit: lastCommit,
-			diff:       diff,
 			note:       note,
 			pr:         prCol,
 		})
@@ -165,7 +148,6 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, prM
 		{Title: "BRANCH", Width: maxBranchWidth + 2},
 		{Title: "STATUS", Width: maxStatusWidth + 2},
 		{Title: "LAST COMMIT", Width: maxLastCommitWidth + 2},
-		{Title: "DIFF", Width: maxDiffWidth + 2},
 		{Title: "NOTE", Width: maxNoteWidth + 2},
 		{Title: "PR", Width: maxPRWidth},
 	}
@@ -173,7 +155,7 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, prM
 	// Build rows
 	var rows []table.Row
 	for _, rd := range rowsData {
-		rows = append(rows, table.Row{rd.id, rd.repo, rd.branch, rd.status, rd.lastCommit, rd.diff, rd.note, rd.pr})
+		rows = append(rows, table.Row{rd.id, rd.repo, rd.branch, rd.status, rd.lastCommit, rd.note, rd.pr})
 	}
 
 	t := table.New(

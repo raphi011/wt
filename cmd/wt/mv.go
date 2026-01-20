@@ -46,8 +46,8 @@ func runMv(cmd *MvCmd, _ *config.Config) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	// Scan for worktrees in current directory
-	worktrees, err := git.ListWorktrees(cwd)
+	// Scan for worktrees in current directory (no dirty check needed for mv)
+	worktrees, err := git.ListWorktrees(cwd, false)
 	if err != nil {
 		return err
 	}

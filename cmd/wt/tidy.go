@@ -52,8 +52,8 @@ func runTidy(cmd *TidyCmd, cfg *config.Config) error {
 	sp := ui.NewSpinner("Scanning worktrees...")
 	sp.Start()
 
-	// List worktrees
-	worktrees, err := git.ListWorktrees(scanPath)
+	// List worktrees (include dirty check for tidy decisions)
+	worktrees, err := git.ListWorktrees(scanPath, true)
 	if err != nil {
 		sp.Stop()
 		return err

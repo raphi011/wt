@@ -176,69 +176,14 @@ func GetLastCommitRelative(path string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-// GetDiffStats returns additions and deletions for uncommitted changes
-// Also returns true for hasUntracked if there are untracked files
-func GetDiffStats(path string) (additions, deletions int, hasUntracked bool, err error) {
-	// Check if there are any changes (including untracked)
-	statusCmd := exec.Command("git", "-C", path, "status", "--porcelain")
-	var stderr bytes.Buffer
-	statusCmd.Stderr = &stderr
-	statusOutput, err := statusCmd.Output()
-	if err != nil {
-		if stderr.Len() > 0 {
-			return 0, 0, false, fmt.Errorf("failed to get status: %s", strings.TrimSpace(stderr.String()))
-		}
-		return 0, 0, false, err
-	}
-
-	statusStr := strings.TrimSpace(string(statusOutput))
-	if statusStr == "" {
-		return 0, 0, false, nil
-	}
-
-	// Check for untracked files
-	for _, line := range strings.Split(statusStr, "\n") {
-		if strings.HasPrefix(line, "??") {
-			hasUntracked = true
-			break
-		}
-	}
-
-	// Get diff stats (both staged and unstaged)
-	cmd := exec.Command("git", "-C", path, "diff", "HEAD", "--numstat")
-	cmd.Stderr = &stderr
+// IsDirty returns true if the worktree has uncommitted changes or untracked files
+func IsDirty(path string) bool {
+	cmd := exec.Command("git", "-C", path, "status", "--porcelain")
 	output, err := cmd.Output()
 	if err != nil {
-		// diff HEAD fails on initial commits, still return untracked status
-		return 0, 0, hasUntracked, nil
+		return false // Treat error as clean (safe default)
 	}
-
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-		// Format: "additions\tdeletions\tfilename"
-		// Binary files show "-" instead of numbers
-		fields := strings.Fields(line)
-		if len(fields) >= 2 {
-			// Skip binary files (marked with "-")
-			if fields[0] == "-" || fields[1] == "-" {
-				continue
-			}
-			var add, del int
-			if _, err := fmt.Sscanf(fields[0], "%d", &add); err != nil {
-				continue // Skip lines with invalid format
-			}
-			if _, err := fmt.Sscanf(fields[1], "%d", &del); err != nil {
-				continue
-			}
-			additions += add
-			deletions += del
-		}
-	}
-
-	return additions, deletions, hasUntracked, nil
+	return strings.TrimSpace(string(output)) != ""
 }
 
 // FetchDefaultBranch fetches the default branch (main/master) from origin
@@ -427,49 +372,6 @@ func GetBranchWorktree(branch string) (string, error) {
 	return "", nil
 }
 
-// GetAllBranchNotes returns all branch notes for a repository in one call.
-// Returns a map of branch name -> note text.
-func GetAllBranchNotes(repoPath string) map[string]string {
-	notes := make(map[string]string)
-
-	cmd := exec.Command("git", "-C", repoPath, "config", "--get-regexp", `branch\..*\.description`)
-	output, err := cmd.Output()
-	if err != nil {
-		// No notes configured is not an error
-		return notes
-	}
-
-	// Parse output: "branch.feature-x.description Note text here"
-	// Note: description value can contain spaces
-	for _, line := range strings.Split(string(output), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		// Format: branch.<name>.description <value>
-		// Find the key-value boundary (first space after description)
-		parts := strings.SplitN(line, " ", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		key := parts[0]   // branch.<name>.description
-		value := parts[1] // note text
-
-		// Extract branch name from key
-		if !strings.HasPrefix(key, "branch.") || !strings.HasSuffix(key, ".description") {
-			continue
-		}
-		branch := key[7 : len(key)-12] // Remove "branch." prefix and ".description" suffix
-		if branch != "" {
-			notes[branch] = value
-		}
-	}
-
-	return notes
-}
-
 // WorktreeInfo contains basic worktree information from git worktree list.
 type WorktreeInfo struct {
 	Path       string
@@ -517,6 +419,79 @@ func ListWorktreesFromRepo(repoPath string) ([]WorktreeInfo, error) {
 	}
 
 	return worktrees, nil
+}
+
+// GetMergedBranches returns a set of branches that are merged into the default branch.
+// Uses a single git call: `git branch --merged origin/<default>`
+func GetMergedBranches(repoPath string) map[string]bool {
+	merged := make(map[string]bool)
+
+	defaultBranch := GetDefaultBranch(repoPath)
+	cmd := exec.Command("git", "-C", repoPath, "branch", "--merged", "origin/"+defaultBranch)
+	output, err := cmd.Output()
+	if err != nil {
+		return merged
+	}
+
+	for _, line := range strings.Split(string(output), "\n") {
+		trimmed := strings.TrimSpace(line)
+		// Handle both "branch" and "* branch" formats
+		trimmed = strings.TrimPrefix(trimmed, "* ")
+		if trimmed != "" {
+			merged[trimmed] = true
+		}
+	}
+	return merged
+}
+
+// GetAllBranchConfig returns branch notes and upstreams for a repository in one call.
+// Uses: `git config --get-regexp 'branch\.'`
+// Returns: notes map (branch -> note), upstreams map (branch -> upstream ref)
+func GetAllBranchConfig(repoPath string) (notes map[string]string, upstreams map[string]bool) {
+	notes = make(map[string]string)
+	upstreams = make(map[string]bool)
+
+	cmd := exec.Command("git", "-C", repoPath, "config", "--get-regexp", `branch\.`)
+	output, err := cmd.Output()
+	if err != nil {
+		// No config is not an error
+		return notes, upstreams
+	}
+
+	// Parse output lines like:
+	// branch.feature-x.description Note text here
+	// branch.feature-x.merge refs/heads/feature-x
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		parts := strings.SplitN(line, " ", 2)
+		if len(parts) < 1 {
+			continue
+		}
+
+		key := parts[0]
+
+		// Handle branch.<name>.description
+		if strings.HasPrefix(key, "branch.") && strings.HasSuffix(key, ".description") {
+			branch := key[7 : len(key)-12] // Remove "branch." prefix and ".description" suffix
+			if branch != "" && len(parts) == 2 {
+				notes[branch] = parts[1]
+			}
+		}
+
+		// Handle branch.<name>.merge
+		if strings.HasPrefix(key, "branch.") && strings.HasSuffix(key, ".merge") {
+			branch := key[7 : len(key)-6] // Remove "branch." prefix and ".merge" suffix
+			if branch != "" {
+				upstreams[branch] = true
+			}
+		}
+	}
+
+	return notes, upstreams
 }
 
 // DeleteLocalBranch deletes a local branch

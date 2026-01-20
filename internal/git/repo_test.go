@@ -56,17 +56,14 @@ func TestGetDefaultBranch(t *testing.T) {
 
 func TestWorktreeStruct(t *testing.T) {
 	wt := Worktree{
-		Path:         "/test/path",
-		Branch:       "feature-branch",
-		MainRepo:     "/test/main",
-		RepoName:     "test-repo",
-		IsMerged:     true,
-		CommitCount:  5,
-		Additions:    10,
-		Deletions:    3,
-		IsDirty:      false,
-		HasUntracked: false,
-		LastCommit:   "2 days ago",
+		Path:        "/test/path",
+		Branch:      "feature-branch",
+		MainRepo:    "/test/main",
+		RepoName:    "test-repo",
+		IsMerged:    true,
+		CommitCount: 5,
+		IsDirty:     false,
+		LastCommit:  "2 days ago",
 	}
 
 	if wt.Path != "/test/path" {
