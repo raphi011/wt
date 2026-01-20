@@ -306,6 +306,7 @@ worktree_format = "{git-origin}-{branch-name}"
 #
 # Hooks run with working directory set to the worktree path.
 # For "prune" hooks, working directory is the main repo (worktree is deleted).
+#
 # Available placeholders:
 #   {path}      - absolute worktree path
 #   {branch}    - branch name
@@ -313,6 +314,13 @@ worktree_format = "{git-origin}-{branch-name}"
 #   {folder}    - main repo folder name
 #   {main-repo} - main repo path
 #   {trigger}   - command that triggered the hook (add, pr, prune, merge)
+#   {key}       - custom variable passed via --arg key=value
+#   {key:-def}  - custom variable with default value if not provided
+#
+# Custom variables example:
+# [hooks.claude]
+# command = "kitty @ launch --cwd={path} -- claude {prompt:-help me}"
+# Run with: wt hook claude --arg prompt="implement feature X"
 
 # Clone settings - configure forge and default org for cloning repos
 # Used by "wt pr clone" when cloning a new repository
