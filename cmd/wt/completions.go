@@ -181,35 +181,26 @@ _wt_completions() {
             fi
             ;;
         note)
+            # note get is default, so flags work directly on note
+            case "$prev" in
+                -d|--dir)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    return
+                    ;;
+                -i|--id)
+                    # Complete worktree IDs only
+                    local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                    COMPREPLY=($(compgen -W "$ids" -- "$cur"))
+                    return
+                    ;;
+            esac
             if [[ $cword -eq 2 ]]; then
-                COMPREPLY=($(compgen -W "set get clear" -- "$cur"))
+                COMPREPLY=($(compgen -W "set get clear -i --id -d --dir" -- "$cur"))
             elif [[ "${words[2]}" == "set" ]]; then
-                case "$prev" in
-                    -d|--dir)
-                        COMPREPLY=($(compgen -d -- "$cur"))
-                        return
-                        ;;
-                    -i|--id)
-                        # Complete worktree IDs only
-                        local ids=$(wt list 2>/dev/null | awk '{print $1}')
-                        COMPREPLY=($(compgen -W "$ids" -- "$cur"))
-                        return
-                        ;;
-                esac
                 COMPREPLY=($(compgen -W "-i --id -d --dir" -- "$cur"))
             elif [[ "${words[2]}" == "get" ]] || [[ "${words[2]}" == "clear" ]]; then
-                case "$prev" in
-                    -d|--dir)
-                        COMPREPLY=($(compgen -d -- "$cur"))
-                        return
-                        ;;
-                    -i|--id)
-                        # Complete worktree IDs only
-                        local ids=$(wt list 2>/dev/null | awk '{print $1}')
-                        COMPREPLY=($(compgen -W "$ids" -- "$cur"))
-                        return
-                        ;;
-                esac
+                COMPREPLY=($(compgen -W "-i --id -d --dir" -- "$cur"))
+            else
                 COMPREPLY=($(compgen -W "-i --id -d --dir" -- "$cur"))
             fi
             ;;
@@ -415,7 +406,12 @@ _wt() {
                     esac
                     ;;
                 note)
+                    # note get is default, so flags work directly
                     _arguments -C \
+                        '-i[worktree ID]:id:__wt_worktree_ids' \
+                        '--id[worktree ID]:id:__wt_worktree_ids' \
+                        '-d[worktree directory]:directory:_files -/' \
+                        '--dir[worktree directory]:directory:_files -/' \
                         '1: :->subcmd' \
                         '*:: :->args'
                     case $state in
@@ -586,10 +582,13 @@ complete -c wt -n "__fish_seen_subcommand_from mv" -l format -d "Worktree naming
 complete -c wt -n "__fish_seen_subcommand_from mv" -s n -l dry-run -d "Show what would be moved"
 complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move dirty worktrees"
 
-# note: subcommands
+# note: subcommands (get is default, so flags work directly on note)
 complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "set" -d "Set a note on a branch"
 complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "get" -d "Get the note for a branch"
 complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "clear" -d "Clear the note from a branch"
+# note: --id and --dir flags work directly (get is default)
+complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for ID lookup"
 # note set/get/clear: --id flag (optional), then flags
 complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for ID lookup"

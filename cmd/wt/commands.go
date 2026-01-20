@@ -221,10 +221,10 @@ func (c *NoteClearCmd) Run(ctx *Context) error {
 	return runNoteClear(c)
 }
 
-// NoteCmd manages branch notes.
+// NoteCmd manages branch notes. Get is default subcommand.
 type NoteCmd struct {
 	Set   NoteSetCmd   `cmd:"" help:"Set a note on a branch"`
-	Get   NoteGetCmd   `cmd:"" help:"Get the note for a branch"`
+	Get   NoteGetCmd   `cmd:"" default:"withargs" help:"Get the note for a branch (default)"`
 	Clear NoteClearCmd `cmd:"" help:"Clear the note from a branch"`
 }
 
