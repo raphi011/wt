@@ -39,7 +39,12 @@ func main() {
 	applyConfigDefaults(&cli, &cfg)
 
 	err = ctx.Run(&Context{Config: &cfg})
-	ctx.FatalIfErrorf(err)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Run 'wt -h' for help")
+		os.Exit(1)
+	}
 }
 
 // applyConfigDefaults sets Dir from config when not specified via flag/env.
