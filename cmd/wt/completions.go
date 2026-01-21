@@ -307,17 +307,37 @@ _wt_completions() {
                     COMPREPLY=($(compgen -d -- "$cur"))
                     return
                     ;;
+                -r|--repository)
+                    # Complete repo names from worktree_dir
+                    local dir="$WT_WORKTREE_DIR"
+                    if [[ -z "$dir" ]]; then
+                        local config_file=~/.config/wt/config.toml
+                        if [[ -f "$config_file" ]]; then
+                            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                        fi
+                    fi
+                    if [[ -d "$dir" ]]; then
+                        local repos=""
+                        for d in "$dir"/*/; do
+                            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                                repos="$repos $(basename "$d")"
+                            fi
+                        done
+                        COMPREPLY=($(compgen -W "$repos" -- "$cur"))
+                    fi
+                    return
+                    ;;
             esac
             if [[ $cword -eq 2 ]]; then
-                COMPREPLY=($(compgen -W "add remove list clear -d --dir -a --all" -- "$cur"))
+                COMPREPLY=($(compgen -W "add remove list clear -r --repository -d --dir -g --global" -- "$cur"))
             elif [[ "${words[2]}" == "add" ]] || [[ "${words[2]}" == "remove" ]]; then
-                COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
+                COMPREPLY=($(compgen -W "-r --repository -d --dir" -- "$cur"))
             elif [[ "${words[2]}" == "list" ]]; then
-                COMPREPLY=($(compgen -W "-d --dir -a --all" -- "$cur"))
+                COMPREPLY=($(compgen -W "-r --repository -d --dir -g --global" -- "$cur"))
             elif [[ "${words[2]}" == "clear" ]]; then
-                COMPREPLY=($(compgen -W "-d --dir" -- "$cur"))
+                COMPREPLY=($(compgen -W "-r --repository -d --dir" -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "-d --dir -a --all" -- "$cur"))
+                COMPREPLY=($(compgen -W "-r --repository -d --dir -g --global" -- "$cur"))
             fi
             ;;
         hook)
@@ -597,10 +617,12 @@ _wt() {
                 label)
                     # label list is default, so flags work directly
                     _arguments -C \
-                        '-d[repository directory]:directory:_files -/' \
-                        '--dir[repository directory]:directory:_files -/' \
-                        '-a[list all labels across repos]' \
-                        '--all[list all labels across repos]' \
+                        '*-r[repository name]:repository:__wt_repo_names' \
+                        '*--repository[repository name]:repository:__wt_repo_names' \
+                        '-d[directory to scan for repos]:directory:_files -/' \
+                        '--dir[directory to scan for repos]:directory:_files -/' \
+                        '-g[list all labels across repos]' \
+                        '--global[list all labels across repos]' \
                         '1: :->subcmd' \
                         '*:: :->args'
                     case $state in
@@ -618,20 +640,26 @@ _wt() {
                                 add|remove)
                                     _arguments \
                                         '1:label:' \
-                                        '-d[repository directory]:directory:_files -/' \
-                                        '--dir[repository directory]:directory:_files -/'
+                                        '*-r[repository name]:repository:__wt_repo_names' \
+                                        '*--repository[repository name]:repository:__wt_repo_names' \
+                                        '-d[directory to scan for repos]:directory:_files -/' \
+                                        '--dir[directory to scan for repos]:directory:_files -/'
                                     ;;
                                 list)
                                     _arguments \
-                                        '-d[repository directory]:directory:_files -/' \
-                                        '--dir[repository directory]:directory:_files -/' \
-                                        '-a[list all labels across repos]' \
-                                        '--all[list all labels across repos]'
+                                        '*-r[repository name]:repository:__wt_repo_names' \
+                                        '*--repository[repository name]:repository:__wt_repo_names' \
+                                        '-d[directory to scan for repos]:directory:_files -/' \
+                                        '--dir[directory to scan for repos]:directory:_files -/' \
+                                        '-g[list all labels across repos]' \
+                                        '--global[list all labels across repos]'
                                     ;;
                                 clear)
                                     _arguments \
-                                        '-d[repository directory]:directory:_files -/' \
-                                        '--dir[repository directory]:directory:_files -/'
+                                        '*-r[repository name]:repository:__wt_repo_names' \
+                                        '*--repository[repository name]:repository:__wt_repo_names' \
+                                        '-d[directory to scan for repos]:directory:_files -/' \
+                                        '--dir[directory to scan for repos]:directory:_files -/'
                                     ;;
                             esac
                             ;;
@@ -859,13 +887,17 @@ complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcom
 complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -a "remove" -d "Remove a label from a repository"
 complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -a "list" -d "List labels for a repository"
 complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -a "clear" -d "Clear all labels from a repository"
-# label: --dir and --all flags work directly (list is default)
-complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -s d -l dir -r -a "(__fish_complete_directories)" -d "Repository directory"
-complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -s a -l all -d "List all labels across repos"
-# label add/remove/list/clear: --dir flag (optional)
-complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from add remove clear" -s d -l dir -r -a "(__fish_complete_directories)" -d "Repository directory"
-complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Repository directory"
-complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list" -s a -l all -d "List all labels across repos"
+# label: flags work directly (list is default)
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan for repos"
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -s g -l global -d "List all labels across repos"
+# label add/remove/clear: -r and -d flags
+complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from add remove clear" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from add remove clear" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan for repos"
+# label list: -r, -d, -g flags
+complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan for repos"
+complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list" -s g -l global -d "List all labels across repos"
 
 # hook: multiple hook names supported, then --id (optional), then flags
 complete -c wt -n "__fish_seen_subcommand_from hook" -a "(__wt_hook_names)" -d "Hook name"

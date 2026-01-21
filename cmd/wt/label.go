@@ -10,102 +10,144 @@ import (
 	"github.com/raphi011/wt/internal/git"
 )
 
-// resolveLabelRepo resolves the repository path for label operations.
-// If inside a git repo, uses that. Otherwise uses dir flag.
-func resolveLabelRepo(dir string) (string, error) {
-	cwd, err := os.Getwd()
+// resolveLabelRepos resolves repository paths for label operations.
+// If repos is empty and inside a repo, uses current repo.
+// If repos is empty and outside a repo, returns error.
+// If repos is provided, resolves each by name via git.FindRepoByName.
+func resolveLabelRepos(repos []string, dir string, cfg *config.Config) ([]string, error) {
+	// Determine scan directory for repo lookup
+	scanDir := dir
+	if scanDir == "" {
+		scanDir = cfg.RepoScanDir()
+	}
+	if scanDir == "" {
+		scanDir = "."
+	}
+	scanDir, err := filepath.Abs(scanDir)
 	if err != nil {
-		return "", fmt.Errorf("failed to get current directory: %w", err)
+		return nil, fmt.Errorf("failed to resolve path: %w", err)
 	}
 
-	// Check if inside a git repo (regular or worktree)
-	if git.IsInsideRepo() {
-		// If in a worktree, get the main repo
-		if git.IsWorktree(cwd) {
-			mainRepo, err := git.GetMainRepoPath(cwd)
-			if err != nil {
-				return "", fmt.Errorf("failed to get main repo path: %w", err)
-			}
-			return mainRepo, nil
+	// If no repos specified, try to use current repo
+	if len(repos) == 0 {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current directory: %w", err)
 		}
-		// In main repo, use toplevel
-		return git.GetCurrentRepoMainPath(), nil
+
+		// Check if inside a git repo (regular or worktree)
+		if git.IsInsideRepo() {
+			// If in a worktree, get the main repo
+			if git.IsWorktree(cwd) {
+				mainRepo, err := git.GetMainRepoPath(cwd)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get main repo path: %w", err)
+				}
+				return []string{mainRepo}, nil
+			}
+			// In main repo, use toplevel
+			return []string{git.GetCurrentRepoMainPath()}, nil
+		}
+
+		return nil, fmt.Errorf("not inside a git repository, specify -r/--repository")
 	}
 
-	// Not in repo - need dir flag
-	if dir == "" {
-		return "", fmt.Errorf("not inside a git repository, specify --dir")
+	// Resolve each repo by name
+	var repoPaths []string
+
+	for _, repoName := range repos {
+		repoPath, err := git.FindRepoByName(scanDir, repoName)
+		if err != nil {
+			// Skip repos that can't be found - errors will be handled per-operation
+			fmt.Fprintf(os.Stderr, "warning: %s: %v\n", repoName, err)
+			continue
+		}
+		repoPaths = append(repoPaths, repoPath)
 	}
 
-	absDir, err := filepath.Abs(dir)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve path: %w", err)
+	if len(repoPaths) == 0 {
+		return nil, fmt.Errorf("no valid repositories found")
 	}
 
-	// Check if dir is a git repo
-	gitPath := filepath.Join(absDir, ".git")
-	if _, err := os.Stat(gitPath); err != nil {
-		return "", fmt.Errorf("%s is not a git repository", absDir)
-	}
-
-	return absDir, nil
+	return repoPaths, nil
 }
 
-func runLabelAdd(cmd *LabelAddCmd) error {
-	repoPath, err := resolveLabelRepo(cmd.Dir)
+func runLabelAdd(cmd *LabelAddCmd, cfg *config.Config) error {
+	repoPaths, err := resolveLabelRepos(cmd.Repository, cmd.Dir, cfg)
 	if err != nil {
 		return err
 	}
 
-	if err := git.AddLabel(repoPath, cmd.Label); err != nil {
-		return fmt.Errorf("failed to add label: %w", err)
+	var errs []error
+	for _, repoPath := range repoPaths {
+		repoName := filepath.Base(repoPath)
+		if err := git.AddLabel(repoPath, cmd.Label); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
+			continue
+		}
+		fmt.Printf("Label %q added to %s\n", cmd.Label, repoName)
 	}
 
-	repoName := filepath.Base(repoPath)
-	fmt.Printf("Label %q added to %s\n", cmd.Label, repoName)
-	return nil
+	return combineErrors(errs)
 }
 
-func runLabelRemove(cmd *LabelRemoveCmd) error {
-	repoPath, err := resolveLabelRepo(cmd.Dir)
+func runLabelRemove(cmd *LabelRemoveCmd, cfg *config.Config) error {
+	repoPaths, err := resolveLabelRepos(cmd.Repository, cmd.Dir, cfg)
 	if err != nil {
 		return err
 	}
 
-	if err := git.RemoveLabel(repoPath, cmd.Label); err != nil {
-		return fmt.Errorf("failed to remove label: %w", err)
+	var errs []error
+	for _, repoPath := range repoPaths {
+		repoName := filepath.Base(repoPath)
+		if err := git.RemoveLabel(repoPath, cmd.Label); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
+			continue
+		}
+		fmt.Printf("Label %q removed from %s\n", cmd.Label, repoName)
 	}
 
-	repoName := filepath.Base(repoPath)
-	fmt.Printf("Label %q removed from %s\n", cmd.Label, repoName)
-	return nil
+	return combineErrors(errs)
 }
 
 func runLabelList(cmd *LabelListCmd, cfg *config.Config) error {
-	// If --all flag, list labels from all repos in directory
-	if cmd.All {
-		return runLabelListAll(cmd, cfg)
+	// If --global flag, list labels from all repos in directory
+	if cmd.Global {
+		return runLabelListGlobal(cmd, cfg)
 	}
 
-	repoPath, err := resolveLabelRepo(cmd.Dir)
+	repoPaths, err := resolveLabelRepos(cmd.Repository, cmd.Dir, cfg)
 	if err != nil {
 		return err
 	}
 
-	labels, err := git.GetLabels(repoPath)
-	if err != nil {
-		return fmt.Errorf("failed to get labels: %w", err)
-	}
+	// If multiple repos, show repo name with labels
+	showRepoName := len(repoPaths) > 1
 
-	if len(labels) == 0 {
-		return nil
-	}
+	for _, repoPath := range repoPaths {
+		labels, err := git.GetLabels(repoPath)
+		if err != nil {
+			return fmt.Errorf("failed to get labels: %w", err)
+		}
 
-	fmt.Println(strings.Join(labels, "\n"))
+		if len(labels) == 0 {
+			continue
+		}
+
+		if showRepoName {
+			repoName, _ := git.GetRepoNameFrom(repoPath)
+			if repoName == "" {
+				repoName = filepath.Base(repoPath)
+			}
+			fmt.Printf("%s: %s\n", repoName, strings.Join(labels, ", "))
+		} else {
+			fmt.Println(strings.Join(labels, "\n"))
+		}
+	}
 	return nil
 }
 
-func runLabelListAll(cmd *LabelListCmd, cfg *config.Config) error {
+func runLabelListGlobal(cmd *LabelListCmd, cfg *config.Config) error {
 	// Use repo_dir from config if available, fallback to cmd.Dir or cwd
 	scanDir := cmd.Dir
 	if scanDir == "" {
@@ -151,17 +193,36 @@ func runLabelListAll(cmd *LabelListCmd, cfg *config.Config) error {
 	return nil
 }
 
-func runLabelClear(cmd *LabelClearCmd) error {
-	repoPath, err := resolveLabelRepo(cmd.Dir)
+func runLabelClear(cmd *LabelClearCmd, cfg *config.Config) error {
+	repoPaths, err := resolveLabelRepos(cmd.Repository, cmd.Dir, cfg)
 	if err != nil {
 		return err
 	}
 
-	if err := git.ClearLabels(repoPath); err != nil {
-		return fmt.Errorf("failed to clear labels: %w", err)
+	var errs []error
+	for _, repoPath := range repoPaths {
+		repoName := filepath.Base(repoPath)
+		if err := git.ClearLabels(repoPath); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
+			continue
+		}
+		fmt.Printf("Labels cleared from %s\n", repoName)
 	}
 
-	repoName := filepath.Base(repoPath)
-	fmt.Printf("Labels cleared from %s\n", repoName)
-	return nil
+	return combineErrors(errs)
+}
+
+// combineErrors returns nil if no errors, otherwise combines them into one error
+func combineErrors(errs []error) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	if len(errs) == 1 {
+		return errs[0]
+	}
+	msgs := make([]string, len(errs))
+	for i, e := range errs {
+		msgs[i] = e.Error()
+	}
+	return fmt.Errorf("multiple errors:\n  %s", strings.Join(msgs, "\n  "))
 }

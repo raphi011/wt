@@ -272,54 +272,60 @@ Examples:
 
 // LabelAddCmd adds a label to a repository.
 type LabelAddCmd struct {
-	Label string `arg:"" required:"" placeholder:"LABEL" help:"label to add"`
-	Dir   string `short:"d" name:"dir" placeholder:"DIR" help:"repository directory (optional inside repo)"`
+	Label      string   `arg:"" required:"" placeholder:"LABEL" help:"label to add"`
+	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
+	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for repos (when using -r)"`
 }
 
 func (c *LabelAddCmd) Help() string {
-	return `Add a label to the current repository (or --dir).
+	return `Add a label to the current repository (or specify repos with -r).
 Labels are stored in git config (wt.labels) and can be used with 'wt add -l'.
 
 Examples:
-  wt label add backend      # Add label to current repo
-  wt label add -d ~/code/api backend`
+  wt label add backend           # Add label to current repo
+  wt label add backend -r api    # Add label to 'api' repo
+  wt label add backend -r api,web  # Add label to multiple repos`
 }
 
 func (c *LabelAddCmd) Run(ctx *Context) error {
-	return runLabelAdd(c)
+	return runLabelAdd(c, ctx.Config)
 }
 
 // LabelRemoveCmd removes a label from a repository.
 type LabelRemoveCmd struct {
-	Label string `arg:"" required:"" placeholder:"LABEL" help:"label to remove"`
-	Dir   string `short:"d" name:"dir" placeholder:"DIR" help:"repository directory (optional inside repo)"`
+	Label      string   `arg:"" required:"" placeholder:"LABEL" help:"label to remove"`
+	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
+	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for repos (when using -r)"`
 }
 
 func (c *LabelRemoveCmd) Help() string {
-	return `Remove a label from the current repository (or --dir).
+	return `Remove a label from the current repository (or specify repos with -r).
 
 Examples:
-  wt label remove backend      # Remove from current repo
-  wt label remove -d ~/code/api backend`
+  wt label remove backend           # Remove from current repo
+  wt label remove backend -r api    # Remove from 'api' repo
+  wt label remove backend -r api,web  # Remove from multiple repos`
 }
 
 func (c *LabelRemoveCmd) Run(ctx *Context) error {
-	return runLabelRemove(c)
+	return runLabelRemove(c, ctx.Config)
 }
 
 // LabelListCmd lists labels for a repository.
 type LabelListCmd struct {
-	Dir string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"repository directory (or scan directory with --all)"`
-	All bool   `short:"a" name:"all" help:"list all labels from repos in directory"`
+	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
+	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for repos"`
+	Global     bool     `short:"g" name:"global" help:"list all labels from repos in directory"`
 }
 
 func (c *LabelListCmd) Help() string {
-	return `List labels for the current repository, or all repos with --all.
+	return `List labels for the current repository, specific repos with -r, or all repos with -g.
 
 Examples:
-  wt label list             # Labels for current repo
-  wt label list -a          # All labels from repos in current dir
-  wt label list -a -d ~/code`
+  wt label list              # Labels for current repo
+  wt label list -r api       # Labels for 'api' repo
+  wt label list -r api,web   # Labels for multiple repos
+  wt label list -g           # All labels from repos in directory`
 }
 
 func (c *LabelListCmd) Run(ctx *Context) error {
@@ -328,19 +334,21 @@ func (c *LabelListCmd) Run(ctx *Context) error {
 
 // LabelClearCmd clears all labels from a repository.
 type LabelClearCmd struct {
-	Dir string `short:"d" name:"dir" placeholder:"DIR" help:"repository directory (optional inside repo)"`
+	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
+	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for repos (when using -r)"`
 }
 
 func (c *LabelClearCmd) Help() string {
-	return `Clear all labels from the current repository (or --dir).
+	return `Clear all labels from the current repository (or specify repos with -r).
 
 Examples:
-  wt label clear            # Clear labels from current repo
-  wt label clear -d ~/code/api`
+  wt label clear             # Clear labels from current repo
+  wt label clear -r api      # Clear labels from 'api' repo
+  wt label clear -r api,web  # Clear labels from multiple repos`
 }
 
 func (c *LabelClearCmd) Run(ctx *Context) error {
-	return runLabelClear(c)
+	return runLabelClear(c, ctx.Config)
 }
 
 // LabelCmd manages repository labels.
@@ -355,11 +363,13 @@ func (c *LabelCmd) Help() string {
 	return `Labels are stored in git config (wt.labels) and can target repos with 'wt add -l'.
 
 Examples:
-  wt label add backend        # Add label to current repo
-  wt label remove backend     # Remove label
-  wt label list               # List labels for current repo
-  wt label list -a            # List all labels across repos
-  wt label clear              # Clear all labels
+  wt label add backend           # Add label to current repo
+  wt label add backend -r api    # Add label to 'api' repo
+  wt label remove backend        # Remove label from current repo
+  wt label list                  # List labels for current repo
+  wt label list -r api,web       # List labels for specific repos
+  wt label list -g               # List all labels across repos in directory
+  wt label clear                 # Clear all labels from current repo
 
 Use with wt add:
   wt add -b feature -l backend   # Create worktree in all repos with 'backend' label`
