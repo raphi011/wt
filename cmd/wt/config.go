@@ -36,6 +36,7 @@ func runConfigShow(cmd *ConfigShowCmd, cfg *config.Config) error {
 			WorktreeDir    string            `json:"worktree_dir,omitempty"`
 			RepoDir        string            `json:"repo_dir,omitempty"`
 			WorktreeFormat string            `json:"worktree_format"`
+			BaseRef        string            `json:"base_ref,omitempty"`
 			Clone          cloneJSON         `json:"clone"`
 			Merge          mergeJSON         `json:"merge,omitempty"`
 			Hosts          map[string]string `json:"hosts,omitempty"`
@@ -53,6 +54,7 @@ func runConfigShow(cmd *ConfigShowCmd, cfg *config.Config) error {
 			WorktreeDir:    cfg.WorktreeDir,
 			RepoDir:        cfg.RepoDir,
 			WorktreeFormat: cfg.WorktreeFormat,
+			BaseRef:        cfg.BaseRef,
 			Clone: cloneJSON{
 				Forge: cfg.Clone.Forge,
 				Org:   cfg.Clone.Org,
@@ -79,6 +81,9 @@ func runConfigShow(cmd *ConfigShowCmd, cfg *config.Config) error {
 	}
 	if cfg.RepoDir != "" {
 		fmt.Printf("repo_dir = %q\n", cfg.RepoDir)
+	}
+	if cfg.BaseRef != "" {
+		fmt.Printf("base_ref = %q\n", cfg.BaseRef)
 	}
 
 	// Clone section

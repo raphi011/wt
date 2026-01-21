@@ -44,7 +44,8 @@ type Config struct {
 	WorktreeDir    string            `toml:"worktree_dir"`
 	RepoDir        string            `toml:"repo_dir"` // optional: where to find repos for -r/-l
 	WorktreeFormat string            `toml:"worktree_format"`
-	Hooks          HooksConfig       `toml:"-"` // custom parsing needed
+	BaseRef        string            `toml:"base_ref"` // "local" or "remote" (default: "remote")
+	Hooks          HooksConfig       `toml:"-"`        // custom parsing needed
 	Clone          CloneConfig       `toml:"clone"`
 	Merge          MergeConfig       `toml:"merge"`
 	Hosts          map[string]string `toml:"hosts"` // domain -> forge type mapping
@@ -123,6 +124,7 @@ type rawConfig struct {
 	WorktreeDir    string                 `toml:"worktree_dir"`
 	RepoDir        string                 `toml:"repo_dir"`
 	WorktreeFormat string                 `toml:"worktree_format"`
+	BaseRef        string                 `toml:"base_ref"`
 	Hooks          map[string]interface{} `toml:"hooks"`
 	Clone          CloneConfig            `toml:"clone"`
 	Merge          MergeConfig            `toml:"merge"`
@@ -155,6 +157,7 @@ func Load() (Config, error) {
 		WorktreeDir:    raw.WorktreeDir,
 		RepoDir:        raw.RepoDir,
 		WorktreeFormat: raw.WorktreeFormat,
+		BaseRef:        raw.BaseRef,
 		Hooks:          parseHooksConfig(raw.Hooks),
 		Clone:          raw.Clone,
 		Merge:          raw.Merge,
@@ -204,6 +207,11 @@ func Load() (Config, error) {
 	// Validate merge.strategy (only "squash", "rebase", "merge", or empty allowed)
 	if cfg.Merge.Strategy != "" && cfg.Merge.Strategy != "squash" && cfg.Merge.Strategy != "rebase" && cfg.Merge.Strategy != "merge" {
 		return Default(), fmt.Errorf("invalid merge.strategy %q: must be \"squash\", \"rebase\", or \"merge\"", cfg.Merge.Strategy)
+	}
+
+	// Validate base_ref (only "local", "remote", or empty allowed)
+	if cfg.BaseRef != "" && cfg.BaseRef != "local" && cfg.BaseRef != "remote" {
+		return Default(), fmt.Errorf("invalid base_ref %q: must be \"local\" or \"remote\"", cfg.BaseRef)
 	}
 
 	// Use defaults for empty values
@@ -307,6 +315,12 @@ const defaultConfig = `# wt configuration
 #   {folder-name}  - actual folder name of the git repo on disk
 # Example: "{folder-name}_{branch-name}" creates "my-repo_feature-branch"
 worktree_format = "{git-origin}-{branch-name}"
+
+# Base ref mode for new branches (wt add -b)
+# Controls which ref to use when creating new branches:
+#   "remote" - use origin/<branch> (default, ensures up-to-date base)
+#   "local"  - use local <branch> (faster, but may be stale)
+# base_ref = "remote"
 
 # Hooks - run commands after worktree creation/removal
 # Use --hook=name to run a specific hook, --no-hook to skip all hooks

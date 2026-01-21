@@ -21,6 +21,31 @@ type successResult struct {
 	Existed  bool
 }
 
+// resolveBaseRef determines the base ref for creating a new branch.
+// If fetch is true, fetches the base branch from origin first.
+// Returns the full ref (e.g., "origin/main" or "main") based on config.
+func resolveBaseRef(repoPath, baseBranch string, fetch bool, baseRefConfig string) (string, error) {
+	// Determine base branch (default: auto-detected main/master)
+	if baseBranch == "" {
+		baseBranch = git.GetDefaultBranch(repoPath)
+	}
+
+	// Fetch if requested
+	if fetch {
+		fmt.Printf("Fetching origin/%s...\n", baseBranch)
+		if err := git.FetchBranch(repoPath, baseBranch); err != nil {
+			return "", err
+		}
+	}
+
+	// Determine whether to use remote or local ref
+	// --fetch always implies remote ref, otherwise use config
+	if fetch || baseRefConfig != "local" {
+		return "origin/" + baseBranch, nil
+	}
+	return baseBranch, nil
+}
+
 func runAdd(cmd *AddCmd, cfg *config.Config) error {
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
@@ -65,11 +90,21 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
 	var result *git.CreateWorktreeResult
 
 	if cmd.NewBranch {
+		// Resolve base branch and ref for new branches
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get current directory: %w", err)
+		}
+		baseRef, err := resolveBaseRef(cwd, cmd.Base, cmd.Fetch, cfg.BaseRef)
+		if err != nil {
+			return err
+		}
+
 		fmt.Printf("Creating worktree for new branch %s in %s\n", cmd.Branch, absPath)
-		result, err = git.AddWorktree(dir, cmd.Branch, cfg.WorktreeFormat, true)
+		result, err = git.AddWorktree(dir, cmd.Branch, cfg.WorktreeFormat, true, baseRef)
 	} else {
 		fmt.Printf("Adding worktree for branch %s in %s\n", cmd.Branch, absPath)
-		result, err = git.AddWorktree(dir, cmd.Branch, cfg.WorktreeFormat, false)
+		result, err = git.AddWorktree(dir, cmd.Branch, cfg.WorktreeFormat, false, "")
 	}
 
 	if err != nil {
@@ -244,11 +279,21 @@ func createWorktreeInCurrentRepo(cmd *AddCmd, cfg *config.Config, targetDir stri
 	var err error
 
 	if cmd.NewBranch {
+		// Resolve base branch and ref for new branches
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current directory: %w", err)
+		}
+		baseRef, err := resolveBaseRef(cwd, cmd.Base, cmd.Fetch, cfg.BaseRef)
+		if err != nil {
+			return nil, err
+		}
+
 		fmt.Printf("Creating worktree for new branch %s (current repo) in %s\n", cmd.Branch, targetDir)
-		result, err = git.AddWorktree(targetDir, cmd.Branch, cfg.WorktreeFormat, true)
+		result, err = git.AddWorktree(targetDir, cmd.Branch, cfg.WorktreeFormat, true, baseRef)
 	} else {
 		fmt.Printf("Adding worktree for branch %s (current repo) in %s\n", cmd.Branch, targetDir)
-		result, err = git.AddWorktree(targetDir, cmd.Branch, cfg.WorktreeFormat, false)
+		result, err = git.AddWorktree(targetDir, cmd.Branch, cfg.WorktreeFormat, false, "")
 	}
 
 	if err != nil {
@@ -297,8 +342,14 @@ func createWorktreeForRepo(repoPath string, cmd *AddCmd, cfg *config.Config, tar
 	folder := filepath.Base(repoPath)
 
 	if cmd.NewBranch {
+		// Resolve base branch and ref for new branches
+		baseRef, err := resolveBaseRef(repoPath, cmd.Base, cmd.Fetch, cfg.BaseRef)
+		if err != nil {
+			return nil, err
+		}
+
 		fmt.Printf("Creating worktree for new branch %s in %s (%s)\n", cmd.Branch, targetDir, repoName)
-		result, err = git.CreateWorktreeFrom(repoPath, targetDir, cmd.Branch, cfg.WorktreeFormat)
+		result, err = git.CreateWorktreeFrom(repoPath, targetDir, cmd.Branch, cfg.WorktreeFormat, baseRef)
 	} else {
 		fmt.Printf("Adding worktree for branch %s in %s (%s)\n", cmd.Branch, targetDir, repoName)
 		result, err = git.OpenWorktreeFrom(repoPath, targetDir, cmd.Branch, cfg.WorktreeFormat)

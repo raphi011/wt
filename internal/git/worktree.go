@@ -242,15 +242,17 @@ type CreateWorktreeResult struct {
 
 // AddWorktree creates a git worktree at basePath/<formatted-name>
 // If createNew is true, creates a new branch (-b flag); otherwise checks out existing branch
-func AddWorktree(basePath, branch, worktreeFmt string, createNew bool) (*CreateWorktreeResult, error) {
+// baseRef is the starting point for new branches (e.g., "origin/main")
+func AddWorktree(basePath, branch, worktreeFmt string, createNew bool, baseRef string) (*CreateWorktreeResult, error) {
 	if createNew {
-		return createWorktreeInternal(basePath, branch, worktreeFmt)
+		return createWorktreeInternal(basePath, branch, worktreeFmt, baseRef)
 	}
 	return openWorktreeInternal(basePath, branch, worktreeFmt)
 }
 
 // createWorktreeInternal creates a new git worktree with a new branch
-func createWorktreeInternal(basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
+// baseRef is the starting point for the new branch (e.g., "origin/main", "main", or empty for HEAD)
+func createWorktreeInternal(basePath, branch, worktreeFmt, baseRef string) (*CreateWorktreeResult, error) {
 	// Check if branch already exists
 	exists, err := BranchExists(branch)
 	if err != nil {
@@ -299,7 +301,13 @@ func createWorktreeInternal(basePath, branch, worktreeFmt string) (*CreateWorktr
 	}
 
 	// Create worktree with new branch
-	cmd := exec.Command("git", "worktree", "add", worktreePath, "-b", branch)
+	// If baseRef is provided, use it as the starting point
+	var cmd *exec.Cmd
+	if baseRef != "" {
+		cmd = exec.Command("git", "worktree", "add", worktreePath, "-b", branch, baseRef)
+	} else {
+		cmd = exec.Command("git", "worktree", "add", worktreePath, "-b", branch)
+	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -315,7 +323,8 @@ func createWorktreeInternal(basePath, branch, worktreeFmt string) (*CreateWorktr
 
 // CreateWorktreeFrom creates a worktree from a specified repository path
 // Used when working with a repo that isn't the current working directory
-func CreateWorktreeFrom(repoPath, basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
+// baseRef is the starting point for the new branch (e.g., "origin/main", or empty for HEAD)
+func CreateWorktreeFrom(repoPath, basePath, branch, worktreeFmt, baseRef string) (*CreateWorktreeResult, error) {
 	absRepoPath, err := filepath.Abs(repoPath)
 	if err != nil {
 		return nil, err
@@ -373,10 +382,16 @@ func CreateWorktreeFrom(repoPath, basePath, branch, worktreeFmt string) (*Create
 	}
 
 	// Create worktree with new branch from the specified repo
-	cmd = exec.Command("git", "-C", absRepoPath, "worktree", "add", worktreePath, "-b", branch)
+	// If baseRef is provided, use it as the starting point
+	var createCmd *exec.Cmd
+	if baseRef != "" {
+		createCmd = exec.Command("git", "-C", absRepoPath, "worktree", "add", worktreePath, "-b", branch, baseRef)
+	} else {
+		createCmd = exec.Command("git", "-C", absRepoPath, "worktree", "add", worktreePath, "-b", branch)
+	}
 	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
+	createCmd.Stderr = &stderr
+	if err := createCmd.Run(); err != nil {
 		errMsg := strings.TrimSpace(stderr.String())
 		if errMsg != "" {
 			return nil, fmt.Errorf("failed to create worktree: %s", errMsg)

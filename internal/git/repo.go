@@ -190,12 +190,17 @@ func IsDirty(path string) bool {
 // FetchDefaultBranch fetches the default branch (main/master) from origin
 func FetchDefaultBranch(repoPath string) error {
 	defaultBranch := GetDefaultBranch(repoPath)
-	cmd := exec.Command("git", "-C", repoPath, "fetch", "origin", defaultBranch, "--quiet")
+	return FetchBranch(repoPath, defaultBranch)
+}
+
+// FetchBranch fetches a specific branch from origin
+func FetchBranch(repoPath, branch string) error {
+	cmd := exec.Command("git", "-C", repoPath, "fetch", "origin", branch, "--quiet")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if stderr.Len() > 0 {
-			return fmt.Errorf("failed to fetch origin/%s: %s", defaultBranch, strings.TrimSpace(stderr.String()))
+			return fmt.Errorf("failed to fetch origin/%s: %s", branch, strings.TrimSpace(stderr.String()))
 		}
 		return err
 	}

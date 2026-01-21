@@ -94,7 +94,7 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 	}
 	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
 
-	result, err := git.CreateWorktreeFrom(repoPath, dir, branch, cfg.WorktreeFormat)
+	result, err := git.CreateWorktreeFrom(repoPath, dir, branch, cfg.WorktreeFormat, "")
 	if err != nil {
 		return err
 	}
@@ -207,7 +207,7 @@ func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 	}
 	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
 
-	result, err := git.CreateWorktreeFrom(repoPath, dir, branch, cfg.WorktreeFormat)
+	result, err := git.CreateWorktreeFrom(repoPath, dir, branch, cfg.WorktreeFormat, "")
 	if err != nil {
 		return err
 	}

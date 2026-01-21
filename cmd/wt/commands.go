@@ -14,6 +14,8 @@ type AddCmd struct {
 	Label      []string `short:"l" name:"label" sep:"," help:"target repos by label (repeatable, comma-separated)"`
 	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	NewBranch  bool     `short:"b" name:"new-branch" help:"create a new branch"`
+	Base       string   `name:"base" placeholder:"BRANCH" help:"base branch to create from (default: main/master)"`
+	Fetch      bool     `short:"f" name:"fetch" help:"fetch base branch from origin before creating"`
 	Note       string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
 	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook     bool     `name:"no-hook" help:"skip post-add hook" xor:"hook-ctrl"`
@@ -24,9 +26,15 @@ func (c *AddCmd) Help() string {
 	return `Use -b to create a new branch, or omit for an existing branch.
 Use -r to target repos by name, -l to target repos by label.
 
+New branches are created from the default branch (main/master) by default.
+Use --base to specify a different base branch.
+Use -f/--fetch to fetch the base branch before creating (ensures up-to-date).
+
 Examples:
   wt add feature-branch              # Existing branch in current repo
-  wt add -b feature-branch           # Create new branch in current repo
+  wt add -b feature-branch           # Create new branch from origin/main
+  wt add -b feature-branch -f        # Fetch main first, then create branch
+  wt add -b feature-branch --base develop  # Create from origin/develop
   wt add feature-branch -d ~/Git     # Specify target directory
   wt add feature-branch --no-hook    # Skip post-add hook
   wt add -b feature -r repo1 -r repo2 -d ~/Git    # By repo name

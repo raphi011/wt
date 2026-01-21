@@ -89,13 +89,19 @@ _wt_completions() {
                 --hook|--note)
                     return
                     ;;
+                --base)
+                    # Complete branch names for --base
+                    local branches=$(git branch --all --format='%(refname:short)' 2>/dev/null | sed 's|origin/||' | sort -u)
+                    COMPREPLY=($(compgen -W "$branches" -- "$cur"))
+                    return
+                    ;;
             esac
             if [[ $cword -eq 2 ]]; then
                 # Complete branch names (all branches for existing, -b for new)
                 local branches=$(git branch --all --format='%(refname:short)' 2>/dev/null | sed 's|origin/||' | sort -u)
                 COMPREPLY=($(compgen -W "$branches" -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "-b --new-branch -r --repository -l --label -d --dir --note --hook --no-hook -a --arg" -- "$cur"))
+                COMPREPLY=($(compgen -W "-b --new-branch -r --repository -l --label -d --dir --base -f --fetch --note --hook --no-hook -a --arg" -- "$cur"))
             fi
             ;;
         prune)
@@ -404,6 +410,9 @@ _wt() {
                         '*--label[target repos by label]:label:__wt_label_names' \
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/' \
+                        '--base[base branch to create from]:branch:__wt_all_branches' \
+                        '-f[fetch base branch before creating]' \
+                        '--fetch[fetch base branch before creating]' \
                         '--note[set note on branch]:note:' \
                         '--hook[run named hook]:hook:' \
                         '--no-hook[skip post-add hook]' \
@@ -781,6 +790,8 @@ complete -c wt -n "__fish_seen_subcommand_from add" -s b -l new-branch -d "Creat
 complete -c wt -n "__fish_seen_subcommand_from add" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from add" -s l -l label -r -a "(__wt_list_labels)" -d "Target repos by label (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from add" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
+complete -c wt -n "__fish_seen_subcommand_from add" -l base -r -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Base branch to create from"
+complete -c wt -n "__fish_seen_subcommand_from add" -s f -l fetch -d "Fetch base branch before creating"
 complete -c wt -n "__fish_seen_subcommand_from add" -l note -r -d "Set note on branch"
 complete -c wt -n "__fish_seen_subcommand_from add" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from add" -l no-hook -d "Skip post-add hook"
