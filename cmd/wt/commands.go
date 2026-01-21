@@ -146,44 +146,53 @@ func (c *ShowCmd) Run(ctx *Context) error {
 	return runShow(c, ctx.Config)
 }
 
-// ExecCmd runs a command in one or more worktrees by ID.
+// ExecCmd runs a command in one or more worktrees by ID, or in repos by name/label.
 type ExecCmd struct {
-	ID      []int    `short:"i" name:"id" required:"" help:"worktree ID(s) (repeatable)"`
-	Command []string `arg:"" optional:"" passthrough:"" placeholder:"COMMAND" help:"command to run (after --)"`
-	Dir     string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	ID         []int    `short:"i" name:"id" xor:"target" help:"worktree ID(s) (repeatable)"`
+	Repository []string `short:"r" name:"repository" xor:"target" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
+	Label      []string `short:"l" name:"label" xor:"target" sep:"," help:"target repos by label (repeatable, comma-separated)"`
+	Command    []string `arg:"" optional:"" passthrough:"" placeholder:"COMMAND" help:"command to run (after --)"`
+	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 }
 
 func (c *ExecCmd) Help() string {
 	return `Use 'wt list' to see worktree IDs. Supports multiple -i flags.
+Use -r to target repos by name, -l to target repos by label.
+When using -r or -l, the command runs in the main repo directory (not worktrees).
 
 Examples:
-  wt exec -i 1 -- gh pr view         # By worktree ID
-  wt exec -i 1 -i 2 -- git status    # Multiple worktrees
-  wt exec -i 1 -- code .             # Open worktree in VS Code`
+  wt exec -i 1 -- gh pr view           # By worktree ID
+  wt exec -i 1 -i 2 -- git status      # Multiple worktrees
+  wt exec -i 1 -- code .               # Open worktree in VS Code
+  wt exec -r wt -- git status          # By repo name
+  wt exec -l backend -d ~/Git -- make  # By label`
 }
 
 func (c *ExecCmd) Run(ctx *Context) error {
-	return runExec(c)
+	return runExec(c, ctx.Config)
 }
 
-// CdCmd prints the path of a worktree for shell scripting.
+// CdCmd prints the path of a worktree or repo for shell scripting.
 type CdCmd struct {
-	ID      int    `short:"i" name:"id" required:"" help:"worktree ID"`
-	Dir     string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for worktrees"`
-	Project bool   `short:"p" name:"project" help:"print main repository path instead of worktree path"`
+	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID"`
+	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
+	Dir        string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for worktrees/repos"`
+	Project    bool   `short:"p" name:"project" help:"print main repository path instead of worktree path"`
 }
 
 func (c *CdCmd) Help() string {
 	return `Use with shell command substitution: cd $(wt cd -i 1)
 Use -p to get the main repository path instead.
+Use -r to get the path of a repository by name.
 
 Examples:
-  cd $(wt cd -i 1)
-  cd $(wt cd -p -i 1)  # cd to main repo`
+  cd $(wt cd -i 1)         # By worktree ID
+  cd $(wt cd -p -i 1)      # cd to main repo of worktree
+  cd $(wt cd -r wt)        # By repo name`
 }
 
 func (c *CdCmd) Run(ctx *Context) error {
-	return runCd(c)
+	return runCd(c, ctx.Config)
 }
 
 // NoteSetCmd sets a note on a branch.
@@ -457,24 +466,28 @@ Examples:
   wt config hooks          # List available hooks`
 }
 
-// HookCmd runs one or more hooks by name for a worktree.
+// HookCmd runs one or more hooks by name for a worktree or repos.
 type HookCmd struct {
-	Hooks []string `arg:"" required:"" placeholder:"HOOK" help:"hook name(s) to run"`
-	ID    []int    `short:"i" name:"id" help:"worktree ID(s) (optional in worktree, repeatable)"`
-	Dir   string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"worktree directory for target lookup"`
-	Env   []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
+	Hooks      []string `arg:"" required:"" placeholder:"HOOK" help:"hook name(s) to run"`
+	ID         []int    `short:"i" name:"id" xor:"target" help:"worktree ID(s) (optional in worktree, repeatable)"`
+	Repository []string `short:"r" name:"repository" xor:"target" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
+	Label      []string `short:"l" name:"label" xor:"target" sep:"," help:"target repos by label (repeatable, comma-separated)"`
+	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory for target lookup"`
+	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
 func (c *HookCmd) Help() string {
 	return `When run inside a worktree, --id is optional (defaults to current worktree).
 When run outside, specify a worktree ID. Multiple IDs can be specified.
+Use -r to target repos by name, -l to target repos by label.
 
 Examples:
   wt hook kitty              # Single hook (current worktree)
   wt hook kitty idea         # Multiple hooks
   wt hook kitty -i 1         # By worktree ID
   wt hook kitty -i 1 -i 2    # Multiple worktrees
-  wt hook kitty idea -i 1 -d ~/Git   # Multiple hooks with ID`
+  wt hook kitty -r wt        # By repo name
+  wt hook kitty -l backend   # By label`
 }
 
 func (c *HookCmd) Run(ctx *Context) error {

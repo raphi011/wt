@@ -194,8 +194,51 @@ _wt_completions() {
                     COMPREPLY=($(compgen -W "$ids" -- "$cur"))
                     return
                     ;;
+                -r|--repository)
+                    # Complete repo names from worktree_dir
+                    local dir="$WT_WORKTREE_DIR"
+                    if [[ -z "$dir" ]]; then
+                        local config_file=~/.config/wt/config.toml
+                        if [[ -f "$config_file" ]]; then
+                            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                        fi
+                    fi
+                    if [[ -d "$dir" ]]; then
+                        local repos=""
+                        for d in "$dir"/*/; do
+                            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                                repos="$repos $(basename "$d")"
+                            fi
+                        done
+                        COMPREPLY=($(compgen -W "$repos" -- "$cur"))
+                    fi
+                    return
+                    ;;
+                -l|--label)
+                    # Complete labels from repos in worktree_dir
+                    local dir="$WT_WORKTREE_DIR"
+                    if [[ -z "$dir" ]]; then
+                        local config_file=~/.config/wt/config.toml
+                        if [[ -f "$config_file" ]]; then
+                            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                        fi
+                    fi
+                    if [[ -d "$dir" ]]; then
+                        local labels=""
+                        for d in "$dir"/*/; do
+                            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                                local repo_labels=$(git -C "$d" config --local wt.labels 2>/dev/null)
+                                if [[ -n "$repo_labels" ]]; then
+                                    labels="$labels $(echo "$repo_labels" | tr ',' ' ')"
+                                fi
+                            fi
+                        done
+                        COMPREPLY=($(compgen -W "$(echo "$labels" | tr ' ' '\n' | sort -u)" -- "$cur"))
+                    fi
+                    return
+                    ;;
             esac
-            COMPREPLY=($(compgen -W "-i --id -d --dir" -- "$cur"))
+            COMPREPLY=($(compgen -W "-i --id -r --repository -l --label -d --dir" -- "$cur"))
             ;;
         cd)
             case "$prev" in
@@ -209,8 +252,28 @@ _wt_completions() {
                     COMPREPLY=($(compgen -W "$ids" -- "$cur"))
                     return
                     ;;
+                -r|--repository)
+                    # Complete repo names from worktree_dir
+                    local dir="$WT_WORKTREE_DIR"
+                    if [[ -z "$dir" ]]; then
+                        local config_file=~/.config/wt/config.toml
+                        if [[ -f "$config_file" ]]; then
+                            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                        fi
+                    fi
+                    if [[ -d "$dir" ]]; then
+                        local repos=""
+                        for d in "$dir"/*/; do
+                            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                                repos="$repos $(basename "$d")"
+                            fi
+                        done
+                        COMPREPLY=($(compgen -W "$repos" -- "$cur"))
+                    fi
+                    return
+                    ;;
             esac
-            COMPREPLY=($(compgen -W "-i --id -d --dir -p --project" -- "$cur"))
+            COMPREPLY=($(compgen -W "-i --id -r --repository -d --dir -p --project" -- "$cur"))
             ;;
         mv)
             case "$prev" in
@@ -352,10 +415,53 @@ _wt_completions() {
                     COMPREPLY=($(compgen -W "$ids" -- "$cur"))
                     return
                     ;;
+                -r|--repository)
+                    # Complete repo names from worktree_dir
+                    local dir="$WT_WORKTREE_DIR"
+                    if [[ -z "$dir" ]]; then
+                        local config_file=~/.config/wt/config.toml
+                        if [[ -f "$config_file" ]]; then
+                            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                        fi
+                    fi
+                    if [[ -d "$dir" ]]; then
+                        local repos=""
+                        for d in "$dir"/*/; do
+                            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                                repos="$repos $(basename "$d")"
+                            fi
+                        done
+                        COMPREPLY=($(compgen -W "$repos" -- "$cur"))
+                    fi
+                    return
+                    ;;
+                -l|--label)
+                    # Complete labels from repos in worktree_dir
+                    local dir="$WT_WORKTREE_DIR"
+                    if [[ -z "$dir" ]]; then
+                        local config_file=~/.config/wt/config.toml
+                        if [[ -f "$config_file" ]]; then
+                            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                        fi
+                    fi
+                    if [[ -d "$dir" ]]; then
+                        local labels=""
+                        for d in "$dir"/*/; do
+                            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                                local repo_labels=$(git -C "$d" config --local wt.labels 2>/dev/null)
+                                if [[ -n "$repo_labels" ]]; then
+                                    labels="$labels $(echo "$repo_labels" | tr ',' ' ')"
+                                fi
+                            fi
+                        done
+                        COMPREPLY=($(compgen -W "$(echo "$labels" | tr ' ' '\n' | sort -u)" -- "$cur"))
+                    fi
+                    return
+                    ;;
             esac
             # Complete hook names for all positional args (supports multiple hooks)
             local hooks=$(wt config hooks 2>/dev/null | awk '{print $1}')
-            COMPREPLY=($(compgen -W "$hooks -i --id -d --dir -a --arg" -- "$cur"))
+            COMPREPLY=($(compgen -W "$hooks -i --id -r --repository -l --label -d --dir -a --arg" -- "$cur"))
             ;;
         config)
             if [[ $cword -eq 2 ]]; then
@@ -493,8 +599,12 @@ _wt() {
                     ;;
                 exec)
                     _arguments \
-                        '-i[worktree ID]:id:__wt_worktree_ids' \
-                        '--id[worktree ID]:id:__wt_worktree_ids' \
+                        '*-i[worktree ID]:id:__wt_worktree_ids' \
+                        '*--id[worktree ID]:id:__wt_worktree_ids' \
+                        '*-r[repository name]:repository:__wt_repo_names' \
+                        '*--repository[repository name]:repository:__wt_repo_names' \
+                        '*-l[target repos by label]:label:__wt_label_names' \
+                        '*--label[target repos by label]:label:__wt_label_names' \
                         '-d[target directory]:directory:_files -/' \
                         '--dir[target directory]:directory:_files -/'
                     ;;
@@ -502,6 +612,8 @@ _wt() {
                     _arguments \
                         '-i[worktree ID]:id:__wt_worktree_ids' \
                         '--id[worktree ID]:id:__wt_worktree_ids' \
+                        '-r[repository name]:repository:__wt_repo_names' \
+                        '--repository[repository name]:repository:__wt_repo_names' \
                         '-d[directory to scan]:directory:_files -/' \
                         '--dir[directory to scan]:directory:_files -/' \
                         '-p[print main repository path]' \
@@ -668,10 +780,14 @@ _wt() {
                 hook)
                     _arguments \
                         '1:hook name:__wt_hook_names' \
-                        '-i[worktree ID]:id:__wt_worktree_ids' \
-                        '--id[worktree ID]:id:__wt_worktree_ids' \
-                        '-d[worktree directory]:directory:_files -/' \
-                        '--dir[worktree directory]:directory:_files -/' \
+                        '*-i[worktree ID]:id:__wt_worktree_ids' \
+                        '*--id[worktree ID]:id:__wt_worktree_ids' \
+                        '*-r[repository name]:repository:__wt_repo_names' \
+                        '*--repository[repository name]:repository:__wt_repo_names' \
+                        '*-l[target repos by label]:label:__wt_label_names' \
+                        '*--label[target repos by label]:label:__wt_label_names' \
+                        '-d[directory]:directory:_files -/' \
+                        '--dir[directory]:directory:_files -/' \
                         '*-a[set hook variable KEY=VALUE]:arg:' \
                         '*--arg[set hook variable KEY=VALUE]:arg:'
                     ;;
@@ -856,12 +972,15 @@ complete -c wt -n "__fish_seen_subcommand_from show" -s d -l dir -r -a "(__fish_
 complete -c wt -n "__fish_seen_subcommand_from show" -s R -l refresh -d "Refresh PR status from API"
 complete -c wt -n "__fish_seen_subcommand_from show" -l json -d "Output as JSON"
 
-# exec: --id flag (required), then -- command
+# exec: --id, -r, -l flags, then -- command
 complete -c wt -n "__fish_seen_subcommand_from exec" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+complete -c wt -n "__fish_seen_subcommand_from exec" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from exec" -s l -l label -r -a "(__wt_list_labels)" -d "Target repos by label (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from exec" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 
-# cd: --id flag (required), then flags
+# cd: --id or -r flag, then flags
 complete -c wt -n "__fish_seen_subcommand_from cd" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+complete -c wt -n "__fish_seen_subcommand_from cd" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s p -l project -d "Print main repository path"
 
@@ -899,10 +1018,12 @@ complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand
 complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan for repos"
 complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list" -s g -l global -d "List all labels across repos"
 
-# hook: multiple hook names supported, then --id (optional), then flags
+# hook: multiple hook names supported, then --id/-r/-l (optional), then flags
 complete -c wt -n "__fish_seen_subcommand_from hook" -a "(__wt_hook_names)" -d "Hook name"
 complete -c wt -n "__fish_seen_subcommand_from hook" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
-complete -c wt -n "__fish_seen_subcommand_from hook" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory for target lookup"
+complete -c wt -n "__fish_seen_subcommand_from hook" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from hook" -s l -l label -r -a "(__wt_list_labels)" -d "Target repos by label (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from hook" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory for target lookup"
 complete -c wt -n "__fish_seen_subcommand_from hook" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 
 # pr: subcommands

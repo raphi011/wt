@@ -6,23 +6,14 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runExec(cmd *ExecCmd) error {
+func runExec(cmd *ExecCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
-	}
-
-	dir := cmd.Dir
-	if dir == "" {
-		dir = "."
-	}
-
-	scanPath, err := filepath.Abs(dir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
 	// Strip leading "--" if present (kong passthrough includes it)
@@ -36,9 +27,35 @@ func runExec(cmd *ExecCmd) error {
 		return fmt.Errorf("no command specified (use: wt exec -i <id> -- <command>)")
 	}
 
-	// Execute for each ID
+	// Determine targeting mode
+	hasID := len(cmd.ID) > 0
+	hasRepo := len(cmd.Repository) > 0 || len(cmd.Label) > 0
+
+	if !hasID && !hasRepo {
+		return fmt.Errorf("specify target: -i <id>, -r <repo>, or -l <label>")
+	}
+
+	// Mode: by ID (worktrees)
+	if hasID {
+		return runExecForIDs(cmd.ID, command, cmd.Dir)
+	}
+
+	// Mode: by repo/label
+	return runExecForRepos(cmd.Repository, cmd.Label, command, cmd.Dir, cfg)
+}
+
+func runExecForIDs(ids []int, command []string, dir string) error {
+	if dir == "" {
+		dir = "."
+	}
+
+	scanPath, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
 	var errs []error
-	for _, id := range cmd.ID {
+	for _, id := range ids {
 		if err := runExecForID(id, command, scanPath); err != nil {
 			errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
 		}
@@ -47,6 +64,40 @@ func runExec(cmd *ExecCmd) error {
 		return fmt.Errorf("failed to execute in some worktrees:\n%w", joinErrors(errs))
 	}
 	return nil
+}
+
+func runExecForRepos(repos []string, labels []string, command []string, dir string, cfg *config.Config) error {
+	scanDir, err := resolveRepoScanDir(dir, cfg)
+	if err != nil {
+		return err
+	}
+
+	repoPaths, errs := collectRepoPaths(repos, labels, scanDir, cfg)
+
+	// Execute command in each repo
+	for repoPath := range repoPaths {
+		repoName, _ := git.GetRepoNameFrom(repoPath)
+		if repoName == "" {
+			repoName = filepath.Base(repoPath)
+		}
+		if err := runCommandInDir(command, repoPath); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to execute in some repos:\n%w", joinErrors(errs))
+	}
+	return nil
+}
+
+func runCommandInDir(command []string, dir string) error {
+	c := exec.Command(command[0], command[1:]...)
+	c.Dir = dir
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	c.Stdin = os.Stdin
+	return c.Run()
 }
 
 func runExecForID(id int, command []string, scanPath string) error {
@@ -61,12 +112,5 @@ func runExecForID(id int, command []string, scanPath string) error {
 		return fmt.Errorf("worktree path no longer exists: %s (run 'wt list' to refresh)", target.Path)
 	}
 
-	// Execute command in worktree directory
-	c := exec.Command(command[0], command[1:]...)
-	c.Dir = target.Path
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	c.Stdin = os.Stdin
-
-	return c.Run()
+	return runCommandInDir(command, target.Path)
 }

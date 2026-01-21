@@ -36,8 +36,12 @@ func runHookRun(cmd *HookCmd, cfg *config.Config) error {
 		return err
 	}
 
-	// If no IDs provided, use current worktree (optional behavior)
-	if len(cmd.ID) == 0 {
+	// Determine targeting mode
+	hasID := len(cmd.ID) > 0
+	hasRepo := len(cmd.Repository) > 0 || len(cmd.Label) > 0
+
+	// If no targeting specified, use current worktree
+	if !hasID && !hasRepo {
 		ctx, err := resolveHookTargetCurrent()
 		if err != nil {
 			return err
@@ -46,17 +50,22 @@ func runHookRun(cmd *HookCmd, cfg *config.Config) error {
 		return runHooksForContext(cmd.Hooks, cfg, ctx)
 	}
 
-	// Execute for each ID
-	var errs []error
-	for _, id := range cmd.ID {
-		if err := runHookForID(id, cmd.Hooks, cmd.Dir, cfg, env); err != nil {
-			errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
+	// Mode: by ID (worktrees)
+	if hasID {
+		var errs []error
+		for _, id := range cmd.ID {
+			if err := runHookForID(id, cmd.Hooks, cmd.Dir, cfg, env); err != nil {
+				errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
+			}
 		}
+		if len(errs) > 0 {
+			return fmt.Errorf("failed to run hooks in some worktrees:\n%w", joinErrors(errs))
+		}
+		return nil
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("failed to run hooks in some worktrees:\n%w", joinErrors(errs))
-	}
-	return nil
+
+	// Mode: by repo/label
+	return runHookForRepos(cmd.Repository, cmd.Label, cmd.Hooks, cmd.Dir, cfg, env)
 }
 
 func runHookForID(id int, hookNames []string, dir string, cfg *config.Config, env map[string]string) error {
@@ -66,6 +75,42 @@ func runHookForID(id int, hookNames []string, dir string, cfg *config.Config, en
 	}
 	ctx.Env = env
 	return runHooksForContext(hookNames, cfg, ctx)
+}
+
+func runHookForRepos(repos []string, labels []string, hookNames []string, dir string, cfg *config.Config, env map[string]string) error {
+	scanDir, err := resolveRepoScanDir(dir, cfg)
+	if err != nil {
+		return err
+	}
+
+	repoPaths, errs := collectRepoPaths(repos, labels, scanDir, cfg)
+
+	// Run hooks for each repo
+	for repoPath := range repoPaths {
+		repoName, _ := git.GetRepoNameFrom(repoPath)
+		if repoName == "" {
+			repoName = filepath.Base(repoPath)
+		}
+
+		ctx := hooks.Context{
+			Path:     repoPath,
+			Branch:   "", // No specific branch when targeting repo
+			MainRepo: repoPath,
+			Folder:   filepath.Base(repoPath),
+			Repo:     repoName,
+			Trigger:  "run",
+			Env:      env,
+		}
+
+		if err := runHooksForContext(hookNames, cfg, ctx); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to run hooks in some repos:\n%w", joinErrors(errs))
+	}
+	return nil
 }
 
 func runHooksForContext(hookNames []string, cfg *config.Config, ctx hooks.Context) error {
@@ -86,7 +131,7 @@ func resolveHookTargetCurrent() (hooks.Context, error) {
 	}
 
 	if !git.IsWorktree(cwd) {
-		return hooks.Context{}, fmt.Errorf("--id required when not inside a worktree (run 'wt list' to see IDs)")
+		return hooks.Context{}, fmt.Errorf("use -i, -r, or -l when not inside a worktree (run 'wt list' to see IDs)")
 	}
 
 	branch, err := git.GetCurrentBranch(cwd)
