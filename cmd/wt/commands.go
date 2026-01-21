@@ -54,7 +54,7 @@ type PruneCmd struct {
 	Force        bool     `short:"f" name:"force" help:"force remove even if not merged or has uncommitted changes"`
 	IncludeClean bool     `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
 	Global       bool     `short:"g" name:"global" help:"prune all worktrees (not just current repo)"`
-	Refresh      bool     `short:"r" name:"refresh" help:"fetch origin and refresh PR status before pruning"`
+	Refresh      bool     `short:"R" name:"refresh" help:"fetch origin and refresh PR status before pruning"`
 	ResetCache   bool     `name:"reset-cache" help:"clear all cached data (PR info, worktree history) and reset IDs from 1"`
 	Hook         string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook       bool     `name:"no-hook" help:"skip post-removal hooks" xor:"hook-ctrl"`
@@ -79,7 +79,7 @@ or rebased PRs. For accurate detection, use GitHub/GitLab where PR status
 shows if the branch was merged.
 
 Examples:
-  wt prune -r                   # Fetch origin + PR status, then prune
+  wt prune -R                   # Fetch origin + PR status, then prune
   wt prune                      # Remove merged worktrees (uses cached PR info)
   wt prune --global              # Prune all repos (not just current)
   wt prune -n                   # Dry-run: preview without removing
@@ -103,7 +103,7 @@ type ListCmd struct {
 	JSON    bool   `name:"json" help:"output as JSON"`
 	Global  bool   `short:"g" name:"global" help:"show all worktrees (not just current repo)"`
 	Sort    string `short:"s" name:"sort" default:"id" enum:"id,repo,branch" help:"sort by: id, repo, branch"`
-	Refresh bool   `short:"r" name:"refresh" help:"fetch origin and refresh PR status before listing"`
+	Refresh bool   `short:"R" name:"refresh" help:"fetch origin and refresh PR status before listing"`
 }
 
 func (c *ListCmd) Help() string {
@@ -112,7 +112,7 @@ Inside a repo: shows only that repo's worktrees. Use --global for all.
 
 Examples:
   wt list                      # List worktrees for current repo
-  wt list -r                   # Refresh PR status before listing
+  wt list -R                   # Refresh PR status before listing
   wt list --global              # List all worktrees (all repos)
   wt list -d ~/Git/worktrees   # List from specific directory
   wt list --json               # Output as JSON for scripting
@@ -127,7 +127,7 @@ func (c *ListCmd) Run(ctx *Context) error {
 type ShowCmd struct {
 	Dir     string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for worktrees"`
 	ID      int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Refresh bool   `short:"r" name:"refresh" help:"refresh PR status from API"`
+	Refresh bool   `short:"R" name:"refresh" help:"refresh PR status from API"`
 	JSON    bool   `name:"json" help:"output as JSON"`
 }
 

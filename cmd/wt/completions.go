@@ -120,7 +120,7 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-i --id -d --dir -n --dry-run -f --force -c --include-clean -g --global -r --refresh --reset-cache --hook --no-hook -a --arg" -- "$cur"))
+            COMPREPLY=($(compgen -W "-i --id -d --dir -n --dry-run -f --force -c --include-clean -g --global -R --refresh --reset-cache --hook --no-hook -a --arg" -- "$cur"))
             ;;
         list)
             case "$prev" in
@@ -133,7 +133,7 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-d --dir --json -g --global -s --sort -r --refresh" -- "$cur"))
+            COMPREPLY=($(compgen -W "-d --dir --json -g --global -s --sort -R --refresh" -- "$cur"))
             ;;
         repos)
             case "$prev" in
@@ -180,7 +180,7 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-i --id -d --dir -r --refresh --json" -- "$cur"))
+            COMPREPLY=($(compgen -W "-i --id -d --dir -R --refresh --json" -- "$cur"))
             ;;
         exec)
             case "$prev" in
@@ -453,7 +453,7 @@ _wt() {
                         '--include-clean[also remove clean worktrees]' \
                         '-g[prune all worktrees, not just current repo]' \
                         '--global[prune all worktrees, not just current repo]' \
-                        '-r[fetch origin and refresh PR status]' \
+                        '-R[fetch origin and refresh PR status]' \
                         '--refresh[fetch origin and refresh PR status]' \
                         '--reset-cache[clear cache and reset IDs from 1]' \
                         '--hook[run named hook]:hook:' \
@@ -470,7 +470,7 @@ _wt() {
                         '--global[show all worktrees]' \
                         '-s[sort by]:field:(id repo branch)' \
                         '--sort[sort by]:field:(id repo branch)' \
-                        '-r[fetch origin and refresh PR status]' \
+                        '-R[fetch origin and refresh PR status]' \
                         '--refresh[fetch origin and refresh PR status]'
                     ;;
                 repos)
@@ -487,7 +487,7 @@ _wt() {
                         '--id[worktree ID]:id:__wt_worktree_ids' \
                         '-d[directory to scan]:directory:_files -/' \
                         '--dir[directory to scan]:directory:_files -/' \
-                        '-r[refresh PR status from API]' \
+                        '-R[refresh PR status from API]' \
                         '--refresh[refresh PR status from API]' \
                         '--json[output as JSON]'
                     ;;
@@ -832,7 +832,7 @@ complete -c wt -n "__fish_seen_subcommand_from prune" -s n -l dry-run -d "Previe
 complete -c wt -n "__fish_seen_subcommand_from prune" -s f -l force -d "Force remove even if not merged/dirty"
 complete -c wt -n "__fish_seen_subcommand_from prune" -s c -l include-clean -d "Also remove clean worktrees"
 complete -c wt -n "__fish_seen_subcommand_from prune" -s g -l global -d "Prune all worktrees (not just current repo)"
-complete -c wt -n "__fish_seen_subcommand_from prune" -s r -l refresh -d "Fetch origin and refresh PR status"
+complete -c wt -n "__fish_seen_subcommand_from prune" -s R -l refresh -d "Fetch origin and refresh PR status"
 complete -c wt -n "__fish_seen_subcommand_from prune" -l reset-cache -d "Clear cache and reset IDs from 1"
 complete -c wt -n "__fish_seen_subcommand_from prune" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from prune" -l no-hook -d "Skip post-removal hooks"
@@ -843,7 +843,7 @@ complete -c wt -n "__fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_
 complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
 complete -c wt -n "__fish_seen_subcommand_from list" -s g -l global -d "Show all worktrees (not just current repo)"
 complete -c wt -n "__fish_seen_subcommand_from list" -s s -l sort -r -a "id repo branch" -d "Sort by field"
-complete -c wt -n "__fish_seen_subcommand_from list" -s r -l refresh -d "Fetch origin and refresh PR status"
+complete -c wt -n "__fish_seen_subcommand_from list" -s R -l refresh -d "Fetch origin and refresh PR status"
 
 # repos: list repositories
 complete -c wt -n "__fish_seen_subcommand_from repos" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
@@ -853,7 +853,7 @@ complete -c wt -n "__fish_seen_subcommand_from repos" -l json -d "Output as JSON
 # show: --id flag (optional), then other flags
 complete -c wt -n "__fish_seen_subcommand_from show" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from show" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
-complete -c wt -n "__fish_seen_subcommand_from show" -s r -l refresh -d "Refresh PR status from API"
+complete -c wt -n "__fish_seen_subcommand_from show" -s R -l refresh -d "Refresh PR status from API"
 complete -c wt -n "__fish_seen_subcommand_from show" -l json -d "Output as JSON"
 
 # exec: --id flag (required), then -- command

@@ -67,7 +67,7 @@ internal/ui/             - Terminal UI components
 - `wt add -b <branch>` - Add worktree for new branch
 - `wt add -b <branch> -r <repo> [-r <repo>...]` - Create branch across multiple repos (by name)
 - `wt add -b <branch> -l <label> [-l <label>...]` - Create branch across repos with label
-- `wt prune` - Remove merged+clean worktrees, show table with PR status (use -r/--refresh to fetch latest)
+- `wt prune` - Remove merged+clean worktrees, show table with PR status (use -R/--refresh to fetch latest)
 - `wt prune -i <id>` - Remove specific worktree by ID
 - `wt list [--json]` - List worktrees in directory
 - `wt repos [-l <label>] [--json]` - List repositories in directory
