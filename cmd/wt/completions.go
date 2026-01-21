@@ -516,7 +516,7 @@ _wt() {
                 'mv:Move worktrees to another directory'
                 'note:Manage branch notes'
                 'label:Manage repository labels'
-                'hook:Manage hooks'
+                'hook:Run configured hook'
                 'pr:Work with GitHub PRs'
                 'config:Manage configuration'
                 'completion:Generate completion script'
@@ -923,7 +923,7 @@ complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exe
 complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "mv" -d "Move worktrees to another directory"
 complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "note" -d "Manage branch notes"
 complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "label" -d "Manage repository labels"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "hook" -d "Manage hooks"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "hook" -d "Run configured hook"
 complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "pr" -d "Work with PRs"
 complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "config" -d "Manage configuration"
 complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "completion" -d "Generate completion script"

@@ -660,7 +660,7 @@ type CLI struct {
 	Mv    MvCmd    `cmd:"" help:"Move worktrees to another directory" group:"util"`
 	Note  NoteCmd  `cmd:"" help:"Manage branch notes" group:"util"`
 	Label LabelCmd `cmd:"" help:"Manage repository labels" group:"util"`
-	Hook  HookCmd  `cmd:"" help:"Manage hooks" group:"util"`
+	Hook  HookCmd  `cmd:"" help:"Run configured hook" group:"util"`
 
 	// Configuration commands
 	Config     ConfigCmd     `cmd:"" help:"Manage configuration" group:"config"`
