@@ -346,13 +346,19 @@ worktree_format = "{git-origin}-{branch-name}"
 #   {folder}    - main repo folder name
 #   {main-repo} - main repo path
 #   {trigger}   - command that triggered the hook (add, pr, prune, merge)
-#   {key}       - custom variable passed via --arg key=value
-#   {key:-def}  - custom variable with default value if not provided
+#   {key}       - custom variable passed via --arg key=value (shell-quoted)
+#   {key:-def}  - custom variable with default value if not provided (shell-quoted)
+#   {key:raw}   - custom variable without shell quoting (for embedding in existing quotes)
 #
 # Custom variables example:
 # [hooks.claude]
 # command = "kitty @ launch --cwd={path} -- claude {prompt:-help me}"
 # Run with: wt hook claude --arg prompt="implement feature X"
+#
+# Raw mode example (when placeholder is already inside quotes):
+# [hooks.fish-claude]
+# command = "kitty @ launch --cwd={path} -- fish -c 'claude {c:raw}'"
+# Run with: wt hook fish-claude --arg c="implement the feature"
 
 # Clone settings - configure forge and default org for cloning repos
 # Used by "wt pr clone" when cloning a new repository

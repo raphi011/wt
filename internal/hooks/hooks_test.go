@@ -672,6 +672,47 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 			},
 			expected: "echo 'value'",
 		},
+		{
+			name:    "raw mode skips quoting",
+			command: "fish -c 'claude {c:raw}'",
+			ctx: Context{
+				Env: map[string]string{"c": "fix the bug"},
+			},
+			expected: "fish -c 'claude fix the bug'",
+		},
+		{
+			name:    "raw mode with special chars preserves them",
+			command: "fish -c 'echo {msg:raw}'",
+			ctx: Context{
+				Env: map[string]string{"msg": "it's a test"},
+			},
+			expected: "fish -c 'echo it's a test'",
+		},
+		{
+			name:    "raw mode with missing var returns empty",
+			command: "echo {missing:raw}",
+			ctx: Context{
+				Env: map[string]string{},
+			},
+			expected: "echo ",
+		},
+		{
+			name:    "raw mode with nil env",
+			command: "echo {x:raw}",
+			ctx: Context{
+				Env: nil,
+			},
+			expected: "echo ",
+		},
+		{
+			name:    "mixed raw and quoted placeholders",
+			command: "cmd {path} -- fish -c '{c:raw}'",
+			ctx: Context{
+				Path: "/home/user",
+				Env:  map[string]string{"c": "do something"},
+			},
+			expected: "cmd '/home/user' -- fish -c 'do something'",
+		},
 	}
 
 	for _, tt := range tests {

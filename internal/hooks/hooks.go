@@ -246,15 +246,22 @@ func ParseEnvWithStdin(envSlice []string) (map[string]string, error) {
 	return result, nil
 }
 
-// envPlaceholderRegex matches {key} or {key:-default} patterns for env variables.
+// envPlaceholderRegex matches {key}, {key:raw}, or {key:-default} patterns for env variables.
 // This is used after static replacements to expand custom env placeholders.
-var envPlaceholderRegex = regexp.MustCompile(`\{([a-zA-Z_][a-zA-Z0-9_]*)(?::-([^}]*))?\}`)
+// Supported formats:
+//   - {key}           - value is shell-quoted
+//   - {key:raw}       - value is used as-is (no quoting)
+//   - {key:-default}  - value is shell-quoted, uses default if key not set
+var envPlaceholderRegex = regexp.MustCompile(`\{([a-zA-Z_][a-zA-Z0-9_]*)(?:(:raw)|:-([^}]*))?\}`)
 
 // SubstitutePlaceholders replaces {placeholder} with shell-quoted values from Context.
 // Values are properly escaped to prevent command injection.
 //
 // Static placeholders: {path}, {branch}, {repo}, {folder}, {main-repo}, {trigger}
-// Env placeholders: {key} or {key:-default} where key comes from Context.Env
+// Env placeholders (from Context.Env):
+//   - {key}         - shell-quoted value
+//   - {key:raw}     - unquoted value (for embedding in existing quotes)
+//   - {key:-default} - shell-quoted value with default if key missing
 func SubstitutePlaceholders(command string, ctx Context) string {
 	// First, handle static replacements
 	replacements := map[string]string{
@@ -271,24 +278,31 @@ func SubstitutePlaceholders(command string, ctx Context) string {
 		result = strings.ReplaceAll(result, placeholder, value)
 	}
 
-	// Then, handle env placeholders with optional defaults: {key} or {key:-default}
+	// Then, handle env placeholders with optional defaults: {key}, {key:raw}, or {key:-default}
 	result = envPlaceholderRegex.ReplaceAllStringFunc(result, func(match string) string {
-		// Parse the match to extract key and optional default
+		// Parse the match to extract key, raw flag, and optional default
 		submatch := envPlaceholderRegex.FindStringSubmatch(match)
 		if submatch == nil {
 			return match
 		}
 		key := submatch[1]
-		defaultVal := submatch[2] // empty string if no default specified
+		isRaw := submatch[2] == ":raw"
+		defaultVal := submatch[3] // empty string if no default specified
 
 		// Look up value in env map
 		if ctx.Env != nil {
 			if val, ok := ctx.Env[key]; ok {
+				if isRaw {
+					return val
+				}
 				return shellQuote(val)
 			}
 		}
 
 		// Use default if specified, otherwise empty string
+		if isRaw {
+			return defaultVal
+		}
 		return shellQuote(defaultVal)
 	})
 
