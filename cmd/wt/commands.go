@@ -586,6 +586,28 @@ func (c *PrCmd) Help() string {
   wt pr merge                # Merge PR and clean up worktree`
 }
 
+// ReposCmd lists repositories in a directory.
+type ReposCmd struct {
+	Dir   string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for repos"`
+	Label string `short:"l" name:"label" placeholder:"LABEL" help:"filter by label"`
+	JSON  bool   `name:"json" help:"output as JSON"`
+}
+
+func (c *ReposCmd) Help() string {
+	return `Scans a directory for git repositories and shows information about each.
+Use --label to filter by repository label.
+
+Examples:
+  wt repos                     # List repos in current/configured directory
+  wt repos -d ~/Git            # List repos in specific directory
+  wt repos -l backend          # Filter repos by label
+  wt repos --json              # Output as JSON`
+}
+
+func (c *ReposCmd) Run(ctx *Context) error {
+	return runRepos(c, ctx.Config)
+}
+
 // VersionFlag is used to show version info.
 type VersionFlag bool
 
@@ -596,14 +618,15 @@ type CLI struct {
 	List  ListCmd  `cmd:"" help:"List worktrees"`
 	Show  ShowCmd  `cmd:"" help:"Show worktree details"`
 	Prune PruneCmd `cmd:"" help:"Prune merged worktrees"`
+	Repos ReposCmd `cmd:"" help:"List repositories"`
 
 	// PR commands
 	Pr PrCmd `cmd:"" help:"Work with PRs" group:"pr"`
 
 	// Utility commands
-	Exec ExecCmd `cmd:"" help:"Run command in worktree by ID" group:"util"`
-	Cd   CdCmd   `cmd:"" help:"Print worktree path" group:"util"`
-	Mv   MvCmd   `cmd:"" help:"Move worktrees to another directory" group:"util"`
+	Exec  ExecCmd  `cmd:"" help:"Run command in worktree by ID" group:"util"`
+	Cd    CdCmd    `cmd:"" help:"Print worktree path" group:"util"`
+	Mv    MvCmd    `cmd:"" help:"Move worktrees to another directory" group:"util"`
 	Note  NoteCmd  `cmd:"" help:"Manage branch notes" group:"util"`
 	Label LabelCmd `cmd:"" help:"Manage repository labels" group:"util"`
 	Hook  HookCmd  `cmd:"" help:"Manage hooks" group:"util"`

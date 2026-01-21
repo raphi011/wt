@@ -70,6 +70,7 @@ internal/ui/             - Terminal UI components
 - `wt prune` - Remove merged+clean worktrees, show table with PR status (use -r/--refresh to fetch latest)
 - `wt prune -i <id>` - Remove specific worktree by ID
 - `wt list [--json]` - List worktrees in directory
+- `wt repos [-l <label>] [--json]` - List repositories in directory
 - `wt show [-i <id>]` - Show detailed status for a worktree (commits, changes, PR info)
 - `wt exec -i <id> [-i <id>...] -- <cmd>` - Run command in worktree(s) by ID
 - `wt cd -i <id>` - Print worktree path by ID
