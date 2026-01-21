@@ -77,6 +77,12 @@ wt list --global                      # list all repos (not just current)
 wt list -d ~/Git/worktrees
 wt list --json
 
+# List repositories
+wt repos                              # list repos in repo_dir (or worktree_dir)
+wt repos -d ~/Git                     # list repos in specific dir
+wt repos -l backend                   # filter by label
+wt repos --json
+
 # Move worktrees to another directory
 wt mv -d ~/Git/worktrees              # move all worktrees from cwd to dir
 wt mv -d ~/Git --format={branch-name} # move and rename using format
