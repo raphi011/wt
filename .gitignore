@@ -34,3 +34,5 @@ go.work.sum
 .claude/settings.local.json
 dist/
 logo-*.png
+.wt-cache.json
+.wt-cache.lock

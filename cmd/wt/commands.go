@@ -21,9 +21,7 @@ type AddCmd struct {
 }
 
 func (c *AddCmd) Help() string {
-	return `Add a worktree for a branch. Use -b to create a new branch.
-
-Inside a git repo: adds a worktree for the specified branch.
+	return `Use -b to create a new branch, or omit for an existing branch.
 Use -r to target repos by name, -l to target repos by label.
 
 Examples:
@@ -101,11 +99,8 @@ type ListCmd struct {
 }
 
 func (c *ListCmd) Help() string {
-	return `List all git worktrees with stable IDs
-
-When run inside a git repository, only shows worktrees for that repo.
-Use --global to show worktrees from all repos in the directory.
-IDs are stable across runs - use them with 'wt exec'.
+	return `IDs are stable across runs - use them with 'wt exec -i'.
+Inside a repo: shows only that repo's worktrees. Use --global for all.
 
 Examples:
   wt list                      # List worktrees for current repo
@@ -129,10 +124,8 @@ type ShowCmd struct {
 }
 
 func (c *ShowCmd) Help() string {
-	return `Show detailed status for a single worktree.
-
-When run inside a worktree, --id is optional (defaults to current worktree).
-When run outside, specify a worktree ID.
+	return `Inside a worktree: --id is optional (defaults to current).
+Outside: specify a worktree ID.
 
 Examples:
   wt show              # Inside worktree, show current
@@ -153,9 +146,7 @@ type ExecCmd struct {
 }
 
 func (c *ExecCmd) Help() string {
-	return `Run a command in one or more worktrees by ID
-
-Use 'wt list' to see worktree IDs. The command runs in each worktree directory.
+	return `Use 'wt list' to see worktree IDs. Supports multiple -i flags.
 
 Examples:
   wt exec -i 1 -- gh pr view         # By worktree ID
@@ -175,11 +166,11 @@ type CdCmd struct {
 }
 
 func (c *CdCmd) Help() string {
-	return `Print the path of a worktree for shell scripting.
+	return `Use with shell command substitution: cd $(wt cd -i 1)
+Use -p to get the main repository path instead.
 
 Examples:
   cd $(wt cd -i 1)
-  cd $(wt cd -i 3)
   cd $(wt cd -p -i 1)  # cd to main repo`
 }
 
@@ -372,10 +363,7 @@ type CompletionCmd struct {
 }
 
 func (c *CompletionCmd) Help() string {
-	return `Generate shell completion script
-
-Outputs a completion script for the specified shell.
-Redirect to the appropriate file for your shell.
+	return `Redirect output to the appropriate file for your shell.
 
 Examples:
   wt completion fish > ~/.config/fish/completions/wt.fish
@@ -443,7 +431,8 @@ type ConfigCmd struct {
 }
 
 func (c *ConfigCmd) Help() string {
-	return `Manage wt configuration
+	return `Config file: ~/.config/wt/config.toml
+
 Examples:
   wt config init           # Create default config
   wt config show           # Show effective config
@@ -483,10 +472,8 @@ type MvCmd struct {
 }
 
 func (c *MvCmd) Help() string {
-	return `Move worktrees to a different directory
-
-Scans the current directory for worktrees and moves them to the destination
-directory, optionally renaming them using the configured worktree format.
+	return `Scans current directory for worktrees and moves them to destination.
+Use --format to rename during move.
 
 Examples:
   wt mv -d ~/Git/worktrees           # Move all worktrees to ~/Git/worktrees
@@ -510,10 +497,8 @@ type PrOpenCmd struct {
 }
 
 func (c *PrOpenCmd) Help() string {
-	return `Create a worktree for a PR from an existing local repo
-
-Fetches PR metadata and creates a worktree for the branch.
-Only works with repos that already exist locally. Use 'wt pr clone' to clone new repos.
+	return `Only works with repos that already exist locally.
+Use 'wt pr clone' to clone new repos first.
 
 Examples:
   wt pr open 123                  # PR from current repo
@@ -540,12 +525,9 @@ type PrCloneCmd struct {
 }
 
 func (c *PrCloneCmd) Help() string {
-	return `Clone a repo and create a worktree for a PR
-
-Clones the repository if not present locally, then creates a worktree for the PR branch.
-Use this for repos you don't have locally yet. Use 'wt pr open' for existing repos.
-
-If [clone] org is configured, you can omit the org/ prefix from the repo name.
+	return `Clones the repository if not present locally.
+Use 'wt pr open' for repos you already have.
+If [clone] org is configured, you can omit the org/ prefix.
 
 Examples:
   wt pr clone 123 org/repo              # Clone and checkout PR
@@ -571,14 +553,12 @@ type PrMergeCmd struct {
 }
 
 func (c *PrMergeCmd) Help() string {
-	return `Merge the PR for a branch and clean up
-
-When run inside a worktree, --id is optional (defaults to current branch).
-When run outside, specify a worktree ID.
+	return `Inside a worktree: --id is optional (defaults to current branch).
+Outside: specify a worktree ID.
 
 Merges the PR, removes the worktree, and deletes the local branch.
-Merge strategy can be set via flag, WT_MERGE_STRATEGY env, or config.
-Note: rebase strategy is not supported on GitLab.
+Use --keep to preserve the worktree after merge.
+Merge strategy: flag > WT_MERGE_STRATEGY env > config. GitLab doesn't support rebase.
 
 Examples:
   wt pr merge                    # Inside worktree: merge current branch's PR
@@ -632,5 +612,5 @@ type CLI struct {
 	Config     ConfigCmd     `cmd:"" help:"Manage configuration" group:"config"`
 	Completion CompletionCmd `cmd:"" help:"Generate completion script" group:"config"`
 
-	Version VersionFlag `name:"version" help:"Show version"`
+	Version VersionFlag `short:"v" name:"version" help:"Show version"`
 }

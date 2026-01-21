@@ -53,9 +53,9 @@ wt add -b feature-branch -d ~/Git     # in specific dir
 
 # Open worktree for a GitHub PR or GitLab MR
 wt pr open 123                        # PR/MR from current repo
-wt pr open 123 myrepo                 # find repo by name in cwd
-wt pr open 123 org/repo               # clone if not found locally
-wt pr open 123 -d ~/Git               # specify base directory
+wt pr open 123 myrepo                 # find repo by name in dir
+wt pr clone 123 org/repo              # clone repo and checkout PR
+wt pr open 123 -d ~/Git               # specify search directory
 
 # Hooks (auto-run based on "on" config, or explicit)
 wt add branch                         # runs hooks with on=["add"]
@@ -65,7 +65,7 @@ wt add branch --no-hook               # skip all hooks
 # Prune merged worktrees
 wt prune                              # in cwd (uses cached info, filters to current repo)
 wt prune -r                           # fetch origin + PR status first, then prune
-wt prune --all                        # prune all repos (not just current)
+wt prune --global                     # prune all repos (not just current)
 wt prune -d ~/Git/worktrees           # in specific dir
 wt prune -n                           # dry run
 wt prune -c                           # also remove clean (0 commits ahead)
@@ -73,7 +73,7 @@ wt prune --no-hook                    # skip post-removal hooks
 
 # List worktrees
 wt list                               # in cwd (filters to current repo if in one)
-wt list --all                         # list all repos (not just current)
+wt list --global                      # list all repos (not just current)
 wt list -d ~/Git/worktrees
 wt list --json
 
@@ -103,7 +103,7 @@ worktree_format = "{git-origin}-{branch-name}"
 [hooks.kitty]
 command = "kitty @ launch --type=tab --cwd={path}"
 description = "Open new kitty tab"
-on = ["create", "open"]  # auto-run for create/open
+on = ["add"]  # auto-run for add command
 
 [hooks.pr-review]
 command = "cd {path} && npm install && code {path}"
@@ -113,7 +113,7 @@ on = ["pr"]  # auto-run when opening PRs
 [hooks.cleanup]
 command = "echo 'Removed {branch} from {repo}'"
 description = "Log removed branches"
-on = ["tidy"]  # auto-run when removing worktrees
+on = ["prune"]  # auto-run when removing worktrees
 
 [hooks.vscode]
 command = "code {path}"
@@ -135,7 +135,7 @@ description = "Open VS Code"
 |--------|-------------|
 | `command` | Shell command to run (required) |
 | `description` | Human-readable description |
-| `on` | Commands to auto-run on: `["create", "open", "pr", "tidy", "all"]` (empty = only via `--hook`) |
+| `on` | Commands to auto-run on: `["add", "pr", "prune", "merge", "all"]` (empty = only via `--hook`) |
 
 ### Hook Placeholders
 
@@ -169,13 +169,13 @@ description = "Open Claude with custom prompt"
 
 The `{prompt:-help me}` syntax provides a default value ("help me") when `--arg prompt=...` is not specified.
 
-### Clone Rules (for `wt pr open`)
+### Clone Rules (for `wt pr clone`)
 
-When cloning a repo via `wt pr open org/repo`, configure which forge to use:
+When cloning a repo via `wt pr clone`, configure which forge to use:
 
 ```toml
 [clone]
-default = "github"  # or "gitlab"
+forge = "github"  # or "gitlab"
 
 [[clone.rules]]
 pattern = "company/*"
@@ -196,7 +196,7 @@ Rules are matched in order; first match wins. Supports glob patterns with `*`.
 [hooks.vscode]
 command = "code {path}"
 description = "Open worktree in VS Code"
-on = ["create", "open", "pr"]
+on = ["add", "pr"]
 ```
 
 ### tmux
@@ -205,7 +205,7 @@ on = ["create", "open", "pr"]
 [hooks.tmux]
 command = "tmux new-window -c {path} -n {branch}"
 description = "Open new tmux window in worktree"
-on = ["create", "open"]
+on = ["add"]
 ```
 
 ### gh dash
