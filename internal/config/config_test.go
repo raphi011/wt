@@ -6,8 +6,11 @@ import (
 
 func TestDefault(t *testing.T) {
 	cfg := Default()
-	if cfg.DefaultPath != "" {
-		t.Errorf("expected default path '', got %q", cfg.DefaultPath)
+	if cfg.WorktreeDir != "" {
+		t.Errorf("expected worktree dir '', got %q", cfg.WorktreeDir)
+	}
+	if cfg.RepoDir != "" {
+		t.Errorf("expected repo dir '', got %q", cfg.RepoDir)
 	}
 }
 
@@ -23,7 +26,7 @@ func TestLoadNonexistent(t *testing.T) {
 	_ = cfg
 }
 
-func TestValidateDefaultPath(t *testing.T) {
+func TestValidatePath(t *testing.T) {
 	tests := []struct {
 		path    string
 		wantErr bool
@@ -41,9 +44,36 @@ func TestValidateDefaultPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
-			err := ValidateDefaultPath(tt.path)
+			err := ValidatePath(tt.path, "test_field")
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateDefaultPath(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
+				t.Errorf("ValidatePath(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestRepoScanDir(t *testing.T) {
+	tests := []struct {
+		name        string
+		worktreeDir string
+		repoDir     string
+		expected    string
+	}{
+		{"both empty", "", "", ""},
+		{"only worktree_dir", "/worktrees", "", "/worktrees"},
+		{"only repo_dir", "", "/repos", "/repos"},
+		{"both set - repo_dir takes precedence", "/worktrees", "/repos", "/repos"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Config{
+				WorktreeDir: tt.worktreeDir,
+				RepoDir:     tt.repoDir,
+			}
+			result := cfg.RepoScanDir()
+			if result != tt.expected {
+				t.Errorf("RepoScanDir() = %q, want %q", result, tt.expected)
 			}
 		})
 	}

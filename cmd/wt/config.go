@@ -33,7 +33,8 @@ func runConfigShow(cmd *ConfigShowCmd, cfg *config.Config) error {
 			Strategy string `json:"strategy,omitempty"`
 		}
 		type configJSON struct {
-			DefaultPath    string            `json:"default_path,omitempty"`
+			WorktreeDir    string            `json:"worktree_dir,omitempty"`
+			RepoDir        string            `json:"repo_dir,omitempty"`
 			WorktreeFormat string            `json:"worktree_format"`
 			Clone          cloneJSON         `json:"clone"`
 			Merge          mergeJSON         `json:"merge,omitempty"`
@@ -49,7 +50,8 @@ func runConfigShow(cmd *ConfigShowCmd, cfg *config.Config) error {
 		}
 
 		result := configJSON{
-			DefaultPath:    cfg.DefaultPath,
+			WorktreeDir:    cfg.WorktreeDir,
+			RepoDir:        cfg.RepoDir,
 			WorktreeFormat: cfg.WorktreeFormat,
 			Clone: cloneJSON{
 				Forge: cfg.Clone.Forge,
@@ -72,8 +74,11 @@ func runConfigShow(cmd *ConfigShowCmd, cfg *config.Config) error {
 
 	// Text output
 	fmt.Printf("worktree_format = %q\n", cfg.WorktreeFormat)
-	if cfg.DefaultPath != "" {
-		fmt.Printf("default_path = %q\n", cfg.DefaultPath)
+	if cfg.WorktreeDir != "" {
+		fmt.Printf("worktree_dir = %q\n", cfg.WorktreeDir)
+	}
+	if cfg.RepoDir != "" {
+		fmt.Printf("repo_dir = %q\n", cfg.RepoDir)
 	}
 
 	// Clone section

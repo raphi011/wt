@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 )
 
@@ -80,10 +81,10 @@ func runLabelRemove(cmd *LabelRemoveCmd) error {
 	return nil
 }
 
-func runLabelList(cmd *LabelListCmd) error {
+func runLabelList(cmd *LabelListCmd, cfg *config.Config) error {
 	// If --all flag, list labels from all repos in directory
 	if cmd.All {
-		return runLabelListAll(cmd)
+		return runLabelListAll(cmd, cfg)
 	}
 
 	repoPath, err := resolveLabelRepo(cmd.Dir)
@@ -104,8 +105,12 @@ func runLabelList(cmd *LabelListCmd) error {
 	return nil
 }
 
-func runLabelListAll(cmd *LabelListCmd) error {
+func runLabelListAll(cmd *LabelListCmd, cfg *config.Config) error {
+	// Use repo_dir from config if available, fallback to cmd.Dir or cwd
 	scanDir := cmd.Dir
+	if scanDir == "" {
+		scanDir = cfg.RepoScanDir()
+	}
 	if scanDir == "" {
 		scanDir = "."
 	}

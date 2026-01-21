@@ -93,8 +93,13 @@ wt config hooks                       # list configured hooks
 Config file: `~/.config/wt/config.toml`
 
 ```toml
-# Must be absolute path or start with ~ (no relative paths)
-default_path = "~/Git/worktrees"
+# Directory for new worktrees (must be absolute path or start with ~)
+worktree_dir = "~/Git/worktrees"
+
+# Optional: directory where repositories are stored (for -r/-l repo lookup)
+# If not set, uses worktree_dir for repo scanning
+# Useful when repos live in ~/Code but worktrees go to ~/Git/worktrees
+repo_dir = "~/Code"
 
 # Worktree folder naming format
 # Placeholders: {git-origin}, {branch-name}, {folder-name}

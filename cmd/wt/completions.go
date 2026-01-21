@@ -44,12 +44,12 @@ _wt_completions() {
                     return
                     ;;
                 -r|--repository)
-                    # Complete repo names from default_path
-                    local dir="$WT_DEFAULT_PATH"
+                    # Complete repo names from worktree_dir
+                    local dir="$WT_WORKTREE_DIR"
                     if [[ -z "$dir" ]]; then
                         local config_file=~/.config/wt/config.toml
                         if [[ -f "$config_file" ]]; then
-                            dir=$(grep '^default_path' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
                         fi
                     fi
                     if [[ -d "$dir" ]]; then
@@ -64,12 +64,12 @@ _wt_completions() {
                     return
                     ;;
                 -l|--label)
-                    # Complete labels from repos in default_path
-                    local dir="$WT_DEFAULT_PATH"
+                    # Complete labels from repos in worktree_dir
+                    local dir="$WT_WORKTREE_DIR"
                     if [[ -z "$dir" ]]; then
                         local config_file=~/.config/wt/config.toml
                         if [[ -f "$config_file" ]]; then
-                            dir=$(grep '^default_path' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
                         fi
                     fi
                     if [[ -d "$dir" ]]; then
@@ -666,14 +666,14 @@ __wt_hook_names() {
     _describe 'hook name' hooks
 }
 
-# Helper: complete repo names in default_path
+# Helper: complete repo names in worktree_dir
 __wt_repo_names() {
     local dir repos
-    dir="$WT_DEFAULT_PATH"
+    dir="$WT_WORKTREE_DIR"
     if [[ -z "$dir" ]]; then
         local config_file=~/.config/wt/config.toml
         if [[ -f "$config_file" ]]; then
-            dir=$(grep '^default_path' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
         fi
     fi
     if [[ -d "$dir" ]]; then
@@ -687,14 +687,14 @@ __wt_repo_names() {
     fi
 }
 
-# Helper: complete label names from repos in default_path
+# Helper: complete label names from repos in worktree_dir
 __wt_label_names() {
     local dir labels
-    dir="$WT_DEFAULT_PATH"
+    dir="$WT_WORKTREE_DIR"
     if [[ -z "$dir" ]]; then
         local config_file=~/.config/wt/config.toml
         if [[ -f "$config_file" ]]; then
-            dir=$(grep '^default_path' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
         fi
     fi
     if [[ -d "$dir" ]]; then
@@ -821,7 +821,7 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcomman
 complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone merge" -a "merge" -d "Merge PR and clean up worktree"
 # pr open: PR number (first positional), then repo (second positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -a "(gh pr list --json number,title --jq '.[] | \"\\(.number)\t\\(.title)\"' 2>/dev/null)" -d "PR number"
-# Repo names from default_path (second positional after PR number)
+# Repo names from worktree_dir (second positional after PR number)
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -a "(__wt_list_repos)" -d "Repository"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -s d -l dir -r -a "(__fish_complete_directories)" -d "Base directory"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -l hook -d "Run named hook instead of default"
@@ -843,13 +843,13 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_fr
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -l no-hook -d "Skip post-merge hook"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 
-# Helper function to list repos in default_path
+# Helper function to list repos in worktree_dir
 function __wt_list_repos
-    set -l dir "$WT_DEFAULT_PATH"
+    set -l dir "$WT_WORKTREE_DIR"
     if test -z "$dir"
         set -l config_file ~/.config/wt/config.toml
         if test -f "$config_file"
-            set dir (grep '^default_path' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | string replace '~' "$HOME")
+            set dir (grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | string replace '~' "$HOME")
         end
     end
     if test -d "$dir"
@@ -871,13 +871,13 @@ function __wt_hook_names
     wt config hooks 2>/dev/null | awk '{print $1}'
 end
 
-# Helper function to list labels from repos in default_path
+# Helper function to list labels from repos in worktree_dir
 function __wt_list_labels
-    set -l dir "$WT_DEFAULT_PATH"
+    set -l dir "$WT_WORKTREE_DIR"
     if test -z "$dir"
         set -l config_file ~/.config/wt/config.toml
         if test -f "$config_file"
-            set dir (grep '^default_path' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | string replace '~' "$HOME")
+            set dir (grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | string replace '~' "$HOME")
         end
     end
     if test -d "$dir"

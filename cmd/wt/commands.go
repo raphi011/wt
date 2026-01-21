@@ -12,7 +12,7 @@ type AddCmd struct {
 	Branch     string   `arg:"" optional:"" placeholder:"BRANCH" help:"branch name"`
 	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) to create worktree in (repeatable, comma-separated)"`
 	Label      []string `short:"l" name:"label" sep:"," help:"target repos by label (repeatable, comma-separated)"`
-	Dir        string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	NewBranch  bool     `short:"b" name:"new-branch" help:"create a new branch"`
 	Note       string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
 	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
@@ -41,7 +41,7 @@ func (c *AddCmd) Run(ctx *Context) error {
 // PruneCmd removes merged and clean worktrees.
 type PruneCmd struct {
 	ID           []int    `short:"i" name:"id" help:"worktree(s) to remove (by ID, repeatable)"`
-	Dir          string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Dir          string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	DryRun       bool     `short:"n" name:"dry-run" negatable:"" help:"preview without removing"`
 	Force        bool     `short:"f" name:"force" help:"force remove even if not merged or has uncommitted changes"`
 	IncludeClean bool     `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
@@ -91,7 +91,7 @@ func (c *PruneCmd) Run(ctx *Context) error {
 
 // ListCmd lists worktrees in a directory.
 type ListCmd struct {
-	Dir     string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Dir     string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	JSON    bool   `name:"json" help:"output as JSON"`
 	Global  bool   `short:"g" name:"global" help:"show all worktrees (not just current repo)"`
 	Sort    string `short:"s" name:"sort" default:"id" enum:"id,repo,branch" help:"sort by: id, repo, branch"`
@@ -117,7 +117,7 @@ func (c *ListCmd) Run(ctx *Context) error {
 
 // ShowCmd shows detailed status for a single worktree.
 type ShowCmd struct {
-	Dir     string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"directory to scan for worktrees"`
+	Dir     string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for worktrees"`
 	ID      int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
 	Refresh bool   `short:"r" name:"refresh" help:"refresh PR status from API"`
 	JSON    bool   `name:"json" help:"output as JSON"`
@@ -142,7 +142,7 @@ func (c *ShowCmd) Run(ctx *Context) error {
 type ExecCmd struct {
 	ID      []int    `short:"i" name:"id" required:"" help:"worktree ID(s) (repeatable)"`
 	Command []string `arg:"" optional:"" passthrough:"" placeholder:"COMMAND" help:"command to run (after --)"`
-	Dir     string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Dir     string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 }
 
 func (c *ExecCmd) Help() string {
@@ -161,7 +161,7 @@ func (c *ExecCmd) Run(ctx *Context) error {
 // CdCmd prints the path of a worktree for shell scripting.
 type CdCmd struct {
 	ID      int    `short:"i" name:"id" required:"" help:"worktree ID"`
-	Dir     string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"directory to scan for worktrees"`
+	Dir     string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for worktrees"`
 	Project bool   `short:"p" name:"project" help:"print main repository path instead of worktree path"`
 }
 
@@ -182,7 +182,7 @@ func (c *CdCmd) Run(ctx *Context) error {
 type NoteSetCmd struct {
 	Text string `arg:"" required:"" placeholder:"TEXT" help:"note text"`
 	ID   int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Dir  string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+	Dir  string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"worktree directory for ID lookup"`
 }
 
 func (c *NoteSetCmd) Help() string {
@@ -204,7 +204,7 @@ func (c *NoteSetCmd) Run(ctx *Context) error {
 // NoteGetCmd gets a note from a branch.
 type NoteGetCmd struct {
 	ID  int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Dir string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+	Dir string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"worktree directory for ID lookup"`
 }
 
 func (c *NoteGetCmd) Help() string {
@@ -225,7 +225,7 @@ func (c *NoteGetCmd) Run(ctx *Context) error {
 // NoteClearCmd clears a note from a branch.
 type NoteClearCmd struct {
 	ID  int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Dir string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for ID lookup"`
+	Dir string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"worktree directory for ID lookup"`
 }
 
 func (c *NoteClearCmd) Help() string {
@@ -301,7 +301,7 @@ func (c *LabelRemoveCmd) Run(ctx *Context) error {
 
 // LabelListCmd lists labels for a repository.
 type LabelListCmd struct {
-	Dir string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"repository directory (or scan directory with --all)"`
+	Dir string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"repository directory (or scan directory with --all)"`
 	All bool   `short:"a" name:"all" help:"list all labels from repos in directory"`
 }
 
@@ -315,7 +315,7 @@ Examples:
 }
 
 func (c *LabelListCmd) Run(ctx *Context) error {
-	return runLabelList(c)
+	return runLabelList(c, ctx.Config)
 }
 
 // LabelClearCmd clears all labels from a repository.
@@ -443,7 +443,7 @@ Examples:
 type HookCmd struct {
 	Hooks []string `arg:"" required:"" placeholder:"HOOK" help:"hook name(s) to run"`
 	ID    []int    `short:"i" name:"id" help:"worktree ID(s) (optional in worktree, repeatable)"`
-	Dir   string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
+	Dir   string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"worktree directory for target lookup"`
 	Env   []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
@@ -465,7 +465,7 @@ func (c *HookCmd) Run(ctx *Context) error {
 
 // MvCmd moves worktrees to a different directory with optional renaming.
 type MvCmd struct {
-	Dir    string `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"destination directory (flag > WT_DEFAULT_PATH > config)"`
+	Dir    string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"destination directory (flag > WT_DEFAULT_PATH > config)"`
 	Format string `name:"format" placeholder:"FORMAT" help:"worktree naming format"`
 	DryRun bool   `short:"n" name:"dry-run" negatable:"" help:"show what would be moved"`
 	Force  bool   `short:"f" name:"force" negatable:"" help:"force move dirty worktrees"`
@@ -490,7 +490,7 @@ func (c *MvCmd) Run(ctx *Context) error {
 type PrOpenCmd struct {
 	Number int      `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
 	Repo   string   `arg:"" optional:"" placeholder:"REPO" help:"repository name to find locally"`
-	Dir    string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Dir    string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Hook   string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook bool     `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
 	Env    []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
@@ -516,7 +516,7 @@ func (c *PrOpenCmd) Run(ctx *Context) error {
 type PrCloneCmd struct {
 	Number int      `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
 	Repo   string   `arg:"" required:"" placeholder:"REPO" help:"repository (org/repo or repo if [clone] org configured)"`
-	Dir    string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Dir    string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Forge  string   `name:"forge" env:"WT_FORGE" placeholder:"FORGE" help:"forge: github or gitlab (flag > env > clone rules > config)"`
 	Note   string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
 	Hook   string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
@@ -544,7 +544,7 @@ func (c *PrCloneCmd) Run(ctx *Context) error {
 // PrMergeCmd merges the PR for the current branch.
 type PrMergeCmd struct {
 	ID       int      `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Dir      string   `short:"d" name:"dir" env:"WT_DEFAULT_PATH" placeholder:"DIR" help:"worktree directory for target lookup"`
+	Dir      string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"worktree directory for target lookup"`
 	Strategy string   `short:"s" name:"strategy" env:"WT_MERGE_STRATEGY" placeholder:"STRATEGY" help:"merge strategy: squash, rebase, or merge"`
 	Keep     bool     `short:"k" name:"keep" help:"keep worktree and branch after merge"`
 	Hook     string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`

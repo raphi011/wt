@@ -51,7 +51,7 @@ func applyConfigDefaults(cli *CLI, cfg *config.Config) {
 	// Helper to set dir if empty
 	setDir := func(dir *string) {
 		if *dir == "" {
-			*dir = cfg.DefaultPath
+			*dir = cfg.WorktreeDir
 		}
 	}
 	setFormat := func(format *string) {

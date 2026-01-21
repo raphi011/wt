@@ -125,7 +125,7 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 - `-i, --id` - worktree ID for targeting
 - `-r, --repository` - repository name for multi-repo operations (wt add)
 - `-l, --label` - target repos by label for multi-repo operations (wt add)
-- `-d, --dir` - target directory (with `env:WT_DEFAULT_PATH`)
+- `-d, --dir` - target directory (with `env:WT_WORKTREE_DIR`)
 - `-n, --dry-run` - preview without making changes
 - `-f, --force` - force operation (override safety checks)
 - `-c, --include-clean` - include clean worktrees (0 commits, no changes)

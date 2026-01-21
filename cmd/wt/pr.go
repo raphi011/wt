@@ -24,9 +24,16 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
 	}
 
+	// Worktree target dir (from -d flag / config)
 	dir := cmd.Dir
 	if dir == "" {
 		dir = "."
+	}
+
+	// Repo scan dir (from config, fallback to dir)
+	repoScanDir := cfg.RepoScanDir()
+	if repoScanDir == "" {
+		repoScanDir = dir
 	}
 
 	// Determine which repo to use (local only - never clones)
@@ -38,18 +45,18 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 		// Repo arg provided: find locally only
 		_, name := git.ParseRepoArg(cmd.Repo)
 
-		// Try to find repo locally
-		foundPath, err := git.FindRepoByName(dir, name)
+		// Try to find repo locally (search in repoScanDir)
+		foundPath, err := git.FindRepoByName(repoScanDir, name)
 		if err == nil {
 			repoPath = foundPath
 			fmt.Printf("Using repo at %s\n", repoPath)
 		} else {
 			// Not found: error with suggestions and hint to use pr clone
-			similar := git.FindSimilarRepos(dir, name)
+			similar := git.FindSimilarRepos(repoScanDir, name)
 			if len(similar) > 0 {
-				return fmt.Errorf("repository %q not found in %s\nDid you mean: %s\nTo clone a new repo, use: wt pr clone %d %s", name, dir, strings.Join(similar, ", "), cmd.Number, cmd.Repo)
+				return fmt.Errorf("repository %q not found in %s\nDid you mean: %s\nTo clone a new repo, use: wt pr clone %d %s", name, repoScanDir, strings.Join(similar, ", "), cmd.Number, cmd.Repo)
 			}
-			return fmt.Errorf("repository %q not found in %s\nTo clone a new repo, use: wt pr clone %d %s", name, dir, cmd.Number, cmd.Repo)
+			return fmt.Errorf("repository %q not found in %s\nTo clone a new repo, use: wt pr clone %d %s", name, repoScanDir, cmd.Number, cmd.Repo)
 		}
 	}
 
@@ -145,13 +152,20 @@ func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 	}
 	repoSpec := org + "/" + name
 
+	// Worktree target dir (from -d flag / config)
 	dir := cmd.Dir
 	if dir == "" {
 		dir = "."
 	}
 
-	// Check if repo already exists locally
-	if existingPath, err := git.FindRepoByName(dir, name); err == nil {
+	// Repo scan dir (from config, fallback to dir)
+	repoScanDir := cfg.RepoScanDir()
+	if repoScanDir == "" {
+		repoScanDir = dir
+	}
+
+	// Check if repo already exists locally (search in repoScanDir)
+	if existingPath, err := git.FindRepoByName(repoScanDir, name); err == nil {
 		return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr open %d %s' instead", name, existingPath, cmd.Number, name)
 	}
 

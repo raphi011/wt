@@ -126,19 +126,25 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 		return fmt.Errorf("branch name required with --repository or --label")
 	}
 
-	// Determine scan directory
-	scanDir := cmd.Dir
-	if scanDir == "" {
+	// Worktree target dir (from -d flag / config)
+	wtDir := cmd.Dir
+	if wtDir == "" {
 		if !insideRepo {
-			return fmt.Errorf("directory required when outside git repo (-d flag or WT_DEFAULT_PATH)")
+			return fmt.Errorf("directory required when outside git repo (-d flag or WT_WORKTREE_DIR)")
 		}
-		scanDir = "."
+		wtDir = "."
 	}
 
 	var err error
-	scanDir, err = filepath.Abs(scanDir)
+	wtDir, err = filepath.Abs(wtDir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	// Repo scan dir (from config, fallback to wtDir)
+	repoScanDir := cfg.RepoScanDir()
+	if repoScanDir == "" {
+		repoScanDir = wtDir
 	}
 
 	var results []successResult
@@ -150,7 +156,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 		if err := git.CheckGit(); err != nil {
 			errs = append(errs, fmt.Errorf("(current repo): %w", err))
 		} else {
-			result, err := createWorktreeInCurrentRepo(cmd, cfg, scanDir)
+			result, err := createWorktreeInCurrentRepo(cmd, cfg, wtDir)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("(current repo): %w", err))
 			} else {
@@ -164,7 +170,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 
 	// Process -r flags (repository names)
 	for _, repoName := range cmd.Repository {
-		repoPath, err := git.FindRepoByName(scanDir, repoName)
+		repoPath, err := git.FindRepoByName(repoScanDir, repoName)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
 			continue
@@ -174,7 +180,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 
 	// Process -l flags (labels)
 	for _, label := range cmd.Label {
-		paths, err := git.FindReposByLabel(scanDir, label)
+		paths, err := git.FindReposByLabel(repoScanDir, label)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("label %q: %w", label, err))
 			continue
@@ -190,7 +196,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 
 	// Process each unique repository
 	for repoPath := range repoPaths {
-		result, err := createWorktreeForRepo(repoPath, cmd, cfg, scanDir)
+		result, err := createWorktreeForRepo(repoPath, cmd, cfg, wtDir)
 		repoName, _ := git.GetRepoNameFrom(repoPath)
 		if repoName == "" {
 			repoName = filepath.Base(repoPath)

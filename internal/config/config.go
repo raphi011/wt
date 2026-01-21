@@ -41,12 +41,22 @@ type CloneConfig struct {
 
 // Config holds the wt configuration
 type Config struct {
-	DefaultPath    string            `toml:"default_path"`
+	WorktreeDir    string            `toml:"worktree_dir"`
+	RepoDir        string            `toml:"repo_dir"` // optional: where to find repos for -r/-l
 	WorktreeFormat string            `toml:"worktree_format"`
 	Hooks          HooksConfig       `toml:"-"` // custom parsing needed
 	Clone          CloneConfig       `toml:"clone"`
 	Merge          MergeConfig       `toml:"merge"`
 	Hosts          map[string]string `toml:"hosts"` // domain -> forge type mapping
+}
+
+// RepoScanDir returns the directory to scan for repositories.
+// Returns RepoDir if set, otherwise falls back to WorktreeDir.
+func (c *Config) RepoScanDir() string {
+	if c.RepoDir != "" {
+		return c.RepoDir
+	}
+	return c.WorktreeDir
 }
 
 // DefaultWorktreeFormat is the default format for worktree folder names
@@ -55,7 +65,8 @@ const DefaultWorktreeFormat = "{git-origin}-{branch-name}"
 // Default returns the default configuration
 func Default() Config {
 	return Config{
-		DefaultPath:    "",
+		WorktreeDir:    "",
+		RepoDir:        "",
 		WorktreeFormat: DefaultWorktreeFormat,
 		Clone: CloneConfig{
 			Forge: "github", // backwards compatible default
@@ -63,9 +74,9 @@ func Default() Config {
 	}
 }
 
-// ValidateDefaultPath checks that the path is absolute or starts with ~
+// ValidatePath checks that the path is absolute or starts with ~
 // Returns error if path is relative (like "." or "..")
-func ValidateDefaultPath(path string) error {
+func ValidatePath(path, fieldName string) error {
 	if path == "" {
 		return nil // Empty is allowed (means not configured)
 	}
@@ -75,7 +86,7 @@ func ValidateDefaultPath(path string) error {
 	}
 	// Must be absolute
 	if !filepath.IsAbs(path) {
-		return fmt.Errorf("default_path must be absolute or start with ~, got: %q", path)
+		return fmt.Errorf("%s must be absolute or start with ~, got: %q", fieldName, path)
 	}
 	return nil
 }
@@ -109,7 +120,8 @@ func configPath() (string, error) {
 
 // rawConfig is used for initial TOML parsing before processing hooks
 type rawConfig struct {
-	DefaultPath    string                 `toml:"default_path"`
+	WorktreeDir    string                 `toml:"worktree_dir"`
+	RepoDir        string                 `toml:"repo_dir"`
 	WorktreeFormat string                 `toml:"worktree_format"`
 	Hooks          map[string]interface{} `toml:"hooks"`
 	Clone          CloneConfig            `toml:"clone"`
@@ -140,7 +152,8 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		DefaultPath:    raw.DefaultPath,
+		WorktreeDir:    raw.WorktreeDir,
+		RepoDir:        raw.RepoDir,
 		WorktreeFormat: raw.WorktreeFormat,
 		Hooks:          parseHooksConfig(raw.Hooks),
 		Clone:          raw.Clone,
@@ -148,18 +161,32 @@ func Load() (Config, error) {
 		Hosts:          raw.Hosts,
 	}
 
-	// Validate default_path (must be absolute or start with ~)
-	if err := ValidateDefaultPath(cfg.DefaultPath); err != nil {
+	// Validate worktree_dir (must be absolute or start with ~)
+	if err := ValidatePath(cfg.WorktreeDir, "worktree_dir"); err != nil {
 		return Default(), err
 	}
 
-	// Expand ~ in default_path (shell doesn't expand in config files)
-	if cfg.DefaultPath != "" {
-		expanded, err := expandPath(cfg.DefaultPath)
+	// Validate repo_dir (must be absolute or start with ~)
+	if err := ValidatePath(cfg.RepoDir, "repo_dir"); err != nil {
+		return Default(), err
+	}
+
+	// Expand ~ in worktree_dir (shell doesn't expand in config files)
+	if cfg.WorktreeDir != "" {
+		expanded, err := expandPath(cfg.WorktreeDir)
 		if err != nil {
-			return Default(), fmt.Errorf("expand default_path: %w", err)
+			return Default(), fmt.Errorf("expand worktree_dir: %w", err)
 		}
-		cfg.DefaultPath = expanded
+		cfg.WorktreeDir = expanded
+	}
+
+	// Expand ~ in repo_dir
+	if cfg.RepoDir != "" {
+		expanded, err := expandPath(cfg.RepoDir)
+		if err != nil {
+			return Default(), fmt.Errorf("expand repo_dir: %w", err)
+		}
+		cfg.RepoDir = expanded
 	}
 
 	// Validate clone.forge (only "github", "gitlab", or empty allowed)
@@ -263,10 +290,15 @@ func matchPattern(pattern, repoSpec string) bool {
 
 const defaultConfig = `# wt configuration
 
-# Base directory for new worktrees (required for default behavior)
+# Base directory for new worktrees
 # Must be an absolute path or start with ~ (no relative paths like "." or "..")
 # Examples: "/Users/you/Git/worktrees" or "~/Git/worktrees"
-# default_path = "~/Git/worktrees"
+# worktree_dir = "~/Git/worktrees"
+
+# Optional: directory where repositories are stored (for -r/-l repo lookup)
+# If not set, uses worktree_dir for repo scanning
+# Useful when repos live in ~/Code but worktrees go to ~/Git/worktrees
+# repo_dir = "~/Code"
 
 # Worktree folder naming format
 # Available placeholders:
