@@ -485,6 +485,7 @@ type HookCmd struct {
 	Label      []string `short:"l" name:"label" xor:"target" sep:"," help:"target repos by label (repeatable, comma-separated)"`
 	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory for target lookup"`
 	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
+	DryRun     bool     `short:"n" name:"dry-run" help:"print substituted command without executing"`
 }
 
 func (c *HookCmd) Help() string {
@@ -498,7 +499,8 @@ Examples:
   wt hook kitty -i 1         # By worktree ID
   wt hook kitty -i 1 -i 2    # Multiple worktrees
   wt hook kitty -r wt        # By repo name
-  wt hook kitty -l backend   # By label`
+  wt hook kitty -l backend   # By label
+  wt hook kitty -n           # Dry-run: print command without executing`
 }
 
 func (c *HookCmd) Run(ctx *Context) error {

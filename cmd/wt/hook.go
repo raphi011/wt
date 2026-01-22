@@ -47,6 +47,7 @@ func runHookRun(cmd *HookCmd, cfg *config.Config) error {
 			return err
 		}
 		ctx.Env = env
+		ctx.DryRun = cmd.DryRun
 		return runHooksForContext(cmd.Hooks, cfg, ctx)
 	}
 
@@ -54,7 +55,7 @@ func runHookRun(cmd *HookCmd, cfg *config.Config) error {
 	if hasID {
 		var errs []error
 		for _, id := range cmd.ID {
-			if err := runHookForID(id, cmd.Hooks, cmd.Dir, cfg, env); err != nil {
+			if err := runHookForID(id, cmd.Hooks, cmd.Dir, cfg, env, cmd.DryRun); err != nil {
 				errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
 			}
 		}
@@ -65,19 +66,20 @@ func runHookRun(cmd *HookCmd, cfg *config.Config) error {
 	}
 
 	// Mode: by repo/label
-	return runHookForRepos(cmd.Repository, cmd.Label, cmd.Hooks, cmd.Dir, cfg, env)
+	return runHookForRepos(cmd.Repository, cmd.Label, cmd.Hooks, cmd.Dir, cfg, env, cmd.DryRun)
 }
 
-func runHookForID(id int, hookNames []string, dir string, cfg *config.Config, env map[string]string) error {
+func runHookForID(id int, hookNames []string, dir string, cfg *config.Config, env map[string]string, dryRun bool) error {
 	ctx, err := resolveHookTargetByID(id, dir)
 	if err != nil {
 		return err
 	}
 	ctx.Env = env
+	ctx.DryRun = dryRun
 	return runHooksForContext(hookNames, cfg, ctx)
 }
 
-func runHookForRepos(repos []string, labels []string, hookNames []string, dir string, cfg *config.Config, env map[string]string) error {
+func runHookForRepos(repos []string, labels []string, hookNames []string, dir string, cfg *config.Config, env map[string]string, dryRun bool) error {
 	scanDir, err := resolveRepoScanDir(dir, cfg)
 	if err != nil {
 		return err
@@ -100,6 +102,7 @@ func runHookForRepos(repos []string, labels []string, hookNames []string, dir st
 			Repo:     repoName,
 			Trigger:  "run",
 			Env:      env,
+			DryRun:   dryRun,
 		}
 
 		if err := runHooksForContext(hookNames, cfg, ctx); err != nil {

@@ -464,7 +464,7 @@ _wt_completions() {
             esac
             # Complete hook names for all positional args (supports multiple hooks)
             local hooks=$(wt config hooks 2>/dev/null | awk '{print $1}')
-            COMPREPLY=($(compgen -W "$hooks -i --id -r --repository -l --label -d --dir -a --arg" -- "$cur"))
+            COMPREPLY=($(compgen -W "$hooks -i --id -r --repository -l --label -d --dir -a --arg -n --dry-run" -- "$cur"))
             ;;
         config)
             if [[ $cword -eq 2 ]]; then
@@ -796,7 +796,9 @@ _wt() {
                         '-d[directory]:directory:_files -/' \
                         '--dir[directory]:directory:_files -/' \
                         '*-a[set hook variable KEY=VALUE]:arg:' \
-                        '*--arg[set hook variable KEY=VALUE]:arg:'
+                        '*--arg[set hook variable KEY=VALUE]:arg:' \
+                        '-n[print command without executing]' \
+                        '--dry-run[print command without executing]'
                     ;;
                 config)
                     _arguments -C \
@@ -1035,6 +1037,7 @@ complete -c wt -n "__fish_seen_subcommand_from hook" -s r -l repository -r -a "(
 complete -c wt -n "__fish_seen_subcommand_from hook" -s l -l label -r -a "(__wt_list_labels)" -d "Target repos by label (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from hook" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory for target lookup"
 complete -c wt -n "__fish_seen_subcommand_from hook" -s a -l arg -r -d "Set hook variable KEY=VALUE"
+complete -c wt -n "__fish_seen_subcommand_from hook" -s n -l dry-run -d "Print command without executing"
 
 # pr: subcommands
 complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone merge" -a "open" -d "Checkout PR from existing local repo"

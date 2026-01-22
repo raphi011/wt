@@ -41,6 +41,7 @@ type Context struct {
 	MainRepo string            // main repo path
 	Trigger  string            // command that triggered the hook (add, pr, prune, merge)
 	Env      map[string]string // custom variables from -e key=value flags
+	DryRun   bool              // if true, print command instead of executing
 }
 
 // HookMatch represents a hook that matched the current command
@@ -153,9 +154,14 @@ func RunSingle(name string, hook *config.Hook, ctx Context) error {
 
 // runHook executes a single hook with variable substitution.
 func runHook(name string, hook *config.Hook, ctx Context, workDir string) error {
-	fmt.Printf("Running hook '%s'...\n", name)
-
 	cmd := SubstitutePlaceholders(hook.Command, ctx)
+
+	if ctx.DryRun {
+		fmt.Printf("[dry-run] %s: %s\n", name, cmd)
+		return nil
+	}
+
+	fmt.Printf("Running hook '%s'...\n", name)
 
 	shellCmd := exec.Command("sh", "-c", cmd)
 	shellCmd.Dir = workDir
