@@ -19,21 +19,21 @@ import (
 
 // ShowInfo contains all information displayed by wt show
 type ShowInfo struct {
-	ID           int        `json:"id"`
-	Path         string     `json:"path"`
-	Branch       string     `json:"branch"`
-	RepoName     string     `json:"repo_name"`
-	MainRepo     string     `json:"main_repo"`
-	OriginURL    string     `json:"origin_url"`
-	CreatedAt    *time.Time `json:"created_at,omitempty"`
-	LastCommit   string     `json:"last_commit,omitempty"`
-	CommitsAhead int        `json:"commits_ahead"`
-	CommitsBehind int       `json:"commits_behind"`
-	DiffStats    *DiffStats `json:"diff_stats,omitempty"`
-	IsDirty      bool       `json:"is_dirty"`
-	IsMerged     bool       `json:"is_merged"`
-	Note         string     `json:"note,omitempty"`
-	PR           *PRInfo    `json:"pr,omitempty"`
+	ID            int        `json:"id"`
+	Path          string     `json:"path"`
+	Branch        string     `json:"branch"`
+	RepoName      string     `json:"repo_name"`
+	MainRepo      string     `json:"main_repo"`
+	OriginURL     string     `json:"origin_url"`
+	CreatedAt     *time.Time `json:"created_at,omitempty"`
+	LastCommit    string     `json:"last_commit,omitempty"`
+	CommitsAhead  int        `json:"commits_ahead"`
+	CommitsBehind int        `json:"commits_behind"`
+	DiffStats     *DiffStats `json:"diff_stats,omitempty"`
+	IsDirty       bool       `json:"is_dirty"`
+	IsMerged      bool       `json:"is_merged"`
+	Note          string     `json:"note,omitempty"`
+	PR            *PRInfo    `json:"pr,omitempty"`
 }
 
 // DiffStats for JSON output
@@ -55,10 +55,6 @@ type PRInfo struct {
 }
 
 func runShow(cmd *ShowCmd, cfg *config.Config) error {
-	if err := git.CheckGit(); err != nil {
-		return err
-	}
-
 	// Resolve target worktree
 	info, err := resolveShowTarget(cmd.ID, cmd.Dir)
 	if err != nil {

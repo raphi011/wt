@@ -1,10 +1,18 @@
 package main
 
-import "github.com/raphi011/wt/internal/config"
+import (
+	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/git"
+)
 
 // Context is passed to all command Run() methods.
 type Context struct {
 	Config *config.Config
+}
+
+// BeforeApply runs before any command and verifies git is available.
+func (c *Context) BeforeApply() error {
+	return git.CheckGit()
 }
 
 // AddCmd adds a worktree for an existing or new branch.

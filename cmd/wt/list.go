@@ -15,10 +15,6 @@ import (
 )
 
 func runList(cmd *ListCmd, cfg *config.Config) error {
-	if err := git.CheckGit(); err != nil {
-		return err
-	}
-
 	dir := cmd.Dir
 	if dir == "" {
 		dir = "."

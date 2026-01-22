@@ -20,10 +20,6 @@ import (
 const maxConcurrentPRFetches = 5
 
 func runPrune(cmd *PruneCmd, cfg *config.Config) error {
-	if err := git.CheckGit(); err != nil {
-		return err
-	}
-
 	dir := cmd.Dir
 	if dir == "" {
 		dir = "."

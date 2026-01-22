@@ -15,10 +15,6 @@ import (
 )
 
 func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
-	if err := git.CheckGit(); err != nil {
-		return err
-	}
-
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
@@ -133,10 +129,6 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 }
 
 func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
-	if err := git.CheckGit(); err != nil {
-		return err
-	}
-
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
@@ -257,10 +249,6 @@ func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 }
 
 func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {
-	if err := git.CheckGit(); err != nil {
-		return err
-	}
-
 	var branch, mainRepo, wtPath string
 	var err error
 

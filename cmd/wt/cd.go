@@ -11,10 +11,6 @@ import (
 )
 
 func runCd(cmd *CdCmd, cfg *config.Config) error {
-	if err := git.CheckGit(); err != nil {
-		return err
-	}
-
 	// Determine targeting mode
 	hasID := cmd.ID != 0
 	hasRepo := cmd.Repository != ""

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -18,10 +19,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 	}
 
-	ctx := kong.Parse(&cli,
+	parser, err := kong.New(&cli,
 		kong.Name("wt"),
 		kong.Description("Git worktree manager with GitHub/GitLab integration"),
-		kong.UsageOnError(),
 		kong.ConfigureHelp(kong.HelpOptions{
 			Compact: true,
 		}),
@@ -34,6 +34,23 @@ func main() {
 			"version": versionString(),
 		},
 	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "wt: %v\n", err)
+		os.Exit(1)
+	}
+
+	ctx, err := parser.Parse(os.Args[1:])
+	if err != nil {
+		// No command given - show help instead of error
+		if len(os.Args) == 1 {
+			var parseErr *kong.ParseError
+			if errors.As(err, &parseErr) {
+				_ = parseErr.Context.PrintUsage(false)
+				return
+			}
+		}
+		parser.FatalIfErrorf(err)
+	}
 
 	// Apply config defaults to commands with Dir field
 	applyConfigDefaults(&cli, &cfg)
@@ -95,4 +112,3 @@ func (v VersionFlag) BeforeApply(app *kong.Kong, vars kong.Vars) error {
 	app.Exit(0)
 	return nil
 }
-

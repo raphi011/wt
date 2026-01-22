@@ -12,10 +12,6 @@ import (
 )
 
 func runExec(cmd *ExecCmd, cfg *config.Config) error {
-	if err := git.CheckGit(); err != nil {
-		return err
-	}
-
 	// Strip leading "--" if present (kong passthrough includes it)
 	command := cmd.Command
 	if len(command) > 0 && command[0] == "--" {

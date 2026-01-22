@@ -11,10 +11,6 @@ import (
 )
 
 func runMv(cmd *MvCmd, _ *config.Config) error {
-	if err := git.CheckGit(); err != nil {
-		return err
-	}
-
 	// Validate destination directory is provided
 	if cmd.Dir == "" {
 		return fmt.Errorf("destination directory required: use -d flag, set WT_DEFAULT_PATH, or configure default_path in config")

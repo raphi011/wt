@@ -73,10 +73,6 @@ func runAdd(cmd *AddCmd, cfg *config.Config) error {
 
 // runAddInRepo handles wt add when inside a git repository (single repo mode)
 func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
-	if err := git.CheckGit(); err != nil {
-		return err
-	}
-
 	dir := cmd.Dir
 	if dir == "" {
 		dir = "."
@@ -188,15 +184,11 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 	// If inside repo with -r flag, include current repo first (original behavior)
 	// With -l only, we don't auto-include current repo (only labeled repos)
 	if insideRepo && len(cmd.Repository) > 0 {
-		if err := git.CheckGit(); err != nil {
+		result, err := createWorktreeInCurrentRepo(cmd, cfg, wtDir)
+		if err != nil {
 			errs = append(errs, fmt.Errorf("(current repo): %w", err))
 		} else {
-			result, err := createWorktreeInCurrentRepo(cmd, cfg, wtDir)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("(current repo): %w", err))
-			} else {
-				results = append(results, *result)
-			}
+			results = append(results, *result)
 		}
 	}
 
@@ -381,4 +373,3 @@ func createWorktreeForRepo(repoPath string, cmd *AddCmd, cfg *config.Config, tar
 		Existed:  result.AlreadyExists,
 	}, nil
 }
-
