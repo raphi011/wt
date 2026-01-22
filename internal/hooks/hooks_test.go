@@ -25,17 +25,17 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		{
 			name:     "single placeholder",
 			command:  "code {path}",
-			expected: "code '/home/user/worktrees/repo-branch'",
+			expected: "code /home/user/worktrees/repo-branch",
 		},
 		{
 			name:     "multiple placeholders",
 			command:  "cd {path} && echo {branch}",
-			expected: "cd '/home/user/worktrees/repo-branch' && echo 'feature-branch'",
+			expected: "cd /home/user/worktrees/repo-branch && echo feature-branch",
 		},
 		{
 			name:     "all placeholders",
 			command:  "{path} {branch} {repo} {folder} {main-repo} {trigger}",
-			expected: "'/home/user/worktrees/repo-branch' 'feature-branch' 'myrepo' 'repo' '/home/user/repo' 'add'",
+			expected: "/home/user/worktrees/repo-branch feature-branch myrepo repo /home/user/repo add",
 		},
 		{
 			name:     "no placeholders",
@@ -45,12 +45,12 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		{
 			name:     "repeated placeholder",
 			command:  "{path} and {path}",
-			expected: "'/home/user/worktrees/repo-branch' and '/home/user/worktrees/repo-branch'",
+			expected: "/home/user/worktrees/repo-branch and /home/user/worktrees/repo-branch",
 		},
 		{
 			name:     "trigger placeholder",
 			command:  "echo triggered by {trigger}",
-			expected: "echo triggered by 'add'",
+			expected: "echo triggered by add",
 		},
 	}
 
@@ -64,7 +64,7 @@ func TestSubstitutePlaceholders(t *testing.T) {
 	}
 }
 
-func TestSubstitutePlaceholders_ShellEscaping(t *testing.T) {
+func TestSubstitutePlaceholders_SpecialChars(t *testing.T) {
 	tests := []struct {
 		name     string
 		ctx      Context
@@ -77,7 +77,7 @@ func TestSubstitutePlaceholders_ShellEscaping(t *testing.T) {
 				Path: "/home/user/my documents/worktree",
 			},
 			command:  "code {path}",
-			expected: "code '/home/user/my documents/worktree'",
+			expected: "code /home/user/my documents/worktree",
 		},
 		{
 			name: "branch with special chars",
@@ -85,7 +85,7 @@ func TestSubstitutePlaceholders_ShellEscaping(t *testing.T) {
 				Branch: "feature/test-branch",
 			},
 			command:  "echo {branch}",
-			expected: "echo 'feature/test-branch'",
+			expected: "echo feature/test-branch",
 		},
 		{
 			name: "value with single quotes",
@@ -93,7 +93,7 @@ func TestSubstitutePlaceholders_ShellEscaping(t *testing.T) {
 				Path: "/home/user/it's a path",
 			},
 			command:  "code {path}",
-			expected: "code '/home/user/it'\\''s a path'",
+			expected: "code /home/user/it's a path",
 		},
 	}
 
@@ -597,7 +597,7 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 			ctx: Context{
 				Env: map[string]string{"prompt": "hello world"},
 			},
-			expected: "echo 'hello world'",
+			expected: "echo hello world",
 		},
 		{
 			name:    "env variable with default - value provided",
@@ -605,7 +605,7 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 			ctx: Context{
 				Env: map[string]string{"prompt": "custom message"},
 			},
-			expected: "echo 'custom message'",
+			expected: "echo custom message",
 		},
 		{
 			name:    "env variable with default - no value",
@@ -613,7 +613,7 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 			ctx: Context{
 				Env: map[string]string{},
 			},
-			expected: "echo 'default message'",
+			expected: "echo default message",
 		},
 		{
 			name:    "env variable with default - nil env",
@@ -621,7 +621,7 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 			ctx: Context{
 				Env: nil,
 			},
-			expected: "echo 'fallback'",
+			expected: "echo fallback",
 		},
 		{
 			name:    "env variable without default - missing",
@@ -629,7 +629,7 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 			ctx: Context{
 				Env: map[string]string{},
 			},
-			expected: "echo ''",
+			expected: "echo ",
 		},
 		{
 			name:    "multiple env variables",
@@ -637,7 +637,7 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 			ctx: Context{
 				Env: map[string]string{"mode": "ask", "prompt": "help me"},
 			},
-			expected: "cmd --mode='ask' --prompt='help me'",
+			expected: "cmd --mode=ask --prompt=help me",
 		},
 		{
 			name:    "mixed static and env placeholders",
@@ -646,7 +646,7 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 				Path: "/home/user/worktree",
 				Env:  map[string]string{"prompt": "implement feature"},
 			},
-			expected: "claude --cwd='/home/user/worktree' 'implement feature'",
+			expected: "claude --cwd=/home/user/worktree implement feature",
 		},
 		{
 			name:    "env variable with special characters",
@@ -654,7 +654,7 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 			ctx: Context{
 				Env: map[string]string{"msg": "it's a test"},
 			},
-			expected: "echo 'it'\\''s a test'",
+			expected: "echo it's a test",
 		},
 		{
 			name:    "env variable with empty default",
@@ -662,7 +662,7 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 			ctx: Context{
 				Env: map[string]string{},
 			},
-			expected: "cmd ''",
+			expected: "cmd ",
 		},
 		{
 			name:    "underscore in variable name",
@@ -670,48 +670,7 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 			ctx: Context{
 				Env: map[string]string{"my_var": "value"},
 			},
-			expected: "echo 'value'",
-		},
-		{
-			name:    "raw mode skips quoting",
-			command: "fish -c 'claude {c:raw}'",
-			ctx: Context{
-				Env: map[string]string{"c": "fix the bug"},
-			},
-			expected: "fish -c 'claude fix the bug'",
-		},
-		{
-			name:    "raw mode with special chars preserves them",
-			command: "fish -c 'echo {msg:raw}'",
-			ctx: Context{
-				Env: map[string]string{"msg": "it's a test"},
-			},
-			expected: "fish -c 'echo it's a test'",
-		},
-		{
-			name:    "raw mode with missing var returns empty",
-			command: "echo {missing:raw}",
-			ctx: Context{
-				Env: map[string]string{},
-			},
-			expected: "echo ",
-		},
-		{
-			name:    "raw mode with nil env",
-			command: "echo {x:raw}",
-			ctx: Context{
-				Env: nil,
-			},
-			expected: "echo ",
-		},
-		{
-			name:    "mixed raw and quoted placeholders",
-			command: "cmd {path} -- fish -c '{c:raw}'",
-			ctx: Context{
-				Path: "/home/user",
-				Env:  map[string]string{"c": "do something"},
-			},
-			expected: "cmd '/home/user' -- fish -c 'do something'",
+			expected: "echo value",
 		},
 	}
 

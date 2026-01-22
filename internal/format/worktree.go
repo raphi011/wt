@@ -7,10 +7,10 @@ import (
 )
 
 // DefaultWorktreeFormat is the default format for worktree folder names
-const DefaultWorktreeFormat = "{git-origin}-{branch-name}"
+const DefaultWorktreeFormat = "{repo}-{branch}"
 
 // ValidPlaceholders lists all supported placeholders
-var ValidPlaceholders = []string{"{git-origin}", "{branch-name}", "{folder-name}"}
+var ValidPlaceholders = []string{"{repo}", "{branch}", "{folder}"}
 
 // FormatParams contains the values for placeholder substitution
 type FormatParams struct {
@@ -62,9 +62,9 @@ func isValidPlaceholder(placeholder string) bool {
 // FormatWorktreeName applies the format template to generate a worktree folder name
 func FormatWorktreeName(format string, params FormatParams) string {
 	result := format
-	result = strings.ReplaceAll(result, "{git-origin}", SanitizeForPath(params.GitOrigin))
-	result = strings.ReplaceAll(result, "{branch-name}", SanitizeForPath(params.BranchName))
-	result = strings.ReplaceAll(result, "{folder-name}", SanitizeForPath(params.FolderName))
+	result = strings.ReplaceAll(result, "{repo}", SanitizeForPath(params.GitOrigin))
+	result = strings.ReplaceAll(result, "{branch}", SanitizeForPath(params.BranchName))
+	result = strings.ReplaceAll(result, "{folder}", SanitizeForPath(params.FolderName))
 	return result
 }
 

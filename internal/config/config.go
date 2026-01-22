@@ -61,7 +61,7 @@ func (c *Config) RepoScanDir() string {
 }
 
 // DefaultWorktreeFormat is the default format for worktree folder names
-const DefaultWorktreeFormat = "{git-origin}-{branch-name}"
+const DefaultWorktreeFormat = "{repo}-{branch}"
 
 // Default returns the default configuration
 func Default() Config {
@@ -310,11 +310,11 @@ const defaultConfig = `# wt configuration
 
 # Worktree folder naming format
 # Available placeholders:
-#   {git-origin}   - repo name extracted from git remote origin URL
-#   {branch-name}  - the branch name as provided
-#   {folder-name}  - actual folder name of the git repo on disk
-# Example: "{folder-name}_{branch-name}" creates "my-repo_feature-branch"
-worktree_format = "{git-origin}-{branch-name}"
+#   {repo}    - repo name extracted from git remote origin URL
+#   {branch}  - the branch name as provided
+#   {folder}  - actual folder name of the git repo on disk
+# Example: "{folder}_{branch}" creates "my-repo_feature-branch"
+worktree_format = "{repo}-{branch}"
 
 # Base ref mode for new branches (wt add -b)
 # Controls which ref to use when creating new branches:
@@ -360,19 +360,13 @@ worktree_format = "{git-origin}-{branch-name}"
 #   {folder}    - main repo folder name
 #   {main-repo} - main repo path
 #   {trigger}   - command that triggered the hook (add, pr, prune, merge)
-#   {key}       - custom variable passed via --arg key=value (shell-quoted)
-#   {key:-def}  - custom variable with default value if not provided (shell-quoted)
-#   {key:raw}   - custom variable without shell quoting (for embedding in existing quotes)
+#   {key}       - custom variable passed via --arg key=value
+#   {key:-def}  - custom variable with default value if not provided
 #
 # Custom variables example:
 # [hooks.claude]
 # command = "kitty @ launch --cwd={path} -- claude {prompt:-help me}"
 # Run with: wt hook claude --arg prompt="implement feature X"
-#
-# Raw mode example (when placeholder is already inside quotes):
-# [hooks.fish-claude]
-# command = "kitty @ launch --cwd={path} -- fish -c 'claude {c:raw}'"
-# Run with: wt hook fish-claude --arg c="implement the feature"
 
 # Clone settings - configure forge and default org for cloning repos
 # Used by "wt pr clone" when cloning a new repository

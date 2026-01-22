@@ -12,14 +12,6 @@ import (
 	"github.com/raphi011/wt/internal/config"
 )
 
-// shellQuote escapes a string for safe use in shell commands.
-// It wraps the value in single quotes and escapes any embedded single quotes.
-func shellQuote(s string) string {
-	// Single quotes preserve everything literally except single quotes themselves.
-	// To include a single quote, we end the quoted string, add an escaped quote, and restart.
-	// e.g., "it's" becomes 'it'\''s'
-	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
-}
 
 // CommandType identifies which command is triggering the hook
 type CommandType string
@@ -253,31 +245,28 @@ func ParseEnvWithStdin(envSlice []string) (map[string]string, error) {
 	return result, nil
 }
 
-// envPlaceholderRegex matches {key}, {key:raw}, or {key:-default} patterns for env variables.
+// envPlaceholderRegex matches {key} or {key:-default} patterns for env variables.
 // This is used after static replacements to expand custom env placeholders.
 // Supported formats:
-//   - {key}           - value is shell-quoted
-//   - {key:raw}       - value is used as-is (no quoting)
-//   - {key:-default}  - value is shell-quoted, uses default if key not set
-var envPlaceholderRegex = regexp.MustCompile(`\{([a-zA-Z_][a-zA-Z0-9_]*)(?:(:raw)|:-([^}]*))?\}`)
+//   - {key}           - value from --arg key=value
+//   - {key:-default}  - value with default if key not set
+var envPlaceholderRegex = regexp.MustCompile(`\{([a-zA-Z_][a-zA-Z0-9_]*)(?::-([^}]*))?\}`)
 
-// SubstitutePlaceholders replaces {placeholder} with shell-quoted values from Context.
-// Values are properly escaped to prevent command injection.
+// SubstitutePlaceholders replaces {placeholder} with values from Context.
 //
 // Static placeholders: {path}, {branch}, {repo}, {folder}, {main-repo}, {trigger}
-// Env placeholders (from Context.Env):
-//   - {key}         - shell-quoted value
-//   - {key:raw}     - unquoted value (for embedding in existing quotes)
-//   - {key:-default} - shell-quoted value with default if key missing
+// Env placeholders (from Context.Env via --arg key=value):
+//   - {key}           - value from --arg key=value
+//   - {key:-default}  - value with default if key not set
 func SubstitutePlaceholders(command string, ctx Context) string {
 	// First, handle static replacements
 	replacements := map[string]string{
-		"{path}":      shellQuote(ctx.Path),
-		"{branch}":    shellQuote(ctx.Branch),
-		"{repo}":      shellQuote(ctx.Repo),
-		"{folder}":    shellQuote(ctx.Folder),
-		"{main-repo}": shellQuote(ctx.MainRepo),
-		"{trigger}":   shellQuote(ctx.Trigger),
+		"{path}":      ctx.Path,
+		"{branch}":    ctx.Branch,
+		"{repo}":      ctx.Repo,
+		"{folder}":    ctx.Folder,
+		"{main-repo}": ctx.MainRepo,
+		"{trigger}":   ctx.Trigger,
 	}
 
 	result := command
@@ -285,32 +274,25 @@ func SubstitutePlaceholders(command string, ctx Context) string {
 		result = strings.ReplaceAll(result, placeholder, value)
 	}
 
-	// Then, handle env placeholders with optional defaults: {key}, {key:raw}, or {key:-default}
+	// Then, handle env placeholders with optional defaults: {key} or {key:-default}
 	result = envPlaceholderRegex.ReplaceAllStringFunc(result, func(match string) string {
-		// Parse the match to extract key, raw flag, and optional default
+		// Parse the match to extract key and optional default
 		submatch := envPlaceholderRegex.FindStringSubmatch(match)
 		if submatch == nil {
 			return match
 		}
 		key := submatch[1]
-		isRaw := submatch[2] == ":raw"
-		defaultVal := submatch[3] // empty string if no default specified
+		defaultVal := submatch[2] // empty string if no default specified
 
 		// Look up value in env map
 		if ctx.Env != nil {
 			if val, ok := ctx.Env[key]; ok {
-				if isRaw {
-					return val
-				}
-				return shellQuote(val)
+				return val
 			}
 		}
 
 		// Use default if specified, otherwise empty string
-		if isRaw {
-			return defaultVal
-		}
-		return shellQuote(defaultVal)
+		return defaultVal
 	})
 
 	return result

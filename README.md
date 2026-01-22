@@ -85,7 +85,7 @@ wt repos --json
 
 # Move worktrees to another directory
 wt mv -d ~/Git/worktrees              # move all worktrees from cwd to dir
-wt mv -d ~/Git --format={branch-name} # move and rename using format
+wt mv -d ~/Git --format={branch} # move and rename using format
 wt mv --dry-run -d ~/Git              # preview what would be moved
 wt mv -f -d ~/Git                     # force move dirty worktrees
 
@@ -108,8 +108,8 @@ worktree_dir = "~/Git/worktrees"
 repo_dir = "~/Code"
 
 # Worktree folder naming format
-# Placeholders: {git-origin}, {branch-name}, {folder-name}
-worktree_format = "{git-origin}-{branch-name}"
+# Placeholders: {repo}, {branch}, {folder}
+worktree_format = "{repo}-{branch}"
 
 [hooks.kitty]
 command = "kitty @ launch --type=tab --cwd={path}"
@@ -136,9 +136,9 @@ description = "Open VS Code"
 
 | Placeholder | Value |
 |-------------|-------|
-| `{git-origin}` | Repo name from `git remote get-url origin` |
-| `{branch-name}` | Branch name as provided |
-| `{folder-name}` | Folder name of the git repo on disk |
+| `{repo}` | Repo name from `git remote get-url origin` |
+| `{branch}` | Branch name as provided |
+| `{folder}` | Folder name of the git repo on disk |
 
 ### Hook Options
 

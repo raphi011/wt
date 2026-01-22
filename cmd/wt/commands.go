@@ -521,7 +521,7 @@ Use --format to rename during move.
 
 Examples:
   wt mv -d ~/Git/worktrees           # Move all worktrees to ~/Git/worktrees
-  wt mv -d ~/Git --format={branch-name}  # Move and rename to just branch name
+  wt mv -d ~/Git --format={branch}  # Move and rename to just branch name
   wt mv --dry-run -d ~/Git           # Preview what would be moved
   wt mv -f -d ~/Git                  # Force move even if worktrees are dirty`
 }

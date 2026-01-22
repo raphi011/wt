@@ -18,18 +18,18 @@ func TestValidateFormat(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "folder-name only",
-			format:  "{folder-name}",
+			name:    "folder only",
+			format:  "{folder}",
 			wantErr: false,
 		},
 		{
 			name:    "all placeholders",
-			format:  "{git-origin}_{folder-name}_{branch-name}",
+			format:  "{repo}_{folder}_{branch}",
 			wantErr: false,
 		},
 		{
 			name:    "unknown placeholder",
-			format:  "{unknown}-{branch-name}",
+			format:  "{unknown}-{branch}",
 			wantErr: true,
 			errMsg:  "unknown placeholder",
 		},
@@ -81,8 +81,8 @@ func TestFormatWorktreeName(t *testing.T) {
 			want: "wt-feature-branch",
 		},
 		{
-			name:   "folder-name format",
-			format: "{folder-name}_{branch-name}",
+			name:   "folder format",
+			format: "{folder}_{branch}",
 			params: FormatParams{
 				GitOrigin:  "wt",
 				BranchName: "feature-branch",
@@ -92,7 +92,7 @@ func TestFormatWorktreeName(t *testing.T) {
 		},
 		{
 			name:   "branch with slashes",
-			format: "{git-origin}-{branch-name}",
+			format: "{repo}-{branch}",
 			params: FormatParams{
 				GitOrigin:  "repo",
 				BranchName: "feature/add-login",
@@ -102,7 +102,7 @@ func TestFormatWorktreeName(t *testing.T) {
 		},
 		{
 			name:   "all placeholders",
-			format: "{git-origin}+{folder-name}+{branch-name}",
+			format: "{repo}+{folder}+{branch}",
 			params: FormatParams{
 				GitOrigin:  "origin-name",
 				BranchName: "my-branch",
