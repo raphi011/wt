@@ -7,6 +7,7 @@ import (
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/resolve"
 )
 
@@ -19,16 +20,17 @@ func runCd(cmd *CdCmd, cfg *config.Config) error {
 		return fmt.Errorf("specify target: -i <id> or -r <repo>")
 	}
 
-	// Mode: by repo name
+	// Mode: by repo name (no hooks for repo mode)
 	if hasRepo {
 		return runCdForRepo(cmd.Repository, cmd.Dir, cfg)
 	}
 
 	// Mode: by ID (worktree)
-	return runCdForID(cmd.ID, cmd.Dir, cmd.Project)
+	return runCdForID(cmd, cfg)
 }
 
-func runCdForID(id int, dir string, project bool) error {
+func runCdForID(cmd *CdCmd, cfg *config.Config) error {
+	dir := cmd.Dir
 	if dir == "" {
 		dir = "."
 	}
@@ -38,13 +40,13 @@ func runCdForID(id int, dir string, project bool) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	target, err := resolve.ByID(id, scanPath)
+	target, err := resolve.ByID(cmd.ID, scanPath)
 	if err != nil {
 		return err
 	}
 
 	path := target.Path
-	if project {
+	if cmd.Project {
 		path = target.MainRepo
 	}
 
@@ -53,6 +55,32 @@ func runCdForID(id int, dir string, project bool) error {
 	}
 
 	fmt.Println(path)
+
+	// Run hooks
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandCd)
+	if err != nil {
+		return err
+	}
+
+	if len(hookMatches) > 0 {
+		env, err := hooks.ParseEnvWithStdin(cmd.Env)
+		if err != nil {
+			return err
+		}
+
+		ctx := hooks.Context{
+			Path:     target.Path,
+			Branch:   target.Branch,
+			MainRepo: target.MainRepo,
+			Folder:   filepath.Base(target.MainRepo),
+			Trigger:  string(hooks.CommandCd),
+			Env:      env,
+		}
+		ctx.Repo, _ = git.GetRepoNameFrom(target.MainRepo)
+
+		return hooks.RunAll(hookMatches, ctx)
+	}
+
 	return nil
 }
 

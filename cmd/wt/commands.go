@@ -182,10 +182,13 @@ func (c *ExecCmd) Run(ctx *Context) error {
 
 // CdCmd prints the path of a worktree or repo for shell scripting.
 type CdCmd struct {
-	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID"`
-	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
-	Dir        string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for worktrees/repos"`
-	Project    bool   `short:"p" name:"project" help:"print main repository path instead of worktree path"`
+	ID         int      `short:"i" name:"id" xor:"target" help:"worktree ID"`
+	Repository string   `short:"r" name:"repository" xor:"target" help:"repository name"`
+	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for worktrees/repos"`
+	Project    bool     `short:"p" name:"project" help:"print main repository path instead of worktree path"`
+	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook     bool     `name:"no-hook" help:"skip hooks" xor:"hook-ctrl"`
+	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
 func (c *CdCmd) Help() string {

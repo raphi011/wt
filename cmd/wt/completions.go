@@ -272,8 +272,11 @@ _wt_completions() {
                     fi
                     return
                     ;;
+                --hook|-a|--arg)
+                    return
+                    ;;
             esac
-            COMPREPLY=($(compgen -W "-i --id -r --repository -d --dir -p --project" -- "$cur"))
+            COMPREPLY=($(compgen -W "-i --id -r --repository -d --dir -p --project --hook --no-hook -a --arg" -- "$cur"))
             ;;
         mv)
             case "$prev" in
@@ -617,7 +620,11 @@ _wt() {
                         '-d[directory to scan]:directory:_files -/' \
                         '--dir[directory to scan]:directory:_files -/' \
                         '-p[print main repository path]' \
-                        '--project[print main repository path]'
+                        '--project[print main repository path]' \
+                        '--hook[run named hook instead of default]:hook:' \
+                        '--no-hook[skip hooks]' \
+                        '-a[set hook variable KEY=VALUE]:arg:' \
+                        '--arg[set hook variable KEY=VALUE]:arg:'
                     ;;
                 mv)
                     _arguments \
@@ -983,6 +990,9 @@ complete -c wt -n "__fish_seen_subcommand_from cd" -s i -l id -r -a "(__wt_workt
 complete -c wt -n "__fish_seen_subcommand_from cd" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s p -l project -d "Print main repository path"
+complete -c wt -n "__fish_seen_subcommand_from cd" -l hook -d "Run named hook instead of default"
+complete -c wt -n "__fish_seen_subcommand_from cd" -l no-hook -d "Skip hooks"
+complete -c wt -n "__fish_seen_subcommand_from cd" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 
 # mv: flags only (no positional args)
 complete -c wt -n "__fish_seen_subcommand_from mv" -s d -l dir -r -a "(__fish_complete_directories)" -d "Destination directory"
