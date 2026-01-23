@@ -150,6 +150,12 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 - `WT_WORKTREE_DIR` - target directory for worktrees
 - `WT_REPO_DIR` - directory to scan for repos
 
+**Forge Feature Parity** - Any feature that involves forge operations (PRs, cloning, etc.) MUST support both GitHub and GitLab. Always:
+- Add methods to the `Forge` interface first
+- Implement in both `github.go` and `gitlab.go`
+- Handle platform-specific limitations explicitly (e.g., GitLab doesn't support rebase merge via CLI)
+- Never call `gh` or `glab` directly outside `internal/forge/`
+
 ### Commit Messages
 
 Follow **Conventional Commits** for GoReleaser changelog grouping:
