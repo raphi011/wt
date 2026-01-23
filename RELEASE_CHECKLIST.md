@@ -163,6 +163,7 @@ This checklist ensures all functionality works correctly and documentation is co
 - [ ] **Creates config** - creates `~/.config/wt/config.toml`
 - [ ] **No overwrite** - fails if file exists (without --force)
 - [ ] **Force flag** - `-f/--force` overwrites existing
+- [ ] **Stdout flag** - `-s/--stdout` prints config to stdout instead of file
 - [ ] **Template quality** - generated config has good comments/examples
 
 ### 4.2 `wt config show`

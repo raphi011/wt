@@ -502,3 +502,8 @@ func Init(force bool) (string, error) {
 
 	return path, nil
 }
+
+// DefaultConfig returns the default configuration content.
+func DefaultConfig() string {
+	return defaultConfig
+}

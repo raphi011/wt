@@ -520,7 +520,7 @@ _wt_completions() {
             if [[ $cword -eq 2 ]]; then
                 COMPREPLY=($(compgen -W "init show hooks" -- "$cur"))
             elif [[ "${words[2]}" == "init" ]]; then
-                COMPREPLY=($(compgen -W "-f --force" -- "$cur"))
+                COMPREPLY=($(compgen -W "-f --force -s --stdout" -- "$cur"))
             elif [[ "${words[2]}" == "show" ]]; then
                 COMPREPLY=($(compgen -W "--json" -- "$cur"))
             elif [[ "${words[2]}" == "hooks" ]]; then
@@ -857,7 +857,9 @@ _wt() {
                                 init)
                                     _arguments \
                                         '-f[overwrite existing config]' \
-                                        '--force[overwrite existing config]'
+                                        '--force[overwrite existing config]' \
+                                        '-s[print config to stdout]' \
+                                        '--stdout[print config to stdout]'
                                     ;;
                                 show)
                                     _arguments \
@@ -1160,6 +1162,7 @@ complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subco
 complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init show hooks" -a "show" -d "Show effective configuration"
 complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init show hooks" -a "hooks" -d "List available hooks"
 complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from init" -s f -l force -d "Overwrite existing config file"
+complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from init" -s s -l stdout -d "Print config to stdout"
 complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from show" -l json -d "Output as JSON"
 complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from hooks" -l json -d "Output as JSON"
 

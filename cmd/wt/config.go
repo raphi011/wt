@@ -10,6 +10,10 @@ import (
 )
 
 func runConfigInit(cmd *ConfigInitCmd) error {
+	if cmd.Stdout {
+		fmt.Print(config.DefaultConfig())
+		return nil
+	}
 	path, err := config.Init(cmd.Force)
 	if err != nil {
 		return err
