@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/raphi011/wt/internal/forge"
+	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/git"
 )
 
@@ -20,12 +20,12 @@ type Target struct {
 // ByID resolves a worktree target by its numeric ID only.
 // Returns error if ID not found, worktree was removed, or path no longer exists.
 func ByID(id int, scanDir string) (*Target, error) {
-	cache, err := forge.LoadCache(scanDir)
+	wtCache, err := cache.Load(scanDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cache: %w", err)
 	}
 
-	branch, path, found, removed := cache.GetBranchByID(id)
+	branch, path, found, removed := wtCache.GetBranchByID(id)
 	if !found {
 		return nil, fmt.Errorf("worktree ID %d not found (run 'wt list' to see available IDs)", id)
 	}

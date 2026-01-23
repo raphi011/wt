@@ -85,14 +85,14 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 	}
 
 	// Acquire lock on cache
-	lock := cache.NewFileLock(forge.LockPath(scanPath))
+	lock := cache.NewFileLock(cache.LockPath(scanPath))
 	if err := lock.Lock(); err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 	defer lock.Unlock()
 
 	// Load cache
-	wtCache, err := forge.LoadCache(scanPath)
+	wtCache, err := cache.Load(scanPath)
 	if err != nil {
 		return fmt.Errorf("failed to load cache: %w", err)
 	}
@@ -104,9 +104,9 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 	}
 
 	// Convert ALL worktrees to WorktreeInfo for cache sync (to preserve IDs)
-	wtInfos := make([]forge.WorktreeInfo, len(allWorktrees))
+	wtInfos := make([]cache.WorktreeInfo, len(allWorktrees))
 	for i, wt := range allWorktrees {
-		wtInfos[i] = forge.WorktreeInfo{
+		wtInfos[i] = cache.WorktreeInfo{
 			Path:      wt.Path,
 			Branch:    wt.Branch,
 			OriginURL: wt.OriginURL,
@@ -175,16 +175,6 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 		}
 	}
 
-	// Display table with only purgeable worktrees
-	if len(toRemove) > 0 {
-		fmt.Print(ui.FormatWorktreesTable(toRemove, pathToID, wtCache, toRemoveMap, cmd.DryRun))
-	}
-
-	// Save updated cache
-	if err := forge.SaveCache(scanPath, wtCache); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
-	}
-
 	// Select hooks for prune (before removing, so we can report errors early)
 	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandPrune)
 	if err != nil {
@@ -196,39 +186,69 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 		return err
 	}
 
-	// Remove worktrees
-	if !cmd.DryRun && len(toRemove) > 0 {
-		for _, wt := range toRemove {
-			if err := git.RemoveWorktree(wt, true); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", wt.Path, err)
-				continue // Skip hooks for failed removals
+	// Track actual removal results
+	var removed []git.Worktree
+	var failed []git.Worktree
+	removedMap := make(map[string]bool)
+
+	// Remove worktrees (or just mark for dry run)
+	if len(toRemove) > 0 {
+		if cmd.DryRun {
+			// Dry run: all would be removed
+			removed = toRemove
+			for _, wt := range toRemove {
+				removedMap[wt.Path] = true
+			}
+		} else {
+			// Actual removal
+			for _, wt := range toRemove {
+				if err := git.RemoveWorktree(wt, true); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", wt.Path, err)
+					failed = append(failed, wt)
+					continue
+				}
+
+				// Mark as removed in cache immediately
+				wtCache.MarkRemoved(wt.OriginURL, wt.Branch)
+				removed = append(removed, wt)
+				removedMap[wt.Path] = true
+
+				// Run prune hooks for this worktree
+				ctx := hooks.Context{
+					Path:     wt.Path,
+					Branch:   wt.Branch,
+					Repo:     wt.RepoName,
+					Folder:   filepath.Base(wt.MainRepo),
+					MainRepo: wt.MainRepo,
+					Trigger:  string(hooks.CommandPrune),
+					Env:      env,
+				}
+				hooks.RunForEach(hookMatches, ctx, wt.MainRepo)
 			}
 
-			// Run prune hooks for this worktree
-			ctx := hooks.Context{
-				Path:     wt.Path,
-				Branch:   wt.Branch,
-				Repo:     wt.RepoName,
-				Folder:   filepath.Base(wt.MainRepo),
-				MainRepo: wt.MainRepo,
-				Trigger:  string(hooks.CommandPrune),
-				Env:      env,
-			}
-			hooks.RunForEach(hookMatches, ctx, wt.MainRepo)
-		}
-
-		// Prune stale references
-		processedRepos := make(map[string]bool)
-		for _, wt := range toRemove {
-			if !processedRepos[wt.MainRepo] {
-				git.PruneWorktrees(wt.MainRepo)
-				processedRepos[wt.MainRepo] = true
+			// Prune stale references
+			processedRepos := make(map[string]bool)
+			for _, wt := range removed {
+				if !processedRepos[wt.MainRepo] {
+					git.PruneWorktrees(wt.MainRepo)
+					processedRepos[wt.MainRepo] = true
+				}
 			}
 		}
 	}
 
-	// Print summary
-	fmt.Print(ui.FormatSummary(len(toRemove), skipped, cmd.DryRun))
+	// Display table with actual results
+	if len(removed) > 0 {
+		fmt.Print(ui.FormatWorktreesTable(removed, pathToID, wtCache, removedMap, cmd.DryRun))
+	}
+
+	// Save updated cache (with RemovedAt timestamps)
+	if err := cache.Save(scanPath, wtCache); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
+	}
+
+	// Print summary with actual counts
+	fmt.Print(ui.FormatSummary(len(removed), skipped+len(failed), cmd.DryRun))
 
 	return nil
 }
@@ -352,7 +372,7 @@ func formatNotRemovableReason(wt *git.Worktree, includeCleanSet bool) string {
 }
 
 // refreshPRStatus fetches PR status for all worktrees in parallel and updates the cache
-func refreshPRStatus(worktrees []git.Worktree, wtCache *forge.Cache, cfg *config.Config, sp *ui.Spinner) {
+func refreshPRStatus(worktrees []git.Worktree, wtCache *cache.Cache, cfg *config.Config, sp *ui.Spinner) {
 	// Filter to worktrees with upstream branches
 	var toFetch []git.Worktree
 	for _, wt := range worktrees {

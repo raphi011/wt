@@ -71,14 +71,14 @@ func runShow(cmd *ShowCmd, cfg *config.Config) error {
 	}
 
 	// Acquire lock on cache
-	lock := cache.NewFileLock(forge.LockPath(scanPath))
+	lock := cache.NewFileLock(cache.LockPath(scanPath))
 	if err := lock.Lock(); err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 	defer lock.Unlock()
 
 	// Load cache
-	wtCache, err := forge.LoadCache(scanPath)
+	wtCache, err := cache.Load(scanPath)
 	if err != nil {
 		return fmt.Errorf("failed to load cache: %w", err)
 	}
@@ -93,7 +93,7 @@ func runShow(cmd *ShowCmd, cfg *config.Config) error {
 			prInfo = fetchPRForBranch(originURL, info.MainRepo, info.Branch, wtCache, cfg)
 			sp.Stop()
 			// Save updated cache
-			if err := forge.SaveCache(scanPath, wtCache); err != nil {
+			if err := cache.Save(scanPath, wtCache); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
 			}
 		} else if pr := wtCache.GetPRForBranch(originURL, info.Branch); pr != nil && pr.Fetched {
@@ -149,11 +149,11 @@ func resolveShowTarget(id int, dir string) (*resolve.Target, error) {
 			scanPath = "."
 		}
 		scanPath, _ = filepath.Abs(scanPath)
-		wtCache, _ := forge.LoadCache(scanPath)
+		wtCache, _ := cache.Load(scanPath)
 		originURL, _ := git.GetOriginURL(mainRepo)
 		wtID := 0
 		if wtCache != nil && originURL != "" {
-			key := forge.MakeWorktreeKey(originURL, branch)
+			key := cache.MakeWorktreeKey(originURL, branch)
 			if entry, ok := wtCache.Worktrees[key]; ok {
 				wtID = entry.ID
 			}
@@ -247,7 +247,7 @@ func gatherShowInfo(target *resolve.Target, prInfo *forge.PRInfo) *ShowInfo {
 	return info
 }
 
-func fetchPRForBranch(originURL, mainRepo, branch string, wtCache *forge.Cache, cfg *config.Config) *forge.PRInfo {
+func fetchPRForBranch(originURL, mainRepo, branch string, wtCache *cache.Cache, cfg *config.Config) *forge.PRInfo {
 	// Check if branch has upstream
 	upstreamBranch := git.GetUpstreamBranch(mainRepo, branch)
 	if upstreamBranch == "" {

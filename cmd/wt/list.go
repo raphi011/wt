@@ -9,7 +9,6 @@ import (
 
 	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/config"
-	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/ui"
 )
@@ -26,14 +25,14 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 	}
 
 	// Acquire lock on cache
-	lock := cache.NewFileLock(forge.LockPath(scanPath))
+	lock := cache.NewFileLock(cache.LockPath(scanPath))
 	if err := lock.Lock(); err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 	defer lock.Unlock()
 
 	// Load cache
-	wtCache, err := forge.LoadCache(scanPath)
+	wtCache, err := cache.Load(scanPath)
 	if err != nil {
 		return fmt.Errorf("failed to load cache: %w", err)
 	}
@@ -45,9 +44,9 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 	}
 
 	// Convert ALL worktrees to WorktreeInfo for cache sync (before filtering)
-	wtInfos := make([]forge.WorktreeInfo, len(allWorktrees))
+	wtInfos := make([]cache.WorktreeInfo, len(allWorktrees))
 	for i, wt := range allWorktrees {
-		wtInfos[i] = forge.WorktreeInfo{
+		wtInfos[i] = cache.WorktreeInfo{
 			Path:      wt.Path,
 			Branch:    wt.Branch,
 			OriginURL: wt.OriginURL,
@@ -109,7 +108,7 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 	}
 
 	// Save updated cache
-	if err := forge.SaveCache(scanPath, wtCache); err != nil {
+	if err := cache.Save(scanPath, wtCache); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
 	}
 

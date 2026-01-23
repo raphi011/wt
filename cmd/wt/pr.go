@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/format"
@@ -74,9 +75,9 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 
 	// Try cache first to avoid network request
 	var branch string
-	cache, err := forge.LoadCache(dir)
+	wtCache, err := cache.Load(dir)
 	if err == nil {
-		branch = cache.GetBranchByPRNumber(originURL, cmd.Number)
+		branch = wtCache.GetBranchByPRNumber(originURL, cmd.Number)
 	}
 
 	if branch == "" {
@@ -494,13 +495,13 @@ func runPrCreate(cmd *PrCreateCmd, cfg *config.Config) error {
 	}
 	scanDir, _ = filepath.Abs(scanDir)
 
-	cache, err := forge.LoadCache(scanDir)
+	wtCache, err := cache.Load(scanDir)
 	if err == nil {
 		state := "OPEN"
 		if cmd.Draft {
 			state = "DRAFT"
 		}
-		prInfo := &forge.PRInfo{
+		prInfo := &cache.PRInfo{
 			Number:   result.Number,
 			State:    state,
 			IsDraft:  cmd.Draft,
@@ -508,8 +509,8 @@ func runPrCreate(cmd *PrCreateCmd, cfg *config.Config) error {
 			CachedAt: time.Now(),
 			Fetched:  true,
 		}
-		cache.SetPRForBranch(originURL, branch, prInfo)
-		if err := forge.SaveCache(scanDir, cache); err != nil {
+		wtCache.SetPRForBranch(originURL, branch, prInfo)
+		if err := cache.Save(scanDir, wtCache); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to update cache: %v\n", err)
 		}
 	}

@@ -7,12 +7,13 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 )
 
 // FormatWorktreesTable creates a formatted table for worktrees
-func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, cache *forge.Cache, toRemove map[string]bool, dryRun bool) string {
+func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, wtCache *cache.Cache, toRemove map[string]bool, dryRun bool) string {
 	if len(worktrees) == 0 {
 		return ""
 	}
@@ -76,7 +77,7 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, cac
 
 		// Format PR column
 		var prCol string
-		pr := cache.GetPRForBranch(wt.OriginURL, wt.Branch)
+		pr := wtCache.GetPRForBranch(wt.OriginURL, wt.Branch)
 		if !wt.HasUpstream {
 			// No upstream branch - can't have a PR
 			prCol = "-"
