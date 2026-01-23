@@ -547,8 +547,8 @@ func (c *MvCmd) Run(ctx *Context) error {
 	return runMv(c, ctx.Config)
 }
 
-// PrOpenCmd creates a worktree for a PR from an existing local repo.
-type PrOpenCmd struct {
+// PrCheckoutCmd creates a worktree for a PR from an existing local repo.
+type PrCheckoutCmd struct {
 	Number int      `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
 	Repo   string   `arg:"" optional:"" placeholder:"REPO" help:"repository name to find locally"`
 	Hook   string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
@@ -556,21 +556,21 @@ type PrOpenCmd struct {
 	Env    []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
-func (c *PrOpenCmd) Help() string {
+func (c *PrCheckoutCmd) Help() string {
 	return `Only works with repos that already exist locally.
 Use 'wt pr clone' to clone new repos first.
 
 Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
-  wt pr open 123                  # PR from current repo
-  wt pr open 123 myrepo           # Find "myrepo" in target directory
-  wt pr open 123 org/repo         # Find "repo" locally (org is ignored)
-  wt pr open 123 --no-hook        # Skip post-create hook`
+  wt pr checkout 123                  # PR from current repo
+  wt pr checkout 123 myrepo           # Find "myrepo" in target directory
+  wt pr checkout 123 org/repo         # Find "repo" locally (org is ignored)
+  wt pr checkout 123 --no-hook        # Skip post-create hook`
 }
 
-func (c *PrOpenCmd) Run(ctx *Context) error {
-	return runPrOpen(c, ctx.Config)
+func (c *PrCheckoutCmd) Run(ctx *Context) error {
+	return runPrCheckout(c, ctx.Config)
 }
 
 // PrCloneCmd clones a repo and creates a worktree for a PR.
@@ -586,7 +586,7 @@ type PrCloneCmd struct {
 
 func (c *PrCloneCmd) Help() string {
 	return `Clones the repository if not present locally.
-Use 'wt pr open' for repos you already have.
+Use 'wt pr checkout' for repos you already have.
 If [clone] org is configured, you can omit the org/ prefix.
 
 Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
@@ -667,21 +667,49 @@ func (c *PrMergeCmd) Run(ctx *Context) error {
 	return runPrMerge(c, ctx.Config)
 }
 
+// PrViewCmd shows PR details or opens in browser.
+type PrViewCmd struct {
+	ID  int  `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
+	Web bool `short:"w" name:"web" help:"open PR in browser"`
+}
+
+func (c *PrViewCmd) Help() string {
+	return `Inside a worktree: --id is optional (defaults to current branch).
+Outside: specify a worktree ID.
+
+Shows PR details for the branch. Use --web to open in browser instead.
+
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
+
+Examples:
+  wt pr view              # Inside worktree: show PR details
+  wt pr view -w           # Inside worktree: open PR in browser
+  wt pr view -i 1         # By worktree ID
+  wt pr view -i 1 -w      # Open PR in browser by ID`
+}
+
+func (c *PrViewCmd) Run(ctx *Context) error {
+	return runPrView(c, ctx.Config)
+}
+
 // PrCmd works with PRs.
 type PrCmd struct {
-	Open   PrOpenCmd   `cmd:"" help:"Checkout PR from existing local repo"`
-	Clone  PrCloneCmd  `cmd:"" help:"Clone repo and checkout PR"`
-	Create PrCreateCmd `cmd:"" help:"Create PR for current branch"`
-	Merge  PrMergeCmd  `cmd:"" help:"Merge PR and clean up worktree"`
+	Checkout PrCheckoutCmd `cmd:"" help:"Checkout PR from existing local repo"`
+	Clone    PrCloneCmd    `cmd:"" help:"Clone repo and checkout PR"`
+	Create   PrCreateCmd   `cmd:"" help:"Create PR for current branch"`
+	Merge    PrMergeCmd    `cmd:"" help:"Merge PR and clean up worktree"`
+	View     PrViewCmd     `cmd:"" help:"View PR details or open in browser"`
 }
 
 func (c *PrCmd) Help() string {
 	return `Examples:
-  wt pr open 123                        # PR from current repo
-  wt pr open 123 myrepo                 # PR from existing local repo
+  wt pr checkout 123                    # PR from current repo
+  wt pr checkout 123 myrepo             # PR from existing local repo
   wt pr clone 123 org/repo              # Clone repo and checkout PR
   wt pr create --title "Add feature"    # Create PR for current branch
-  wt pr merge                           # Merge PR and clean up worktree`
+  wt pr merge                           # Merge PR and clean up worktree
+  wt pr view                            # View PR details for current branch
+  wt pr view -w                         # Open PR in browser`
 }
 
 // ReposCmd lists repositories in a directory.

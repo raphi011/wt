@@ -37,7 +37,7 @@ wt config init
 wt add -b my-feature
 
 # Review a PR
-wt pr open 123
+wt pr checkout 123
 
 # Clean up merged worktrees
 wt prune
@@ -74,13 +74,21 @@ on = ["add"]
 
 ```bash
 # Checkout PR from current repo
-wt pr open 123
+wt pr checkout 123
 
 # Checkout PR from a different repo (searches in worktree_dir)
-wt pr open 123 backend-api
+wt pr checkout 123 backend-api
 
 # Clone repo you don't have locally and checkout PR
 wt pr clone 456 org/new-repo
+```
+
+View PR details or open in browser:
+
+```bash
+wt pr view               # Show PR details
+wt pr view -w            # Open PR in browser
+wt pr view -i 3          # By worktree ID
 ```
 
 After review, merge and clean up in one command:
@@ -313,7 +321,7 @@ strategy = "squash"  # squash, rebase, or merge
 keybindings:
   prs:
     - key: O
-      command: wt pr open {{.PrNumber}} {{.RepoName}}
+      command: wt pr checkout {{.PrNumber}} {{.RepoName}}
 ```
 
 Press `O` to checkout PR → hooks auto-open your editor.
@@ -340,8 +348,9 @@ wt completion zsh > ~/.zfunc/_wt
 | `wt show` | Show worktree details |
 | `wt prune` | Remove merged worktrees |
 | `wt repos` | List repositories |
-| `wt pr open` | Checkout PR from local repo |
+| `wt pr checkout` | Checkout PR from local repo |
 | `wt pr clone` | Clone repo and checkout PR |
+| `wt pr view` | View PR details or open in browser |
 | `wt pr merge` | Merge PR and clean up |
 | `wt exec` | Run command in worktree |
 | `wt cd` | Print worktree/repo path |

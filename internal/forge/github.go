@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -207,6 +208,18 @@ func (g *GitHub) MergePR(repoURL string, number int, strategy string) error {
 		return fmt.Errorf("merge failed: %v", err)
 	}
 	return nil
+}
+
+// ViewPR shows PR details or opens in browser
+func (g *GitHub) ViewPR(repoURL string, number int, web bool) error {
+	args := []string{"pr", "view", fmt.Sprintf("%d", number), "-R", repoURL}
+	if web {
+		args = append(args, "--web")
+	}
+	c := exec.Command("gh", args...)
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	return c.Run()
 }
 
 // FormatState returns a human-readable PR state

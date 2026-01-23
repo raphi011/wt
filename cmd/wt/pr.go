@@ -19,7 +19,7 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
+func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config) error {
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
@@ -159,7 +159,7 @@ func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 
 	// Check if repo already exists locally (search in repoScanDir)
 	if existingPath, err := git.FindRepoByName(repoScanDir, name); err == nil {
-		return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr open %d %s' instead", name, existingPath, cmd.Number, name)
+		return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr checkout %d %s' instead", name, existingPath, cmd.Number, name)
 	}
 
 	// Determine forge: cmd.Forge > cfg.Clone rules > cfg.Clone.Forge
@@ -516,6 +516,70 @@ func runPrCreate(cmd *PrCreateCmd, cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+func runPrView(cmd *PrViewCmd, cfg *config.Config) error {
+	var branch, mainRepo string
+	var err error
+
+	// Resolve target: if ID is 0 and in worktree, use current branch
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	if cmd.ID == 0 && git.IsWorktree(cwd) {
+		// Inside worktree, no ID specified - use current branch
+		branch, err = git.GetCurrentBranch(cwd)
+		if err != nil {
+			return fmt.Errorf("failed to get current branch: %w", err)
+		}
+		mainRepo, err = git.GetMainRepoPath(cwd)
+		if err != nil {
+			return fmt.Errorf("failed to get main repo path: %w", err)
+		}
+	} else if cmd.ID == 0 {
+		return fmt.Errorf("--id required when not inside a worktree (run 'wt list' to see IDs)")
+	} else {
+		// Resolve target by ID
+		scanDir := cfg.WorktreeDir
+		if scanDir == "" {
+			scanDir = "."
+		}
+		scanDir, err = filepath.Abs(scanDir)
+		if err != nil {
+			return fmt.Errorf("failed to resolve absolute path: %w", err)
+		}
+
+		target, err := resolve.ByID(cmd.ID, scanDir)
+		if err != nil {
+			return err
+		}
+		branch = target.Branch
+		mainRepo = target.MainRepo
+	}
+
+	// Get origin URL and detect forge
+	originURL, err := git.GetOriginURL(mainRepo)
+	if err != nil {
+		return fmt.Errorf("failed to get origin URL: %w", err)
+	}
+	f := forge.Detect(originURL, cfg.Hosts)
+	if err := f.Check(); err != nil {
+		return err
+	}
+
+	// Get PR for current branch
+	pr, err := f.GetPRForBranch(originURL, branch)
+	if err != nil {
+		return fmt.Errorf("failed to get PR info: %w", err)
+	}
+	if pr == nil || pr.Number == 0 {
+		return fmt.Errorf("no PR found for branch %q", branch)
+	}
+
+	// View the PR
+	return f.ViewPR(originURL, pr.Number, cmd.Web)
 }
 
 // openBrowser opens the specified URL in the default browser

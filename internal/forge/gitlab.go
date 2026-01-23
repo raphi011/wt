@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -248,6 +249,19 @@ func (g *GitLab) MergePR(repoURL string, number int, strategy string) error {
 		return fmt.Errorf("merge failed: %v", err)
 	}
 	return nil
+}
+
+// ViewPR shows MR details or opens in browser
+func (g *GitLab) ViewPR(repoURL string, number int, web bool) error {
+	projectPath := extractGitLabProject(repoURL)
+	args := []string{"mr", "view", fmt.Sprintf("%d", number), "-R", projectPath}
+	if web {
+		args = append(args, "--web")
+	}
+	c := exec.Command("glab", args...)
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	return c.Run()
 }
 
 // FormatState returns a human-readable PR state

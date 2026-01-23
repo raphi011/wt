@@ -48,6 +48,10 @@ type Forge interface {
 	// Returns error if repo doesn't allow the requested merge strategy
 	MergePR(repoURL string, number int, strategy string) error
 
+	// ViewPR shows PR details or opens in browser
+	// If web is true, opens in browser; otherwise shows details in terminal
+	ViewPR(repoURL string, number int, web bool) error
+
 	// FormatState returns a human-readable PR state
 	FormatState(state string) string
 }

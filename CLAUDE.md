@@ -84,9 +84,10 @@ internal/ui/             - Terminal UI components
 - `wt label add/remove/list/clear` - Manage repository labels (stored in git config as wt.labels)
 - `wt hook <hook> [-i <id>...]` - Run configured hook by name (multi-ID supported)
 - `wt hook <hook> -r <repo> [-l <label>]` - Run hook in repo(s) by name/label
-- `wt pr open <number> [repo]` - Create worktree for GitHub PR
+- `wt pr checkout <number> [repo]` - Create worktree for GitHub PR
 - `wt pr clone <number> <repo>` - Clone repo and create worktree for PR
 - `wt pr create --title "..." [--body "..."]` - Create PR for current branch
+- `wt pr view [-i <id>] [-w]` - View PR details or open in browser
 - `wt pr merge [-i <id>]` - Merge PR and clean up worktree
 - `wt config init` - Create default config file
 - `wt config show` - Show effective configuration
@@ -143,7 +144,7 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 - `-g, --global` - operate on all repos (not just current)
 - `-a, --arg` - set hook variable KEY=VALUE (repeatable)
 - `--json` - output as JSON
-- `--hook` / `--no-hook` - control hook execution (for add, pr open, prune)
+- `--hook` / `--no-hook` - control hook execution (for add, pr checkout, prune)
 
 **Environment Variables** - Directory configuration via env vars (override config file):
 - `WT_WORKTREE_DIR` - target directory for worktrees
