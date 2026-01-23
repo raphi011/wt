@@ -15,9 +15,15 @@ func runCd(cmd *CdCmd, cfg *config.Config) error {
 	// Determine targeting mode
 	hasID := cmd.ID != 0
 	hasRepo := cmd.Repository != ""
+	hasLabel := cmd.Label != ""
 
-	if !hasID && !hasRepo {
-		return fmt.Errorf("specify target: -i <id> or -r <repo>")
+	if !hasID && !hasRepo && !hasLabel {
+		return fmt.Errorf("specify target: -i <id>, -r <repo>, or -l <label>")
+	}
+
+	// Mode: by label (no hooks for label mode)
+	if hasLabel {
+		return runCdForLabel(cmd.Label, cmd.Dir, cfg)
 	}
 
 	// Mode: by repo name (no hooks for repo mode)
@@ -95,6 +101,34 @@ func runCdForRepo(repoName string, dir string, cfg *config.Config) error {
 		return err
 	}
 
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		return fmt.Errorf("path no longer exists: %s", repoPath)
+	}
+
+	fmt.Println(repoPath)
+	return nil
+}
+
+func runCdForLabel(label string, dir string, cfg *config.Config) error {
+	scanDir, err := resolveRepoScanDir(dir, cfg)
+	if err != nil {
+		return err
+	}
+
+	repos, err := git.FindReposByLabel(scanDir, label)
+	if err != nil {
+		return err
+	}
+
+	if len(repos) == 0 {
+		return fmt.Errorf("no repos found with label %q", label)
+	}
+
+	if len(repos) > 1 {
+		return fmt.Errorf("multiple repos match label %q (use -r to specify)", label)
+	}
+
+	repoPath := repos[0]
 	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
 		return fmt.Errorf("path no longer exists: %s", repoPath)
 	}

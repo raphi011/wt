@@ -190,6 +190,7 @@ func (c *ExecCmd) Run(ctx *Context) error {
 type CdCmd struct {
 	ID         int      `short:"i" name:"id" xor:"target" help:"worktree ID"`
 	Repository string   `short:"r" name:"repository" xor:"target" help:"repository name"`
+	Label      string   `short:"l" name:"label" xor:"target" help:"repository label (must match exactly one repo)"`
 	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for worktrees/repos"`
 	Project    bool     `short:"p" name:"project" help:"print main repository path instead of worktree path"`
 	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
@@ -201,11 +202,13 @@ func (c *CdCmd) Help() string {
 	return `Use with shell command substitution: cd $(wt cd -i 1)
 Use -p to get the main repository path instead.
 Use -r to get the path of a repository by name.
+Use -l to get the path of a repo by label (must match exactly one repo).
 
 Examples:
   cd $(wt cd -i 1)         # By worktree ID
   cd $(wt cd -p -i 1)      # cd to main repo of worktree
-  cd $(wt cd -r wt)        # By repo name`
+  cd $(wt cd -r wt)        # By repo name
+  cd $(wt cd -l backend)   # By label (must match exactly one repo)`
 }
 
 func (c *CdCmd) Run(ctx *Context) error {
@@ -640,17 +643,21 @@ func (c *PrCmd) Help() string {
 type ReposCmd struct {
 	Dir   string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for repos"`
 	Label string `short:"l" name:"label" placeholder:"LABEL" help:"filter by label"`
+	Sort  string `short:"s" name:"sort" default:"name" enum:"name,branch,worktrees,label" help:"sort by: name (default), branch, worktrees, label"`
 	JSON  bool   `name:"json" help:"output as JSON"`
 }
 
 func (c *ReposCmd) Help() string {
 	return `Scans a directory for git repositories and shows information about each.
 Use --label to filter by repository label.
+Use --sort to change ordering: name (default), branch, worktrees, label.
 
 Examples:
   wt repos                     # List repos in current/configured directory
   wt repos -d ~/Git            # List repos in specific directory
   wt repos -l backend          # Filter repos by label
+  wt repos -s worktrees        # Sort by worktree count (descending)
+  wt repos -s label            # Sort by label (alphabetically)
   wt repos --json              # Output as JSON`
 }
 

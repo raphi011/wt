@@ -207,8 +207,12 @@ _wt_completions() {
                     fi
                     return
                     ;;
+                -s|--sort)
+                    COMPREPLY=($(compgen -W "name branch worktrees label" -- "$cur"))
+                    return
+                    ;;
             esac
-            COMPREPLY=($(compgen -W "-d --dir -l --label --json" -- "$cur"))
+            COMPREPLY=($(compgen -W "-d --dir -l --label -s --sort --json" -- "$cur"))
             ;;
         show)
             case "$prev" in
@@ -315,11 +319,34 @@ _wt_completions() {
                     fi
                     return
                     ;;
+                -l|--label)
+                    # Complete labels from repos in worktree_dir
+                    local dir="$WT_WORKTREE_DIR"
+                    if [[ -z "$dir" ]]; then
+                        local config_file=~/.config/wt/config.toml
+                        if [[ -f "$config_file" ]]; then
+                            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                        fi
+                    fi
+                    if [[ -d "$dir" ]]; then
+                        local labels=""
+                        for d in "$dir"/*/; do
+                            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                                local repo_labels=$(git -C "$d" config --local wt.labels 2>/dev/null)
+                                if [[ -n "$repo_labels" ]]; then
+                                    labels="$labels $(echo "$repo_labels" | tr ',' ' ')"
+                                fi
+                            fi
+                        done
+                        COMPREPLY=($(compgen -W "$(echo "$labels" | tr ' ' '\n' | sort -u)" -- "$cur"))
+                    fi
+                    return
+                    ;;
                 --hook|-a|--arg)
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-i --id -r --repository -d --dir -p --project --hook --no-hook -a --arg" -- "$cur"))
+            COMPREPLY=($(compgen -W "-i --id -r --repository -l --label -d --dir -p --project --hook --no-hook -a --arg" -- "$cur"))
             ;;
         mv)
             case "$prev" in
@@ -635,6 +662,8 @@ _wt() {
                         '--dir[directory to scan]:directory:_files -/' \
                         '-l[filter by label]:label:__wt_label_names' \
                         '--label[filter by label]:label:__wt_label_names' \
+                        '-s[sort by]:field:(name branch worktrees label)' \
+                        '--sort[sort by]:field:(name branch worktrees label)' \
                         '--json[output as JSON]'
                     ;;
                 show)
@@ -664,6 +693,8 @@ _wt() {
                         '--id[worktree ID]:id:__wt_worktree_ids' \
                         '-r[repository name]:repository:__wt_repo_names' \
                         '--repository[repository name]:repository:__wt_repo_names' \
+                        '-l[repository label (must match one repo)]:label:__wt_label_names' \
+                        '--label[repository label (must match one repo)]:label:__wt_label_names' \
                         '-d[directory to scan]:directory:_files -/' \
                         '--dir[directory to scan]:directory:_files -/' \
                         '-p[print main repository path]' \
@@ -1022,6 +1053,7 @@ complete -c wt -n "__fish_seen_subcommand_from list" -s l -l label -r -a "(__wt_
 # repos: list repositories
 complete -c wt -n "__fish_seen_subcommand_from repos" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from repos" -s l -l label -r -a "(__wt_list_labels)" -d "Filter by label"
+complete -c wt -n "__fish_seen_subcommand_from repos" -s s -l sort -r -a "name branch worktrees label" -d "Sort by field"
 complete -c wt -n "__fish_seen_subcommand_from repos" -l json -d "Output as JSON"
 
 # show: --id flag (optional), then other flags
@@ -1036,9 +1068,10 @@ complete -c wt -n "__fish_seen_subcommand_from exec" -s r -l repository -r -a "(
 complete -c wt -n "__fish_seen_subcommand_from exec" -s l -l label -r -a "(__wt_list_labels)" -d "Target repos by label (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from exec" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 
-# cd: --id or -r flag, then flags
+# cd: --id, -r, or -l flag, then flags
 complete -c wt -n "__fish_seen_subcommand_from cd" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name"
+complete -c wt -n "__fish_seen_subcommand_from cd" -s l -l label -r -a "(__wt_list_labels)" -d "Repository label (must match one repo)"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s p -l project -d "Print main repository path"
 complete -c wt -n "__fish_seen_subcommand_from cd" -l hook -d "Run named hook instead of default"

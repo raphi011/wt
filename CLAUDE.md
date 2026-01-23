@@ -70,12 +70,13 @@ internal/ui/             - Terminal UI components
 - `wt prune` - Remove merged+clean worktrees, show table with PR status (use -R/--refresh to fetch latest)
 - `wt prune -i <id>` - Remove specific worktree by ID
 - `wt list [-r <repo>] [-l <label>] [-s id|repo|branch|commit] [--json]` - List worktrees in directory
-- `wt repos [-l <label>] [--json]` - List repositories in directory
+- `wt repos [-l <label>] [-s name|branch|worktrees|label] [--json]` - List repositories in directory
 - `wt show [-i <id>]` - Show detailed status for a worktree (commits, changes, PR info)
 - `wt exec -i <id> [-i <id>...] -- <cmd>` - Run command in worktree(s) by ID
 - `wt exec -r <repo> [-l <label>] -- <cmd>` - Run command in repo(s) by name/label
 - `wt cd -i <id>` - Print worktree path by ID
 - `wt cd -r <repo>` - Print repo path by name
+- `wt cd -l <label>` - Print repo path by label (must match exactly one repo)
 - `wt mv` - Move worktrees to different directory
 - `wt note set/get/clear [-i <id>]` - Manage branch notes (optional ID outside worktree)
 - `wt label add/remove/list/clear` - Manage repository labels (stored in git config as wt.labels)
@@ -118,7 +119,7 @@ Completions provide context-aware suggestions for branches, directories, and fla
 **Target Resolution Pattern** - Commands that operate on worktrees use `--id` (`-i`) flag with `internal/resolve.ByID()`:
 
 - **ID or repo/label**: `wt exec`, `wt hook` - require `-i <id>`, or `-r <repo>`/`-l <label>` (exec/hook support multiple); these flags are mutually exclusive
-- **ID or repo**: `wt cd` - require `-i <id>` or `-r <repo>` (mutually exclusive)
+- **ID or repo or label**: `wt cd` - require `-i <id>`, `-r <repo>`, or `-l <label>` (mutually exclusive)
 - **Optional ID**: `wt note`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current branch; outside requires `-i` (prune supports multiple)
 - **Special case**: `wt add` - inside repo uses branch name; outside repo requires `-r <repo>` or `-l <label>` to specify target repos
 

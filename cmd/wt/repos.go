@@ -98,10 +98,8 @@ func runRepos(cmd *ReposCmd, cfg *config.Config) error {
 		})
 	}
 
-	// Sort by name
-	sort.Slice(repos, func(i, j int) bool {
-		return repos[i].Name < repos[j].Name
-	})
+	// Sort repos
+	sortRepos(repos, cmd.Sort)
 
 	if cmd.JSON {
 		data, err := json.MarshalIndent(repos, "", "  ")
@@ -224,4 +222,46 @@ func formatReposTable(repos []RepoInfo) string {
 	output.WriteString("\n")
 
 	return output.String()
+}
+
+func sortRepos(repos []RepoInfo, sortBy string) {
+	switch sortBy {
+	case "branch":
+		sort.Slice(repos, func(i, j int) bool {
+			return repos[i].Branch < repos[j].Branch
+		})
+	case "worktrees":
+		// Sort by worktree count descending (most worktrees first)
+		sort.Slice(repos, func(i, j int) bool {
+			return repos[i].WorktreeCount > repos[j].WorktreeCount
+		})
+	case "label":
+		// Sort by first label alphabetically (unlabeled repos last, then by name)
+		sort.Slice(repos, func(i, j int) bool {
+			li := ""
+			lj := ""
+			if len(repos[i].Labels) > 0 {
+				li = repos[i].Labels[0]
+			}
+			if len(repos[j].Labels) > 0 {
+				lj = repos[j].Labels[0]
+			}
+			// Unlabeled repos go last
+			if li == "" && lj != "" {
+				return false
+			}
+			if li != "" && lj == "" {
+				return true
+			}
+			// Same label (or both empty): sort by name
+			if li == lj {
+				return repos[i].Name < repos[j].Name
+			}
+			return li < lj
+		})
+	default: // "name" or empty
+		sort.Slice(repos, func(i, j int) bool {
+			return repos[i].Name < repos[j].Name
+		})
+	}
 }
