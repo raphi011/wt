@@ -177,12 +177,10 @@ func runHook(name string, hook *config.Hook, ctx Context, workDir string) error 
 func ParseEnv(envSlice []string) (map[string]string, error) {
 	result := make(map[string]string)
 	for _, e := range envSlice {
-		idx := strings.Index(e, "=")
-		if idx == -1 {
+		key, value, ok := strings.Cut(e, "=")
+		if !ok {
 			return nil, fmt.Errorf("invalid env format %q: expected KEY=VALUE", e)
 		}
-		key := e[:idx]
-		value := e[idx+1:]
 		if key == "" {
 			return nil, fmt.Errorf("invalid env format %q: key cannot be empty", e)
 		}
@@ -213,12 +211,10 @@ func ParseEnvWithStdin(envSlice []string) (map[string]string, error) {
 
 	// First pass: parse all entries and identify stdin keys
 	for _, e := range envSlice {
-		idx := strings.Index(e, "=")
-		if idx == -1 {
+		key, value, ok := strings.Cut(e, "=")
+		if !ok {
 			return nil, fmt.Errorf("invalid env format %q: expected KEY=VALUE", e)
 		}
-		key := e[:idx]
-		value := e[idx+1:]
 		if key == "" {
 			return nil, fmt.Errorf("invalid env format %q: key cannot be empty", e)
 		}

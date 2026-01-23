@@ -22,6 +22,88 @@ type successResult struct {
 	Existed  bool
 }
 
+// createWorktreeParams holds parameters for worktree creation
+type createWorktreeParams struct {
+	repoPath  string // repo path (empty = use current dir with AddWorktree)
+	targetDir string
+	branch    string
+	format    string
+	newBranch bool
+	baseRef   string // already resolved (only used if newBranch=true)
+	note      string
+}
+
+// createWorktree creates a worktree and returns the result.
+// If repoPath is empty, operates on current directory using AddWorktree.
+// Otherwise, operates on the specified repo using CreateWorktreeFrom/OpenWorktreeFrom.
+func createWorktree(p createWorktreeParams) (*successResult, error) {
+	var result *git.CreateWorktreeResult
+	var err error
+	var repoName, folder, mainRepo string
+
+	if p.repoPath == "" {
+		// Current repo mode
+		if p.newBranch {
+			result, err = git.AddWorktree(p.targetDir, p.branch, p.format, true, p.baseRef)
+		} else {
+			result, err = git.AddWorktree(p.targetDir, p.branch, p.format, false, "")
+		}
+		if err != nil {
+			return nil, err
+		}
+		repoName, _ = git.GetRepoName()
+		folder, _ = git.GetRepoFolderName()
+		mainRepo, _ = git.GetMainRepoPath(result.Path)
+		if mainRepo == "" {
+			mainRepo, _ = filepath.Abs(".")
+		}
+	} else {
+		// External repo mode
+		if p.newBranch {
+			result, err = git.CreateWorktreeFrom(p.repoPath, p.targetDir, p.branch, p.format, p.baseRef)
+		} else {
+			result, err = git.OpenWorktreeFrom(p.repoPath, p.targetDir, p.branch, p.format)
+		}
+		if err != nil {
+			return nil, err
+		}
+		repoName = git.GetRepoDisplayName(p.repoPath)
+		folder = filepath.Base(p.repoPath)
+		mainRepo = p.repoPath
+	}
+
+	// Print result
+	if result.AlreadyExists {
+		fmt.Printf("→ Worktree already exists at: %s\n", result.Path)
+	} else {
+		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
+	}
+
+	// Set note if provided
+	if p.note != "" {
+		noteRepo := p.repoPath
+		if noteRepo == "" {
+			noteRepo, _ = os.Getwd()
+		}
+		if err := git.SetBranchNote(noteRepo, p.branch, p.note); err != nil {
+			if p.repoPath != "" {
+				fmt.Fprintf(os.Stderr, "Warning: failed to set note for %s: %v\n", repoName, err)
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: failed to set note: %v\n", err)
+			}
+		}
+	}
+
+	return &successResult{
+		Path:     result.Path,
+		Branch:   p.branch,
+		RepoName: repoName,
+		MainRepo: mainRepo,
+		Folder:   folder,
+		Existed:  result.AlreadyExists,
+	}, nil
+}
+
 // resolveBaseRef determines the base ref for creating a new branch.
 // If fetch is true, fetches the base branch from origin first.
 // Returns the full ref (e.g., "origin/main" or "main") based on config.
@@ -79,45 +161,33 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
 		return err
 	}
 
-	var result *git.CreateWorktreeResult
-
+	// Resolve base ref if creating new branch
+	var baseRef string
 	if cmd.NewBranch {
-		// Resolve base branch and ref for new branches
 		cwd, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("failed to get current directory: %w", err)
 		}
-		baseRef, err := resolveBaseRef(cwd, cmd.Base, cmd.Fetch, cfg.BaseRef)
+		baseRef, err = resolveBaseRef(cwd, cmd.Base, cmd.Fetch, cfg.BaseRef)
 		if err != nil {
 			return err
 		}
-
 		fmt.Printf("Creating worktree for new branch %s in %s\n", cmd.Branch, absPath)
-		result, err = git.AddWorktree(targetDir, cmd.Branch, cfg.WorktreeFormat, true, baseRef)
 	} else {
 		fmt.Printf("Adding worktree for branch %s in %s\n", cmd.Branch, absPath)
-		result, err = git.AddWorktree(targetDir, cmd.Branch, cfg.WorktreeFormat, false, "")
 	}
 
+	result, err := createWorktree(createWorktreeParams{
+		repoPath:  "",
+		targetDir: targetDir,
+		branch:    cmd.Branch,
+		format:    cfg.WorktreeFormat,
+		newBranch: cmd.NewBranch,
+		baseRef:   baseRef,
+		note:      cmd.Note,
+	})
 	if err != nil {
 		return err
-	}
-
-	if result.AlreadyExists {
-		fmt.Printf("→ Worktree already exists at: %s\n", result.Path)
-	} else {
-		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
-	}
-
-	// Set note if provided
-	if cmd.Note != "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("failed to get current directory: %w", err)
-		}
-		if err := git.SetBranchNote(cwd, cmd.Branch, cmd.Note); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to set note: %v\n", err)
-		}
 	}
 
 	// Run post-add hooks
@@ -132,16 +202,13 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
 	}
 
 	ctx := hooks.Context{
-		Path:    result.Path,
-		Branch:  cmd.Branch,
-		Trigger: string(hooks.CommandAdd),
-		Env:     env,
-	}
-	ctx.Repo, _ = git.GetRepoName()
-	ctx.Folder, _ = git.GetRepoFolderName()
-	ctx.MainRepo, _ = git.GetMainRepoPath(result.Path)
-	if ctx.MainRepo == "" {
-		ctx.MainRepo, _ = filepath.Abs(".")
+		Path:     result.Path,
+		Branch:   result.Branch,
+		Repo:     result.RepoName,
+		Folder:   result.Folder,
+		MainRepo: result.MainRepo,
+		Trigger:  string(hooks.CommandAdd),
+		Env:      env,
 	}
 
 	return hooks.RunAll(hookMatches, ctx)
@@ -260,111 +327,59 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 
 // createWorktreeInCurrentRepo creates a worktree in the current git repository
 func createWorktreeInCurrentRepo(cmd *AddCmd, cfg *config.Config, targetDir string) (*successResult, error) {
-	var result *git.CreateWorktreeResult
-	var err error
-
+	// Resolve base ref if creating new branch
+	var baseRef string
 	if cmd.NewBranch {
-		// Resolve base branch and ref for new branches
 		cwd, err := os.Getwd()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get current directory: %w", err)
 		}
-		baseRef, err := resolveBaseRef(cwd, cmd.Base, cmd.Fetch, cfg.BaseRef)
+		baseRef, err = resolveBaseRef(cwd, cmd.Base, cmd.Fetch, cfg.BaseRef)
 		if err != nil {
 			return nil, err
 		}
-
 		fmt.Printf("Creating worktree for new branch %s (current repo) in %s\n", cmd.Branch, targetDir)
-		result, err = git.AddWorktree(targetDir, cmd.Branch, cfg.WorktreeFormat, true, baseRef)
 	} else {
 		fmt.Printf("Adding worktree for branch %s (current repo) in %s\n", cmd.Branch, targetDir)
-		result, err = git.AddWorktree(targetDir, cmd.Branch, cfg.WorktreeFormat, false, "")
 	}
 
-	if err != nil {
-		return nil, err
-	}
-
-	if result.AlreadyExists {
-		fmt.Printf("→ Worktree already exists at: %s\n", result.Path)
-	} else {
-		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
-	}
-
-	// Set note if provided
-	if cmd.Note != "" {
-		cwd, err := os.Getwd()
-		if err == nil {
-			if err := git.SetBranchNote(cwd, cmd.Branch, cmd.Note); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to set note for current repo: %v\n", err)
-			}
-		}
-	}
-
-	repoName, _ := git.GetRepoName()
-	folder, _ := git.GetRepoFolderName()
-	mainRepo, _ := git.GetMainRepoPath(result.Path)
-	if mainRepo == "" {
-		mainRepo, _ = filepath.Abs(".")
-	}
-
-	return &successResult{
-		Path:     result.Path,
-		Branch:   cmd.Branch,
-		RepoName: repoName,
-		MainRepo: mainRepo,
-		Folder:   folder,
-		Existed:  result.AlreadyExists,
-	}, nil
+	return createWorktree(createWorktreeParams{
+		repoPath:  "",
+		targetDir: targetDir,
+		branch:    cmd.Branch,
+		format:    cfg.WorktreeFormat,
+		newBranch: cmd.NewBranch,
+		baseRef:   baseRef,
+		note:      cmd.Note,
+	})
 }
 
 // createWorktreeForRepo creates a worktree for a specified repository
 func createWorktreeForRepo(repoPath string, cmd *AddCmd, cfg *config.Config, targetDir string) (*successResult, error) {
-	var result *git.CreateWorktreeResult
-	var err error
-
 	repoName := git.GetRepoDisplayName(repoPath)
-	folder := filepath.Base(repoPath)
 
+	// Resolve base ref if creating new branch
+	var baseRef string
 	if cmd.NewBranch {
-		// Resolve base branch and ref for new branches
-		baseRef, err := resolveBaseRef(repoPath, cmd.Base, cmd.Fetch, cfg.BaseRef)
+		var err error
+		baseRef, err = resolveBaseRef(repoPath, cmd.Base, cmd.Fetch, cfg.BaseRef)
 		if err != nil {
 			return nil, err
 		}
-
 		fmt.Printf("Creating worktree for new branch %s in %s (%s)\n", cmd.Branch, targetDir, repoName)
-		result, err = git.CreateWorktreeFrom(repoPath, targetDir, cmd.Branch, cfg.WorktreeFormat, baseRef)
 	} else {
 		fmt.Printf("Adding worktree for branch %s in %s (%s)\n", cmd.Branch, targetDir, repoName)
-		result, err = git.OpenWorktreeFrom(repoPath, targetDir, cmd.Branch, cfg.WorktreeFormat)
 	}
 
-	if err != nil {
-		return nil, err
-	}
-
-	if result.AlreadyExists {
-		fmt.Printf("→ Worktree already exists at: %s\n", result.Path)
-	} else {
-		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
-	}
-
-	// Set note if provided
-	if cmd.Note != "" {
-		if err := git.SetBranchNote(repoPath, cmd.Branch, cmd.Note); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to set note for %s: %v\n", repoName, err)
-		}
-	}
-
-	return &successResult{
-		Path:     result.Path,
-		Branch:   cmd.Branch,
-		RepoName: repoName,
-		MainRepo: repoPath,
-		Folder:   folder,
-		Existed:  result.AlreadyExists,
-	}, nil
+	return createWorktree(createWorktreeParams{
+		repoPath:  repoPath,
+		targetDir: targetDir,
+		branch:    cmd.Branch,
+		format:    cfg.WorktreeFormat,
+		newBranch: cmd.NewBranch,
+		baseRef:   baseRef,
+		note:      cmd.Note,
+	})
 }
 
 // resolveWorktreeTargetDir returns both the target dir (possibly relative) and its absolute path.

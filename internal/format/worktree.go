@@ -3,6 +3,7 @@ package format
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -51,12 +52,7 @@ func ValidateFormat(format string) error {
 
 // isValidPlaceholder checks if a placeholder is in the valid list
 func isValidPlaceholder(placeholder string) bool {
-	for _, valid := range ValidPlaceholders {
-		if placeholder == valid {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ValidPlaceholders, placeholder)
 }
 
 // FormatWorktreeName applies the format template to generate a worktree folder name
