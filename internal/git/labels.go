@@ -1,7 +1,6 @@
 package git
 
 import (
-	"bytes"
 	"os/exec"
 	"strings"
 )
@@ -12,11 +11,8 @@ const labelsConfigKey = "wt.labels"
 // Returns empty slice if no labels are set
 func GetLabels(repoPath string) ([]string, error) {
 	cmd := exec.Command("git", "-C", repoPath, "config", "--local", labelsConfigKey)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
+	output, err := outputCmd(cmd)
+	if err != nil {
 		// Exit code 1 means the config key doesn't exist - not an error
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 			return nil, nil
@@ -24,7 +20,7 @@ func GetLabels(repoPath string) ([]string, error) {
 		return nil, err
 	}
 
-	value := strings.TrimSpace(stdout.String())
+	value := strings.TrimSpace(string(output))
 	if value == "" {
 		return nil, nil
 	}
@@ -49,10 +45,7 @@ func SetLabels(repoPath string, labels []string) error {
 
 	value := strings.Join(labels, ",")
 	cmd := exec.Command("git", "-C", repoPath, "config", "--local", labelsConfigKey, value)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	return cmd.Run()
+	return runCmd(cmd)
 }
 
 // AddLabel adds a label to a repository (if not already present)
@@ -94,17 +87,13 @@ func RemoveLabel(repoPath, label string) error {
 // ClearLabels removes all labels from a repository
 func ClearLabels(repoPath string) error {
 	cmd := exec.Command("git", "-C", repoPath, "config", "--local", "--unset", labelsConfigKey)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
+	if err := runCmd(cmd); err != nil {
 		// Exit code 5 means the key doesn't exist - not an error for clearing
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 5 {
 			return nil
 		}
 		return err
 	}
-
 	return nil
 }
 

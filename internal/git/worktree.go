@@ -1,7 +1,6 @@
 package git
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -314,14 +313,8 @@ func createWorktreeInternal(basePath, branch, worktreeFmt, baseRef string) (*Cre
 	} else {
 		cmd = exec.Command("git", "worktree", "add", worktreePath, "-b", branch)
 	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return nil, fmt.Errorf("failed to create worktree: %s", errMsg)
-		}
-		return nil, fmt.Errorf("failed to create worktree: %w", err)
+	if err := runCmd(cmd); err != nil {
+		return nil, fmt.Errorf("failed to create worktree: %v", err)
 	}
 
 	return &CreateWorktreeResult{Path: worktreePath, AlreadyExists: false}, nil
@@ -338,7 +331,7 @@ func CreateWorktreeFrom(repoPath, basePath, branch, worktreeFmt, baseRef string)
 
 	// Check if branch already exists in the repo
 	cmd := exec.Command("git", "-C", absRepoPath, "rev-parse", "--verify", "refs/heads/"+branch)
-	if cmd.Run() == nil {
+	if runCmd(cmd) == nil {
 		// Branch exists, check if it's already checked out
 		wtPath, err := getBranchWorktreeFrom(absRepoPath, branch)
 		if err != nil {
@@ -395,14 +388,8 @@ func CreateWorktreeFrom(repoPath, basePath, branch, worktreeFmt, baseRef string)
 	} else {
 		createCmd = exec.Command("git", "-C", absRepoPath, "worktree", "add", worktreePath, "-b", branch)
 	}
-	var stderr bytes.Buffer
-	createCmd.Stderr = &stderr
-	if err := createCmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return nil, fmt.Errorf("failed to create worktree: %s", errMsg)
-		}
-		return nil, fmt.Errorf("failed to create worktree: %w", err)
+	if err := runCmd(createCmd); err != nil {
+		return nil, fmt.Errorf("failed to create worktree: %v", err)
 	}
 
 	return &CreateWorktreeResult{Path: worktreePath, AlreadyExists: false}, nil
@@ -447,14 +434,8 @@ func OpenWorktreeFrom(absRepoPath, basePath, branch, worktreeFmt string) (*Creat
 
 	// Create worktree for existing branch (no -b flag)
 	cmd := exec.Command("git", "-C", absRepoPath, "worktree", "add", worktreePath, branch)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return nil, fmt.Errorf("failed to create worktree: %s", errMsg)
-		}
-		return nil, fmt.Errorf("failed to create worktree: %w", err)
+	if err := runCmd(cmd); err != nil {
+		return nil, fmt.Errorf("failed to create worktree: %v", err)
 	}
 
 	return &CreateWorktreeResult{Path: worktreePath, AlreadyExists: false}, nil
@@ -463,14 +444,9 @@ func OpenWorktreeFrom(absRepoPath, basePath, branch, worktreeFmt string) (*Creat
 // getBranchWorktreeFrom returns the worktree path if branch is checked out in the given repo
 func getBranchWorktreeFrom(repoPath, branch string) (string, error) {
 	cmd := exec.Command("git", "-C", repoPath, "worktree", "list", "--porcelain")
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	output, err := cmd.Output()
+	output, err := outputCmd(cmd)
 	if err != nil {
-		if stderr.Len() > 0 {
-			return "", fmt.Errorf("failed to list worktrees: %s", strings.TrimSpace(stderr.String()))
-		}
-		return "", err
+		return "", fmt.Errorf("failed to list worktrees: %v", err)
 	}
 
 	lines := strings.Split(string(output), "\n")
@@ -555,14 +531,8 @@ func openWorktreeInternal(basePath, branch, worktreeFmt string) (*CreateWorktree
 
 	// Create worktree for existing branch (no -b flag)
 	cmd := exec.Command("git", "worktree", "add", worktreePath, branch)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return nil, fmt.Errorf("failed to create worktree: %s", errMsg)
-		}
-		return nil, fmt.Errorf("failed to create worktree: %w", err)
+	if err := runCmd(cmd); err != nil {
+		return nil, fmt.Errorf("failed to create worktree: %v", err)
 	}
 
 	return &CreateWorktreeResult{Path: worktreePath, AlreadyExists: false}, nil
@@ -576,7 +546,7 @@ func RemoveWorktree(worktree Worktree, force bool) error {
 	}
 
 	cmd := exec.Command("git", args...)
-	return cmd.Run()
+	return runCmd(cmd)
 }
 
 // MoveWorktree moves a git worktree to a new path
@@ -587,22 +557,13 @@ func MoveWorktree(worktree Worktree, newPath string, force bool) error {
 	}
 
 	cmd := exec.Command("git", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return fmt.Errorf("%s", errMsg)
-		}
-		return err
-	}
-	return nil
+	return runCmd(cmd)
 }
 
 // PruneWorktrees prunes stale worktree references
 func PruneWorktrees(repoPath string) error {
 	cmd := exec.Command("git", "-C", repoPath, "worktree", "prune")
-	return cmd.Run()
+	return runCmd(cmd)
 }
 
 // GroupWorktreesByRepo groups worktrees by their main repository

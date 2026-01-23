@@ -162,7 +162,8 @@ func runHook(name string, hook *config.Hook, ctx Context, workDir string) error 
 	shellCmd.Stdin = os.Stdin
 
 	if err := shellCmd.Run(); err != nil {
-		return err
+		// Error details already printed to stderr by shell
+		return fmt.Errorf("command failed: %s", cmd)
 	}
 
 	if hook.Description != "" {

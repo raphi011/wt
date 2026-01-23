@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/raphi011/wt/internal/cmd"
 )
 
 // GitLab implements Forge for GitLab repositories using the glab CLI.
@@ -25,19 +27,13 @@ func (g *GitLab) Check() error {
 		return fmt.Errorf("glab not found: please install GitLab CLI (https://gitlab.com/gitlab-org/cli)")
 	}
 
-	cmd := exec.Command("glab", "auth", "status")
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
+	c := exec.Command("glab", "auth", "status")
+	if err := cmd.Run(c); err != nil {
+		errMsg := err.Error()
 		if strings.Contains(errMsg, "not logged") || strings.Contains(errMsg, "no token") {
 			return fmt.Errorf("glab not authenticated: please run 'glab auth login'")
 		}
-		if errMsg != "" {
-			return fmt.Errorf("glab auth check failed: %s", errMsg)
-		}
-		return fmt.Errorf("glab not authenticated: please run 'glab auth login'")
+		return fmt.Errorf("glab auth check failed: %s", errMsg)
 	}
 
 	return nil
@@ -48,22 +44,16 @@ func (g *GitLab) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 	// glab uses -R for repo like gh, but needs project path format
 	projectPath := extractGitLabProject(repoURL)
 
-	cmd := exec.Command("glab", "mr", "list",
+	c := exec.Command("glab", "mr", "list",
 		"-R", projectPath,
 		"--source-branch", branch,
 		"--state", "all",
 		"-F", "json",
 		"-P", "1") // limit to 1
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	output, err := cmd.Output()
+	output, err := cmd.Output(c)
 	if err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return nil, fmt.Errorf("glab command failed: %s", errMsg)
-		}
-		return nil, fmt.Errorf("glab command failed: %w", err)
+		return nil, fmt.Errorf("glab command failed: %v", err)
 	}
 
 	// glab returns an array of MRs with various fields
@@ -110,20 +100,14 @@ func (g *GitLab) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 func (g *GitLab) GetPRBranch(repoURL string, number int) (string, error) {
 	projectPath := extractGitLabProject(repoURL)
 
-	cmd := exec.Command("glab", "mr", "view",
+	c := exec.Command("glab", "mr", "view",
 		fmt.Sprintf("%d", number),
 		"-R", projectPath,
 		"-F", "json")
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	output, err := cmd.Output()
+	output, err := cmd.Output(c)
 	if err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return "", fmt.Errorf("glab command failed: %s", errMsg)
-		}
-		return "", fmt.Errorf("glab command failed: %w", err)
+		return "", fmt.Errorf("glab command failed: %v", err)
 	}
 
 	var result struct {
@@ -171,16 +155,9 @@ func (g *GitLab) CloneRepo(repoSpec, destPath string) (string, error) {
 	}
 	clonePath := filepath.Join(destPath, repoName)
 
-	cmd := exec.Command("glab", "repo", "clone", repoSpec, clonePath)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return "", fmt.Errorf("glab repo clone failed: %s", errMsg)
-		}
-		return "", fmt.Errorf("glab repo clone failed: %w", err)
+	c := exec.Command("glab", "repo", "clone", repoSpec, clonePath)
+	if err := cmd.Run(c); err != nil {
+		return "", fmt.Errorf("glab repo clone failed: %v", err)
 	}
 
 	return clonePath, nil
@@ -207,17 +184,12 @@ func (g *GitLab) CreatePR(repoURL string, params CreatePRParams) (*CreatePRResul
 		args = append(args, "--draft")
 	}
 
-	cmd := exec.Command("glab", args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	c := exec.Command("glab", args...)
+	var stdout bytes.Buffer
+	c.Stdout = &stdout
 
-	if err := cmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return nil, fmt.Errorf("glab mr create failed: %s", errMsg)
-		}
-		return nil, fmt.Errorf("glab mr create failed: %w", err)
+	if err := cmd.Run(c); err != nil {
+		return nil, fmt.Errorf("glab mr create failed: %v", err)
 	}
 
 	// Parse MR URL from stdout (glab mr create outputs something like "!123 https://...")
@@ -271,15 +243,9 @@ func (g *GitLab) MergePR(repoURL string, number int, strategy string) error {
 	}
 	// "merge" uses default behavior (no extra flag)
 
-	cmd := exec.Command("glab", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return fmt.Errorf("merge failed: %s", errMsg)
-		}
-		return fmt.Errorf("merge failed: %w", err)
+	c := exec.Command("glab", args...)
+	if err := cmd.Run(c); err != nil {
+		return fmt.Errorf("merge failed: %v", err)
 	}
 	return nil
 }

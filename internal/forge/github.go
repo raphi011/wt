@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/raphi011/wt/internal/cmd"
 )
 
 // GitHub implements Forge for GitHub repositories using the gh CLI.
@@ -25,19 +27,13 @@ func (g *GitHub) Check() error {
 		return fmt.Errorf("gh not found: please install GitHub CLI (https://cli.github.com)")
 	}
 
-	cmd := exec.Command("gh", "auth", "status")
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
+	c := exec.Command("gh", "auth", "status")
+	if err := cmd.Run(c); err != nil {
+		errMsg := err.Error()
 		if strings.Contains(errMsg, "not logged") || strings.Contains(errMsg, "no accounts") {
 			return fmt.Errorf("gh not authenticated: please run 'gh auth login'")
 		}
-		if errMsg != "" {
-			return fmt.Errorf("gh auth check failed: %s", errMsg)
-		}
-		return fmt.Errorf("gh not authenticated: please run 'gh auth login'")
+		return fmt.Errorf("gh auth check failed: %s", errMsg)
 	}
 
 	return nil
@@ -45,22 +41,16 @@ func (g *GitHub) Check() error {
 
 // GetPRForBranch fetches PR info for a branch using gh CLI
 func (g *GitHub) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
-	cmd := exec.Command("gh", "pr", "list",
+	c := exec.Command("gh", "pr", "list",
 		"-R", repoURL,
 		"--head", branch,
 		"--state", "all",
 		"--json", "number,state,isDraft,url,author,comments,reviewDecision",
 		"--limit", "1")
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	output, err := cmd.Output()
+	output, err := cmd.Output(c)
 	if err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return nil, fmt.Errorf("gh command failed: %s", errMsg)
-		}
-		return nil, fmt.Errorf("gh command failed: %w", err)
+		return nil, fmt.Errorf("gh command failed: %v", err)
 	}
 
 	var prs []struct {
@@ -103,20 +93,14 @@ func (g *GitHub) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 
 // GetPRBranch fetches the head branch name for a PR number using gh CLI
 func (g *GitHub) GetPRBranch(repoURL string, number int) (string, error) {
-	cmd := exec.Command("gh", "pr", "view",
+	c := exec.Command("gh", "pr", "view",
 		fmt.Sprintf("%d", number),
 		"-R", repoURL,
 		"--json", "headRefName,isCrossRepository")
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	output, err := cmd.Output()
+	output, err := cmd.Output(c)
 	if err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return "", fmt.Errorf("gh command failed: %s", errMsg)
-		}
-		return "", fmt.Errorf("gh command failed: %w", err)
+		return "", fmt.Errorf("gh command failed: %v", err)
 	}
 
 	var result struct {
@@ -150,16 +134,9 @@ func (g *GitHub) CloneRepo(repoSpec, destPath string) (string, error) {
 	}
 	clonePath := filepath.Join(destPath, repoName)
 
-	cmd := exec.Command("gh", "repo", "clone", repoSpec, clonePath)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return "", fmt.Errorf("gh repo clone failed: %s", errMsg)
-		}
-		return "", fmt.Errorf("gh repo clone failed: %w", err)
+	c := exec.Command("gh", "repo", "clone", repoSpec, clonePath)
+	if err := cmd.Run(c); err != nil {
+		return "", fmt.Errorf("gh repo clone failed: %v", err)
 	}
 
 	return clonePath, nil
@@ -183,17 +160,12 @@ func (g *GitHub) CreatePR(repoURL string, params CreatePRParams) (*CreatePRResul
 		args = append(args, "--draft")
 	}
 
-	cmd := exec.Command("gh", args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	c := exec.Command("gh", args...)
+	var stdout bytes.Buffer
+	c.Stdout = &stdout
 
-	if err := cmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return nil, fmt.Errorf("gh pr create failed: %s", errMsg)
-		}
-		return nil, fmt.Errorf("gh pr create failed: %w", err)
+	if err := cmd.Run(c); err != nil {
+		return nil, fmt.Errorf("gh pr create failed: %v", err)
 	}
 
 	// Parse PR URL from stdout (gh pr create outputs the URL)
@@ -226,19 +198,13 @@ func (g *GitHub) MergePR(repoURL string, number int, strategy string) error {
 		strategyFlag = "--merge"
 	}
 
-	cmd := exec.Command("gh", "pr", "merge", fmt.Sprintf("%d", number),
+	c := exec.Command("gh", "pr", "merge", fmt.Sprintf("%d", number),
 		"-R", repoURL,
 		strategyFlag,
 		"--delete-branch")
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return fmt.Errorf("merge failed: %s", errMsg)
-		}
-		return fmt.Errorf("merge failed: %w", err)
+	if err := cmd.Run(c); err != nil {
+		return fmt.Errorf("merge failed: %v", err)
 	}
 	return nil
 }
