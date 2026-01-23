@@ -48,6 +48,7 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 	for i, wt := range allWorktrees {
 		wtInfos[i] = cache.WorktreeInfo{
 			Path:      wt.Path,
+			RepoPath:  wt.MainRepo,
 			Branch:    wt.Branch,
 			OriginURL: wt.OriginURL,
 		}
@@ -154,7 +155,8 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 				Note:        wt.Note,
 			}
 			// Add PR info if available
-			if pr := wtCache.GetPRForBranch(wt.OriginURL, wt.Branch); pr != nil && pr.Fetched && pr.Number > 0 {
+			folderName := filepath.Base(wt.Path)
+			if pr := wtCache.GetPRForBranch(folderName); pr != nil && pr.Fetched && pr.Number > 0 {
 				wtJSON.PR = &prJSON{
 					Number:     pr.Number,
 					State:      pr.State,
@@ -191,7 +193,8 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 
 	// Update merge status for worktrees based on cached PR state
 	for i := range worktrees {
-		pr := wtCache.GetPRForBranch(worktrees[i].OriginURL, worktrees[i].Branch)
+		folderName := filepath.Base(worktrees[i].Path)
+		pr := wtCache.GetPRForBranch(folderName)
 		if pr != nil && pr.Fetched && pr.State == "MERGED" {
 			worktrees[i].IsMerged = true
 		}

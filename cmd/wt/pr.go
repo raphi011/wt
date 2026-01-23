@@ -509,7 +509,8 @@ func runPrCreate(cmd *PrCreateCmd, cfg *config.Config) error {
 			CachedAt: time.Now(),
 			Fetched:  true,
 		}
-		wtCache.SetPRForBranch(originURL, branch, prInfo)
+		folderName := filepath.Base(wtPath)
+		wtCache.SetPRForBranch(folderName, prInfo)
 		if err := cache.Save(scanDir, wtCache); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to update cache: %v\n", err)
 		}

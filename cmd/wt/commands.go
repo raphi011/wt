@@ -700,6 +700,34 @@ func (c *ReposCmd) Run(ctx *Context) error {
 	return runRepos(c, ctx.Config)
 }
 
+// DoctorCmd diagnoses and repairs cache issues.
+type DoctorCmd struct {
+	Dir   string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	Fix   bool   `name:"fix" help:"auto-fix recoverable issues"`
+	Reset bool   `name:"reset" help:"rebuild cache from scratch (loses IDs)"`
+}
+
+func (c *DoctorCmd) Help() string {
+	return `Diagnose and repair cache issues. Checks for:
+- Stale entries (worktree no longer exists)
+- Orphaned keys (old cache format)
+- Missing metadata (repo_path, branch)
+- Broken git links
+- Duplicate IDs
+
+Use --fix to automatically repair issues.
+Use --reset to rebuild the cache from scratch (all worktrees get new IDs).
+
+Examples:
+  wt doctor              # Check for issues
+  wt doctor --fix        # Auto-fix recoverable issues
+  wt doctor --reset      # Rebuild cache from scratch`
+}
+
+func (c *DoctorCmd) Run(ctx *Context) error {
+	return runDoctor(c, ctx.Config)
+}
+
 // VersionFlag is used to show version info.
 type VersionFlag bool
 
@@ -726,6 +754,7 @@ type CLI struct {
 	// Configuration commands
 	Config     ConfigCmd     `cmd:"" help:"Manage configuration" group:"config"`
 	Completion CompletionCmd `cmd:"" help:"Generate completion script" group:"config"`
+	Doctor     DoctorCmd     `cmd:"" help:"Diagnose and repair cache" group:"config"`
 
 	Version VersionFlag `short:"v" name:"version" help:"Show version"`
 }

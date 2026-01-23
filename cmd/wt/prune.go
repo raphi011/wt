@@ -108,6 +108,7 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 	for i, wt := range allWorktrees {
 		wtInfos[i] = cache.WorktreeInfo{
 			Path:      wt.Path,
+			RepoPath:  wt.MainRepo,
 			Branch:    wt.Branch,
 			OriginURL: wt.OriginURL,
 		}
@@ -140,7 +141,8 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 
 	// Update merge status for worktrees based on cached PR state
 	for i := range worktrees {
-		pr := wtCache.GetPRForBranch(worktrees[i].OriginURL, worktrees[i].Branch)
+		folderName := filepath.Base(worktrees[i].Path)
+		pr := wtCache.GetPRForBranch(folderName)
 		if pr != nil && pr.Fetched && pr.State == "MERGED" {
 			worktrees[i].IsMerged = true
 		}
@@ -209,7 +211,8 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 				}
 
 				// Mark as removed in cache immediately
-				wtCache.MarkRemoved(wt.OriginURL, wt.Branch)
+				folderName := filepath.Base(wt.Path)
+				wtCache.MarkRemoved(folderName)
 				removed = append(removed, wt)
 				removedMap[wt.Path] = true
 
@@ -432,7 +435,8 @@ func refreshPRStatus(worktrees []git.Worktree, wtCache *cache.Cache, cfg *config
 			}
 
 			prMutex.Lock()
-			wtCache.SetPRForBranch(wt.OriginURL, wt.Branch, pr)
+			folderName := filepath.Base(wt.Path)
+			wtCache.SetPRForBranch(folderName, pr)
 			prMutex.Unlock()
 
 			countMutex.Lock()

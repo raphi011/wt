@@ -33,7 +33,7 @@ _wt_completions() {
         cword=$COMP_CWORD
     fi
 
-    local commands="add prune list show repos exec cd mv note label hook pr config completion"
+    local commands="add prune list show repos exec cd mv note label hook pr config completion doctor"
 
     # Handle subcommand-specific completions
     case "${words[1]}" in
@@ -569,6 +569,15 @@ _wt_completions() {
                 COMPREPLY=($(compgen -W "fish bash zsh" -- "$cur"))
             fi
             ;;
+        doctor)
+            case "$prev" in
+                -d|--dir)
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    return
+                    ;;
+            esac
+            COMPREPLY=($(compgen -W "-d --dir --fix --reset" -- "$cur"))
+            ;;
         *)
             if [[ $cword -eq 1 ]]; then
                 COMPREPLY=($(compgen -W "$commands" -- "$cur"))
@@ -610,6 +619,7 @@ _wt() {
                 'pr:Work with GitHub PRs'
                 'config:Manage configuration'
                 'completion:Generate completion script'
+                'doctor:Diagnose and repair cache'
             )
             _describe 'command' commands
             ;;
@@ -948,6 +958,13 @@ _wt() {
                     _arguments \
                         '1:shell:(fish bash zsh)'
                     ;;
+                doctor)
+                    _arguments \
+                        '-d[directory to scan]:directory:_files -/' \
+                        '--dir[directory to scan]:directory:_files -/' \
+                        '--fix[auto-fix recoverable issues]' \
+                        '--reset[rebuild cache from scratch]'
+                    ;;
             esac
             ;;
     esac
@@ -1034,20 +1051,21 @@ const fishCompletions = `# wt completions - supports fish autosuggestions and ta
 complete -c wt -f
 
 # Subcommands (shown in completions and autosuggestions)
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "add" -d "Add worktree for branch"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "prune" -d "Prune merged worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "list" -d "List worktrees with stable IDs"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "show" -d "Show worktree details"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "repos" -d "List repositories"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "exec" -d "Run command in worktree by ID"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "cd" -d "Print worktree path"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "mv" -d "Move worktrees to another directory"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "note" -d "Manage branch notes"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "label" -d "Manage repository labels"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "hook" -d "Run configured hook"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "pr" -d "Work with PRs"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "config" -d "Manage configuration"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion" -a "completion" -d "Generate completion script"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "add" -d "Add worktree for branch"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "prune" -d "Prune merged worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "list" -d "List worktrees with stable IDs"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "show" -d "Show worktree details"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "repos" -d "List repositories"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "exec" -d "Run command in worktree by ID"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "cd" -d "Print worktree path"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "mv" -d "Move worktrees to another directory"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "note" -d "Manage branch notes"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "label" -d "Manage repository labels"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "hook" -d "Run configured hook"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "pr" -d "Work with PRs"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "config" -d "Manage configuration"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "completion" -d "Generate completion script"
+complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "doctor" -d "Diagnose and repair cache"
 
 # add: branch name (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from add; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
@@ -1254,6 +1272,11 @@ complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcomman
 complete -c wt -n "__fish_seen_subcommand_from completion" -a "fish" -d "Fish shell"
 complete -c wt -n "__fish_seen_subcommand_from completion" -a "bash" -d "Bash shell"
 complete -c wt -n "__fish_seen_subcommand_from completion" -a "zsh" -d "Zsh shell"
+
+# doctor: diagnose and repair cache
+complete -c wt -n "__fish_seen_subcommand_from doctor" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
+complete -c wt -n "__fish_seen_subcommand_from doctor" -l fix -d "Auto-fix recoverable issues"
+complete -c wt -n "__fish_seen_subcommand_from doctor" -l reset -d "Rebuild cache from scratch"
 
 # Global help
 complete -c wt -s h -l help -d "Show help message"

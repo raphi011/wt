@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -77,7 +78,8 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, wtC
 
 		// Format PR column
 		var prCol string
-		pr := wtCache.GetPRForBranch(wt.OriginURL, wt.Branch)
+		folderName := filepath.Base(wt.Path)
+		pr := wtCache.GetPRForBranch(folderName)
 		if !wt.HasUpstream {
 			// No upstream branch - can't have a PR
 			prCol = "-"

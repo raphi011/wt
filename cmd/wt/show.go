@@ -86,17 +86,18 @@ func runShow(cmd *ShowCmd, cfg *config.Config) error {
 	// Get PR info from cache or refresh
 	var prInfo *forge.PRInfo
 	originURL, _ := git.GetOriginURL(info.MainRepo)
+	folderName := filepath.Base(info.Path)
 	if originURL != "" {
 		if cmd.Refresh {
 			sp := ui.NewSpinner("Fetching PR status...")
 			sp.Start()
-			prInfo = fetchPRForBranch(originURL, info.MainRepo, info.Branch, wtCache, cfg)
+			prInfo = fetchPRForBranch(originURL, info.MainRepo, info.Branch, folderName, wtCache, cfg)
 			sp.Stop()
 			// Save updated cache
 			if err := cache.Save(scanPath, wtCache); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
 			}
-		} else if pr := wtCache.GetPRForBranch(originURL, info.Branch); pr != nil && pr.Fetched {
+		} else if pr := wtCache.GetPRForBranch(folderName); pr != nil && pr.Fetched {
 			prInfo = pr
 		}
 	}
@@ -150,10 +151,9 @@ func resolveShowTarget(id int, dir string) (*resolve.Target, error) {
 		}
 		scanPath, _ = filepath.Abs(scanPath)
 		wtCache, _ := cache.Load(scanPath)
-		originURL, _ := git.GetOriginURL(mainRepo)
 		wtID := 0
-		if wtCache != nil && originURL != "" {
-			key := cache.MakeWorktreeKey(originURL, branch)
+		if wtCache != nil {
+			key := cache.MakeWorktreeKey(cwd)
 			if entry, ok := wtCache.Worktrees[key]; ok {
 				wtID = entry.ID
 			}
@@ -247,7 +247,7 @@ func gatherShowInfo(target *resolve.Target, prInfo *forge.PRInfo) *ShowInfo {
 	return info
 }
 
-func fetchPRForBranch(originURL, mainRepo, branch string, wtCache *cache.Cache, cfg *config.Config) *forge.PRInfo {
+func fetchPRForBranch(originURL, mainRepo, branch, folderName string, wtCache *cache.Cache, cfg *config.Config) *forge.PRInfo {
 	// Check if branch has upstream
 	upstreamBranch := git.GetUpstreamBranch(mainRepo, branch)
 	if upstreamBranch == "" {
@@ -267,7 +267,7 @@ func fetchPRForBranch(originURL, mainRepo, branch string, wtCache *cache.Cache, 
 	}
 
 	// Cache the result
-	wtCache.SetPRForBranch(originURL, branch, pr)
+	wtCache.SetPRForBranch(folderName, pr)
 
 	return pr
 }

@@ -89,6 +89,9 @@ internal/ui/             - Terminal UI components
 - `wt config init` - Create default config file
 - `wt config show` - Show effective configuration
 - `wt config hooks` - List available hooks
+- `wt doctor` - Diagnose and report cache issues
+- `wt doctor --fix` - Auto-fix recoverable cache issues
+- `wt doctor --reset` - Rebuild cache from scratch (loses IDs)
 - `wt completion <shell>` - Generate shell completions (fish, bash, zsh)
 
 ### Shell Completions

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -36,24 +35,28 @@ func (m *PRInfo) IsStale() bool {
 // PRCache maps origin URL -> branch -> PR info (legacy format)
 type PRCache map[string]map[string]*PRInfo
 
-// WorktreeIDEntry stores the ID for a worktree
+// WorktreeIDEntry stores the ID for a worktree with rich metadata for repair
 type WorktreeIDEntry struct {
 	ID        int        `json:"id"`
 	Path      string     `json:"path"`
-	RemovedAt *time.Time `json:"removed_at,omitempty"` // nil if still exists
-	PR        *PRInfo    `json:"pr,omitempty"`         // embedded PR info
+	RepoPath  string     `json:"repo_path,omitempty"`   // main repo path for repair
+	Branch    string     `json:"branch,omitempty"`      // branch name for repair
+	OriginURL string     `json:"origin_url,omitempty"`  // origin URL (may be empty for local-only repos)
+	RemovedAt *time.Time `json:"removed_at,omitempty"`  // nil if still exists
+	PR        *PRInfo    `json:"pr,omitempty"`          // embedded PR info
 }
 
 // Cache is the unified cache structure stored in .wt-cache.json
 type Cache struct {
 	PRs       PRCache                     `json:"prs,omitempty"`
-	Worktrees map[string]*WorktreeIDEntry `json:"worktrees,omitempty"` // key: "origin::branch"
+	Worktrees map[string]*WorktreeIDEntry `json:"worktrees,omitempty"` // key: folder name (e.g., "repo-feature-branch")
 	NextID    int                         `json:"next_id,omitempty"`
 }
 
-// MakeWorktreeKey creates a cache key from origin URL and branch
-func MakeWorktreeKey(originURL, branch string) string {
-	return originURL + "::" + branch
+// MakeWorktreeKey creates a cache key from worktree path (folder name).
+// The folder name is unique within a worktree_dir and human-readable.
+func MakeWorktreeKey(path string) string {
+	return filepath.Base(path)
 }
 
 // CachePath returns the path to the cache file for a directory
@@ -114,16 +117,8 @@ func Load(scanDir string) (*Cache, error) {
 		cache.NextID = 1
 	}
 
-	// Migrate old PRs into worktree entries
-	for originURL, branches := range cache.PRs {
-		for branch, prInfo := range branches {
-			key := MakeWorktreeKey(originURL, branch)
-			if entry, ok := cache.Worktrees[key]; ok && entry.PR == nil {
-				entry.PR = prInfo
-			}
-		}
-	}
-	// Clear old PRs map after migration (omitted on save via omitempty)
+	// Clear old PRs map (omitted on save via omitempty)
+	// Old PR data in the PRs map is no longer used; PR info is now in WorktreeIDEntry
 	cache.PRs = nil
 
 	return &cache, nil
@@ -146,13 +141,17 @@ func Save(scanDir string, cache *Cache) error {
 	return os.Rename(tempPath, cachePath)
 }
 
-// GetOrAssignID returns the existing ID for a worktree or assigns a new one
-func (c *Cache) GetOrAssignID(originURL, branch, path string) int {
-	key := MakeWorktreeKey(originURL, branch)
+// GetOrAssignID returns the existing ID for a worktree or assigns a new one.
+// Uses folder name as key, stores rich metadata for repair/recovery.
+func (c *Cache) GetOrAssignID(info WorktreeInfo) int {
+	key := MakeWorktreeKey(info.Path)
 
 	if entry, ok := c.Worktrees[key]; ok {
-		// Update path if changed
-		entry.Path = path
+		// Update metadata if changed
+		entry.Path = info.Path
+		entry.RepoPath = info.RepoPath
+		entry.Branch = info.Branch
+		entry.OriginURL = info.OriginURL
 		// Clear RemovedAt if worktree reappeared
 		entry.RemovedAt = nil
 		return entry.ID
@@ -162,8 +161,11 @@ func (c *Cache) GetOrAssignID(originURL, branch, path string) int {
 	id := c.NextID
 	c.NextID++
 	c.Worktrees[key] = &WorktreeIDEntry{
-		ID:   id,
-		Path: path,
+		ID:        id,
+		Path:      info.Path,
+		RepoPath:  info.RepoPath,
+		Branch:    info.Branch,
+		OriginURL: info.OriginURL,
 	}
 
 	return id
@@ -183,14 +185,9 @@ func (c *Cache) GetByID(id int) (path string, found bool, removed bool) {
 // GetBranchByID looks up a worktree by its ID and returns the branch name
 // Returns branch, path, found, and whether it was marked as removed
 func (c *Cache) GetBranchByID(id int) (branch string, path string, found bool, removed bool) {
-	for key, entry := range c.Worktrees {
+	for _, entry := range c.Worktrees {
 		if entry.ID == id {
-			// Key format is "originURL::branch"
-			parts := strings.SplitN(key, "::", 2)
-			if len(parts) == 2 {
-				return parts[1], entry.Path, true, entry.RemovedAt != nil
-			}
-			return "", entry.Path, true, entry.RemovedAt != nil
+			return entry.Branch, entry.Path, true, entry.RemovedAt != nil
 		}
 	}
 	return "", "", false, false
@@ -200,59 +197,83 @@ func (c *Cache) GetBranchByID(id int) (branch string, path string, found bool, r
 // Returns the branch name if found and cache is not stale, empty string otherwise
 func (c *Cache) GetBranchByPRNumber(originURL string, prNumber int) string {
 	// Search in embedded PRs
-	for key, entry := range c.Worktrees {
+	for _, entry := range c.Worktrees {
 		if entry.PR != nil && entry.PR.Number == prNumber && !entry.PR.IsStale() {
-			// Extract origin from key and compare
-			parts := strings.SplitN(key, "::", 2)
-			if len(parts) == 2 && parts[0] == originURL {
-				return parts[1] // branch name
+			// Compare origin URL from stored metadata
+			if entry.OriginURL == originURL {
+				return entry.Branch
 			}
 		}
 	}
 	return ""
 }
 
-// GetPRForBranch returns the cached PR for a given origin URL and branch
-// Returns nil if not found or not fetched
-func (c *Cache) GetPRForBranch(originURL, branch string) *PRInfo {
-	key := MakeWorktreeKey(originURL, branch)
-	if entry, ok := c.Worktrees[key]; ok {
+// GetPRForBranch returns the cached PR for a worktree by folder name.
+// Returns nil if not found or not fetched.
+func (c *Cache) GetPRForBranch(folderName string) *PRInfo {
+	if entry, ok := c.Worktrees[folderName]; ok {
 		return entry.PR
 	}
 	return nil
 }
 
-// SetPRForBranch stores PR info for a given origin URL and branch
-// Creates the worktree entry if it doesn't exist
-func (c *Cache) SetPRForBranch(originURL, branch string, pr *PRInfo) {
-	key := MakeWorktreeKey(originURL, branch)
-	if entry, ok := c.Worktrees[key]; ok {
-		entry.PR = pr
-	} else {
-		// Create entry if it doesn't exist (edge case)
-		c.Worktrees[key] = &WorktreeIDEntry{
-			ID: c.NextID,
-			PR: pr,
+// GetPRByOriginAndBranch returns the cached PR for a given origin URL and branch.
+// Searches through all entries to find a match. Returns nil if not found.
+// This is used for backwards compatibility in cases where folder name isn't available.
+func (c *Cache) GetPRByOriginAndBranch(originURL, branch string) *PRInfo {
+	for _, entry := range c.Worktrees {
+		if entry.OriginURL == originURL && entry.Branch == branch {
+			return entry.PR
 		}
-		c.NextID++
+	}
+	return nil
+}
+
+// SetPRForBranch stores PR info for a worktree by folder name.
+// Updates the entry if it exists; does nothing if the entry doesn't exist.
+func (c *Cache) SetPRForBranch(folderName string, pr *PRInfo) {
+	if entry, ok := c.Worktrees[folderName]; ok {
+		entry.PR = pr
 	}
 }
 
-// MarkRemoved sets the RemovedAt timestamp for a worktree entry.
+// SetPRByOriginAndBranch stores PR info by origin URL and branch.
+// Searches through all entries to find a match.
+// This is used for backwards compatibility in cases where folder name isn't available.
+func (c *Cache) SetPRByOriginAndBranch(originURL, branch string, pr *PRInfo) {
+	for _, entry := range c.Worktrees {
+		if entry.OriginURL == originURL && entry.Branch == branch {
+			entry.PR = pr
+			return
+		}
+	}
+}
+
+// MarkRemoved sets the RemovedAt timestamp for a worktree entry by folder name.
 // Call this immediately after successfully removing a worktree.
-func (c *Cache) MarkRemoved(originURL, branch string) {
-	key := MakeWorktreeKey(originURL, branch)
+func (c *Cache) MarkRemoved(folderName string) {
+	if entry, ok := c.Worktrees[folderName]; ok {
+		now := time.Now()
+		entry.RemovedAt = &now
+	}
+}
+
+// MarkRemovedByKey is a package-level function for marking an entry as removed.
+// Used by doctor command for fixing cache issues.
+func MarkRemovedByKey(c *Cache, key string) {
 	if entry, ok := c.Worktrees[key]; ok {
 		now := time.Now()
 		entry.RemovedAt = &now
 	}
 }
 
-// WorktreeInfo contains the minimal info needed to sync the cache
+// WorktreeInfo contains the info needed to sync the cache.
+// Path is required; other fields are stored as metadata for repair/recovery.
 type WorktreeInfo struct {
-	Path      string
-	Branch    string
-	OriginURL string
+	Path      string // worktree path (required)
+	RepoPath  string // main repo path
+	Branch    string // branch name
+	OriginURL string // origin URL (may be empty for local-only repos)
 }
 
 // SyncWorktrees updates the cache with current worktrees
@@ -264,10 +285,10 @@ func (c *Cache) SyncWorktrees(worktrees []WorktreeInfo) map[string]int {
 	pathToID := make(map[string]int)
 
 	for _, wt := range worktrees {
-		key := MakeWorktreeKey(wt.OriginURL, wt.Branch)
+		key := MakeWorktreeKey(wt.Path)
 		currentKeys[key] = true
 
-		id := c.GetOrAssignID(wt.OriginURL, wt.Branch, wt.Path)
+		id := c.GetOrAssignID(wt)
 		pathToID[wt.Path] = id
 	}
 
