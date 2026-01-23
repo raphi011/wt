@@ -86,7 +86,7 @@ internal/ui/             - Terminal UI components
 - `wt hook <hook> -r <repo> [-l <label>]` - Run hook in repo(s) by name/label
 - `wt pr checkout <number> [org/repo]` - Create worktree for PR (clones repo if org/repo provided)
 - `wt pr checkout <number> -r <repo>` - Create worktree for PR from local repo by name
-- `wt pr create --title "..." [--body "..."]` - Create PR for current branch
+- `wt pr create --title "..." [--body "..."]` - Create PR for worktree
 - `wt pr view [-i <id>] [-w]` - View PR details or open in browser
 - `wt pr merge [-i <id>]` - Merge PR and clean up worktree
 - `wt config init` - Create default config file

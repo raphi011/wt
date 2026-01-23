@@ -593,7 +593,7 @@ type PrMergeCmd struct {
 	Env      []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
-// PrCreateCmd creates a PR for the current branch.
+// PrCreateCmd creates a PR for a worktree.
 type PrCreateCmd struct {
 	ID       int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
 	Title    string `short:"t" name:"title" required:"" placeholder:"TITLE" help:"PR title"`
@@ -676,7 +676,7 @@ func (c *PrViewCmd) Run(ctx *Context) error {
 // PrCmd works with PRs.
 type PrCmd struct {
 	Checkout PrCheckoutCmd `cmd:"" help:"Checkout PR (clones if needed)"`
-	Create   PrCreateCmd   `cmd:"" help:"Create PR for current branch"`
+	Create   PrCreateCmd   `cmd:"" help:"Create PR for worktree"`
 	Merge    PrMergeCmd    `cmd:"" help:"Merge PR and clean up worktree"`
 	View     PrViewCmd     `cmd:"" help:"View PR details or open in browser"`
 }
@@ -686,9 +686,9 @@ func (c *PrCmd) Help() string {
   wt pr checkout 123                    # PR from current directory
   wt pr checkout 123 -r myrepo          # PR from existing local repo
   wt pr checkout 123 org/repo           # Clone repo and checkout PR
-  wt pr create --title "Add feature"    # Create PR for current branch
+  wt pr create --title "Add feature"    # Create PR
   wt pr merge                           # Merge PR and clean up worktree
-  wt pr view                            # View PR details for current branch
+  wt pr view                            # View PR details
   wt pr view -w                         # Open PR in browser`
 }
 
@@ -773,7 +773,7 @@ type CLI struct {
 	Pr PrCmd `cmd:"" help:"Work with PRs" group:"pr"`
 
 	// Utility commands
-	Exec  ExecCmd  `cmd:"" help:"Run command in worktree by ID" group:"util"`
+	Exec  ExecCmd  `cmd:"" help:"Run command in worktree(s) or repo(s)" group:"util"`
 	Cd    CdCmd    `cmd:"" help:"Print worktree path" group:"util"`
 	Mv    MvCmd    `cmd:"" help:"Move worktrees to another directory" group:"util"`
 	Note  NoteCmd  `cmd:"" help:"Manage branch notes" group:"util"`
