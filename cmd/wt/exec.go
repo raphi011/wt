@@ -1,10 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
@@ -31,24 +31,21 @@ func runExec(cmd *ExecCmd, cfg *config.Config) error {
 		return fmt.Errorf("specify target: -i <id>, -r <repo>, or -l <label>")
 	}
 
-	// Mode: by ID (worktrees)
-	if hasID {
-		return runExecForIDs(cmd.ID, command, cmd.Dir)
-	}
-
-	// Mode: by repo/label
-	return runExecForRepos(cmd.Repository, cmd.Label, command, cmd.Dir, cfg)
-}
-
-func runExecForIDs(ids []int, command []string, dir string) error {
-	if dir == "" {
-		dir = "."
-	}
-
-	scanPath, err := filepath.Abs(dir)
+	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
+
+	// Mode: by ID (worktrees)
+	if hasID {
+		return runExecForIDs(cmd.ID, command, scanPath)
+	}
+
+	// Mode: by repo/label
+	return runExecForRepos(cmd.Repository, cmd.Label, command, scanPath, cfg)
+}
+
+func runExecForIDs(ids []int, command []string, scanPath string) error {
 
 	var errs []error
 	for _, id := range ids {
@@ -57,7 +54,7 @@ func runExecForIDs(ids []int, command []string, dir string) error {
 		}
 	}
 	if len(errs) > 0 {
-		return fmt.Errorf("failed to execute in some worktrees:\n%w", joinErrors(errs))
+		return fmt.Errorf("failed to execute in some worktrees:\n%w", errors.Join(errs...))
 	}
 	return nil
 }
@@ -72,17 +69,14 @@ func runExecForRepos(repos []string, labels []string, command []string, dir stri
 
 	// Execute command in each repo
 	for repoPath := range repoPaths {
-		repoName, _ := git.GetRepoNameFrom(repoPath)
-		if repoName == "" {
-			repoName = filepath.Base(repoPath)
-		}
+		repoName := git.GetRepoDisplayName(repoPath)
 		if err := runCommandInDir(command, repoPath); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
 		}
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("failed to execute in some repos:\n%w", joinErrors(errs))
+		return fmt.Errorf("failed to execute in some repos:\n%w", errors.Join(errs...))
 	}
 	return nil
 }

@@ -44,6 +44,15 @@ func GetRepoNameFrom(repoPath string) (string, error) {
 	return repoName, nil
 }
 
+// GetRepoDisplayName returns the repo name from origin URL, falling back to folder name.
+func GetRepoDisplayName(repoPath string) string {
+	name, err := GetRepoNameFrom(repoPath)
+	if err != nil || name == "" {
+		return filepath.Base(repoPath)
+	}
+	return name
+}
+
 // GetRepoFolderName returns the actual folder name of the git repo on disk
 // Uses git rev-parse --show-toplevel to get the root directory
 func GetRepoFolderName() (string, error) {

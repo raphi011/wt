@@ -18,34 +18,28 @@ type Issue struct {
 	FixAction   string // what --fix would do
 }
 
-func runDoctor(cmd *DoctorCmd, _ *config.Config) error {
-	dir := cmd.Dir
-	if dir == "" {
-		dir = "."
-	}
-
-	scanPath, err := filepath.Abs(dir)
+func runDoctor(cmd *DoctorCmd, cfg *config.Config) error {
+	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	// Acquire lock on cache
-	lock := cache.NewFileLock(cache.LockPath(scanPath))
-	if err := lock.Lock(); err != nil {
-		return fmt.Errorf("failed to acquire lock: %w", err)
-	}
-	defer lock.Unlock()
-
-	// Handle reset
+	// Handle reset (needs separate lock handling)
 	if cmd.Reset {
+		lock := cache.NewFileLock(cache.LockPath(scanPath))
+		if err := lock.Lock(); err != nil {
+			return fmt.Errorf("failed to acquire lock: %w", err)
+		}
+		defer lock.Unlock()
 		return runDoctorReset(scanPath)
 	}
 
-	// Load cache
-	wtCache, err := cache.Load(scanPath)
+	// Load cache with lock
+	wtCache, unlock, err := cache.LoadWithLock(scanPath)
 	if err != nil {
-		return fmt.Errorf("failed to load cache: %w", err)
+		return err
 	}
+	defer unlock()
 
 	fmt.Println("Checking cache...")
 

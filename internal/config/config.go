@@ -61,6 +61,15 @@ func (c *Config) RepoScanDir() string {
 	return c.WorktreeDir
 }
 
+// GetAbsWorktreeDir returns the absolute worktree directory, defaulting to cwd.
+func (c *Config) GetAbsWorktreeDir() (string, error) {
+	dir := c.WorktreeDir
+	if dir == "" {
+		dir = "."
+	}
+	return filepath.Abs(dir)
+}
+
 // DefaultWorktreeFormat is the default format for worktree folder names
 const DefaultWorktreeFormat = "{repo}-{branch}"
 
@@ -136,6 +145,9 @@ type rawConfig struct {
 // Load reads config from ~/.config/wt/config.toml
 // Returns Default() if file doesn't exist (no error)
 // Returns error only if file exists but is invalid
+// Environment variables override config file values:
+// - WT_WORKTREE_DIR overrides worktree_dir
+// - WT_REPO_DIR overrides repo_dir
 func Load() (Config, error) {
 	path, err := configPath()
 	if err != nil {
@@ -145,7 +157,12 @@ func Load() (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return Default(), nil
+			cfg := Default()
+			// Apply env vars even when no config file exists
+			if err := applyEnvOverrides(&cfg); err != nil {
+				return Default(), err
+			}
+			return cfg, nil
 		}
 		return Default(), fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -230,7 +247,41 @@ func Load() (Config, error) {
 		cfg.Clone.Forge = "github"
 	}
 
+	// Apply env var overrides (after loading config file)
+	if err := applyEnvOverrides(&cfg); err != nil {
+		return Default(), err
+	}
+
 	return cfg, nil
+}
+
+// applyEnvOverrides applies environment variable overrides to config
+func applyEnvOverrides(cfg *Config) error {
+	// WT_WORKTREE_DIR overrides worktree_dir
+	if envDir := os.Getenv("WT_WORKTREE_DIR"); envDir != "" {
+		if err := ValidatePath(envDir, "WT_WORKTREE_DIR"); err != nil {
+			return err
+		}
+		expanded, err := expandPath(envDir)
+		if err != nil {
+			return fmt.Errorf("expand WT_WORKTREE_DIR: %w", err)
+		}
+		cfg.WorktreeDir = expanded
+	}
+
+	// WT_REPO_DIR overrides repo_dir
+	if envDir := os.Getenv("WT_REPO_DIR"); envDir != "" {
+		if err := ValidatePath(envDir, "WT_REPO_DIR"); err != nil {
+			return err
+		}
+		expanded, err := expandPath(envDir)
+		if err != nil {
+			return fmt.Errorf("expand WT_REPO_DIR: %w", err)
+		}
+		cfg.RepoDir = expanded
+	}
+
+	return nil
 }
 
 // parseHooksConfig extracts HooksConfig from raw TOML map
@@ -309,11 +360,13 @@ const defaultConfig = `# wt configuration
 # Base directory for new worktrees
 # Must be an absolute path or start with ~ (no relative paths like "." or "..")
 # Examples: "/Users/you/Git/worktrees" or "~/Git/worktrees"
+# Can also be set via WT_WORKTREE_DIR env var (env overrides config)
 # worktree_dir = "~/Git/worktrees"
 
 # Optional: directory where repositories are stored (for -r/-l repo lookup)
 # If not set, uses worktree_dir for repo scanning
 # Useful when repos live in ~/Code but worktrees go to ~/Git/worktrees
+# Can also be set via WT_REPO_DIR env var (env overrides config)
 # repo_dir = "~/Code"
 
 # Worktree folder naming format

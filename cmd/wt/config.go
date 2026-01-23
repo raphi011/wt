@@ -1,9 +1,10 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 
 	"github.com/raphi011/wt/internal/config"
 )
@@ -137,8 +138,8 @@ func runConfigHooks(cmd *ConfigHooksCmd, cfg *config.Config) error {
 		}
 
 		// Sort by name for consistent output
-		sort.Slice(result, func(i, j int) bool {
-			return result[i].Name < result[j].Name
+		slices.SortFunc(result, func(a, b hookJSON) int {
+			return cmp.Compare(a.Name, b.Name)
 		})
 
 		data, err := json.MarshalIndent(result, "", "  ")
@@ -163,7 +164,7 @@ func runConfigHooks(cmd *ConfigHooksCmd, cfg *config.Config) error {
 	for name := range hooksConfig.Hooks {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 
 	for _, name := range names {
 		hook := hooksConfig.Hooks[name]

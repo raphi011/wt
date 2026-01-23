@@ -1,10 +1,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"sync"
 
 	"github.com/raphi011/wt/internal/cache"
@@ -20,12 +21,7 @@ import (
 const maxConcurrentPRFetches = 5
 
 func runPrune(cmd *PruneCmd, cfg *config.Config) error {
-	dir := cmd.Dir
-	if dir == "" {
-		dir = "."
-	}
-
-	scanPath, err := filepath.Abs(dir)
+	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
@@ -84,18 +80,12 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 		return nil
 	}
 
-	// Acquire lock on cache
-	lock := cache.NewFileLock(cache.LockPath(scanPath))
-	if err := lock.Lock(); err != nil {
-		return fmt.Errorf("failed to acquire lock: %w", err)
-	}
-	defer lock.Unlock()
-
-	// Load cache
-	wtCache, err := cache.Load(scanPath)
+	// Load cache with lock
+	wtCache, unlock, err := cache.LoadWithLock(scanPath)
 	if err != nil {
-		return fmt.Errorf("failed to load cache: %w", err)
+		return err
 	}
+	defer unlock()
 
 	// Reset cache if requested (before sync so worktrees get fresh IDs)
 	if cmd.ResetCache {
@@ -152,8 +142,14 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 	sp.Stop()
 
 	// Sort worktrees by repo name
-	sort.Slice(worktrees, func(i, j int) bool {
-		return worktrees[i].RepoName < worktrees[j].RepoName
+	slices.SortFunc(worktrees, func(a, b git.Worktree) int {
+		if a.RepoName < b.RepoName {
+			return -1
+		}
+		if a.RepoName > b.RepoName {
+			return 1
+		}
+		return 0
 	})
 
 	// Determine which to remove
@@ -265,24 +261,9 @@ func runPruneTargets(cmd *PruneCmd, cfg *config.Config, scanPath string) error {
 		}
 	}
 	if len(errs) > 0 {
-		return fmt.Errorf("failed to prune some worktrees:\n%w", joinErrors(errs))
+		return fmt.Errorf("failed to prune some worktrees:\n%w", errors.Join(errs...))
 	}
 	return nil
-}
-
-// joinErrors joins multiple errors with newlines
-func joinErrors(errs []error) error {
-	if len(errs) == 0 {
-		return nil
-	}
-	if len(errs) == 1 {
-		return errs[0]
-	}
-	msg := errs[0].Error()
-	for _, e := range errs[1:] {
-		msg += "\n" + e.Error()
-	}
-	return fmt.Errorf("%s", msg)
 }
 
 // runPruneTargetByID handles removal of a single targeted worktree by ID

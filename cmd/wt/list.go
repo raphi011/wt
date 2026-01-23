@@ -1,11 +1,12 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 
 	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/config"
@@ -14,28 +15,17 @@ import (
 )
 
 func runList(cmd *ListCmd, cfg *config.Config) error {
-	dir := cmd.Dir
-	if dir == "" {
-		dir = "."
-	}
-
-	scanPath, err := filepath.Abs(dir)
+	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	// Acquire lock on cache
-	lock := cache.NewFileLock(cache.LockPath(scanPath))
-	if err := lock.Lock(); err != nil {
-		return fmt.Errorf("failed to acquire lock: %w", err)
-	}
-	defer lock.Unlock()
-
-	// Load cache
-	wtCache, err := cache.Load(scanPath)
+	// Load cache with lock
+	wtCache, unlock, err := cache.LoadWithLock(scanPath)
 	if err != nil {
-		return fmt.Errorf("failed to load cache: %w", err)
+		return err
 	}
+	defer unlock()
 
 	// List worktrees (no dirty check needed for list)
 	allWorktrees, err := git.ListWorktrees(scanPath, false)
@@ -211,19 +201,19 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 }
 
 func sortWorktrees(wts []git.Worktree, pathToID map[string]int, sortBy string) {
-	sort.Slice(wts, func(i, j int) bool {
+	slices.SortFunc(wts, func(a, b git.Worktree) int {
 		switch sortBy {
 		case "id":
-			return pathToID[wts[i].Path] < pathToID[wts[j].Path]
+			return cmp.Compare(pathToID[a.Path], pathToID[b.Path])
 		case "repo":
-			return wts[i].RepoName < wts[j].RepoName
+			return cmp.Compare(a.RepoName, b.RepoName)
 		case "branch":
-			return wts[i].Branch < wts[j].Branch
+			return cmp.Compare(a.Branch, b.Branch)
 		case "commit":
 			// Sort by most recent commit first (newest first)
-			return wts[i].LastCommitTime.After(wts[j].LastCommitTime)
+			return b.LastCommitTime.Compare(a.LastCommitTime)
 		default:
-			return pathToID[wts[i].Path] < pathToID[wts[j].Path]
+			return cmp.Compare(pathToID[a.Path], pathToID[b.Path])
 		}
 	})
 }

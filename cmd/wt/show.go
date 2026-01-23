@@ -55,33 +55,23 @@ type PRInfo struct {
 }
 
 func runShow(cmd *ShowCmd, cfg *config.Config) error {
-	// Resolve target worktree
-	info, err := resolveShowTarget(cmd.ID, cmd.Dir)
-	if err != nil {
-		return err
-	}
-
-	scanPath := cmd.Dir
-	if scanPath == "" {
-		scanPath = "."
-	}
-	scanPath, err = filepath.Abs(scanPath)
+	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	// Acquire lock on cache
-	lock := cache.NewFileLock(cache.LockPath(scanPath))
-	if err := lock.Lock(); err != nil {
-		return fmt.Errorf("failed to acquire lock: %w", err)
-	}
-	defer lock.Unlock()
-
-	// Load cache
-	wtCache, err := cache.Load(scanPath)
+	// Resolve target worktree
+	info, err := resolveShowTarget(cmd.ID, scanPath)
 	if err != nil {
-		return fmt.Errorf("failed to load cache: %w", err)
+		return err
 	}
+
+	// Load cache with lock
+	wtCache, unlock, err := cache.LoadWithLock(scanPath)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 
 	// Get PR info from cache or refresh
 	var prInfo *forge.PRInfo

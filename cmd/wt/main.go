@@ -52,8 +52,10 @@ func main() {
 		parser.FatalIfErrorf(err)
 	}
 
-	// Apply config defaults to commands with Dir field
-	applyConfigDefaults(&cli, &cfg)
+	// Apply format default from config to MvCmd
+	if cli.Mv.Format == "" {
+		cli.Mv.Format = cfg.WorktreeFormat
+	}
 
 	err = ctx.Run(&Context{Config: &cfg})
 	if err != nil {
@@ -62,44 +64,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Run 'wt -h' for help")
 		os.Exit(1)
 	}
-}
-
-// applyConfigDefaults sets Dir from config when not specified via flag/env.
-func applyConfigDefaults(cli *CLI, cfg *config.Config) {
-	if cfg == nil {
-		return
-	}
-
-	// Helper to set dir if empty
-	setDir := func(dir *string) {
-		if *dir == "" {
-			*dir = cfg.WorktreeDir
-		}
-	}
-	setFormat := func(format *string) {
-		if *format == "" {
-			*format = cfg.WorktreeFormat
-		}
-	}
-
-	// Apply defaults based on which command was selected
-	// Kong has already parsed the command, so we check each field
-	setDir(&cli.Add.Dir)
-	setDir(&cli.Prune.Dir)
-	setDir(&cli.List.Dir)
-	setDir(&cli.Show.Dir)
-	setDir(&cli.Exec.Dir)
-	setDir(&cli.Cd.Dir)
-	setDir(&cli.Mv.Dir)
-	setFormat(&cli.Mv.Format)
-	setDir(&cli.Note.Set.Dir)
-	setDir(&cli.Note.Get.Dir)
-	setDir(&cli.Note.Clear.Dir)
-	setDir(&cli.Hook.Dir)
-	setDir(&cli.Pr.Open.Dir)
-	setDir(&cli.Pr.Clone.Dir)
-	setDir(&cli.Pr.Create.Dir)
-	setDir(&cli.Pr.Merge.Dir)
 }
 
 // versionString returns the version string.

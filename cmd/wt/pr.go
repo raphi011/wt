@@ -25,10 +25,10 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
 	}
 
-	// Worktree target dir (from -d flag / config)
-	dir := cmd.Dir
-	if dir == "" {
-		dir = "."
+	// Worktree target dir from config
+	dir, absPath, err := resolveWorktreeTargetDir(cfg)
+	if err != nil {
+		return err
 	}
 
 	// Repo scan dir (from config, fallback to dir)
@@ -89,10 +89,6 @@ func runPrOpen(cmd *PrOpenCmd, cfg *config.Config) error {
 		}
 	}
 
-	absPath, err := filepath.Abs(dir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve absolute path: %w", err)
-	}
 	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
 
 	result, err := git.CreateWorktreeFrom(repoPath, dir, branch, cfg.WorktreeFormat, "")
@@ -149,10 +145,10 @@ func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 	}
 	repoSpec := org + "/" + name
 
-	// Worktree target dir (from -d flag / config)
-	dir := cmd.Dir
-	if dir == "" {
-		dir = "."
+	// Worktree target dir from config
+	dir, absPath, err := resolveWorktreeTargetDir(cfg)
+	if err != nil {
+		return err
 	}
 
 	// Repo scan dir (from config, fallback to dir)
@@ -198,10 +194,6 @@ func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
 		return fmt.Errorf("failed to get PR branch: %w", err)
 	}
 
-	absPath, err := filepath.Abs(dir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve absolute path: %w", err)
-	}
 	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
 
 	result, err := git.CreateWorktreeFrom(repoPath, dir, branch, cfg.WorktreeFormat, "")
@@ -279,7 +271,7 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {
 		return fmt.Errorf("--id required when not inside a worktree (run 'wt list' to see IDs)")
 	} else {
 		// Resolve target by ID
-		scanDir := cmd.Dir
+		scanDir := cfg.WorktreeDir
 		if scanDir == "" {
 			scanDir = "."
 		}
@@ -424,7 +416,7 @@ func runPrCreate(cmd *PrCreateCmd, cfg *config.Config) error {
 		return fmt.Errorf("--id required when not inside a worktree (run 'wt list' to see IDs)")
 	} else {
 		// Resolve target by ID
-		scanDir := cmd.Dir
+		scanDir := cfg.WorktreeDir
 		if scanDir == "" {
 			scanDir = "."
 		}
@@ -489,7 +481,7 @@ func runPrCreate(cmd *PrCreateCmd, cfg *config.Config) error {
 	fmt.Printf("✓ PR #%d created: %s\n", result.Number, result.URL)
 
 	// Update cache with PR info
-	scanDir := cmd.Dir
+	scanDir := cfg.WorktreeDir
 	if scanDir == "" {
 		scanDir = filepath.Dir(wtPath)
 	}

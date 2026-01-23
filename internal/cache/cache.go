@@ -2,6 +2,7 @@ package cache
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -139,6 +140,27 @@ func Save(scanDir string, cache *Cache) error {
 	}
 
 	return os.Rename(tempPath, cachePath)
+}
+
+// LoadWithLock acquires a lock and loads the cache.
+// Returns cache, unlock function, and error.
+// Caller must defer unlock() if err == nil.
+func LoadWithLock(dir string) (*Cache, func(), error) {
+	lock := NewFileLock(LockPath(dir))
+	if err := lock.Lock(); err != nil {
+		return nil, nil, fmt.Errorf("failed to acquire lock: %w", err)
+	}
+
+	cache, err := Load(dir)
+	if err != nil {
+		lock.Unlock()
+		return nil, nil, fmt.Errorf("failed to load cache: %w", err)
+	}
+
+	// Wrap unlock to discard the error (it's safe to ignore on unlock)
+	unlock := func() { _ = lock.Unlock() }
+
+	return cache, unlock, nil
 }
 
 // GetOrAssignID returns the existing ID for a worktree or assigns a new one.

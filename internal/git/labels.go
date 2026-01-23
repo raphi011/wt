@@ -2,6 +2,7 @@ package git
 
 import (
 	"os/exec"
+	"slices"
 	"strings"
 )
 
@@ -56,10 +57,8 @@ func AddLabel(repoPath, label string) error {
 	}
 
 	// Check if already present
-	for _, l := range labels {
-		if l == label {
-			return nil // Already exists
-		}
+	if slices.Contains(labels, label) {
+		return nil // Already exists
 	}
 
 	labels = append(labels, label)
@@ -74,12 +73,7 @@ func RemoveLabel(repoPath, label string) error {
 	}
 
 	// Filter out the label
-	var newLabels []string
-	for _, l := range labels {
-		if l != label {
-			newLabels = append(newLabels, l)
-		}
-	}
+	newLabels := slices.DeleteFunc(labels, func(l string) bool { return l == label })
 
 	return SetLabels(repoPath, newLabels)
 }
@@ -104,12 +98,7 @@ func HasLabel(repoPath, label string) (bool, error) {
 		return false, err
 	}
 
-	for _, l := range labels {
-		if l == label {
-			return true, nil
-		}
-	}
-	return false, nil
+	return slices.Contains(labels, label), nil
 }
 
 // FindReposByLabel scans a directory for repos with the given label

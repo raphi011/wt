@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,12 +15,9 @@ import (
 // If repos is empty and inside a repo, uses current repo.
 // If repos is empty and outside a repo, returns error.
 // If repos is provided, resolves each by name via git.FindRepoByName.
-func resolveLabelRepos(repos []string, dir string, cfg *config.Config) ([]string, error) {
+func resolveLabelRepos(repos []string, cfg *config.Config) ([]string, error) {
 	// Determine scan directory for repo lookup
-	scanDir := dir
-	if scanDir == "" {
-		scanDir = cfg.RepoScanDir()
-	}
+	scanDir := cfg.RepoScanDir()
 	if scanDir == "" {
 		scanDir = "."
 	}
@@ -73,7 +71,7 @@ func resolveLabelRepos(repos []string, dir string, cfg *config.Config) ([]string
 }
 
 func runLabelAdd(cmd *LabelAddCmd, cfg *config.Config) error {
-	repoPaths, err := resolveLabelRepos(cmd.Repository, cmd.Dir, cfg)
+	repoPaths, err := resolveLabelRepos(cmd.Repository, cfg)
 	if err != nil {
 		return err
 	}
@@ -88,11 +86,11 @@ func runLabelAdd(cmd *LabelAddCmd, cfg *config.Config) error {
 		fmt.Printf("Label %q added to %s\n", cmd.Label, repoName)
 	}
 
-	return combineErrors(errs)
+	return errors.Join(errs...)
 }
 
 func runLabelRemove(cmd *LabelRemoveCmd, cfg *config.Config) error {
-	repoPaths, err := resolveLabelRepos(cmd.Repository, cmd.Dir, cfg)
+	repoPaths, err := resolveLabelRepos(cmd.Repository, cfg)
 	if err != nil {
 		return err
 	}
@@ -107,7 +105,7 @@ func runLabelRemove(cmd *LabelRemoveCmd, cfg *config.Config) error {
 		fmt.Printf("Label %q removed from %s\n", cmd.Label, repoName)
 	}
 
-	return combineErrors(errs)
+	return errors.Join(errs...)
 }
 
 func runLabelList(cmd *LabelListCmd, cfg *config.Config) error {
@@ -116,7 +114,7 @@ func runLabelList(cmd *LabelListCmd, cfg *config.Config) error {
 		return runLabelListGlobal(cmd, cfg)
 	}
 
-	repoPaths, err := resolveLabelRepos(cmd.Repository, cmd.Dir, cfg)
+	repoPaths, err := resolveLabelRepos(cmd.Repository, cfg)
 	if err != nil {
 		return err
 	}
@@ -135,10 +133,7 @@ func runLabelList(cmd *LabelListCmd, cfg *config.Config) error {
 		}
 
 		if showRepoName {
-			repoName, _ := git.GetRepoNameFrom(repoPath)
-			if repoName == "" {
-				repoName = filepath.Base(repoPath)
-			}
+			repoName := git.GetRepoDisplayName(repoPath)
 			fmt.Printf("%s: %s\n", repoName, strings.Join(labels, ", "))
 		} else {
 			fmt.Println(strings.Join(labels, "\n"))
@@ -148,11 +143,8 @@ func runLabelList(cmd *LabelListCmd, cfg *config.Config) error {
 }
 
 func runLabelListGlobal(cmd *LabelListCmd, cfg *config.Config) error {
-	// Use repo_dir from config if available, fallback to cmd.Dir or cwd
-	scanDir := cmd.Dir
-	if scanDir == "" {
-		scanDir = cfg.RepoScanDir()
-	}
+	// Use repo_dir from config if available, fallback to cwd
+	scanDir := cfg.RepoScanDir()
 	if scanDir == "" {
 		scanDir = "."
 	}
@@ -174,10 +166,7 @@ func runLabelListGlobal(cmd *LabelListCmd, cfg *config.Config) error {
 		if err != nil {
 			continue
 		}
-		repoName, _ := git.GetRepoNameFrom(repoPath)
-		if repoName == "" {
-			repoName = filepath.Base(repoPath)
-		}
+		repoName := git.GetRepoDisplayName(repoPath)
 		for _, label := range labels {
 			labelRepos[label] = append(labelRepos[label], repoName)
 		}
@@ -194,7 +183,7 @@ func runLabelListGlobal(cmd *LabelListCmd, cfg *config.Config) error {
 }
 
 func runLabelClear(cmd *LabelClearCmd, cfg *config.Config) error {
-	repoPaths, err := resolveLabelRepos(cmd.Repository, cmd.Dir, cfg)
+	repoPaths, err := resolveLabelRepos(cmd.Repository, cfg)
 	if err != nil {
 		return err
 	}
@@ -209,20 +198,5 @@ func runLabelClear(cmd *LabelClearCmd, cfg *config.Config) error {
 		fmt.Printf("Labels cleared from %s\n", repoName)
 	}
 
-	return combineErrors(errs)
-}
-
-// combineErrors returns nil if no errors, otherwise combines them into one error
-func combineErrors(errs []error) error {
-	if len(errs) == 0 {
-		return nil
-	}
-	if len(errs) == 1 {
-		return errs[0]
-	}
-	msgs := make([]string, len(errs))
-	for i, e := range errs {
-		msgs[i] = e.Error()
-	}
-	return fmt.Errorf("multiple errors:\n  %s", strings.Join(msgs, "\n  "))
+	return errors.Join(errs...)
 }

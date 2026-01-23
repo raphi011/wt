@@ -1,10 +1,11 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/table"
@@ -29,11 +30,8 @@ func runRepos(cmd *ReposCmd, cfg *config.Config) error {
 		return err
 	}
 
-	// Determine scan directory
-	scanDir := cmd.Dir
-	if scanDir == "" {
-		scanDir = cfg.RepoScanDir()
-	}
+	// Determine scan directory from config
+	scanDir := cfg.RepoScanDir()
 	if scanDir == "" {
 		scanDir = "."
 	}
@@ -227,41 +225,41 @@ func formatReposTable(repos []RepoInfo) string {
 func sortRepos(repos []RepoInfo, sortBy string) {
 	switch sortBy {
 	case "branch":
-		sort.Slice(repos, func(i, j int) bool {
-			return repos[i].Branch < repos[j].Branch
+		slices.SortFunc(repos, func(a, b RepoInfo) int {
+			return cmp.Compare(a.Branch, b.Branch)
 		})
 	case "worktrees":
 		// Sort by worktree count descending (most worktrees first)
-		sort.Slice(repos, func(i, j int) bool {
-			return repos[i].WorktreeCount > repos[j].WorktreeCount
+		slices.SortFunc(repos, func(a, b RepoInfo) int {
+			return cmp.Compare(b.WorktreeCount, a.WorktreeCount)
 		})
 	case "label":
 		// Sort by first label alphabetically (unlabeled repos last, then by name)
-		sort.Slice(repos, func(i, j int) bool {
-			li := ""
-			lj := ""
-			if len(repos[i].Labels) > 0 {
-				li = repos[i].Labels[0]
+		slices.SortFunc(repos, func(a, b RepoInfo) int {
+			la := ""
+			lb := ""
+			if len(a.Labels) > 0 {
+				la = a.Labels[0]
 			}
-			if len(repos[j].Labels) > 0 {
-				lj = repos[j].Labels[0]
+			if len(b.Labels) > 0 {
+				lb = b.Labels[0]
 			}
 			// Unlabeled repos go last
-			if li == "" && lj != "" {
-				return false
+			if la == "" && lb != "" {
+				return 1
 			}
-			if li != "" && lj == "" {
-				return true
+			if la != "" && lb == "" {
+				return -1
 			}
 			// Same label (or both empty): sort by name
-			if li == lj {
-				return repos[i].Name < repos[j].Name
+			if la == lb {
+				return cmp.Compare(a.Name, b.Name)
 			}
-			return li < lj
+			return cmp.Compare(la, lb)
 		})
 	default: // "name" or empty
-		sort.Slice(repos, func(i, j int) bool {
-			return repos[i].Name < repos[j].Name
+		slices.SortFunc(repos, func(a, b RepoInfo) int {
+			return cmp.Compare(a.Name, b.Name)
 		})
 	}
 }

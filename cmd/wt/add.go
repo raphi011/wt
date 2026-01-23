@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -73,14 +74,9 @@ func runAdd(cmd *AddCmd, cfg *config.Config) error {
 
 // runAddInRepo handles wt add when inside a git repository (single repo mode)
 func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
-	dir := cmd.Dir
-	if dir == "" {
-		dir = "."
-	}
-
-	absPath, err := filepath.Abs(dir)
+	targetDir, absPath, err := resolveWorktreeTargetDir(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to resolve absolute path: %w", err)
+		return err
 	}
 
 	var result *git.CreateWorktreeResult
@@ -97,10 +93,10 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
 		}
 
 		fmt.Printf("Creating worktree for new branch %s in %s\n", cmd.Branch, absPath)
-		result, err = git.AddWorktree(dir, cmd.Branch, cfg.WorktreeFormat, true, baseRef)
+		result, err = git.AddWorktree(targetDir, cmd.Branch, cfg.WorktreeFormat, true, baseRef)
 	} else {
 		fmt.Printf("Adding worktree for branch %s in %s\n", cmd.Branch, absPath)
-		result, err = git.AddWorktree(dir, cmd.Branch, cfg.WorktreeFormat, false, "")
+		result, err = git.AddWorktree(targetDir, cmd.Branch, cfg.WorktreeFormat, false, "")
 	}
 
 	if err != nil {
@@ -157,11 +153,11 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 		return fmt.Errorf("branch name required with --repository or --label")
 	}
 
-	// Worktree target dir (from -d flag / config)
-	wtDir := cmd.Dir
+	// Worktree target dir from config
+	wtDir := cfg.WorktreeDir
 	if wtDir == "" {
 		if !insideRepo {
-			return fmt.Errorf("directory required when outside git repo (-d flag or WT_WORKTREE_DIR)")
+			return fmt.Errorf("directory required when outside git repo (set WT_WORKTREE_DIR or worktree_dir in config)")
 		}
 		wtDir = "."
 	}
@@ -224,10 +220,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 	// Process each unique repository
 	for repoPath := range repoPaths {
 		result, err := createWorktreeForRepo(repoPath, cmd, cfg, wtDir)
-		repoName, _ := git.GetRepoNameFrom(repoPath)
-		if repoName == "" {
-			repoName = filepath.Base(repoPath)
-		}
+		repoName := git.GetRepoDisplayName(repoPath)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
 		} else {
@@ -260,7 +253,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("failed to add worktrees:\n%w", joinErrors(errs))
+		return fmt.Errorf("failed to add worktrees:\n%w", errors.Join(errs...))
 	}
 	return nil
 }
@@ -330,7 +323,7 @@ func createWorktreeForRepo(repoPath string, cmd *AddCmd, cfg *config.Config, tar
 	var result *git.CreateWorktreeResult
 	var err error
 
-	repoName, _ := git.GetRepoNameFrom(repoPath)
+	repoName := git.GetRepoDisplayName(repoPath)
 	folder := filepath.Base(repoPath)
 
 	if cmd.NewBranch {
@@ -372,4 +365,18 @@ func createWorktreeForRepo(repoPath string, cmd *AddCmd, cfg *config.Config, tar
 		Folder:   folder,
 		Existed:  result.AlreadyExists,
 	}, nil
+}
+
+// resolveWorktreeTargetDir returns both the target dir (possibly relative) and its absolute path.
+// The relative/configured path is used for git operations, absolute is for display.
+func resolveWorktreeTargetDir(cfg *config.Config) (targetDir string, absPath string, err error) {
+	targetDir = cfg.WorktreeDir
+	if targetDir == "" {
+		targetDir = "."
+	}
+	absPath, err = filepath.Abs(targetDir)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+	return targetDir, absPath, nil
 }

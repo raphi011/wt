@@ -54,10 +54,12 @@ internal/ui/             - Terminal UI components
 
 **Worktree naming convention** - Worktrees are created as `<repo-name>-<branch>` (e.g., `wt-feature-branch`). The repo name is extracted from git origin URL.
 
-**Path handling** - User must specify base directory for `wt add`. The tool fails if the directory doesn't exist (no automatic mkdir). Common patterns:
-- `wt add . branch` - Add in current dir
-- `wt add .. branch` - Add next to repo
-- `wt add ~/Git/worktrees branch` - Add in central location
+**Path handling** - Directory configuration is done via config file or environment variables (no `-d` flag). The tool fails if the directory doesn't exist (no automatic mkdir). Configuration sources (highest priority first):
+- `WT_WORKTREE_DIR` env var - target directory for worktrees
+- `WT_REPO_DIR` env var - directory to scan for repos
+- `worktree_dir` in config file
+- `repo_dir` in config file
+- Falls back to current directory if unset
 
 **MR/PR status** - Uses `gh pr list` or `glab mr list` to fetch merge request info (auto-detected). States: merged, open, closed.
 
@@ -77,7 +79,7 @@ internal/ui/             - Terminal UI components
 - `wt cd -i <id>` - Print worktree path by ID
 - `wt cd -r <repo>` - Print repo path by name
 - `wt cd -l <label>` - Print repo path by label (must match exactly one repo)
-- `wt mv` - Move worktrees to different directory
+- `wt mv` - Move worktrees to configured directory (from env/config)
 - `wt note set/get/clear [-i <id>]` - Manage branch notes (optional ID outside worktree)
 - `wt label add/remove/list/clear` - Manage repository labels (stored in git config as wt.labels)
 - `wt hook <hook> [-i <id>...]` - Run configured hook by name (multi-ID supported)
@@ -135,7 +137,6 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 - `-i, --id` - worktree ID for targeting
 - `-r, --repository` - repository name for targeting (wt add, list, exec, cd, hook)
 - `-l, --label` - target repos by label (wt add, list, exec, hook)
-- `-d, --dir` - target directory (with `env:WT_WORKTREE_DIR`)
 - `-n, --dry-run` - preview without making changes
 - `-f, --force` - force operation (override safety checks)
 - `-c, --include-clean` - include clean worktrees (0 commits, no changes)
@@ -143,6 +144,10 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 - `-a, --arg` - set hook variable KEY=VALUE (repeatable)
 - `--json` - output as JSON
 - `--hook` / `--no-hook` - control hook execution (for add, pr open, prune)
+
+**Environment Variables** - Directory configuration via env vars (override config file):
+- `WT_WORKTREE_DIR` - target directory for worktrees
+- `WT_REPO_DIR` - directory to scan for repos
 
 ### Commit Messages
 

@@ -20,7 +20,6 @@ type AddCmd struct {
 	Branch     string   `arg:"" optional:"" placeholder:"BRANCH" help:"branch name"`
 	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) to create worktree in (repeatable, comma-separated)"`
 	Label      []string `short:"l" name:"label" sep:"," help:"target repos by label (repeatable, comma-separated)"`
-	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	NewBranch  bool     `short:"b" name:"new-branch" help:"create a new branch"`
 	Base       string   `name:"base" placeholder:"BRANCH" help:"base branch to create from (default: main/master)"`
 	Fetch      bool     `short:"f" name:"fetch" help:"fetch base branch from origin before creating"`
@@ -38,16 +37,17 @@ New branches are created from the default branch (main/master) by default.
 Use --base to specify a different base branch.
 Use -f/--fetch to fetch the base branch before creating (ensures up-to-date).
 
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
+
 Examples:
   wt add feature-branch              # Existing branch in current repo
   wt add -b feature-branch           # Create new branch from origin/main
   wt add -b feature-branch -f        # Fetch main first, then create branch
   wt add -b feature-branch --base develop  # Create from origin/develop
-  wt add feature-branch -d ~/Git     # Specify target directory
   wt add feature-branch --no-hook    # Skip post-add hook
-  wt add -b feature -r repo1 -r repo2 -d ~/Git    # By repo name
-  wt add -b feature -l backend -d ~/Git           # By label
-  wt add -b feature -l backend -r extra -d ~/Git  # Mixed`
+  wt add -b feature -r repo1 -r repo2      # By repo name
+  wt add -b feature -l backend             # By label
+  wt add -b feature -l backend -r extra    # Mixed`
 }
 
 func (c *AddCmd) Run(ctx *Context) error {
@@ -57,7 +57,6 @@ func (c *AddCmd) Run(ctx *Context) error {
 // PruneCmd removes merged and clean worktrees.
 type PruneCmd struct {
 	ID           []int    `short:"i" name:"id" help:"worktree(s) to remove (by ID, repeatable)"`
-	Dir          string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	DryRun       bool     `short:"n" name:"dry-run" negatable:"" help:"preview without removing"`
 	Force        bool     `short:"f" name:"force" help:"force remove even if not merged or has uncommitted changes"`
 	IncludeClean bool     `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
@@ -82,16 +81,13 @@ update PR status from GitHub/GitLab.
 Hooks with on=["prune"] run after each worktree removal. Hooks run with
 working directory set to the main repo (since worktree path is deleted).
 
-Merge detection uses git merge-base locally, which may miss squash-merged
-or rebased PRs. For accurate detection, use GitHub/GitLab where PR status
-shows if the branch was merged.
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
   wt prune -R                   # Fetch origin + PR status, then prune
   wt prune                      # Remove merged worktrees (uses cached PR info)
-  wt prune --global              # Prune all repos (not just current)
+  wt prune --global             # Prune all repos (not just current)
   wt prune -n                   # Dry-run: preview without removing
-  wt prune -d ~/Git/worktrees   # Scan specific directory
   wt prune -c                   # Also remove clean (0-commit) worktrees
   wt prune -i 1                 # Remove specific worktree by ID
   wt prune -i 1 -i 2 -i 3       # Remove multiple worktrees by ID
@@ -107,7 +103,6 @@ func (c *PruneCmd) Run(ctx *Context) error {
 
 // ListCmd lists worktrees in a directory.
 type ListCmd struct {
-	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	JSON       bool     `name:"json" help:"output as JSON"`
 	Global     bool     `short:"g" name:"global" help:"show all worktrees (not just current repo)"`
 	Sort       string   `short:"s" name:"sort" default:"" enum:",id,repo,branch,commit" help:"sort by: id, repo, branch, commit (default from config or 'id')"`
@@ -121,6 +116,8 @@ func (c *ListCmd) Help() string {
 Inside a repo: shows only that repo's worktrees. Use --global for all.
 Use -r to filter by repo name(s), -l to filter by label(s).
 
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
+
 Examples:
   wt list                      # List worktrees for current repo
   wt list -R                   # Refresh PR status before listing
@@ -128,7 +125,6 @@ Examples:
   wt list -r myrepo            # Filter by repository name
   wt list -l backend           # Filter by label
   wt list -r repo1 -l team     # Combined filters
-  wt list -d ~/Git/worktrees   # List from specific directory
   wt list --json               # Output as JSON for scripting
   wt list --sort=commit        # Sort by most recent commit`
 }
@@ -139,15 +135,16 @@ func (c *ListCmd) Run(ctx *Context) error {
 
 // ShowCmd shows detailed status for a single worktree.
 type ShowCmd struct {
-	Dir     string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for worktrees"`
-	ID      int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Refresh bool   `short:"R" name:"refresh" help:"refresh PR status from API"`
-	JSON    bool   `name:"json" help:"output as JSON"`
+	ID      int  `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
+	Refresh bool `short:"R" name:"refresh" help:"refresh PR status from API"`
+	JSON    bool `name:"json" help:"output as JSON"`
 }
 
 func (c *ShowCmd) Help() string {
 	return `Inside a worktree: --id is optional (defaults to current).
 Outside: specify a worktree ID.
+
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
   wt show              # Inside worktree, show current
@@ -166,7 +163,6 @@ type ExecCmd struct {
 	Repository []string `short:"r" name:"repository" xor:"target" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
 	Label      []string `short:"l" name:"label" xor:"target" sep:"," help:"target repos by label (repeatable, comma-separated)"`
 	Command    []string `arg:"" optional:"" passthrough:"" placeholder:"COMMAND" help:"command to run (after --)"`
-	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 }
 
 func (c *ExecCmd) Help() string {
@@ -174,12 +170,14 @@ func (c *ExecCmd) Help() string {
 Use -r to target repos by name, -l to target repos by label.
 When using -r or -l, the command runs in the main repo directory (not worktrees).
 
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
+
 Examples:
   wt exec -i 1 -- gh pr view           # By worktree ID
   wt exec -i 1 -i 2 -- git status      # Multiple worktrees
   wt exec -i 1 -- code .               # Open worktree in VS Code
   wt exec -r wt -- git status          # By repo name
-  wt exec -l backend -d ~/Git -- make  # By label`
+  wt exec -l backend -- make           # By label`
 }
 
 func (c *ExecCmd) Run(ctx *Context) error {
@@ -191,7 +189,6 @@ type CdCmd struct {
 	ID         int      `short:"i" name:"id" xor:"target" help:"worktree ID"`
 	Repository string   `short:"r" name:"repository" xor:"target" help:"repository name"`
 	Label      string   `short:"l" name:"label" xor:"target" help:"repository label (must match exactly one repo)"`
-	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for worktrees/repos"`
 	Project    bool     `short:"p" name:"project" help:"print main repository path instead of worktree path"`
 	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook     bool     `name:"no-hook" help:"skip hooks" xor:"hook-ctrl"`
@@ -203,6 +200,8 @@ func (c *CdCmd) Help() string {
 Use -p to get the main repository path instead.
 Use -r to get the path of a repository by name.
 Use -l to get the path of a repo by label (must match exactly one repo).
+
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
   cd $(wt cd -i 1)         # By worktree ID
@@ -219,7 +218,6 @@ func (c *CdCmd) Run(ctx *Context) error {
 type NoteSetCmd struct {
 	Text string `arg:"" required:"" placeholder:"TEXT" help:"note text"`
 	ID   int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Dir  string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"worktree directory for ID lookup"`
 }
 
 func (c *NoteSetCmd) Help() string {
@@ -229,19 +227,20 @@ When run outside, specify a worktree ID.
 The note is stored in git config (branch.<name>.description) and displayed
 in 'wt list' and 'wt prune' output.
 
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
+
 Examples:
   wt note set "Working on login flow"      # Inside worktree, current branch
   wt note set "Working on login" -i 1      # By worktree ID`
 }
 
 func (c *NoteSetCmd) Run(ctx *Context) error {
-	return runNoteSet(c)
+	return runNoteSet(c, ctx.Config)
 }
 
 // NoteGetCmd gets a note from a branch.
 type NoteGetCmd struct {
-	ID  int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Dir string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"worktree directory for ID lookup"`
+	ID int `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
 }
 
 func (c *NoteGetCmd) Help() string {
@@ -250,19 +249,20 @@ When run outside, specify a worktree ID.
 
 Prints the note if set, or nothing if no note exists.
 
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
+
 Examples:
   wt note get        # Inside worktree, current branch
   wt note get -i 1   # By worktree ID`
 }
 
 func (c *NoteGetCmd) Run(ctx *Context) error {
-	return runNoteGet(c)
+	return runNoteGet(c, ctx.Config)
 }
 
 // NoteClearCmd clears a note from a branch.
 type NoteClearCmd struct {
-	ID  int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Dir string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"worktree directory for ID lookup"`
+	ID int `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
 }
 
 func (c *NoteClearCmd) Help() string {
@@ -271,13 +271,15 @@ When run outside, specify a worktree ID.
 
 Removes the note from the branch. Safe to run even if no note exists.
 
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
+
 Examples:
   wt note clear        # Inside worktree, current branch
   wt note clear -i 1   # By worktree ID`
 }
 
 func (c *NoteClearCmd) Run(ctx *Context) error {
-	return runNoteClear(c)
+	return runNoteClear(c, ctx.Config)
 }
 
 // NoteCmd manages branch notes. Get is default subcommand.
@@ -303,12 +305,13 @@ Examples:
 type LabelAddCmd struct {
 	Label      string   `arg:"" required:"" placeholder:"LABEL" help:"label to add"`
 	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
-	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for repos (when using -r)"`
 }
 
 func (c *LabelAddCmd) Help() string {
 	return `Add a label to the current repository (or specify repos with -r).
 Labels are stored in git config (wt.labels) and can be used with 'wt add -l'.
+
+Target directory is set via WT_REPO_DIR env var or repo_dir/worktree_dir config.
 
 Examples:
   wt label add backend           # Add label to current repo
@@ -324,11 +327,12 @@ func (c *LabelAddCmd) Run(ctx *Context) error {
 type LabelRemoveCmd struct {
 	Label      string   `arg:"" required:"" placeholder:"LABEL" help:"label to remove"`
 	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
-	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for repos (when using -r)"`
 }
 
 func (c *LabelRemoveCmd) Help() string {
 	return `Remove a label from the current repository (or specify repos with -r).
+
+Target directory is set via WT_REPO_DIR env var or repo_dir/worktree_dir config.
 
 Examples:
   wt label remove backend           # Remove from current repo
@@ -343,12 +347,13 @@ func (c *LabelRemoveCmd) Run(ctx *Context) error {
 // LabelListCmd lists labels for a repository.
 type LabelListCmd struct {
 	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
-	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for repos"`
 	Global     bool     `short:"g" name:"global" help:"list all labels from repos in directory"`
 }
 
 func (c *LabelListCmd) Help() string {
 	return `List labels for the current repository, specific repos with -r, or all repos with -g.
+
+Target directory is set via WT_REPO_DIR env var or repo_dir/worktree_dir config.
 
 Examples:
   wt label list              # Labels for current repo
@@ -364,11 +369,12 @@ func (c *LabelListCmd) Run(ctx *Context) error {
 // LabelClearCmd clears all labels from a repository.
 type LabelClearCmd struct {
 	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
-	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for repos (when using -r)"`
 }
 
 func (c *LabelClearCmd) Help() string {
 	return `Clear all labels from the current repository (or specify repos with -r).
+
+Target directory is set via WT_REPO_DIR env var or repo_dir/worktree_dir config.
 
 Examples:
   wt label clear             # Clear labels from current repo
@@ -492,7 +498,6 @@ type HookCmd struct {
 	ID         []int    `short:"i" name:"id" xor:"target" help:"worktree ID(s) (optional in worktree, repeatable)"`
 	Repository []string `short:"r" name:"repository" xor:"target" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
 	Label      []string `short:"l" name:"label" xor:"target" sep:"," help:"target repos by label (repeatable, comma-separated)"`
-	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory for target lookup"`
 	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 	DryRun     bool     `short:"n" name:"dry-run" help:"print substituted command without executing"`
 }
@@ -501,6 +506,8 @@ func (c *HookCmd) Help() string {
 	return `When run inside a worktree, --id is optional (defaults to current worktree).
 When run outside, specify a worktree ID. Multiple IDs can be specified.
 Use -r to target repos by name, -l to target repos by label.
+
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
   wt hook kitty              # Single hook (current worktree)
@@ -518,7 +525,6 @@ func (c *HookCmd) Run(ctx *Context) error {
 
 // MvCmd moves worktrees to a different directory with optional renaming.
 type MvCmd struct {
-	Dir    string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"destination directory (flag > WT_DEFAULT_PATH > config)"`
 	Format string `name:"format" placeholder:"FORMAT" help:"worktree naming format"`
 	DryRun bool   `short:"n" name:"dry-run" negatable:"" help:"show what would be moved"`
 	Force  bool   `short:"f" name:"force" negatable:"" help:"force move dirty worktrees"`
@@ -528,11 +534,13 @@ func (c *MvCmd) Help() string {
 	return `Scans current directory for worktrees and moves them to destination.
 Use --format to rename during move.
 
+Destination is set via WT_WORKTREE_DIR env var or worktree_dir config.
+
 Examples:
-  wt mv -d ~/Git/worktrees           # Move all worktrees to ~/Git/worktrees
-  wt mv -d ~/Git --format={branch}  # Move and rename to just branch name
-  wt mv --dry-run -d ~/Git           # Preview what would be moved
-  wt mv -f -d ~/Git                  # Force move even if worktrees are dirty`
+  wt mv                              # Move all worktrees to configured dir
+  wt mv --format={branch}            # Move and rename to just branch name
+  wt mv --dry-run                    # Preview what would be moved
+  wt mv -f                           # Force move even if worktrees are dirty`
 }
 
 func (c *MvCmd) Run(ctx *Context) error {
@@ -543,7 +551,6 @@ func (c *MvCmd) Run(ctx *Context) error {
 type PrOpenCmd struct {
 	Number int      `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
 	Repo   string   `arg:"" optional:"" placeholder:"REPO" help:"repository name to find locally"`
-	Dir    string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Hook   string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
 	NoHook bool     `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
 	Env    []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
@@ -553,11 +560,12 @@ func (c *PrOpenCmd) Help() string {
 	return `Only works with repos that already exist locally.
 Use 'wt pr clone' to clone new repos first.
 
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
+
 Examples:
   wt pr open 123                  # PR from current repo
   wt pr open 123 myrepo           # Find "myrepo" in target directory
   wt pr open 123 org/repo         # Find "repo" locally (org is ignored)
-  wt pr open 123 -d ~/Git         # Specify target directory
   wt pr open 123 --no-hook        # Skip post-create hook`
 }
 
@@ -569,7 +577,6 @@ func (c *PrOpenCmd) Run(ctx *Context) error {
 type PrCloneCmd struct {
 	Number int      `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
 	Repo   string   `arg:"" required:"" placeholder:"REPO" help:"repository (org/repo or repo if [clone] org configured)"`
-	Dir    string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
 	Forge  string   `name:"forge" env:"WT_FORGE" placeholder:"FORGE" help:"forge: github or gitlab (flag > env > clone rules > config)"`
 	Note   string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
 	Hook   string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
@@ -582,10 +589,11 @@ func (c *PrCloneCmd) Help() string {
 Use 'wt pr open' for repos you already have.
 If [clone] org is configured, you can omit the org/ prefix.
 
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
+
 Examples:
   wt pr clone 123 org/repo              # Clone and checkout PR
   wt pr clone 123 repo                  # Use default org from config
-  wt pr clone 123 org/repo -d ~/Git     # Specify target directory
   wt pr clone 123 org/repo --forge=gitlab  # Use GitLab instead of GitHub
   wt pr clone 123 org/repo --no-hook    # Skip post-create hook`
 }
@@ -597,7 +605,6 @@ func (c *PrCloneCmd) Run(ctx *Context) error {
 // PrMergeCmd merges the PR for the current branch.
 type PrMergeCmd struct {
 	ID       int      `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Dir      string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"worktree directory for target lookup"`
 	Strategy string   `short:"s" name:"strategy" env:"WT_MERGE_STRATEGY" placeholder:"STRATEGY" help:"merge strategy: squash, rebase, or merge"`
 	Keep     bool     `short:"k" name:"keep" help:"keep worktree and branch after merge"`
 	Hook     string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
@@ -608,7 +615,6 @@ type PrMergeCmd struct {
 // PrCreateCmd creates a PR for the current branch.
 type PrCreateCmd struct {
 	ID       int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Dir      string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"worktree directory for target lookup"`
 	Title    string `short:"t" name:"title" required:"" placeholder:"TITLE" help:"PR title"`
 	Body     string `short:"b" name:"body" placeholder:"BODY" help:"PR body (use - to read from stdin)"`
 	BodyFile string `name:"body-file" placeholder:"FILE" help:"read body from file"`
@@ -623,6 +629,8 @@ Outside: specify a worktree ID.
 
 The body can be provided via --body, --body-file, or piped from stdin with --body -.
 Use --draft to create a draft PR. Use --web to open the PR in browser after creation.
+
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
   wt pr create --title "Add feature"                    # Inside worktree
@@ -646,9 +654,11 @@ Merges the PR, removes the worktree, and deletes the local branch.
 Use --keep to preserve the worktree after merge.
 Merge strategy: flag > WT_MERGE_STRATEGY env > config. GitLab doesn't support rebase.
 
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
+
 Examples:
   wt pr merge                    # Inside worktree: merge current branch's PR
-  wt pr merge -i 1 -d ~/Git      # By worktree ID
+  wt pr merge -i 1               # By worktree ID
   wt pr merge --keep             # Merge PR only, keep worktree and branch
   wt pr merge -s rebase          # Use rebase merge strategy`
 }
@@ -676,7 +686,6 @@ func (c *PrCmd) Help() string {
 
 // ReposCmd lists repositories in a directory.
 type ReposCmd struct {
-	Dir   string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"directory to scan for repos"`
 	Label string `short:"l" name:"label" placeholder:"LABEL" help:"filter by label"`
 	Sort  string `short:"s" name:"sort" default:"name" enum:"name,branch,worktrees,label" help:"sort by: name (default), branch, worktrees, label"`
 	JSON  bool   `name:"json" help:"output as JSON"`
@@ -687,9 +696,10 @@ func (c *ReposCmd) Help() string {
 Use --label to filter by repository label.
 Use --sort to change ordering: name (default), branch, worktrees, label.
 
+Target directory is set via WT_REPO_DIR env var or repo_dir/worktree_dir config.
+
 Examples:
   wt repos                     # List repos in current/configured directory
-  wt repos -d ~/Git            # List repos in specific directory
   wt repos -l backend          # Filter repos by label
   wt repos -s worktrees        # Sort by worktree count (descending)
   wt repos -s label            # Sort by label (alphabetically)
@@ -702,9 +712,8 @@ func (c *ReposCmd) Run(ctx *Context) error {
 
 // DoctorCmd diagnoses and repairs cache issues.
 type DoctorCmd struct {
-	Dir   string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	Fix   bool   `name:"fix" help:"auto-fix recoverable issues"`
-	Reset bool   `name:"reset" help:"rebuild cache from scratch (loses IDs)"`
+	Fix   bool `name:"fix" help:"auto-fix recoverable issues"`
+	Reset bool `name:"reset" help:"rebuild cache from scratch (loses IDs)"`
 }
 
 func (c *DoctorCmd) Help() string {
@@ -717,6 +726,8 @@ func (c *DoctorCmd) Help() string {
 
 Use --fix to automatically repair issues.
 Use --reset to rebuild the cache from scratch (all worktrees get new IDs).
+
+Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
   wt doctor              # Check for issues

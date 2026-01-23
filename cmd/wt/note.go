@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/resolve"
 )
@@ -13,7 +14,7 @@ import (
 // If id is 0 and inside a worktree, uses the current branch.
 // Otherwise, uses the ID resolver.
 // Returns branch name, repo path, and any error.
-func resolveNoteTarget(id int, dir string) (branch string, repoPath string, err error) {
+func resolveNoteTarget(id int, scanPath string) (branch string, repoPath string, err error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get current directory: %w", err)
@@ -41,15 +42,6 @@ func resolveNoteTarget(id int, dir string) (branch string, repoPath string, err 
 	}
 
 	// Resolve by ID
-	scanPath := dir
-	if scanPath == "" {
-		scanPath = "."
-	}
-	scanPath, err = filepath.Abs(scanPath)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to resolve absolute path: %w", err)
-	}
-
 	resolved, err := resolve.ByID(id, scanPath)
 	if err != nil {
 		return "", "", err
@@ -58,8 +50,13 @@ func resolveNoteTarget(id int, dir string) (branch string, repoPath string, err 
 	return resolved.Branch, resolved.MainRepo, nil
 }
 
-func runNoteSet(cmd *NoteSetCmd) error {
-	branch, repoPath, err := resolveNoteTarget(cmd.ID, cmd.Dir)
+func runNoteSet(cmd *NoteSetCmd, cfg *config.Config) error {
+	scanPath, err := cfg.GetAbsWorktreeDir()
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	branch, repoPath, err := resolveNoteTarget(cmd.ID, scanPath)
 	if err != nil {
 		return err
 	}
@@ -71,8 +68,13 @@ func runNoteSet(cmd *NoteSetCmd) error {
 	return nil
 }
 
-func runNoteGet(cmd *NoteGetCmd) error {
-	branch, repoPath, err := resolveNoteTarget(cmd.ID, cmd.Dir)
+func runNoteGet(cmd *NoteGetCmd, cfg *config.Config) error {
+	scanPath, err := cfg.GetAbsWorktreeDir()
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	branch, repoPath, err := resolveNoteTarget(cmd.ID, scanPath)
 	if err != nil {
 		return err
 	}
@@ -86,8 +88,13 @@ func runNoteGet(cmd *NoteGetCmd) error {
 	return nil
 }
 
-func runNoteClear(cmd *NoteClearCmd) error {
-	branch, repoPath, err := resolveNoteTarget(cmd.ID, cmd.Dir)
+func runNoteClear(cmd *NoteClearCmd, cfg *config.Config) error {
+	scanPath, err := cfg.GetAbsWorktreeDir()
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	branch, repoPath, err := resolveNoteTarget(cmd.ID, scanPath)
 	if err != nil {
 		return err
 	}

@@ -10,19 +10,20 @@ import (
 	"github.com/raphi011/wt/internal/git"
 )
 
-func runMv(cmd *MvCmd, _ *config.Config) error {
-	// Validate destination directory is provided
-	if cmd.Dir == "" {
-		return fmt.Errorf("destination directory required: use -d flag, set WT_DEFAULT_PATH, or configure default_path in config")
-	}
-
+func runMv(cmd *MvCmd, cfg *config.Config) error {
 	// Validate worktree format
 	if err := format.ValidateFormat(cmd.Format); err != nil {
 		return fmt.Errorf("invalid format: %w", err)
 	}
 
+	// Get destination from config
+	dest := cfg.WorktreeDir
+	if dest == "" {
+		return fmt.Errorf("destination not configured: set WT_WORKTREE_DIR env var or worktree_dir in config")
+	}
+
 	// Validate destination path
-	destPath, err := filepath.Abs(cmd.Dir)
+	destPath, err := filepath.Abs(dest)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
