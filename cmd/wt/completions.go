@@ -362,7 +362,7 @@ _wt_completions() {
             ;;
         pr)
             if [[ $cword -eq 2 ]]; then
-                COMPREPLY=($(compgen -W "open clone merge" -- "$cur"))
+                COMPREPLY=($(compgen -W "open clone create merge" -- "$cur"))
             elif [[ "${words[2]}" == "open" ]]; then
                 case "$prev" in
                     -d|--dir)
@@ -389,6 +389,23 @@ _wt_completions() {
                         ;;
                 esac
                 COMPREPLY=($(compgen -W "-d --dir --forge --note --hook --no-hook -a --arg" -- "$cur"))
+            elif [[ "${words[2]}" == "create" ]]; then
+                case "$prev" in
+                    -d|--dir)
+                        COMPREPLY=($(compgen -d -- "$cur"))
+                        return
+                        ;;
+                    -i|--id)
+                        # Complete worktree IDs only
+                        local ids=$(wt list 2>/dev/null | awk '{print $1}')
+                        COMPREPLY=($(compgen -W "$ids" -- "$cur"))
+                        return
+                        ;;
+                    -t|--title|-b|--body|--body-file|--base)
+                        return
+                        ;;
+                esac
+                COMPREPLY=($(compgen -W "-i --id -d --dir -t --title -b --body --body-file --base --draft -w --web" -- "$cur"))
             elif [[ "${words[2]}" == "merge" ]]; then
                 case "$prev" in
                     -d|--dir)
@@ -723,6 +740,7 @@ _wt() {
                             local subcommands=(
                                 'open:Checkout PR from existing local repo'
                                 'clone:Clone repo and checkout PR'
+                                'create:Create PR for current branch'
                                 'merge:Merge PR and clean up worktree'
                             )
                             _describe 'subcommand' subcommands
@@ -752,6 +770,22 @@ _wt() {
                                         '--no-hook[skip post-add hook]' \
                                         '*-a[set hook variable KEY=VALUE]:arg:' \
                                         '*--arg[set hook variable KEY=VALUE]:arg:'
+                                    ;;
+                                create)
+                                    _arguments \
+                                        '-i[worktree ID]:id:__wt_worktree_ids' \
+                                        '--id[worktree ID]:id:__wt_worktree_ids' \
+                                        '-d[worktree directory]:directory:_files -/' \
+                                        '--dir[worktree directory]:directory:_files -/' \
+                                        '-t[PR title]:title:' \
+                                        '--title[PR title]:title:' \
+                                        '-b[PR body]:body:' \
+                                        '--body[PR body]:body:' \
+                                        '--body-file[read body from file]:file:_files' \
+                                        '--base[base branch]:branch:__wt_all_branches' \
+                                        '--draft[create as draft PR]' \
+                                        '-w[open in browser after creation]' \
+                                        '--web[open in browser after creation]'
                                     ;;
                                 merge)
                                     _arguments \
@@ -1122,9 +1156,10 @@ complete -c wt -n "__fish_seen_subcommand_from hook" -s a -l arg -r -d "Set hook
 complete -c wt -n "__fish_seen_subcommand_from hook" -s n -l dry-run -d "Print command without executing"
 
 # pr: subcommands
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone merge" -a "open" -d "Checkout PR from existing local repo"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone merge" -a "clone" -d "Clone repo and checkout PR"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone merge" -a "merge" -d "Merge PR and clean up worktree"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone create merge" -a "open" -d "Checkout PR from existing local repo"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone create merge" -a "clone" -d "Clone repo and checkout PR"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone create merge" -a "create" -d "Create PR for current branch"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from open clone create merge" -a "merge" -d "Merge PR and clean up worktree"
 # pr open: PR number (first positional), then repo (second positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from open" -a "(gh pr list --json number,title --jq '.[] | \"\\(.number)\t\\(.title)\"' 2>/dev/null)" -d "PR number"
 # Repo names from worktree_dir (second positional after PR number)
@@ -1140,6 +1175,15 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_fr
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l no-hook -d "Skip post-add hook"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -s a -l arg -r -d "Set hook variable KEY=VALUE"
+# pr create: --id flag (optional), then flags
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -s t -l title -r -d "PR title"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -s b -l body -r -d "PR body (use - to read from stdin)"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -l body-file -r -a "(__fish_complete_path)" -d "Read body from file"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -l base -r -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Base branch"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -l draft -d "Create as draft PR"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -s w -l web -d "Open in browser after creation"
 # pr merge: --id flag (optional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s d -l dir -r -a "(__fish_complete_directories)" -d "Worktree directory"

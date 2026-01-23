@@ -605,6 +605,39 @@ type PrMergeCmd struct {
 	Env      []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
+// PrCreateCmd creates a PR for the current branch.
+type PrCreateCmd struct {
+	ID       int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
+	Dir      string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"worktree directory for target lookup"`
+	Title    string `short:"t" name:"title" required:"" placeholder:"TITLE" help:"PR title"`
+	Body     string `short:"b" name:"body" placeholder:"BODY" help:"PR body (use - to read from stdin)"`
+	BodyFile string `name:"body-file" placeholder:"FILE" help:"read body from file"`
+	Base     string `name:"base" placeholder:"BRANCH" help:"base branch (default: repo's default branch)"`
+	Draft    bool   `name:"draft" help:"create as draft PR"`
+	Web      bool   `short:"w" name:"web" help:"open PR in browser after creation"`
+}
+
+func (c *PrCreateCmd) Help() string {
+	return `Inside a worktree: --id is optional (defaults to current branch).
+Outside: specify a worktree ID.
+
+The body can be provided via --body, --body-file, or piped from stdin with --body -.
+Use --draft to create a draft PR. Use --web to open the PR in browser after creation.
+
+Examples:
+  wt pr create --title "Add feature"                    # Inside worktree
+  wt pr create --title "Add feature" --body "Details"   # With body
+  wt pr create --title "Add feature" --body-file=pr.md  # Body from file
+  echo "body" | wt pr create --title "Add feature" --body -  # Body from stdin
+  wt pr create --title "Add feature" --draft            # Create as draft
+  wt pr create --title "Add feature" -w                 # Open in browser after
+  wt pr create --title "Add feature" -i 1               # By worktree ID`
+}
+
+func (c *PrCreateCmd) Run(ctx *Context) error {
+	return runPrCreate(c, ctx.Config)
+}
+
 func (c *PrMergeCmd) Help() string {
 	return `Inside a worktree: --id is optional (defaults to current branch).
 Outside: specify a worktree ID.
@@ -626,17 +659,19 @@ func (c *PrMergeCmd) Run(ctx *Context) error {
 
 // PrCmd works with PRs.
 type PrCmd struct {
-	Open  PrOpenCmd  `cmd:"" help:"Checkout PR from existing local repo"`
-	Clone PrCloneCmd `cmd:"" help:"Clone repo and checkout PR"`
-	Merge PrMergeCmd `cmd:"" help:"Merge PR and clean up worktree"`
+	Open   PrOpenCmd   `cmd:"" help:"Checkout PR from existing local repo"`
+	Clone  PrCloneCmd  `cmd:"" help:"Clone repo and checkout PR"`
+	Create PrCreateCmd `cmd:"" help:"Create PR for current branch"`
+	Merge  PrMergeCmd  `cmd:"" help:"Merge PR and clean up worktree"`
 }
 
 func (c *PrCmd) Help() string {
 	return `Examples:
-  wt pr open 123             # PR from current repo
-  wt pr open 123 myrepo      # PR from existing local repo
-  wt pr clone 123 org/repo   # Clone repo and checkout PR
-  wt pr merge                # Merge PR and clean up worktree`
+  wt pr open 123                        # PR from current repo
+  wt pr open 123 myrepo                 # PR from existing local repo
+  wt pr clone 123 org/repo              # Clone repo and checkout PR
+  wt pr create --title "Add feature"    # Create PR for current branch
+  wt pr merge                           # Merge PR and clean up worktree`
 }
 
 // ReposCmd lists repositories in a directory.

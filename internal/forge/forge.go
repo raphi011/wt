@@ -34,6 +34,21 @@ func (m *PRInfo) IsStale() bool {
 	return time.Since(m.CachedAt) > CacheMaxAge
 }
 
+// CreatePRParams contains parameters for creating a PR/MR
+type CreatePRParams struct {
+	Title string
+	Body  string
+	Base  string // base branch (empty = repo default)
+	Head  string // head/source branch
+	Draft bool
+}
+
+// CreatePRResult contains the result of creating a PR/MR
+type CreatePRResult struct {
+	Number int
+	URL    string
+}
+
 // Forge represents a git hosting service (GitHub, GitLab, etc.)
 type Forge interface {
 	// Name returns the forge name ("github" or "gitlab")
@@ -50,6 +65,9 @@ type Forge interface {
 
 	// CloneRepo clones a repository to destPath, returns the full clone path
 	CloneRepo(repoSpec, destPath string) (string, error)
+
+	// CreatePR creates a new PR/MR
+	CreatePR(repoURL string, params CreatePRParams) (*CreatePRResult, error)
 
 	// MergePR merges a PR by number with the given strategy
 	// strategy: "squash", "rebase", or "merge"

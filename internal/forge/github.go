@@ -165,6 +165,56 @@ func (g *GitHub) CloneRepo(repoSpec, destPath string) (string, error) {
 	return clonePath, nil
 }
 
+// CreatePR creates a new PR using gh CLI
+func (g *GitHub) CreatePR(repoURL string, params CreatePRParams) (*CreatePRResult, error) {
+	args := []string{"pr", "create",
+		"-R", repoURL,
+		"--title", params.Title,
+		"--body", params.Body,
+	}
+
+	if params.Base != "" {
+		args = append(args, "--base", params.Base)
+	}
+	if params.Head != "" {
+		args = append(args, "--head", params.Head)
+	}
+	if params.Draft {
+		args = append(args, "--draft")
+	}
+
+	cmd := exec.Command("gh", args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg != "" {
+			return nil, fmt.Errorf("gh pr create failed: %s", errMsg)
+		}
+		return nil, fmt.Errorf("gh pr create failed: %w", err)
+	}
+
+	// Parse PR URL from stdout (gh pr create outputs the URL)
+	prURL := strings.TrimSpace(stdout.String())
+	if prURL == "" {
+		return nil, fmt.Errorf("gh pr create returned empty output")
+	}
+
+	// Extract PR number from URL (e.g., https://github.com/org/repo/pull/123)
+	parts := strings.Split(prURL, "/")
+	var prNumber int
+	if len(parts) > 0 {
+		fmt.Sscanf(parts[len(parts)-1], "%d", &prNumber)
+	}
+
+	return &CreatePRResult{
+		Number: prNumber,
+		URL:    prURL,
+	}, nil
+}
+
 // MergePR merges a PR by number with the given strategy
 func (g *GitHub) MergePR(repoURL string, number int, strategy string) error {
 	// Map strategy to gh flag

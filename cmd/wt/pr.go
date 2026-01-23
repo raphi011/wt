@@ -2,9 +2,13 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
@@ -392,4 +396,146 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {
 
 	hooks.RunAllNonFatal(hookMatches, ctx, workDir)
 	return nil
+}
+
+func runPrCreate(cmd *PrCreateCmd, cfg *config.Config) error {
+	var branch, mainRepo, wtPath string
+	var err error
+
+	// Resolve target: if ID is 0 and in worktree, use current branch
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	if cmd.ID == 0 && git.IsWorktree(cwd) {
+		// Inside worktree, no ID specified - use current branch
+		branch, err = git.GetCurrentBranch(cwd)
+		if err != nil {
+			return fmt.Errorf("failed to get current branch: %w", err)
+		}
+		mainRepo, err = git.GetMainRepoPath(cwd)
+		if err != nil {
+			return fmt.Errorf("failed to get main repo path: %w", err)
+		}
+		wtPath = cwd
+	} else if cmd.ID == 0 {
+		return fmt.Errorf("--id required when not inside a worktree (run 'wt list' to see IDs)")
+	} else {
+		// Resolve target by ID
+		scanDir := cmd.Dir
+		if scanDir == "" {
+			scanDir = "."
+		}
+		scanDir, err = filepath.Abs(scanDir)
+		if err != nil {
+			return fmt.Errorf("failed to resolve absolute path: %w", err)
+		}
+
+		target, err := resolve.ByID(cmd.ID, scanDir)
+		if err != nil {
+			return err
+		}
+		branch = target.Branch
+		mainRepo = target.MainRepo
+		wtPath = target.Path
+	}
+
+	// Get origin URL and detect forge
+	originURL, err := git.GetOriginURL(mainRepo)
+	if err != nil {
+		return fmt.Errorf("failed to get origin URL: %w", err)
+	}
+	f := forge.Detect(originURL, cfg.Hosts)
+	if err := f.Check(); err != nil {
+		return err
+	}
+
+	// Get body content
+	body := cmd.Body
+	if cmd.BodyFile != "" {
+		// Read body from file
+		content, err := os.ReadFile(cmd.BodyFile)
+		if err != nil {
+			return fmt.Errorf("failed to read body file: %w", err)
+		}
+		body = string(content)
+	} else if cmd.Body == "-" {
+		// Read body from stdin
+		content, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read body from stdin: %w", err)
+		}
+		body = string(content)
+	}
+
+	// Create PR params
+	params := forge.CreatePRParams{
+		Title: cmd.Title,
+		Body:  body,
+		Base:  cmd.Base,
+		Head:  branch,
+		Draft: cmd.Draft,
+	}
+
+	// Create the PR
+	fmt.Printf("Creating PR for branch %s...\n", branch)
+	result, err := f.CreatePR(originURL, params)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("✓ PR #%d created: %s\n", result.Number, result.URL)
+
+	// Update cache with PR info
+	scanDir := cmd.Dir
+	if scanDir == "" {
+		scanDir = filepath.Dir(wtPath)
+	}
+	scanDir, _ = filepath.Abs(scanDir)
+
+	cache, err := forge.LoadCache(scanDir)
+	if err == nil {
+		state := "OPEN"
+		if cmd.Draft {
+			state = "DRAFT"
+		}
+		prInfo := &forge.PRInfo{
+			Number:   result.Number,
+			State:    state,
+			IsDraft:  cmd.Draft,
+			URL:      result.URL,
+			CachedAt: time.Now(),
+			Fetched:  true,
+		}
+		cache.SetPRForBranch(originURL, branch, prInfo)
+		if err := forge.SaveCache(scanDir, cache); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to update cache: %v\n", err)
+		}
+	}
+
+	// Open in browser if requested
+	if cmd.Web && result.URL != "" {
+		if err := openBrowser(result.URL); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to open browser: %v\n", err)
+		}
+	}
+
+	return nil
+}
+
+// openBrowser opens the specified URL in the default browser
+func openBrowser(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", url)
+	default:
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+	return cmd.Start()
 }

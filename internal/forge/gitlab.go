@@ -186,6 +186,73 @@ func (g *GitLab) CloneRepo(repoSpec, destPath string) (string, error) {
 	return clonePath, nil
 }
 
+// CreatePR creates a new MR using glab CLI
+func (g *GitLab) CreatePR(repoURL string, params CreatePRParams) (*CreatePRResult, error) {
+	projectPath := extractGitLabProject(repoURL)
+
+	args := []string{"mr", "create",
+		"-R", projectPath,
+		"--title", params.Title,
+		"--description", params.Body,
+		"--yes", // non-interactive
+	}
+
+	if params.Base != "" {
+		args = append(args, "--target-branch", params.Base)
+	}
+	if params.Head != "" {
+		args = append(args, "--source-branch", params.Head)
+	}
+	if params.Draft {
+		args = append(args, "--draft")
+	}
+
+	cmd := exec.Command("glab", args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg != "" {
+			return nil, fmt.Errorf("glab mr create failed: %s", errMsg)
+		}
+		return nil, fmt.Errorf("glab mr create failed: %w", err)
+	}
+
+	// Parse MR URL from stdout (glab mr create outputs something like "!123 https://...")
+	output := strings.TrimSpace(stdout.String())
+
+	// Try to extract URL - glab outputs the URL on a line
+	var mrURL string
+	var mrNumber int
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "https://") {
+			mrURL = line
+			// Extract MR number from URL (e.g., https://gitlab.com/org/repo/-/merge_requests/123)
+			parts := strings.Split(mrURL, "/")
+			if len(parts) > 0 {
+				fmt.Sscanf(parts[len(parts)-1], "%d", &mrNumber)
+			}
+			break
+		}
+		// Also check for !123 format
+		if strings.HasPrefix(line, "!") {
+			fmt.Sscanf(line, "!%d", &mrNumber)
+		}
+	}
+
+	if mrURL == "" && mrNumber == 0 {
+		return nil, fmt.Errorf("glab mr create returned unexpected output: %s", output)
+	}
+
+	return &CreatePRResult{
+		Number: mrNumber,
+		URL:    mrURL,
+	}, nil
+}
+
 // MergePR merges a MR by number with the given strategy
 func (g *GitLab) MergePR(repoURL string, number int, strategy string) error {
 	// GitLab doesn't support rebase strategy via CLI

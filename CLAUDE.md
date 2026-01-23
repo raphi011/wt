@@ -84,6 +84,7 @@ internal/ui/             - Terminal UI components
 - `wt hook <hook> -r <repo> [-l <label>]` - Run hook in repo(s) by name/label
 - `wt pr open <number> [repo]` - Create worktree for GitHub PR
 - `wt pr clone <number> <repo>` - Clone repo and create worktree for PR
+- `wt pr create --title "..." [--body "..."]` - Create PR for current branch
 - `wt pr merge [-i <id>]` - Merge PR and clean up worktree
 - `wt config init` - Create default config file
 - `wt config show` - Show effective configuration
@@ -120,10 +121,10 @@ Completions provide context-aware suggestions for branches, directories, and fla
 
 - **ID or repo/label**: `wt exec`, `wt hook` - require `-i <id>`, or `-r <repo>`/`-l <label>` (exec/hook support multiple); these flags are mutually exclusive
 - **ID or repo or label**: `wt cd` - require `-i <id>`, `-r <repo>`, or `-l <label>` (mutually exclusive)
-- **Optional ID**: `wt note`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current branch; outside requires `-i` (prune supports multiple)
+- **Optional ID**: `wt note`, `wt pr create`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current branch; outside requires `-i` (prune supports multiple)
 - **Special case**: `wt add` - inside repo uses branch name; outside repo requires `-r <repo>` or `-l <label>` to specify target repos
 
-Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt hook`, `wt pr merge`, `wt prune`
+Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt hook`, `wt pr create`, `wt pr merge`, `wt prune`
 
 **Keep completions/config in sync** - When CLI commands, flags, or subcommands change, always update the shell completion scripts (fish, bash, zsh in `cmd/wt/main.go`) and any config generation commands to match.
 
