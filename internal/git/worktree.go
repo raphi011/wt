@@ -587,3 +587,115 @@ func IsWorktree(path string) bool {
 	// Worktrees have .git as file, main repos have .git as directory
 	return !info.IsDir()
 }
+
+// RepairWorktree attempts to repair broken links for a single worktree.
+// Uses `git worktree repair <path>` from the main repo.
+func RepairWorktree(repoPath, worktreePath string) error {
+	cmd := exec.Command("git", "-C", repoPath, "worktree", "repair", worktreePath)
+	return runCmd(cmd)
+}
+
+// RepairWorktreesFromRepo repairs all worktrees for a repository.
+// Uses `git worktree repair` without arguments to repair all.
+func RepairWorktreesFromRepo(repoPath string) error {
+	cmd := exec.Command("git", "-C", repoPath, "worktree", "repair")
+	return runCmd(cmd)
+}
+
+// ListPrunableWorktrees returns worktree paths that git considers stale.
+// Uses `git worktree prune --dry-run` and parses the output.
+func ListPrunableWorktrees(repoPath string) ([]string, error) {
+	cmd := exec.Command("git", "-C", repoPath, "worktree", "prune", "--dry-run", "-v")
+	output, err := outputCmd(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list prunable worktrees: %v", err)
+	}
+
+	var prunable []string
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Output format: "Removing worktrees/<name>: <reason>"
+		// We extract the worktree name/path
+		if strings.HasPrefix(line, "Removing ") {
+			// Extract path between "Removing " and ":"
+			rest := strings.TrimPrefix(line, "Removing ")
+			if idx := strings.Index(rest, ":"); idx > 0 {
+				prunable = append(prunable, rest[:idx])
+			}
+		}
+	}
+	return prunable, nil
+}
+
+// IsWorktreeLinkValid checks if a worktree's bidirectional link is valid.
+// Returns true if both the .git file in worktree and gitdir in main repo exist and match.
+func IsWorktreeLinkValid(worktreePath string) bool {
+	// Check .git file exists and is readable
+	gitFile := filepath.Join(worktreePath, ".git")
+	content, err := os.ReadFile(gitFile)
+	if err != nil {
+		return false
+	}
+
+	// Parse gitdir from .git file
+	line := strings.TrimSpace(string(content))
+	if idx := strings.Index(line, "\n"); idx != -1 {
+		line = strings.TrimSpace(line[:idx])
+	}
+	if !strings.HasPrefix(line, "gitdir: ") {
+		return false
+	}
+
+	gitdir := strings.TrimPrefix(line, "gitdir: ")
+	if !filepath.IsAbs(gitdir) {
+		gitdir = filepath.Join(worktreePath, gitdir)
+	}
+	gitdir = filepath.Clean(gitdir)
+
+	// Check gitdir exists
+	if _, err := os.Stat(gitdir); err != nil {
+		return false
+	}
+
+	// Check the back-link exists (gitdir should contain a "gitdir" file pointing back)
+	// The gitdir (e.g., .git/worktrees/name) should contain a file named "gitdir"
+	// that points back to the worktree's .git file
+	backLink := filepath.Join(gitdir, "gitdir")
+	backContent, err := os.ReadFile(backLink)
+	if err != nil {
+		return false
+	}
+
+	// The back-link should resolve to the worktree path
+	linkedPath := strings.TrimSpace(string(backContent))
+	if !filepath.IsAbs(linkedPath) {
+		linkedPath = filepath.Join(gitdir, linkedPath)
+	}
+	linkedPath = filepath.Clean(linkedPath)
+
+	// Remove .git suffix if present to get worktree path
+	expectedPath := filepath.Clean(worktreePath)
+	linkedWorktree := filepath.Dir(linkedPath) // linkedPath points to .git file
+	if strings.HasSuffix(linkedPath, "/.git") || strings.HasSuffix(linkedPath, "\\.git") {
+		linkedWorktree = strings.TrimSuffix(linkedPath, "/.git")
+		linkedWorktree = strings.TrimSuffix(linkedWorktree, "\\.git")
+	}
+
+	return linkedWorktree == expectedPath || linkedPath == filepath.Join(expectedPath, ".git")
+}
+
+// CanRepairWorktree checks if a worktree can potentially be repaired.
+// Returns true if .git file exists but links are broken.
+func CanRepairWorktree(worktreePath string) bool {
+	gitFile := filepath.Join(worktreePath, ".git")
+	info, err := os.Stat(gitFile)
+	if err != nil || info.IsDir() {
+		return false // No .git file or it's a directory (main repo)
+	}
+
+	// .git file exists but link is invalid - potentially repairable
+	return !IsWorktreeLinkValid(worktreePath)
+}

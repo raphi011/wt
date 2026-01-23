@@ -745,12 +745,22 @@ type DoctorCmd struct {
 }
 
 func (c *DoctorCmd) Help() string {
-	return `Diagnose and repair cache issues. Checks for:
+	return `Diagnose and repair worktree issues.
+
+Cache checks:
 - Stale entries (worktree no longer exists)
 - Orphaned keys (old cache format)
 - Missing metadata (repo_path, branch)
-- Broken git links
 - Duplicate IDs
+
+Git link checks:
+- Broken bidirectional links (repairable via 'git worktree repair')
+- Stale git references (prunable via 'git worktree prune')
+- Missing .git file (unrepairable)
+
+Orphan checks:
+- Untracked worktrees (folder exists but not in cache)
+- Ghost entries (in cache but git doesn't recognize)
 
 Use --fix to automatically repair issues.
 Use --reset to rebuild the cache from scratch (all worktrees get new IDs).
