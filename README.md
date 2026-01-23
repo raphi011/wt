@@ -2,18 +2,7 @@
 
 # wt
 
-
 Git worktree manager with GitHub/GitLab integration.
-
-## Table of Contents
-
-- [Why wt](#why-wt)
-- [Install](#install)
-- [Usage](#usage)
-- [Configuration](#configuration)
-- [Hook Examples](#hook-examples)
-- [Shell Completions](#shell-completions)
-- [Development](#development)
 
 ## Why wt
 
@@ -23,205 +12,291 @@ But worktrees can pile up fast. You end up with a dozen directories, can't remem
 
 `wt` solves this:
 - **Hooks** auto-run commands when creating/opening worktrees (open editor, spawn terminal tab)
-- **Tidy** removes merged worktrees and shows PR/MR status so you know what's safe to delete
+- **Prune** removes merged worktrees and shows PR/MR status so you know what's safe to delete
 - **PR checkout** opens pull requests in worktrees for easier code review
 
 ## Install
 
-**Homebrew (macOS/Linux):**
 ```bash
-brew install raphi011/tap/wt
-```
+# Homebrew (macOS/Linux)
+brew install --cask raphi011/tap/wt
 
-**Go:**
-```bash
+# Go
 go install github.com/raphi011/wt/cmd/wt@latest
 ```
 
 Requires `git` in PATH. For GitHub repos: `gh` CLI. For GitLab repos: `glab` CLI.
 
-## Usage
+## Quick Start
 
 ```bash
-# Add worktree for existing branch
-wt add feature-branch                 # in cwd
-wt add feature-branch -d ~/Git        # in specific dir
+# Create config (optional but recommended)
+wt config init
 
-# Add worktree with new branch
-wt add -b feature-branch              # creates new branch
-wt add -b feature-branch -d ~/Git     # in specific dir
+# Start working on a new feature
+wt add -b my-feature
 
-# Open worktree for a GitHub PR or GitLab MR
-wt pr open 123                        # PR/MR from current repo
-wt pr open 123 myrepo                 # find repo by name in dir
-wt pr clone 123 org/repo              # clone repo and checkout PR
-wt pr open 123 -d ~/Git               # specify search directory
+# Review a PR
+wt pr open 123
 
-# Hooks (auto-run based on "on" config, or explicit)
-wt add branch                         # runs hooks with on=["add"]
-wt add branch --hook=vscode           # run specific hook
-wt add branch --no-hook               # skip all hooks
+# Clean up merged worktrees
+wt prune
+```
 
-# Prune merged worktrees
-wt prune                              # in cwd (uses cached info, filters to current repo)
-wt prune -r                           # fetch origin + PR status first, then prune
-wt prune --global                     # prune all repos (not just current)
-wt prune -d ~/Git/worktrees           # in specific dir
-wt prune -n                           # dry run
-wt prune -c                           # also remove clean (0 commits ahead)
-wt prune --no-hook                    # skip post-removal hooks
+## Scenarios
 
-# List worktrees
-wt list                               # in cwd (filters to current repo if in one)
-wt list --global                      # list all repos (not just current)
-wt list -d ~/Git/worktrees
-wt list --json
+### Starting a New Feature
 
-# List repositories
-wt repos                              # list repos in repo_dir (or worktree_dir)
-wt repos -d ~/Git                     # list repos in specific dir
-wt repos -l backend                   # filter by label
-wt repos --json
+```bash
+# Create worktree with new branch (from origin/main)
+wt add -b feature-login
 
-# Move worktrees to another directory
-wt mv -d ~/Git/worktrees              # move all worktrees from cwd to dir
-wt mv -d ~/Git --format={branch} # move and rename using format
-wt mv --dry-run -d ~/Git              # preview what would be moved
-wt mv -f -d ~/Git                     # force move dirty worktrees
+# Create from a different base branch
+wt add -b feature-login --base develop
 
-# Configuration
-wt config init                        # create ~/.config/wt/config.toml
-wt config hooks                       # list configured hooks
+# Fetch latest before creating (ensures up-to-date base)
+wt add -b feature-login -f
+
+# Add a note to remember what you're working on
+wt add -b feature-login --note "Implementing OAuth flow"
+```
+
+With hooks configured, your editor opens automatically:
+
+```toml
+# ~/.config/wt/config.toml
+[hooks.vscode]
+command = "code {path}"
+on = ["add"]
+```
+
+### Reviewing a Pull Request
+
+```bash
+# Checkout PR from current repo
+wt pr open 123
+
+# Checkout PR from a different repo (searches in worktree_dir)
+wt pr open 123 backend-api
+
+# Clone repo you don't have locally and checkout PR
+wt pr clone 456 org/new-repo
+```
+
+After review, merge and clean up in one command:
+
+```bash
+wt pr merge              # Uses squash by default
+wt pr merge -s rebase    # Or specify strategy
+wt pr merge --keep       # Merge but keep worktree
+```
+
+### Cleaning Up
+
+```bash
+# See what worktrees exist
+wt list
+
+# Show detailed status for a specific worktree
+wt show -i 3
+
+# Remove merged worktrees (uses cached PR status)
+wt prune
+
+# Refresh PR status from GitHub/GitLab first
+wt prune -R
+
+# Preview what would be removed
+wt prune -n
+
+# Also remove worktrees with 0 commits (stale checkouts)
+wt prune -c
+
+# Remove specific worktree by ID
+wt prune -i 3
+
+# Force remove even if not merged or dirty
+wt prune -i 3 -f
+```
+
+### Working Across Multiple Repos
+
+Label your repos for batch operations:
+
+```bash
+# Add labels to repos
+cd ~/Git/backend-api && wt label add backend
+cd ~/Git/auth-service && wt label add backend
+cd ~/Git/web-app && wt label add frontend
+
+# Create same branch across all backend repos
+wt add -b feature-auth -l backend -d ~/Git
+
+# Or target specific repos by name
+wt add -b feature-auth -r backend-api -r auth-service -d ~/Git
+
+# Run command across repos
+wt exec -l backend -- git status
+wt exec -r backend-api -r auth-service -- make test
+
+# List repos and their labels
+wt repos
+wt repos -l backend
+```
+
+### Quick Navigation
+
+```bash
+# Jump to worktree by ID
+cd $(wt cd -i 3)
+
+# Jump to repo by name
+cd $(wt cd -r backend-api)
+
+# Jump to main repo (not worktree)
+cd $(wt cd -i 3 -p)
+
+# Run command in worktree without switching
+wt exec -i 3 -- git status
+wt exec -i 3 -- code .
+```
+
+### Running Hooks Manually
+
+```bash
+# Run a hook on current worktree
+wt hook vscode
+
+# Run on specific worktree
+wt hook vscode -i 3
+
+# Run multiple hooks
+wt hook vscode kitty
+
+# Run across repos by label
+wt hook build -l backend
+
+# Pass custom variables
+wt hook claude --arg prompt="implement feature X"
+
+# Preview command without executing
+wt hook vscode -n
+```
+
+### Branch Notes
+
+```bash
+# Set a note (visible in list/prune output)
+wt note set "WIP: fixing auth timeout issue"
+
+# Get current note
+wt note get
+
+# Clear note
+wt note clear
+
+# Set note by worktree ID
+wt note set "Ready for review" -i 3
+```
+
+### Moving Worktrees
+
+```bash
+# Move all worktrees to a central location
+wt mv -d ~/Git/worktrees
+
+# Move and rename using format
+wt mv -d ~/Git/worktrees --format={branch}
+
+# Preview first
+wt mv -d ~/Git/worktrees -n
 ```
 
 ## Configuration
 
 Config file: `~/.config/wt/config.toml`
 
+```bash
+wt config init    # Create default config
+wt config show    # Show effective config
+wt config hooks   # List configured hooks
+```
+
+### Basic Settings
+
 ```toml
-# Directory for new worktrees (must be absolute path or start with ~)
+# Directory for new worktrees (must be absolute or start with ~)
 worktree_dir = "~/Git/worktrees"
 
-# Optional: directory where repositories are stored (for -r/-l repo lookup)
-# If not set, uses worktree_dir for repo scanning
-# Useful when repos live in ~/Code but worktrees go to ~/Git/worktrees
-repo_dir = "~/Code"
+# Where repos live (for -r/-l lookup, defaults to worktree_dir)
+repo_dir = "~/Git"
 
-# Worktree folder naming format
-# Placeholders: {repo}, {branch}, {folder}
+# Folder naming: {repo}, {branch}, {folder}
 worktree_format = "{repo}-{branch}"
+
+# Base ref for new branches: "remote" (default) or "local"
+base_ref = "remote"
+```
+
+### Hooks
+
+```toml
+[hooks.vscode]
+command = "code {path}"
+description = "Open VS Code"
+on = ["add", "pr"]  # Auto-run for these commands
 
 [hooks.kitty]
 command = "kitty @ launch --type=tab --cwd={path}"
 description = "Open new kitty tab"
-on = ["add"]  # auto-run for add command
-
-[hooks.pr-review]
-command = "cd {path} && npm install && code {path}"
-description = "Setup PR for review"
-on = ["pr"]  # auto-run when opening PRs
+on = ["add"]
 
 [hooks.cleanup]
-command = "echo 'Removed {branch} from {repo}'"
-description = "Log removed branches"
-on = ["prune"]  # auto-run when removing worktrees
+command = "echo 'Removed {branch}'"
+on = ["prune"]
 
-[hooks.vscode]
-command = "code {path}"
-description = "Open VS Code"
-# no "on" - only runs via --hook=vscode
-```
-
-### Worktree Format Placeholders
-
-| Placeholder | Value |
-|-------------|-------|
-| `{repo}` | Repo name from `git remote get-url origin` |
-| `{branch}` | Branch name as provided |
-| `{folder}` | Folder name of the git repo on disk |
-
-### Hook Options
-
-| Option | Description |
-|--------|-------------|
-| `command` | Shell command to run (required) |
-| `description` | Human-readable description |
-| `on` | Commands to auto-run on: `["add", "pr", "prune", "merge", "all"]` (empty = only via `--hook`) |
-
-### Hook Placeholders
-
-| Placeholder | Value |
-|-------------|-------|
-| `{path}` | Absolute worktree path |
-| `{branch}` | Branch name |
-| `{repo}` | Repo name from origin |
-| `{folder}` | Main repo folder name |
-| `{main-repo}` | Main repo path |
-| `{trigger}` | Command that triggered the hook (add, pr, prune, merge) |
-| `{key}` | Custom variable from `--arg key=value` |
-| `{key:-default}` | Custom variable with fallback if not provided |
-
-### Custom Hook Variables
-
-Pass dynamic values to hooks using `--arg`:
-
-```bash
-wt hook claude --arg prompt="implement feature X"
-wt add -b feature --arg task="JIRA-123"
-```
-
-Example hook using custom variables:
-
-```toml
 [hooks.claude]
 command = "kitty @ launch --cwd={path} -- claude {prompt:-help me}"
-description = "Open Claude with custom prompt"
+description = "Open Claude with prompt"
+# No "on" = only runs via: wt hook claude --arg prompt="..."
 ```
 
-The `{prompt:-help me}` syntax provides a default value ("help me") when `--arg prompt=...` is not specified.
+**Hook triggers:** `add`, `pr`, `prune`, `merge`, `all`
 
-### Clone Rules (for `wt pr clone`)
+**Placeholders:** `{path}`, `{branch}`, `{repo}`, `{folder}`, `{main-repo}`, `{trigger}`, `{key}`, `{key:-default}`
 
-When cloning a repo via `wt pr clone`, configure which forge to use:
+### Clone Rules
+
+Configure forge detection for `wt pr clone`:
 
 ```toml
 [clone]
-forge = "github"  # or "gitlab"
+forge = "github"      # Default forge
+org = "my-company"    # Default org (allows: wt pr clone 123 repo)
 
 [[clone.rules]]
 pattern = "company/*"
 forge = "gitlab"
-
-[[clone.rules]]
-pattern = "oss/*"
-forge = "github"
 ```
 
-Rules are matched in order; first match wins. Supports glob patterns with `*`.
-
-## Hook Examples
-
-### VS Code
+### Merge Settings
 
 ```toml
-[hooks.vscode]
-command = "code {path}"
-description = "Open worktree in VS Code"
-on = ["add", "pr"]
+[merge]
+strategy = "squash"  # squash, rebase, or merge
 ```
 
-### tmux
+### Self-Hosted Instances
 
 ```toml
-[hooks.tmux]
-command = "tmux new-window -c {path} -n {branch}"
-description = "Open new tmux window in worktree"
-on = ["add"]
+[hosts]
+"github.mycompany.com" = "github"
+"gitlab.internal.corp" = "gitlab"
 ```
 
-### gh dash
+## Integration with gh-dash
 
-`wt` works well with [gh dash](https://github.com/dlvhdr/gh-dash) for reviewing PRs. Configure a keybinding to open PRs as worktrees:
+`wt` works great with [gh-dash](https://github.com/dlvhdr/gh-dash). Add a keybinding to checkout PRs as worktrees:
 
 ```yaml
 # ~/.config/gh-dash/config.yml
@@ -231,18 +306,48 @@ keybindings:
       command: wt pr open {{.PrNumber}} {{.RepoName}}
 ```
 
-Combined with hooks, you get a seamless workflow: press `O` in gh dash to checkout the PR as a worktree and automatically open it in your editor.
+Press `O` to checkout PR → hooks auto-open your editor.
 
 ## Shell Completions
 
 ```bash
+# Fish
 wt completion fish > ~/.config/fish/completions/wt.fish
+
+# Bash
+wt completion bash > ~/.local/share/bash-completion/completions/wt
+
+# Zsh (add ~/.zfunc to fpath in .zshrc)
+wt completion zsh > ~/.zfunc/_wt
 ```
+
+## Command Reference
+
+| Command | Description |
+|---------|-------------|
+| `wt add` | Add worktree for branch |
+| `wt list` | List worktrees |
+| `wt show` | Show worktree details |
+| `wt prune` | Remove merged worktrees |
+| `wt repos` | List repositories |
+| `wt pr open` | Checkout PR from local repo |
+| `wt pr clone` | Clone repo and checkout PR |
+| `wt pr merge` | Merge PR and clean up |
+| `wt exec` | Run command in worktree |
+| `wt cd` | Print worktree/repo path |
+| `wt mv` | Move worktrees |
+| `wt note` | Manage branch notes |
+| `wt label` | Manage repo labels |
+| `wt hook` | Run configured hook |
+| `wt config` | Manage configuration |
+| `wt completion` | Generate shell completions |
+
+Run `wt <command> --help` for detailed usage.
 
 ## Development
 
 ```bash
-make build    # build ./wt binary
-make test     # run tests
-make install  # install to ~/go/bin
+make build    # Build ./wt binary
+make test     # Run tests
+make install  # Install to ~/go/bin
 ```
