@@ -20,6 +20,11 @@ import (
 )
 
 func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config) error {
+	// Validate mutual exclusion: positional org/repo and -r flag can't both be used
+	if cmd.Repo != "" && cmd.Repository != "" {
+		return fmt.Errorf("cannot use both positional org/repo argument and -r/--repository flag\nUse 'wt pr checkout %d %s' (clone mode) OR 'wt pr checkout %d -r %s' (local mode)", cmd.Number, cmd.Repo, cmd.Number, cmd.Repository)
+	}
+
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
@@ -37,40 +42,84 @@ func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config) error {
 		repoScanDir = dir
 	}
 
-	// Determine which repo to use (local only - never clones)
 	var repoPath string
-	if cmd.Repo == "" {
-		// No repo arg: use current directory
-		repoPath = "."
-	} else {
-		// Repo arg provided: find locally only
-		_, name := git.ParseRepoArg(cmd.Repo)
+	var f forge.Forge
 
-		// Try to find repo locally (search in repoScanDir)
-		foundPath, err := git.FindRepoByName(repoScanDir, name)
-		if err == nil {
+	// Clone mode: positional Repo arg with org/repo format
+	if cmd.Repo != "" {
+		// Validate org/repo format (must contain /)
+		if !strings.Contains(cmd.Repo, "/") {
+			return fmt.Errorf("clone mode requires org/repo format (e.g., 'org/repo'), got %q\nTo use a local repo by name, use: wt pr checkout %d -r %s", cmd.Repo, cmd.Number, cmd.Repo)
+		}
+
+		// Parse org/repo - use clone.org if org not specified
+		org, name := git.ParseRepoArg(cmd.Repo)
+		if org == "" {
+			if cfg.Clone.Org == "" {
+				return fmt.Errorf("repository must be in org/repo format, or configure [clone] org in config")
+			}
+			org = cfg.Clone.Org
+		}
+		repoSpec := org + "/" + name
+
+		// Check if repo already exists locally
+		if existingPath, err := git.FindRepoByName(repoScanDir, name); err == nil {
+			return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr checkout %d -r %s' instead", name, existingPath, cmd.Number, name)
+		}
+
+		// Determine forge: cmd.Forge > cfg.Clone rules > cfg.Clone.Forge
+		forgeName := cmd.Forge
+		if forgeName == "" {
+			forgeName = cfg.Clone.GetForgeForRepo(repoSpec)
+		}
+
+		f = forge.ByName(forgeName)
+		if err := f.Check(); err != nil {
+			return err
+		}
+
+		// Clone the repo to repoScanDir (repo_dir if set, else worktree_dir)
+		fmt.Printf("Cloning %s to %s (using %s)...\n", repoSpec, repoScanDir, forgeName)
+		repoPath, err = f.CloneRepo(repoSpec, repoScanDir)
+		if err != nil {
+			return fmt.Errorf("failed to clone repo: %w", err)
+		}
+		fmt.Printf("✓ Cloned to %s\n", repoPath)
+	} else {
+		// Local mode: -r flag or current directory
+		if cmd.Repository != "" {
+			// -r flag: find repo locally by name
+			foundPath, err := git.FindRepoByName(repoScanDir, cmd.Repository)
+			if err != nil {
+				similar := git.FindSimilarRepos(repoScanDir, cmd.Repository)
+				if len(similar) > 0 {
+					return fmt.Errorf("repository %q not found in %s\nDid you mean: %s", cmd.Repository, repoScanDir, strings.Join(similar, ", "))
+				}
+				return fmt.Errorf("repository %q not found in %s", cmd.Repository, repoScanDir)
+			}
 			repoPath = foundPath
 			fmt.Printf("Using repo at %s\n", repoPath)
 		} else {
-			// Not found: error with suggestions and hint to use pr clone
-			similar := git.FindSimilarRepos(repoScanDir, name)
-			if len(similar) > 0 {
-				return fmt.Errorf("repository %q not found in %s\nDid you mean: %s\nTo clone a new repo, use: wt pr clone %d %s", name, repoScanDir, strings.Join(similar, ", "), cmd.Number, cmd.Repo)
-			}
-			return fmt.Errorf("repository %q not found in %s\nTo clone a new repo, use: wt pr clone %d %s", name, repoScanDir, cmd.Number, cmd.Repo)
+			// No args: use current directory
+			repoPath = "."
+		}
+
+		// Get origin URL and detect forge
+		originURL, err := git.GetOriginURL(repoPath)
+		if err != nil {
+			return fmt.Errorf("failed to get origin URL: %w", err)
+		}
+
+		f = forge.Detect(originURL, cfg.Hosts)
+		if err := f.Check(); err != nil {
+			return err
 		}
 	}
 
-	// Get origin URL from repo
+	// Get origin URL from repo (may have just been cloned)
 	originURL, err := git.GetOriginURL(repoPath)
 	if err != nil {
 		return fmt.Errorf("failed to get origin URL: %w", err)
-	}
-
-	// Detect forge and check CLI availability
-	f := forge.Detect(originURL, cfg.Hosts)
-	if err := f.Check(); err != nil {
-		return err
 	}
 
 	// Try cache first to avoid network request
@@ -87,111 +136,6 @@ func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config) error {
 		if err != nil {
 			return fmt.Errorf("failed to get PR branch: %w", err)
 		}
-	}
-
-	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
-
-	result, err := git.CreateWorktreeFrom(repoPath, dir, branch, cfg.WorktreeFormat, "")
-	if err != nil {
-		return err
-	}
-
-	if result.AlreadyExists {
-		fmt.Printf("→ Worktree already exists at: %s\n", result.Path)
-	} else {
-		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
-	}
-
-	// Run post-add hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandPR)
-	if err != nil {
-		return err
-	}
-
-	env, err := hooks.ParseEnvWithStdin(cmd.Env)
-	if err != nil {
-		return err
-	}
-
-	ctx := hooks.Context{
-		Path:    result.Path,
-		Branch:  branch,
-		Folder:  filepath.Base(repoPath),
-		Trigger: string(hooks.CommandPR),
-		Env:     env,
-	}
-	ctx.Repo, _ = git.GetRepoNameFrom(repoPath)
-	ctx.MainRepo, _ = git.GetMainRepoPath(result.Path)
-	if ctx.MainRepo == "" {
-		ctx.MainRepo, _ = filepath.Abs(repoPath)
-	}
-
-	return hooks.RunAll(hookMatches, ctx)
-}
-
-func runPrClone(cmd *PrCloneCmd, cfg *config.Config) error {
-	// Validate worktree format
-	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
-		return fmt.Errorf("invalid worktree_format in config: %w", err)
-	}
-
-	// Parse org/repo - use clone.org if org not specified
-	org, name := git.ParseRepoArg(cmd.Repo)
-	if org == "" {
-		if cfg.Clone.Org == "" {
-			return fmt.Errorf("repository must be in org/repo format, or configure [clone] org in config")
-		}
-		org = cfg.Clone.Org
-	}
-	repoSpec := org + "/" + name
-
-	// Worktree target dir from config
-	dir, absPath, err := resolveWorktreeTargetDir(cfg)
-	if err != nil {
-		return err
-	}
-
-	// Repo scan dir (from config, fallback to dir)
-	repoScanDir := cfg.RepoScanDir()
-	if repoScanDir == "" {
-		repoScanDir = dir
-	}
-
-	// Check if repo already exists locally (search in repoScanDir)
-	if existingPath, err := git.FindRepoByName(repoScanDir, name); err == nil {
-		return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr checkout %d %s' instead", name, existingPath, cmd.Number, name)
-	}
-
-	// Determine forge: cmd.Forge > cfg.Clone rules > cfg.Clone.Forge
-	forgeName := cmd.Forge
-	if forgeName == "" {
-		forgeName = cfg.Clone.GetForgeForRepo(repoSpec)
-	}
-
-	f := forge.ByName(forgeName)
-	if err := f.Check(); err != nil {
-		return err
-	}
-
-	// Clone the repo
-	fmt.Printf("Cloning %s to %s (using %s)...\n", repoSpec, dir, forgeName)
-	repoPath, err := f.CloneRepo(repoSpec, dir)
-	if err != nil {
-		return fmt.Errorf("failed to clone repo: %w", err)
-	}
-	fmt.Printf("✓ Cloned to %s\n", repoPath)
-
-	// Get origin URL from cloned repo
-	originURL, err := git.GetOriginURL(repoPath)
-	if err != nil {
-		return fmt.Errorf("failed to get origin URL: %w", err)
-	}
-
-	// Fetch PR branch name
-	fmt.Printf("Fetching PR #%d...\n", cmd.Number)
-	branch, err := f.GetPRBranch(originURL, cmd.Number)
-	if err != nil {
-		return fmt.Errorf("failed to get PR branch: %w", err)
 	}
 
 	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)

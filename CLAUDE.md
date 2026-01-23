@@ -84,8 +84,8 @@ internal/ui/             - Terminal UI components
 - `wt label add/remove/list/clear` - Manage repository labels (stored in git config as wt.labels)
 - `wt hook <hook> [-i <id>...]` - Run configured hook by name (multi-ID supported)
 - `wt hook <hook> -r <repo> [-l <label>]` - Run hook in repo(s) by name/label
-- `wt pr checkout <number> [repo]` - Create worktree for GitHub PR
-- `wt pr clone <number> <repo>` - Clone repo and create worktree for PR
+- `wt pr checkout <number> [org/repo]` - Create worktree for PR (clones repo if org/repo provided)
+- `wt pr checkout <number> -r <repo>` - Create worktree for PR from local repo by name
 - `wt pr create --title "..." [--body "..."]` - Create PR for current branch
 - `wt pr view [-i <id>] [-w]` - View PR details or open in browser
 - `wt pr merge [-i <id>]` - Merge PR and clean up worktree

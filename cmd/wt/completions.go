@@ -330,16 +330,29 @@ _wt_completions() {
             ;;
         pr)
             if [[ $cword -eq 2 ]]; then
-                COMPREPLY=($(compgen -W "checkout clone create merge view" -- "$cur"))
+                COMPREPLY=($(compgen -W "checkout create merge view" -- "$cur"))
             elif [[ "${words[2]}" == "checkout" ]]; then
                 case "$prev" in
-                    --hook)
+                    -r|--repository)
+                        # Complete repo names from worktree_dir
+                        local dir="$WT_WORKTREE_DIR"
+                        if [[ -z "$dir" ]]; then
+                            local config_file=~/.config/wt/config.toml
+                            if [[ -f "$config_file" ]]; then
+                                dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                            fi
+                        fi
+                        if [[ -d "$dir" ]]; then
+                            local repos=""
+                            for d in "$dir"/*/; do
+                                if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                                    repos="$repos $(basename "$d")"
+                                fi
+                            done
+                            COMPREPLY=($(compgen -W "$repos" -- "$cur"))
+                        fi
                         return
                         ;;
-                esac
-                COMPREPLY=($(compgen -W "--hook --no-hook -a --arg" -- "$cur"))
-            elif [[ "${words[2]}" == "clone" ]]; then
-                case "$prev" in
                     --forge)
                         COMPREPLY=($(compgen -W "github gitlab" -- "$cur"))
                         return
@@ -348,7 +361,7 @@ _wt_completions() {
                         return
                         ;;
                 esac
-                COMPREPLY=($(compgen -W "--forge --note --hook --no-hook -a --arg" -- "$cur"))
+                COMPREPLY=($(compgen -W "-r --repository --forge --note --hook --no-hook -a --arg" -- "$cur"))
             elif [[ "${words[2]}" == "create" ]]; then
                 case "$prev" in
                     -i|--id)
@@ -676,8 +689,7 @@ _wt() {
                     case $state in
                         subcmd)
                             local subcommands=(
-                                'checkout:Checkout PR from existing local repo'
-                                'clone:Clone repo and checkout PR'
+                                'checkout:Checkout PR (clones if needed)'
                                 'create:Create PR for current branch'
                                 'merge:Merge PR and clean up worktree'
                                 'view:View PR details or open in browser'
@@ -689,16 +701,9 @@ _wt() {
                                 checkout)
                                     _arguments \
                                         '1:PR number:' \
-                                        '2:repository:' \
-                                        '--hook[run named hook]:hook:' \
-                                        '--no-hook[skip post-add hook]' \
-                                        '*-a[set hook variable KEY=VALUE]:arg:' \
-                                        '*--arg[set hook variable KEY=VALUE]:arg:'
-                                    ;;
-                                clone)
-                                    _arguments \
-                                        '1:PR number:' \
-                                        '2:repository (org/repo):' \
+                                        '2:org/repo (clone mode):' \
+                                        '-r[local repo name]:repository:__wt_repo_names' \
+                                        '--repository[local repo name]:repository:__wt_repo_names' \
                                         '--forge[forge type]:forge:(github gitlab)' \
                                         '--note[set note on branch]:note:' \
                                         '--hook[run named hook]:hook:' \
@@ -1070,24 +1075,18 @@ complete -c wt -n "__fish_seen_subcommand_from hook" -s a -l arg -r -d "Set hook
 complete -c wt -n "__fish_seen_subcommand_from hook" -s n -l dry-run -d "Print command without executing"
 
 # pr: subcommands
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from checkout clone create merge view" -a "checkout" -d "Checkout PR from existing local repo"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from checkout clone create merge view" -a "clone" -d "Clone repo and checkout PR"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from checkout clone create merge view" -a "create" -d "Create PR for current branch"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from checkout clone create merge view" -a "merge" -d "Merge PR and clean up worktree"
-complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from checkout clone create merge view" -a "view" -d "View PR details or open in browser"
-# pr checkout: PR number (first positional), then repo (second positional), then flags
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from checkout create merge view" -a "checkout" -d "Checkout PR (clones if needed)"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from checkout create merge view" -a "create" -d "Create PR for current branch"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from checkout create merge view" -a "merge" -d "Merge PR and clean up worktree"
+complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from checkout create merge view" -a "view" -d "View PR details or open in browser"
+# pr checkout: PR number (first positional), then org/repo (second positional for clone mode), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -a "(gh pr list --json number,title --jq '.[] | \"\\(.number)\t\\(.title)\"' 2>/dev/null)" -d "PR number"
-# Repo names from worktree_dir (second positional after PR number)
-complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -a "(__wt_list_repos)" -d "Repository"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -s r -l repository -r -a "(__wt_list_repos)" -d "Local repo name"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -l forge -r -a "github gitlab" -d "Forge type (for cloning)"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -l note -r -d "Set note on branch"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -l no-hook -d "Skip post-add hook"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -s a -l arg -r -d "Set hook variable KEY=VALUE"
-# pr clone: PR number (first positional), then org/repo (second positional), then flags
-complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l forge -r -a "github gitlab" -d "Forge type"
-complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l note -r -d "Set note on branch"
-complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l hook -d "Run named hook instead of default"
-complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -l no-hook -d "Skip post-add hook"
-complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from clone" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 # pr create: --id flag (optional), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -s t -l title -r -d "PR title"

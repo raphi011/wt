@@ -438,7 +438,7 @@ worktree_format = "{repo}-{branch}"
 # Run with: wt hook claude --arg prompt="implement feature X"
 
 # Clone settings - configure forge and default org for cloning repos
-# Used by "wt pr clone" when cloning a new repository
+# Used by "wt pr checkout <number> org/repo" when cloning a new repository
 #
 # [clone]
 # forge = "github"    # default forge when no rule matches (github or gitlab)

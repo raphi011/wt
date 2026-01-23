@@ -547,59 +547,38 @@ func (c *MvCmd) Run(ctx *Context) error {
 	return runMv(c, ctx.Config)
 }
 
-// PrCheckoutCmd creates a worktree for a PR from an existing local repo.
+// PrCheckoutCmd creates a worktree for a PR, cloning the repo if needed.
 type PrCheckoutCmd struct {
-	Number int      `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
-	Repo   string   `arg:"" optional:"" placeholder:"REPO" help:"repository name to find locally"`
-	Hook   string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
-	NoHook bool     `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
-	Env    []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
+	Number     int      `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
+	Repo       string   `arg:"" optional:"" placeholder:"ORG/REPO" help:"clone repo (org/repo format)"`
+	Repository string   `short:"r" name:"repository" help:"local repo name"`
+	Forge      string   `name:"forge" env:"WT_FORGE" placeholder:"FORGE" help:"forge for cloning: github or gitlab"`
+	Note       string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
+	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook     bool     `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
+	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
 func (c *PrCheckoutCmd) Help() string {
-	return `Only works with repos that already exist locally.
-Use 'wt pr clone' to clone new repos first.
+	return `Checkout a PR, cloning the repo if it doesn't exist locally.
+
+Two modes:
+  Clone mode (positional org/repo): Clones repo first, then creates worktree
+  Local mode (-r flag or no args): Uses existing local repo
 
 Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
-  wt pr checkout 123                  # PR from current repo
-  wt pr checkout 123 myrepo           # Find "myrepo" in target directory
-  wt pr checkout 123 org/repo         # Find "repo" locally (org is ignored)
-  wt pr checkout 123 --no-hook        # Skip post-create hook`
+  wt pr checkout 123                    # PR from current directory
+  wt pr checkout 123 -r myrepo          # PR from local repo by name
+  wt pr checkout 123 org/repo           # Clone repo and checkout PR
+  wt pr checkout 123 org/repo --forge=gitlab  # Use GitLab instead of GitHub
+  wt pr checkout 123 org/repo --note "WIP"    # Set note on branch
+  wt pr checkout 123 --no-hook          # Skip post-create hook`
 }
 
 func (c *PrCheckoutCmd) Run(ctx *Context) error {
 	return runPrCheckout(c, ctx.Config)
-}
-
-// PrCloneCmd clones a repo and creates a worktree for a PR.
-type PrCloneCmd struct {
-	Number int      `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
-	Repo   string   `arg:"" required:"" placeholder:"REPO" help:"repository (org/repo or repo if [clone] org configured)"`
-	Forge  string   `name:"forge" env:"WT_FORGE" placeholder:"FORGE" help:"forge: github or gitlab (flag > env > clone rules > config)"`
-	Note   string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook   string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
-	NoHook bool     `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
-	Env    []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
-}
-
-func (c *PrCloneCmd) Help() string {
-	return `Clones the repository if not present locally.
-Use 'wt pr checkout' for repos you already have.
-If [clone] org is configured, you can omit the org/ prefix.
-
-Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
-
-Examples:
-  wt pr clone 123 org/repo              # Clone and checkout PR
-  wt pr clone 123 repo                  # Use default org from config
-  wt pr clone 123 org/repo --forge=gitlab  # Use GitLab instead of GitHub
-  wt pr clone 123 org/repo --no-hook    # Skip post-create hook`
-}
-
-func (c *PrCloneCmd) Run(ctx *Context) error {
-	return runPrClone(c, ctx.Config)
 }
 
 // PrMergeCmd merges the PR for the current branch.
@@ -694,8 +673,7 @@ func (c *PrViewCmd) Run(ctx *Context) error {
 
 // PrCmd works with PRs.
 type PrCmd struct {
-	Checkout PrCheckoutCmd `cmd:"" help:"Checkout PR from existing local repo"`
-	Clone    PrCloneCmd    `cmd:"" help:"Clone repo and checkout PR"`
+	Checkout PrCheckoutCmd `cmd:"" help:"Checkout PR (clones if needed)"`
 	Create   PrCreateCmd   `cmd:"" help:"Create PR for current branch"`
 	Merge    PrMergeCmd    `cmd:"" help:"Merge PR and clean up worktree"`
 	View     PrViewCmd     `cmd:"" help:"View PR details or open in browser"`
@@ -703,9 +681,9 @@ type PrCmd struct {
 
 func (c *PrCmd) Help() string {
 	return `Examples:
-  wt pr checkout 123                    # PR from current repo
-  wt pr checkout 123 myrepo             # PR from existing local repo
-  wt pr clone 123 org/repo              # Clone repo and checkout PR
+  wt pr checkout 123                    # PR from current directory
+  wt pr checkout 123 -r myrepo          # PR from existing local repo
+  wt pr checkout 123 org/repo           # Clone repo and checkout PR
   wt pr create --title "Add feature"    # Create PR for current branch
   wt pr merge                           # Merge PR and clean up worktree
   wt pr view                            # View PR details for current branch

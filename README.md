@@ -76,11 +76,11 @@ on = ["add"]
 # Checkout PR from current repo
 wt pr checkout 123
 
-# Checkout PR from a different repo (searches in worktree_dir)
-wt pr checkout 123 backend-api
+# Checkout PR from a different local repo (by name)
+wt pr checkout 123 -r backend-api
 
 # Clone repo you don't have locally and checkout PR
-wt pr clone 456 org/new-repo
+wt pr checkout 456 org/new-repo
 ```
 
 View PR details or open in browser:
@@ -285,12 +285,12 @@ description = "Open Claude with prompt"
 
 ### Clone Rules
 
-Configure forge detection for `wt pr clone`:
+Configure forge detection for `wt pr checkout` when cloning new repos:
 
 ```toml
 [clone]
 forge = "github"      # Default forge
-org = "my-company"    # Default org (allows: wt pr clone 123 repo)
+org = "my-company"    # Default org (allows: wt pr checkout 123 repo)
 
 [[clone.rules]]
 pattern = "company/*"
@@ -348,8 +348,7 @@ wt completion zsh > ~/.zfunc/_wt
 | `wt show` | Show worktree details |
 | `wt prune` | Remove merged worktrees |
 | `wt repos` | List repositories |
-| `wt pr checkout` | Checkout PR from local repo |
-| `wt pr clone` | Clone repo and checkout PR |
+| `wt pr checkout` | Checkout PR (clones if needed) |
 | `wt pr view` | View PR details or open in browser |
 | `wt pr merge` | Merge PR and clean up |
 | `wt exec` | Run command in worktree |
