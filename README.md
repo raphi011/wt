@@ -99,6 +99,28 @@ wt pr merge -s rebase    # Or specify strategy
 wt pr merge --keep       # Merge but keep worktree
 ```
 
+### Creating a Pull Request
+
+```bash
+# Create PR for current branch
+wt pr create --title "Add login feature"
+
+# With description
+wt pr create --title "Fix bug" --body "Fixes issue #123"
+
+# Read body from file (great for templates)
+wt pr create --title "Add feature" --body-file=pr.md
+
+# Create as draft
+wt pr create --title "WIP: Refactor auth" --draft
+
+# Create and open in browser
+wt pr create --title "Ready for review" -w
+
+# By worktree ID (when outside worktree)
+wt pr create --title "Add feature" -i 3
+```
+
 ### Cleaning Up
 
 ```bash
@@ -138,10 +160,10 @@ cd ~/Git/auth-service && wt label add backend
 cd ~/Git/web-app && wt label add frontend
 
 # Create same branch across all backend repos
-wt add -b feature-auth -l backend -d ~/Git
+wt add -b feature-auth -l backend
 
 # Or target specific repos by name
-wt add -b feature-auth -r backend-api -r auth-service -d ~/Git
+wt add -b feature-auth -r backend-api -r auth-service
 
 # Run command across repos
 wt exec -l backend -- git status
@@ -212,20 +234,35 @@ wt note set "Ready for review" -i 3
 Already have worktrees scattered around? Use `wt mv` to consolidate them:
 
 ```bash
-# Preview what would be moved
-wt mv -d ~/Git/worktrees -n
+# Preview what would be moved (destination from config)
+wt mv -n
 
-# Move all worktrees from current directory to central location
-wt mv -d ~/Git/worktrees
+# Move all worktrees to configured worktree_dir
+wt mv
 
 # Move and rename to consistent format
-wt mv -d ~/Git/worktrees --format={repo}-{branch}
+wt mv --format={repo}-{branch}
 
 # Force move even if worktrees have uncommitted changes
-wt mv -d ~/Git/worktrees -f
+wt mv -f
 ```
 
 This updates git's worktree tracking automatically—no manual fixup needed.
+
+### Diagnosing Issues
+
+If worktrees get into a bad state (broken links, stale cache entries):
+
+```bash
+# Check for issues
+wt doctor
+
+# Auto-fix recoverable issues
+wt doctor --fix
+
+# Rebuild cache from scratch (worktrees get new IDs)
+wt doctor --reset
+```
 
 ## Configuration
 
@@ -349,6 +386,7 @@ wt completion zsh > ~/.zfunc/_wt
 | `wt prune` | Remove merged worktrees |
 | `wt repos` | List repositories |
 | `wt pr checkout` | Checkout PR (clones if needed) |
+| `wt pr create` | Create PR for current branch |
 | `wt pr view` | View PR details or open in browser |
 | `wt pr merge` | Merge PR and clean up |
 | `wt exec` | Run command in worktree |
@@ -358,6 +396,7 @@ wt completion zsh > ~/.zfunc/_wt
 | `wt label` | Manage repo labels |
 | `wt hook` | Run configured hook |
 | `wt config` | Manage configuration |
+| `wt doctor` | Diagnose and repair cache |
 | `wt completion` | Generate shell completions |
 
 Run `wt <command> --help` for detailed usage.
