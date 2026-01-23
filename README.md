@@ -199,18 +199,25 @@ wt note clear
 wt note set "Ready for review" -i 3
 ```
 
-### Moving Worktrees
+### Moving Worktrees / Migrating to wt
+
+Already have worktrees scattered around? Use `wt mv` to consolidate them:
 
 ```bash
-# Move all worktrees to a central location
+# Preview what would be moved
+wt mv -d ~/Git/worktrees -n
+
+# Move all worktrees from current directory to central location
 wt mv -d ~/Git/worktrees
 
-# Move and rename using format
-wt mv -d ~/Git/worktrees --format={branch}
+# Move and rename to consistent format
+wt mv -d ~/Git/worktrees --format={repo}-{branch}
 
-# Preview first
-wt mv -d ~/Git/worktrees -n
+# Force move even if worktrees have uncommitted changes
+wt mv -d ~/Git/worktrees -f
 ```
+
+This updates git's worktree tracking automatically—no manual fixup needed.
 
 ## Configuration
 
