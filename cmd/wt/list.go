@@ -65,10 +65,37 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 		sp.Stop()
 	}
 
-	// If in a git repo and not using --global, filter to only show worktrees from that repo
+	// Resolve sort order: flag > config > "id"
+	sortBy := cmd.Sort
+	if sortBy == "" {
+		sortBy = cfg.DefaultSort
+	}
+	if sortBy == "" {
+		sortBy = "id"
+	}
+
+	// Filter worktrees based on flags
 	worktrees := allWorktrees
 	var currentRepo string
-	if !cmd.Global {
+	hasRepoOrLabelFilter := len(cmd.Repository) > 0 || len(cmd.Label) > 0
+
+	if hasRepoOrLabelFilter {
+		// Filter by -r and/or -l flags (overrides current repo filter)
+		repoPaths, errs := collectRepoPaths(cmd.Repository, cmd.Label, scanPath, cfg)
+		for _, e := range errs {
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", e)
+		}
+		if len(repoPaths) > 0 {
+			var filtered []git.Worktree
+			for _, wt := range allWorktrees {
+				if repoPaths[wt.MainRepo] {
+					filtered = append(filtered, wt)
+				}
+			}
+			worktrees = filtered
+		}
+	} else if !cmd.Global {
+		// Default behavior: filter by current repo if inside one
 		currentRepo = git.GetCurrentRepoMainPath()
 		if currentRepo != "" {
 			var filtered []git.Worktree
@@ -87,7 +114,7 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 	}
 
 	// Sort worktrees for JSON output
-	sortWorktrees(worktrees, pathToID, cmd.Sort)
+	sortWorktrees(worktrees, pathToID, sortBy)
 
 	if cmd.JSON {
 		// Build JSON output with IDs and PR info
@@ -172,7 +199,7 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 	}
 
 	// Sort worktrees
-	sortWorktrees(worktrees, pathToID, cmd.Sort)
+	sortWorktrees(worktrees, pathToID, sortBy)
 
 	// Display table (no items marked for removal in list)
 	toRemoveMap := make(map[string]bool)
@@ -190,6 +217,9 @@ func sortWorktrees(wts []git.Worktree, pathToID map[string]int, sortBy string) {
 			return wts[i].RepoName < wts[j].RepoName
 		case "branch":
 			return wts[i].Branch < wts[j].Branch
+		case "commit":
+			// Sort by most recent commit first (newest first)
+			return wts[i].LastCommitTime.After(wts[j].LastCommitTime)
 		default:
 			return pathToID[wts[i].Path] < pathToID[wts[j].Path]
 		}

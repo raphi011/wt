@@ -69,7 +69,7 @@ internal/ui/             - Terminal UI components
 - `wt add -b <branch> -l <label> [-l <label>...]` - Create branch across repos with label
 - `wt prune` - Remove merged+clean worktrees, show table with PR status (use -R/--refresh to fetch latest)
 - `wt prune -i <id>` - Remove specific worktree by ID
-- `wt list [--json]` - List worktrees in directory
+- `wt list [-r <repo>] [-l <label>] [-s id|repo|branch|commit] [--json]` - List worktrees in directory
 - `wt repos [-l <label>] [--json]` - List repositories in directory
 - `wt show [-i <id>]` - Show detailed status for a worktree (commits, changes, PR info)
 - `wt exec -i <id> [-i <id>...] -- <cmd>` - Run command in worktree(s) by ID
@@ -128,8 +128,8 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 
 **Reuse flags consistently** - When adding flags that serve the same purpose across commands, use identical names/shortcuts. Standard flags:
 - `-i, --id` - worktree ID for targeting
-- `-r, --repository` - repository name for targeting (wt add, exec, cd, hook)
-- `-l, --label` - target repos by label (wt add, exec, hook)
+- `-r, --repository` - repository name for targeting (wt add, list, exec, cd, hook)
+- `-l, --label` - target repos by label (wt add, list, exec, hook)
 - `-d, --dir` - target directory (with `env:WT_WORKTREE_DIR`)
 - `-n, --dry-run` - preview without making changes
 - `-f, --force` - force operation (override safety checks)

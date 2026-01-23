@@ -243,6 +243,9 @@ worktree_format = "{repo}-{branch}"
 
 # Base ref for new branches: "remote" (default) or "local"
 base_ref = "remote"
+
+# Default sort order for list: "id", "repo", "branch", "commit"
+default_sort = "id"
 ```
 
 ### Hooks

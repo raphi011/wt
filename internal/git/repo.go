@@ -177,6 +177,28 @@ func GetLastCommitRelative(path string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// GetLastCommitTime returns the unix timestamp of the last commit
+func GetLastCommitTime(path string) (time.Time, error) {
+	cmd := exec.Command("git", "-C", path, "log", "-1", "--format=%ct")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		if stderr.Len() > 0 {
+			return time.Time{}, fmt.Errorf("failed to get last commit time: %s", strings.TrimSpace(stderr.String()))
+		}
+		return time.Time{}, err
+	}
+
+	var timestamp int64
+	_, err = fmt.Sscanf(strings.TrimSpace(string(output)), "%d", &timestamp)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse commit timestamp: %w", err)
+	}
+
+	return time.Unix(timestamp, 0), nil
+}
+
 // IsDirty returns true if the worktree has uncommitted changes or untracked files
 func IsDirty(path string) bool {
 	cmd := exec.Command("git", "-C", path, "status", "--porcelain")

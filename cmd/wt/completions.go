@@ -129,11 +129,54 @@ _wt_completions() {
                     return
                     ;;
                 -s|--sort)
-                    COMPREPLY=($(compgen -W "id repo branch" -- "$cur"))
+                    COMPREPLY=($(compgen -W "id repo branch commit" -- "$cur"))
+                    return
+                    ;;
+                -r|--repository)
+                    # Complete repo names from worktree_dir
+                    local dir="$WT_WORKTREE_DIR"
+                    if [[ -z "$dir" ]]; then
+                        local config_file=~/.config/wt/config.toml
+                        if [[ -f "$config_file" ]]; then
+                            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                        fi
+                    fi
+                    if [[ -d "$dir" ]]; then
+                        local repos=""
+                        for d in "$dir"/*/; do
+                            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                                repos="$repos $(basename "$d")"
+                            fi
+                        done
+                        COMPREPLY=($(compgen -W "$repos" -- "$cur"))
+                    fi
+                    return
+                    ;;
+                -l|--label)
+                    # Complete labels from repos in worktree_dir
+                    local dir="$WT_WORKTREE_DIR"
+                    if [[ -z "$dir" ]]; then
+                        local config_file=~/.config/wt/config.toml
+                        if [[ -f "$config_file" ]]; then
+                            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                        fi
+                    fi
+                    if [[ -d "$dir" ]]; then
+                        local labels=""
+                        for d in "$dir"/*/; do
+                            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                                local repo_labels=$(git -C "$d" config --local wt.labels 2>/dev/null)
+                                if [[ -n "$repo_labels" ]]; then
+                                    labels="$labels $(echo "$repo_labels" | tr ',' ' ')"
+                                fi
+                            fi
+                        done
+                        COMPREPLY=($(compgen -W "$(echo "$labels" | tr ' ' '\n' | sort -u)" -- "$cur"))
+                    fi
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-d --dir --json -g --global -s --sort -R --refresh" -- "$cur"))
+            COMPREPLY=($(compgen -W "-d --dir --json -g --global -s --sort -R --refresh -r --repository -l --label" -- "$cur"))
             ;;
         repos)
             case "$prev" in
@@ -577,10 +620,14 @@ _wt() {
                         '--json[output as JSON]' \
                         '-g[show all worktrees]' \
                         '--global[show all worktrees]' \
-                        '-s[sort by]:field:(id repo branch)' \
-                        '--sort[sort by]:field:(id repo branch)' \
+                        '-s[sort by]:field:(id repo branch commit)' \
+                        '--sort[sort by]:field:(id repo branch commit)' \
                         '-R[fetch origin and refresh PR status]' \
-                        '--refresh[fetch origin and refresh PR status]'
+                        '--refresh[fetch origin and refresh PR status]' \
+                        '*-r[filter by repository name]:repository:__wt_repo_names' \
+                        '*--repository[filter by repository name]:repository:__wt_repo_names' \
+                        '*-l[filter by label]:label:__wt_label_names' \
+                        '*--label[filter by label]:label:__wt_label_names'
                     ;;
                 repos)
                     _arguments \
@@ -967,8 +1014,10 @@ complete -c wt -n "__fish_seen_subcommand_from prune" -s a -l arg -r -d "Set hoo
 complete -c wt -n "__fish_seen_subcommand_from list" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"
 complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
 complete -c wt -n "__fish_seen_subcommand_from list" -s g -l global -d "Show all worktrees (not just current repo)"
-complete -c wt -n "__fish_seen_subcommand_from list" -s s -l sort -r -a "id repo branch" -d "Sort by field"
+complete -c wt -n "__fish_seen_subcommand_from list" -s s -l sort -r -a "id repo branch commit" -d "Sort by field"
 complete -c wt -n "__fish_seen_subcommand_from list" -s R -l refresh -d "Fetch origin and refresh PR status"
+complete -c wt -n "__fish_seen_subcommand_from list" -s r -l repository -r -a "(__wt_list_repos)" -d "Filter by repository name (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from list" -s l -l label -r -a "(__wt_list_labels)" -d "Filter by label (repeatable)"
 
 # repos: list repositories
 complete -c wt -n "__fish_seen_subcommand_from repos" -s d -l dir -r -a "(__fish_complete_directories)" -d "Directory to scan"

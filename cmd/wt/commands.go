@@ -107,24 +107,30 @@ func (c *PruneCmd) Run(ctx *Context) error {
 
 // ListCmd lists worktrees in a directory.
 type ListCmd struct {
-	Dir     string `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
-	JSON    bool   `name:"json" help:"output as JSON"`
-	Global  bool   `short:"g" name:"global" help:"show all worktrees (not just current repo)"`
-	Sort    string `short:"s" name:"sort" default:"id" enum:"id,repo,branch" help:"sort by: id, repo, branch"`
-	Refresh bool   `short:"R" name:"refresh" help:"fetch origin and refresh PR status before listing"`
+	Dir        string   `short:"d" name:"dir" env:"WT_WORKTREE_DIR" placeholder:"DIR" help:"target directory (flag > WT_DEFAULT_PATH > config > cwd)"`
+	JSON       bool     `name:"json" help:"output as JSON"`
+	Global     bool     `short:"g" name:"global" help:"show all worktrees (not just current repo)"`
+	Sort       string   `short:"s" name:"sort" default:"" enum:",id,repo,branch,commit" help:"sort by: id, repo, branch, commit (default from config or 'id')"`
+	Refresh    bool     `short:"R" name:"refresh" help:"fetch origin and refresh PR status before listing"`
+	Repository []string `short:"r" name:"repository" sep:"," help:"filter by repository name(s) (repeatable, comma-separated)"`
+	Label      []string `short:"l" name:"label" sep:"," help:"filter by label(s) (repeatable, comma-separated)"`
 }
 
 func (c *ListCmd) Help() string {
 	return `IDs are stable across runs - use them with 'wt exec -i'.
 Inside a repo: shows only that repo's worktrees. Use --global for all.
+Use -r to filter by repo name(s), -l to filter by label(s).
 
 Examples:
   wt list                      # List worktrees for current repo
   wt list -R                   # Refresh PR status before listing
-  wt list --global              # List all worktrees (all repos)
+  wt list --global             # List all worktrees (all repos)
+  wt list -r myrepo            # Filter by repository name
+  wt list -l backend           # Filter by label
+  wt list -r repo1 -l team     # Combined filters
   wt list -d ~/Git/worktrees   # List from specific directory
   wt list --json               # Output as JSON for scripting
-  wt list --sort=repo          # Sort by repository name`
+  wt list --sort=commit        # Sort by most recent commit`
 }
 
 func (c *ListCmd) Run(ctx *Context) error {

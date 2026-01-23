@@ -7,23 +7,25 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/raphi011/wt/internal/format"
 )
 
 // Worktree represents a git worktree with its status
 type Worktree struct {
-	Path        string `json:"path"`
-	Branch      string `json:"branch"`
-	MainRepo    string `json:"main_repo"`
-	RepoName    string `json:"repo_name"`
-	OriginURL   string `json:"origin_url"`
-	IsMerged    bool   `json:"is_merged"`
-	CommitCount int    `json:"commit_count"`
-	IsDirty     bool   `json:"is_dirty"` // only populated when includeDirty=true
-	HasUpstream bool   `json:"has_upstream"`
-	LastCommit  string `json:"last_commit"`
-	Note        string `json:"note,omitempty"`
+	Path           string    `json:"path"`
+	Branch         string    `json:"branch"`
+	MainRepo       string    `json:"main_repo"`
+	RepoName       string    `json:"repo_name"`
+	OriginURL      string    `json:"origin_url"`
+	IsMerged       bool      `json:"is_merged"`
+	CommitCount    int       `json:"commit_count"`
+	IsDirty        bool      `json:"is_dirty"` // only populated when includeDirty=true
+	HasUpstream    bool      `json:"has_upstream"`
+	LastCommit     string    `json:"last_commit"`
+	LastCommitTime time.Time `json:"last_commit_time"` // for sorting by commit date
+	Note           string    `json:"note,omitempty"`
 }
 
 // GetWorktreeInfo returns info for a single worktree at the given path
@@ -69,8 +71,9 @@ func GetWorktreeInfo(path string) (*Worktree, error) {
 	// Check dirty status via git status --porcelain
 	isDirty := IsDirty(path)
 
-	// Get last commit time (errors treated as empty string)
+	// Get last commit time (errors treated as empty/zero values)
 	lastCommit, _ := GetLastCommitRelative(path)
+	lastCommitTime, _ := GetLastCommitTime(path)
 
 	// Get branch note (errors treated as empty string)
 	note, _ := GetBranchNote(mainRepo, branch)
@@ -79,17 +82,18 @@ func GetWorktreeInfo(path string) (*Worktree, error) {
 	hasUpstream := GetUpstreamBranch(mainRepo, branch) != ""
 
 	return &Worktree{
-		Path:        path,
-		Branch:      branch,
-		MainRepo:    mainRepo,
-		RepoName:    repoName,
-		OriginURL:   originURL,
-		IsMerged:    isMerged,
-		CommitCount: commitCount,
-		IsDirty:     isDirty,
-		HasUpstream: hasUpstream,
-		LastCommit:  lastCommit,
-		Note:        note,
+		Path:           path,
+		Branch:         branch,
+		MainRepo:       mainRepo,
+		RepoName:       repoName,
+		OriginURL:      originURL,
+		IsMerged:       isMerged,
+		CommitCount:    commitCount,
+		IsDirty:        isDirty,
+		HasUpstream:    hasUpstream,
+		LastCommit:     lastCommit,
+		LastCommitTime: lastCommitTime,
+		Note:           note,
 	}, nil
 }
 
@@ -207,8 +211,9 @@ func ListWorktrees(scanDir string, includeDirty bool) ([]Worktree, error) {
 			hasUpstream = upstreams[branch]
 		}
 
-		// Get last commit time
+		// Get last commit time (relative and absolute)
 		lastCommit, _ := GetLastCommitRelative(p.path)
+		lastCommitTime, _ := GetLastCommitTime(p.path)
 
 		// Phase 4: Only check dirty status if requested
 		var isDirty bool
@@ -217,17 +222,18 @@ func ListWorktrees(scanDir string, includeDirty bool) ([]Worktree, error) {
 		}
 
 		worktrees = append(worktrees, Worktree{
-			Path:        p.path,
-			Branch:      branch,
-			MainRepo:    p.mainRepo,
-			RepoName:    filepath.Base(p.mainRepo),
-			OriginURL:   repoOrigins[p.mainRepo],
-			IsMerged:    isMerged,
-			CommitCount: commitCount,
-			IsDirty:     isDirty,
-			HasUpstream: hasUpstream,
-			LastCommit:  lastCommit,
-			Note:        note,
+			Path:           p.path,
+			Branch:         branch,
+			MainRepo:       p.mainRepo,
+			RepoName:       filepath.Base(p.mainRepo),
+			OriginURL:      repoOrigins[p.mainRepo],
+			IsMerged:       isMerged,
+			CommitCount:    commitCount,
+			IsDirty:        isDirty,
+			HasUpstream:    hasUpstream,
+			LastCommit:     lastCommit,
+			LastCommitTime: lastCommitTime,
+			Note:           note,
 		})
 	}
 

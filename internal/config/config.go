@@ -44,8 +44,9 @@ type Config struct {
 	WorktreeDir    string            `toml:"worktree_dir"`
 	RepoDir        string            `toml:"repo_dir"` // optional: where to find repos for -r/-l
 	WorktreeFormat string            `toml:"worktree_format"`
-	BaseRef        string            `toml:"base_ref"` // "local" or "remote" (default: "remote")
-	Hooks          HooksConfig       `toml:"-"`        // custom parsing needed
+	BaseRef        string            `toml:"base_ref"`     // "local" or "remote" (default: "remote")
+	DefaultSort    string            `toml:"default_sort"` // "id", "repo", "branch", "commit" (default: "id")
+	Hooks          HooksConfig       `toml:"-"`            // custom parsing needed
 	Clone          CloneConfig       `toml:"clone"`
 	Merge          MergeConfig       `toml:"merge"`
 	Hosts          map[string]string `toml:"hosts"` // domain -> forge type mapping
@@ -125,6 +126,7 @@ type rawConfig struct {
 	RepoDir        string                 `toml:"repo_dir"`
 	WorktreeFormat string                 `toml:"worktree_format"`
 	BaseRef        string                 `toml:"base_ref"`
+	DefaultSort    string                 `toml:"default_sort"`
 	Hooks          map[string]interface{} `toml:"hooks"`
 	Clone          CloneConfig            `toml:"clone"`
 	Merge          MergeConfig            `toml:"merge"`
@@ -158,6 +160,7 @@ func Load() (Config, error) {
 		RepoDir:        raw.RepoDir,
 		WorktreeFormat: raw.WorktreeFormat,
 		BaseRef:        raw.BaseRef,
+		DefaultSort:    raw.DefaultSort,
 		Hooks:          parseHooksConfig(raw.Hooks),
 		Clone:          raw.Clone,
 		Merge:          raw.Merge,
@@ -212,6 +215,11 @@ func Load() (Config, error) {
 	// Validate base_ref (only "local", "remote", or empty allowed)
 	if cfg.BaseRef != "" && cfg.BaseRef != "local" && cfg.BaseRef != "remote" {
 		return Default(), fmt.Errorf("invalid base_ref %q: must be \"local\" or \"remote\"", cfg.BaseRef)
+	}
+
+	// Validate default_sort (only "id", "repo", "branch", "commit", or empty allowed)
+	if cfg.DefaultSort != "" && cfg.DefaultSort != "id" && cfg.DefaultSort != "repo" && cfg.DefaultSort != "branch" && cfg.DefaultSort != "commit" {
+		return Default(), fmt.Errorf("invalid default_sort %q: must be \"id\", \"repo\", \"branch\", or \"commit\"", cfg.DefaultSort)
 	}
 
 	// Use defaults for empty values
@@ -321,6 +329,14 @@ worktree_format = "{repo}-{branch}"
 #   "remote" - use origin/<branch> (default, ensures up-to-date base)
 #   "local"  - use local <branch> (faster, but may be stale)
 # base_ref = "remote"
+
+# Default sort order for 'wt list'
+# Available values: "id", "repo", "branch", "commit"
+#   "id"     - sort by stable worktree ID (default)
+#   "repo"   - sort by repository name
+#   "branch" - sort by branch name
+#   "commit" - sort by most recent commit (newest first)
+# default_sort = "id"
 
 # Hooks - run commands after worktree creation/removal
 # Use --hook=name to run a specific hook, --no-hook to skip all hooks
