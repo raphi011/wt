@@ -9,9 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/config"
-	"github.com/raphi011/wt/internal/git"
 )
 
 func TestCd_ByWorktreeID(t *testing.T) {
@@ -571,40 +569,4 @@ func runCdCommand(t *testing.T, cwd string, cfg *config.Config, cmd *CdCmd) (str
 	return buf.String(), runErr
 }
 
-// populateCache scans worktreeDir for worktrees and populates the cache.
-// This is required for ID-based lookups to work.
-func populateCache(t *testing.T, worktreeDir string) {
-	t.Helper()
-
-	// Load or create cache
-	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
-	if err != nil {
-		t.Fatalf("failed to load cache: %v", err)
-	}
-	defer unlock()
-
-	// List worktrees
-	worktrees, err := git.ListWorktrees(worktreeDir, false)
-	if err != nil {
-		t.Fatalf("failed to list worktrees: %v", err)
-	}
-
-	// Convert to cache.WorktreeInfo
-	wtInfos := make([]cache.WorktreeInfo, len(worktrees))
-	for i, wt := range worktrees {
-		wtInfos[i] = cache.WorktreeInfo{
-			Path:      wt.Path,
-			RepoPath:  wt.MainRepo,
-			Branch:    wt.Branch,
-			OriginURL: wt.OriginURL,
-		}
-	}
-
-	// Sync cache
-	wtCache.SyncWorktrees(wtInfos)
-
-	// Save cache
-	if err := cache.Save(worktreeDir, wtCache); err != nil {
-		t.Fatalf("failed to save cache: %v", err)
-	}
-}
+// Note: populateCache is defined in integration_test_helpers.go

@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/raphi011/wt/internal/cache"
+	"github.com/raphi011/wt/internal/git"
 )
 
 // resolvePath resolves symlinks in a path.
@@ -209,4 +212,42 @@ func runGitCommand(t *testing.T, dir string, args ...string) string {
 		t.Fatalf("failed to run %v: %v\n%s", args, err, out)
 	}
 	return string(out)
+}
+
+// populateCache scans worktreeDir for worktrees and populates the cache.
+// This is required for ID-based lookups to work.
+func populateCache(t *testing.T, worktreeDir string) {
+	t.Helper()
+
+	// Load or create cache
+	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
+	if err != nil {
+		t.Fatalf("failed to load cache: %v", err)
+	}
+	defer unlock()
+
+	// List worktrees
+	worktrees, err := git.ListWorktrees(worktreeDir, false)
+	if err != nil {
+		t.Fatalf("failed to list worktrees: %v", err)
+	}
+
+	// Convert to cache.WorktreeInfo
+	wtInfos := make([]cache.WorktreeInfo, len(worktrees))
+	for i, wt := range worktrees {
+		wtInfos[i] = cache.WorktreeInfo{
+			Path:      wt.Path,
+			RepoPath:  wt.MainRepo,
+			Branch:    wt.Branch,
+			OriginURL: wt.OriginURL,
+		}
+	}
+
+	// Sync cache
+	wtCache.SyncWorktrees(wtInfos)
+
+	// Save cache
+	if err := cache.Save(worktreeDir, wtCache); err != nil {
+		t.Fatalf("failed to save cache: %v", err)
+	}
 }
