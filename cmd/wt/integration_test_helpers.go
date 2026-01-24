@@ -37,9 +37,9 @@ func setupTestRepo(t *testing.T, dir, name string) string {
 		t.Fatalf("failed to create repo dir: %v", err)
 	}
 
-	// Initialize git repo
+	// Initialize git repo with main branch
 	cmds := [][]string{
-		{"git", "init"},
+		{"git", "init", "-b", "main"},
 		{"git", "config", "user.email", "test@test.com"},
 		{"git", "config", "user.name", "Test User"},
 		{"git", "config", "commit.gpgsign", "false"},
@@ -269,9 +269,9 @@ func setupTestRepoWithLocalOrigin(t *testing.T, dir, name string) string {
 		t.Fatalf("failed to create repo dir: %v", err)
 	}
 
-	// Initialize git repo
+	// Initialize git repo with main branch
 	cmds := [][]string{
-		{"git", "init"},
+		{"git", "init", "-b", "main"},
 		{"git", "config", "user.email", "test@test.com"},
 		{"git", "config", "user.name", "Test User"},
 		{"git", "config", "commit.gpgsign", "false"},
