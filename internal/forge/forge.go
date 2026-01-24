@@ -1,4 +1,3 @@
-// Package forge provides an abstraction over git hosting services (GitHub, GitLab).
 package forge
 
 import (

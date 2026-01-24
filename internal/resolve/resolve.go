@@ -1,4 +1,3 @@
-// Package resolve provides unified target resolution for worktree commands.
 package resolve
 
 import (

@@ -1,4 +1,3 @@
-// Package cmd provides helpers for executing shell commands with proper error handling.
 package cmd
 
 import (
