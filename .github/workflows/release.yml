@@ -23,6 +23,9 @@ jobs:
       - name: Test
         run: go test -v ./...
 
+      - name: Integration Test
+        run: go test -tags=integration -v ./...
+
   release:
     needs: test
     runs-on: ubuntu-latest
