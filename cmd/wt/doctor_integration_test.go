@@ -1,0 +1,532 @@
+//go:build integration
+
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/raphi011/wt/internal/cache"
+	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/doctor"
+	"github.com/raphi011/wt/internal/git"
+)
+
+func TestDoctor_NoIssues(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := t.TempDir()
+
+	// Create repo with worktree
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
+	setupWorktree(t, repoPath, worktreePath, "feature")
+
+	// Populate cache properly
+	populateCache(t, worktreeDir)
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		RepoDir:        repoDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Run doctor - should find no issues
+	err := doctor.Run(cfg, false)
+	if err != nil {
+		t.Fatalf("doctor failed: %v", err)
+	}
+}
+
+func TestDoctor_StaleEntry(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := t.TempDir()
+
+	// Create repo with worktree
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
+	setupWorktree(t, repoPath, worktreePath, "feature")
+
+	// Populate cache
+	populateCache(t, worktreeDir)
+
+	// Remove worktree directory manually (simulating deletion outside wt)
+	if err := os.RemoveAll(worktreePath); err != nil {
+		t.Fatalf("failed to remove worktree: %v", err)
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		RepoDir:        repoDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Run doctor without fix - should detect stale entry
+	err := doctor.Run(cfg, false)
+	if err != nil {
+		t.Fatalf("doctor failed: %v", err)
+	}
+
+	// Run doctor with fix - should mark entry as removed
+	err = doctor.Run(cfg, true)
+	if err != nil {
+		t.Fatalf("doctor --fix failed: %v", err)
+	}
+
+	// Verify entry is marked as removed
+	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
+	if err != nil {
+		t.Fatalf("failed to load cache: %v", err)
+	}
+	defer unlock()
+
+	key := "myrepo-feature"
+	entry, ok := wtCache.Worktrees[key]
+	if !ok {
+		t.Fatalf("entry %q not found in cache", key)
+	}
+	if entry.RemovedAt == nil {
+		t.Errorf("entry %q should be marked as removed", key)
+	}
+}
+
+func TestDoctor_DuplicateIDs(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := t.TempDir()
+
+	// Create repo with two worktrees
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	wt1 := filepath.Join(worktreeDir, "myrepo-feature1")
+	setupWorktree(t, repoPath, wt1, "feature1")
+	wt2 := filepath.Join(worktreeDir, "myrepo-feature2")
+	setupWorktree(t, repoPath, wt2, "feature2")
+
+	// Create cache manually with duplicate IDs
+	wtCache := &cache.Cache{
+		Worktrees: make(map[string]*cache.WorktreeIDEntry),
+		NextID:    2, // intentionally low to cause issue
+	}
+	wtCache.Worktrees["myrepo-feature1"] = &cache.WorktreeIDEntry{
+		ID:       1,
+		Path:     wt1,
+		RepoPath: repoPath,
+		Branch:   "feature1",
+	}
+	wtCache.Worktrees["myrepo-feature2"] = &cache.WorktreeIDEntry{
+		ID:       1, // duplicate ID!
+		Path:     wt2,
+		RepoPath: repoPath,
+		Branch:   "feature2",
+	}
+	if err := cache.Save(worktreeDir, wtCache); err != nil {
+		t.Fatalf("failed to save cache: %v", err)
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		RepoDir:        repoDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Run doctor with fix - should reassign duplicate ID
+	err := doctor.Run(cfg, true)
+	if err != nil {
+		t.Fatalf("doctor --fix failed: %v", err)
+	}
+
+	// Verify IDs are now unique
+	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
+	if err != nil {
+		t.Fatalf("failed to load cache: %v", err)
+	}
+	defer unlock()
+
+	ids := make(map[int]string)
+	for key, entry := range wtCache.Worktrees {
+		if entry.RemovedAt != nil {
+			continue
+		}
+		if existing, ok := ids[entry.ID]; ok {
+			t.Errorf("duplicate ID %d for entries %q and %q", entry.ID, existing, key)
+		}
+		ids[entry.ID] = key
+	}
+}
+
+func TestDoctor_MissingMetadata(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := t.TempDir()
+
+	// Create repo with worktree
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
+	setupWorktree(t, repoPath, worktreePath, "feature")
+
+	// Create cache manually with missing metadata
+	wtCache := &cache.Cache{
+		Worktrees: make(map[string]*cache.WorktreeIDEntry),
+		NextID:    2,
+	}
+	wtCache.Worktrees["myrepo-feature"] = &cache.WorktreeIDEntry{
+		ID:       1,
+		Path:     worktreePath,
+		RepoPath: "", // missing!
+		Branch:   "", // missing!
+	}
+	if err := cache.Save(worktreeDir, wtCache); err != nil {
+		t.Fatalf("failed to save cache: %v", err)
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		RepoDir:        repoDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Run doctor with fix - should update metadata
+	err := doctor.Run(cfg, true)
+	if err != nil {
+		t.Fatalf("doctor --fix failed: %v", err)
+	}
+
+	// Verify metadata is now populated
+	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
+	if err != nil {
+		t.Fatalf("failed to load cache: %v", err)
+	}
+	defer unlock()
+
+	entry := wtCache.Worktrees["myrepo-feature"]
+	if entry.RepoPath == "" {
+		t.Errorf("repo_path should be populated after fix")
+	}
+	if entry.Branch == "" {
+		t.Errorf("branch should be populated after fix")
+	}
+}
+
+func TestDoctor_OrphanWorktree(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := t.TempDir()
+
+	// Create repo with worktree
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
+	setupWorktree(t, repoPath, worktreePath, "feature")
+
+	// Create empty cache (worktree not tracked)
+	wtCache := &cache.Cache{
+		Worktrees: make(map[string]*cache.WorktreeIDEntry),
+		NextID:    1,
+	}
+	if err := cache.Save(worktreeDir, wtCache); err != nil {
+		t.Fatalf("failed to save cache: %v", err)
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		RepoDir:        repoDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Run doctor with fix - should add orphan to cache
+	err := doctor.Run(cfg, true)
+	if err != nil {
+		t.Fatalf("doctor --fix failed: %v", err)
+	}
+
+	// Verify worktree is now in cache
+	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
+	if err != nil {
+		t.Fatalf("failed to load cache: %v", err)
+	}
+	defer unlock()
+
+	if _, ok := wtCache.Worktrees["myrepo-feature"]; !ok {
+		t.Errorf("orphan worktree should be added to cache after fix")
+	}
+}
+
+func TestDoctor_Reset(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := t.TempDir()
+
+	// Create repo with two worktrees
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	wt1 := filepath.Join(worktreeDir, "myrepo-feature1")
+	setupWorktree(t, repoPath, wt1, "feature1")
+	wt2 := filepath.Join(worktreeDir, "myrepo-feature2")
+	setupWorktree(t, repoPath, wt2, "feature2")
+
+	// Create cache with high IDs (to verify reset resets IDs)
+	wtCache := &cache.Cache{
+		Worktrees: make(map[string]*cache.WorktreeIDEntry),
+		NextID:    100,
+	}
+	wtCache.Worktrees["myrepo-feature1"] = &cache.WorktreeIDEntry{
+		ID:       50,
+		Path:     wt1,
+		RepoPath: repoPath,
+		Branch:   "feature1",
+	}
+	wtCache.Worktrees["myrepo-feature2"] = &cache.WorktreeIDEntry{
+		ID:       75,
+		Path:     wt2,
+		RepoPath: repoPath,
+		Branch:   "feature2",
+	}
+
+	// Set a note on one of the branches (stored in git config)
+	if err := git.SetBranchNote(repoPath, "feature1", "old note"); err != nil {
+		t.Fatalf("failed to set branch note: %v", err)
+	}
+	if err := cache.Save(worktreeDir, wtCache); err != nil {
+		t.Fatalf("failed to save cache: %v", err)
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		RepoDir:        repoDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Run reset
+	err := doctor.Reset(cfg)
+	if err != nil {
+		t.Fatalf("doctor --reset failed: %v", err)
+	}
+
+	// Verify cache is rebuilt with IDs starting from 1
+	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
+	if err != nil {
+		t.Fatalf("failed to load cache: %v", err)
+	}
+	defer unlock()
+
+	// Check that we have 2 entries
+	activeCount := 0
+	for _, entry := range wtCache.Worktrees {
+		if entry.RemovedAt == nil {
+			activeCount++
+		}
+	}
+	if activeCount != 2 {
+		t.Errorf("expected 2 active entries, got %d", activeCount)
+	}
+
+	// Check that IDs are 1 and 2 (not 50 and 75)
+	ids := make(map[int]bool)
+	for _, entry := range wtCache.Worktrees {
+		if entry.RemovedAt == nil {
+			ids[entry.ID] = true
+		}
+	}
+	if !ids[1] || !ids[2] {
+		t.Errorf("expected IDs 1 and 2, got %v", ids)
+	}
+
+	// Note: Branch notes are stored in git config, not in the cache,
+	// so they are preserved across reset. Only cache IDs are reset.
+}
+
+func TestDoctor_BrokenGitLink(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := resolvePath(t, t.TempDir())
+
+	// Create repo with worktree
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
+	setupWorktree(t, repoPath, worktreePath, "feature")
+
+	// Populate cache
+	populateCache(t, worktreeDir)
+
+	// Break the git link by moving the main repo to a subdirectory
+	// This simulates a common scenario where the repo is moved and worktree links break
+	// Keep the same name so doctor can find it by name
+	newRepoDir := filepath.Join(repoDir, "moved")
+	if err := os.MkdirAll(newRepoDir, 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+	newRepoPath := filepath.Join(newRepoDir, "myrepo")
+	if err := os.Rename(repoPath, newRepoPath); err != nil {
+		t.Fatalf("failed to move repo: %v", err)
+	}
+
+	// Note: git status will fail now because the repo link is broken
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		RepoDir:        newRepoDir, // Point to the new location where repos are
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Run doctor without fix - should detect broken link
+	err := doctor.Run(cfg, false)
+	if err != nil {
+		t.Fatalf("doctor failed: %v", err)
+	}
+
+	// Run doctor with fix - should repair the link
+	err = doctor.Run(cfg, true)
+	if err != nil {
+		t.Fatalf("doctor --fix failed: %v", err)
+	}
+
+	// Verify worktree is now functional
+	verifyWorktreeWorks(t, worktreePath)
+}
+
+func TestDoctor_MultipleRepos(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := t.TempDir()
+
+	// Create two repos with worktrees
+	repoA := setupTestRepo(t, repoDir, "repo-a")
+	wtA := filepath.Join(worktreeDir, "repo-a-feature")
+	setupWorktree(t, repoA, wtA, "feature")
+
+	repoB := setupTestRepo(t, repoDir, "repo-b")
+	wtB := filepath.Join(worktreeDir, "repo-b-feature")
+	setupWorktree(t, repoB, wtB, "feature")
+
+	// Populate cache
+	populateCache(t, worktreeDir)
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		RepoDir:        repoDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Run doctor - should find no issues
+	err := doctor.Run(cfg, false)
+	if err != nil {
+		t.Fatalf("doctor failed: %v", err)
+	}
+}
+
+func TestDoctor_PathMismatch(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := t.TempDir()
+
+	// Create repo with worktree
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
+	setupWorktree(t, repoPath, worktreePath, "feature")
+
+	// Create cache with wrong path
+	wtCache := &cache.Cache{
+		Worktrees: make(map[string]*cache.WorktreeIDEntry),
+		NextID:    2,
+	}
+	wtCache.Worktrees["myrepo-feature"] = &cache.WorktreeIDEntry{
+		ID:       1,
+		Path:     "/wrong/path/myrepo-feature", // wrong path!
+		RepoPath: repoPath,
+		Branch:   "feature",
+	}
+	if err := cache.Save(worktreeDir, wtCache); err != nil {
+		t.Fatalf("failed to save cache: %v", err)
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		RepoDir:        repoDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Run doctor with fix - should update path
+	err := doctor.Run(cfg, true)
+	if err != nil {
+		t.Fatalf("doctor --fix failed: %v", err)
+	}
+
+	// Verify path is corrected
+	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
+	if err != nil {
+		t.Fatalf("failed to load cache: %v", err)
+	}
+	defer unlock()
+
+	entry := wtCache.Worktrees["myrepo-feature"]
+	if entry.Path != worktreePath {
+		t.Errorf("expected path %s, got %s", worktreePath, entry.Path)
+	}
+}
+
+func TestDoctor_EmptyWorktreeDir(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+
+	// Create empty cache
+	wtCache := &cache.Cache{
+		Worktrees: make(map[string]*cache.WorktreeIDEntry),
+		NextID:    1,
+	}
+	if err := cache.Save(worktreeDir, wtCache); err != nil {
+		t.Fatalf("failed to save cache: %v", err)
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Run doctor - should succeed with no issues
+	err := doctor.Run(cfg, false)
+	if err != nil {
+		t.Fatalf("doctor failed on empty dir: %v", err)
+	}
+}
+
+func TestDoctor_OldFormatKey(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+
+	// Create cache with old format key (contains "::")
+	wtCache := &cache.Cache{
+		Worktrees: make(map[string]*cache.WorktreeIDEntry),
+		NextID:    2,
+	}
+	wtCache.Worktrees["myrepo::feature"] = &cache.WorktreeIDEntry{
+		ID:       1,
+		Path:     "/some/path",
+		RepoPath: "/some/repo",
+		Branch:   "feature",
+	}
+	if err := cache.Save(worktreeDir, wtCache); err != nil {
+		t.Fatalf("failed to save cache: %v", err)
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Run doctor with fix - should remove old format entry
+	err := doctor.Run(cfg, true)
+	if err != nil {
+		t.Fatalf("doctor --fix failed: %v", err)
+	}
+
+	// Verify old format entry is removed
+	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
+	if err != nil {
+		t.Fatalf("failed to load cache: %v", err)
+	}
+	defer unlock()
+
+	if _, ok := wtCache.Worktrees["myrepo::feature"]; ok {
+		t.Errorf("old format entry should be removed after fix")
+	}
+}
