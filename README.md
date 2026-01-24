@@ -51,7 +51,7 @@ Scans the current directory for git repos and worktrees. Worktrees are moved to 
 ### 3. List Worktrees
 
 ```bash
-wt list
+wt list -g
 ```
 
 You're ready to go! See Scenarios below for common workflows.
