@@ -79,7 +79,7 @@ func runDoctor(cmd *DoctorCmd, cfg *config.Config) error {
 
 	// Category 2: Git link checks
 	fmt.Println("Checking git links...")
-	gitIssues := checkGitLinkIssues(wtCache, scanPath)
+	gitIssues := checkGitLinkIssues(wtCache, scanPath, cfg)
 	for i := range gitIssues {
 		gitIssues[i].Category = CategoryGit
 	}
@@ -98,15 +98,18 @@ func runDoctor(cmd *DoctorCmd, cfg *config.Config) error {
 
 	// Category 3: Orphan checks
 	fmt.Println("Checking for orphans...")
-	orphanIssues := checkOrphanIssues(wtCache, scanPath)
+	orphanIssues := checkOrphanIssues(wtCache, scanPath, cfg)
 	for i := range orphanIssues {
 		orphanIssues[i].Category = CategoryOrphan
 	}
 	allIssues = append(allIssues, orphanIssues...)
 	for _, issue := range orphanIssues {
-		if issue.FixAction == "add_to_cache" {
+		switch issue.FixAction {
+		case "add_to_cache", "repair_and_add", "remove_orphan_dir":
+			// Worktrees found on disk but not properly tracked
 			stats.OrphanUntracked++
-		} else {
+		default:
+			// Ghost entries: in cache but git doesn't recognize
 			stats.OrphanGhost++
 		}
 	}
@@ -290,11 +293,20 @@ func checkCacheIssues(wtCache *cache.Cache, scanPath string) []Issue {
 }
 
 // checkGitLinkIssues checks for broken git worktree links
-func checkGitLinkIssues(wtCache *cache.Cache, _ string) []Issue {
+func checkGitLinkIssues(wtCache *cache.Cache, scanPath string, cfg *config.Config) []Issue {
 	var issues []Issue
 
 	// Track repos we've checked for prunable worktrees
 	checkedRepos := make(map[string]bool)
+
+	// Build search directories for finding moved repos
+	var searchDirs []string
+	if cfg.RepoDir != "" {
+		searchDirs = append(searchDirs, cfg.RepoDir)
+	}
+	if scanPath != cfg.RepoDir {
+		searchDirs = append(searchDirs, scanPath)
+	}
 
 	for key, entry := range wtCache.Worktrees {
 		// Skip already-removed entries or entries without path
@@ -334,21 +346,56 @@ func checkGitLinkIssues(wtCache *cache.Cache, _ string) []Issue {
 
 		// Check if links are valid
 		if !git.IsWorktreeLinkValid(entry.Path) {
-			if git.CanRepairWorktree(entry.Path) {
+			// Determine which repo path to use for repair
+			repoPath := entry.RepoPath
+			repoMoved := false
+
+			// Check if cached repo path still exists
+			if repoPath != "" {
+				if _, err := os.Stat(filepath.Join(repoPath, ".git")); os.IsNotExist(err) {
+					// Repo moved - try to find it
+					repoName := git.GetRepoNameFromWorktree(entry.Path)
+					if repoName != "" {
+						foundRepo := git.FindRepoInDirs(repoName, searchDirs...)
+						if foundRepo != "" {
+							repoPath = foundRepo
+							repoMoved = true
+						} else {
+							repoPath = "" // Can't find repo
+						}
+					} else {
+						repoPath = "" // Can't parse .git file
+					}
+				}
+			}
+
+			if repoPath != "" && git.CanRepairWorktree(entry.Path) {
+				desc := "broken bidirectional link (repairable)"
+				if repoMoved {
+					desc = fmt.Sprintf("broken link, repo moved to %s (repairable)", repoPath)
+				}
 				issues = append(issues, Issue{
 					Key:         key,
-					Description: "broken bidirectional link (repairable)",
+					Description: desc,
 					FixAction:   "repair",
-					RepoPath:    entry.RepoPath,
+					RepoPath:    repoPath,
 				})
 			} else {
+				desc := "broken git link (unrepairable)"
+				if repoPath == "" {
+					repoName := git.GetRepoNameFromWorktree(entry.Path)
+					if repoName != "" {
+						desc = fmt.Sprintf("broken git link (repo %q not found)", repoName)
+					}
+				}
 				issues = append(issues, Issue{
 					Key:         key,
-					Description: "broken git link (unrepairable)",
+					Description: desc,
 					FixAction:   "mark_removed",
 					RepoPath:    entry.RepoPath,
 				})
 			}
+			continue
 		}
 
 		// Track repo for prunable check
@@ -377,7 +424,7 @@ func checkGitLinkIssues(wtCache *cache.Cache, _ string) []Issue {
 }
 
 // checkOrphanIssues finds untracked worktrees and ghost entries
-func checkOrphanIssues(wtCache *cache.Cache, scanPath string) []Issue {
+func checkOrphanIssues(wtCache *cache.Cache, scanPath string, cfg *config.Config) []Issue {
 	var issues []Issue
 
 	// Build set of known worktree paths from cache
@@ -394,6 +441,15 @@ func checkOrphanIssues(wtCache *cache.Cache, scanPath string) []Issue {
 		return issues
 	}
 
+	// Build search directories for finding moved repos
+	var searchDirs []string
+	if cfg.RepoDir != "" {
+		searchDirs = append(searchDirs, cfg.RepoDir)
+	}
+	if scanPath != cfg.RepoDir {
+		searchDirs = append(searchDirs, scanPath)
+	}
+
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -401,19 +457,53 @@ func checkOrphanIssues(wtCache *cache.Cache, scanPath string) []Issue {
 
 		path := filepath.Join(scanPath, entry.Name())
 
-		// Check if it's a worktree
+		// Check if it's a worktree (has .git file, not directory)
 		if !git.IsWorktree(path) {
 			continue
 		}
 
-		// Check if it's in cache
-		if !cachedPaths[path] {
-			issues = append(issues, Issue{
-				Key:         entry.Name(),
-				Description: "worktree not in cache",
-				FixAction:   "add_to_cache",
-			})
+		// Check if it's in cache - if so, skip (other checks handle cached entries)
+		if cachedPaths[path] {
+			continue
 		}
+
+		// Check if worktree link is valid
+		if !git.IsWorktreeLinkValid(path) {
+			// Broken link - try to find the moved repo
+			repoName := git.GetRepoNameFromWorktree(path)
+			if repoName == "" {
+				issues = append(issues, Issue{
+					Key:         entry.Name(),
+					Description: "orphan worktree (cannot parse .git file)",
+					FixAction:   "remove_orphan_dir",
+				})
+				continue
+			}
+
+			foundRepo := git.FindRepoInDirs(repoName, searchDirs...)
+			if foundRepo != "" {
+				issues = append(issues, Issue{
+					Key:         entry.Name(),
+					Description: fmt.Sprintf("broken link (repo found at %s)", foundRepo),
+					FixAction:   "repair_and_add",
+					RepoPath:    foundRepo,
+				})
+			} else {
+				issues = append(issues, Issue{
+					Key:         entry.Name(),
+					Description: fmt.Sprintf("orphan worktree (repo %q not found)", repoName),
+					FixAction:   "remove_orphan_dir",
+				})
+			}
+			continue
+		}
+
+		// Valid worktree not in cache
+		issues = append(issues, Issue{
+			Key:         entry.Name(),
+			Description: "worktree not in cache",
+			FixAction:   "add_to_cache",
+		})
 	}
 
 	// Check for ghost entries (in cache but git doesn't know about them)
@@ -511,7 +601,17 @@ func fixAllIssues(wtCache *cache.Cache, issues []Issue, scanPath string) error {
 						fmt.Printf("  ✗ Failed to repair %q: %v\n", issue.Key, err)
 						failed++
 					} else {
-						fmt.Printf("  ✓ Repaired git links for %q\n", issue.Key)
+						// Update cache if repo moved to new location
+						if entry.RepoPath != issue.RepoPath {
+							entry.RepoPath = issue.RepoPath
+							// Update origin URL from new repo location
+							if originURL, err := git.GetOriginURL(issue.RepoPath); err == nil {
+								entry.OriginURL = originURL
+							}
+							fmt.Printf("  ✓ Repaired git links for %q (updated repo path)\n", issue.Key)
+						} else {
+							fmt.Printf("  ✓ Repaired git links for %q\n", issue.Key)
+						}
 						fixed++
 					}
 				}
@@ -554,6 +654,46 @@ func fixAllIssues(wtCache *cache.Cache, issues []Issue, scanPath string) error {
 			wtCache.GetOrAssignID(info)
 			fmt.Printf("  ✓ Added %q to cache\n", issue.Key)
 			fixed++
+
+		case "repair_and_add":
+			// Repair worktree link and add to cache
+			path := filepath.Join(scanPath, issue.Key)
+			if issue.RepoPath == "" {
+				fmt.Printf("  ✗ Cannot repair %q: missing repo path\n", issue.Key)
+				failed++
+				continue
+			}
+
+			// Repair the worktree using the found repo
+			if err := git.RepairWorktree(issue.RepoPath, path); err != nil {
+				fmt.Printf("  ✗ Failed to repair %q: %v\n", issue.Key, err)
+				failed++
+				continue
+			}
+
+			// Now get worktree info and add to cache
+			wtInfo, err := git.GetWorktreeInfo(path)
+			if err != nil {
+				fmt.Printf("  ✗ Repaired %q but failed to get info: %v\n", issue.Key, err)
+				failed++
+				continue
+			}
+
+			info := cache.WorktreeInfo{
+				Path:      path,
+				RepoPath:  wtInfo.MainRepo,
+				Branch:    wtInfo.Branch,
+				OriginURL: wtInfo.OriginURL,
+			}
+			wtCache.GetOrAssignID(info)
+			fmt.Printf("  ✓ Repaired and added %q to cache\n", issue.Key)
+			fixed++
+
+		case "remove_orphan_dir":
+			// Report unfixable orphan - don't delete automatically
+			path := filepath.Join(scanPath, issue.Key)
+			fmt.Printf("  ⚠ Cannot fix %q: repo not found. Delete manually: rm -rf %s\n", issue.Key, path)
+			failed++
 		}
 	}
 

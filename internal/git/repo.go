@@ -536,6 +536,68 @@ func GetCommitsBehind(repoPath, branch string) (int, error) {
 	return count, err
 }
 
+// FindRepoInDirs searches for a repo with the given name in the provided directories.
+// Returns the absolute path to the repo if found, empty string otherwise.
+// Unlike FindRepoByName in discovery.go, this checks multiple directories and only
+// looks for exact folder name matches with a valid .git directory.
+func FindRepoInDirs(repoName string, searchDirs ...string) string {
+	for _, dir := range searchDirs {
+		if dir == "" {
+			continue
+		}
+		candidate := filepath.Join(dir, repoName)
+		gitPath := filepath.Join(candidate, ".git")
+		info, err := os.Stat(gitPath)
+		if err == nil && info.IsDir() {
+			return candidate
+		}
+	}
+	return ""
+}
+
+// GetRepoNameFromWorktree extracts the expected repo name from a worktree's .git file.
+// Parses: gitdir: /path/to/repo/.git/worktrees/name
+// Extracts: repo name from the path (parent of .git directory)
+func GetRepoNameFromWorktree(worktreePath string) string {
+	gitFile := filepath.Join(worktreePath, ".git")
+	content, err := os.ReadFile(gitFile)
+	if err != nil {
+		return ""
+	}
+
+	// Parse: "gitdir: /path/to/repo/.git/worktrees/name"
+	line := strings.TrimSpace(string(content))
+	if idx := strings.Index(line, "\n"); idx != -1 {
+		line = strings.TrimSpace(line[:idx])
+	}
+	if !strings.HasPrefix(line, "gitdir: ") {
+		return ""
+	}
+
+	gitdir := strings.TrimPrefix(line, "gitdir: ")
+	if !filepath.IsAbs(gitdir) {
+		gitdir = filepath.Join(worktreePath, gitdir)
+	}
+	gitdir = filepath.Clean(gitdir)
+
+	// Walk up from gitdir to find the .git directory, then get repo name
+	// gitdir is like: /path/to/repo/.git/worktrees/name
+	// We want: "repo" (the folder name)
+	dir := gitdir
+	for {
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached root without finding .git
+			return ""
+		}
+		if filepath.Base(dir) == ".git" {
+			// Found .git directory, parent is the repo path
+			return filepath.Base(parent)
+		}
+		dir = parent
+	}
+}
+
 // GetBranchCreatedTime returns when the branch was created (first commit on branch)
 // Falls back to first commit time if reflog is unavailable
 func GetBranchCreatedTime(repoPath, branch string) (time.Time, error) {
