@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -171,11 +172,15 @@ func gatherShowInfo(target *resolve.Target, prInfo *forge.PRInfo) *ShowInfo {
 		Path:     target.Path,
 		Branch:   target.Branch,
 		MainRepo: target.MainRepo,
-		RepoName: filepath.Base(target.MainRepo),
 	}
 
-	// Get origin URL
+	// Get origin URL and extract repo name from it
 	info.OriginURL, _ = git.GetOriginURL(target.MainRepo)
+	info.RepoName = extractRepoName(info.OriginURL)
+	if info.RepoName == "" {
+		// Fallback to local folder name
+		info.RepoName = filepath.Base(target.MainRepo)
+	}
 
 	// Get commits ahead
 	commitsAhead, err := git.GetCommitCount(target.MainRepo, target.Branch)
@@ -273,33 +278,31 @@ func outputShowJSON(info *ShowInfo) error {
 
 func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 	// Styles
-	titleStyle := lipgloss.NewStyle().Bold(true)
 	greenStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	redStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	yellowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	cyanStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
-	// Header
-	worktreeName := filepath.Base(info.Path)
-	idStr := ""
+	// Build section header
+	worktreeHeader := "Worktree"
 	if info.ID > 0 {
-		idStr = fmt.Sprintf(" (ID: %d)", info.ID)
+		worktreeHeader = fmt.Sprintf("Worktree (ID: %d)", info.ID)
 	}
-	fmt.Println(titleStyle.Render(worktreeName + idStr))
 
-	// Build sections
-	var sections [][][]string
+	// Build all rows
+	var rows [][]string
 
-	// Basic info section
-	var basicRows [][]string
-	basicRows = append(basicRows, []string{"Branch", info.Branch})
-	basicRows = append(basicRows, []string{"Repo", info.RepoName})
+	// Worktree info
+	worktreeName := filepath.Base(info.Path)
+	rows = append(rows, []string{"Name", worktreeName})
+	rows = append(rows, []string{"Branch", info.Branch})
+	rows = append(rows, []string{"Repo", info.RepoName})
 	if info.CreatedAt != nil {
-		basicRows = append(basicRows, []string{"Created", formatTimeAgo(*info.CreatedAt)})
+		rows = append(rows, []string{"Created", formatTimeAgo(*info.CreatedAt)})
 	}
 	if info.LastCommit != "" {
-		basicRows = append(basicRows, []string{"Last commit", info.LastCommit})
+		rows = append(rows, []string{"Last commit", info.LastCommit})
 	}
 
 	// Commits ahead/behind
@@ -316,7 +319,7 @@ func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 	if commitStr == "" {
 		commitStr = dimStyle.Render("up to date")
 	}
-	basicRows = append(basicRows, []string{"Commits", commitStr})
+	rows = append(rows, []string{"Commits", commitStr})
 
 	// Diff stats
 	if info.DiffStats != nil {
@@ -324,7 +327,7 @@ func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 			greenStyle.Render(fmt.Sprintf("+%d", info.DiffStats.Additions)),
 			redStyle.Render(fmt.Sprintf("-%d", info.DiffStats.Deletions)),
 			info.DiffStats.Files)
-		basicRows = append(basicRows, []string{"Changes", diffStr})
+		rows = append(rows, []string{"Changes", diffStr})
 	}
 
 	// Status
@@ -335,12 +338,22 @@ func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 	if info.IsMerged {
 		statusStr = greenStyle.Render("merged")
 	}
-	basicRows = append(basicRows, []string{"Status", statusStr})
-	sections = append(sections, basicRows)
+	rows = append(rows, []string{"Status", statusStr})
 
-	// PR section
+	// Track PR section start index
+	prStartIndex := -1
+
+	// PR info
+	prHeader := "PR"
 	if info.PR != nil {
-		var prRows [][]string
+		// Detect forge type from URL
+		if strings.Contains(info.OriginURL, "github") {
+			prHeader = "GitHub PR"
+		} else if strings.Contains(info.OriginURL, "gitlab") {
+			prHeader = "GitLab MR"
+		}
+
+		prStartIndex = len(rows)
 		stateStyle := yellowStyle
 		switch info.PR.State {
 		case "MERGED":
@@ -352,89 +365,128 @@ func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 		if info.PR.IsDraft {
 			prValue += " " + dimStyle.Render("[DRAFT]")
 		}
-		prRows = append(prRows, []string{"PR", prValue})
+		rows = append(rows, []string{"Number", prValue})
 
 		if info.PR.Author != "" {
-			prRows = append(prRows, []string{"Author", "@" + info.PR.Author})
+			rows = append(rows, []string{"Author", "@" + info.PR.Author})
 		}
 		if info.PR.URL != "" {
-			prRows = append(prRows, []string{"URL", cyanStyle.Render(info.PR.URL)})
+			rows = append(rows, []string{"URL", cyanStyle.Render(info.PR.URL)})
 		}
 		reviewStr := dimStyle.Render("none")
 		if info.PR.IsApproved {
 			reviewStr = greenStyle.Render("approved")
 		}
-		prRows = append(prRows, []string{"Reviews", reviewStr})
+		rows = append(rows, []string{"Reviews", reviewStr})
 		if info.PR.CommentCount > 0 {
-			prRows = append(prRows, []string{"Comments", fmt.Sprintf("%d", info.PR.CommentCount)})
+			rows = append(rows, []string{"Comments", fmt.Sprintf("%d", info.PR.CommentCount)})
 		}
-		sections = append(sections, prRows)
 	}
 
-	// Note section
+	// Note
 	if info.Note != "" {
-		sections = append(sections, [][]string{{"Note", info.Note}})
+		rows = append(rows, []string{"Note", info.Note})
 	}
 
-	// Calculate max column widths across all sections for alignment
+	// Calculate max key width and max value width for alignment
 	maxKeyWidth := 0
-	maxValWidth := 0
-	for _, sec := range sections {
-		for _, row := range sec {
-			if len(row[0]) > maxKeyWidth {
-				maxKeyWidth = len(row[0])
-			}
-			// Use lipgloss.Width to handle ANSI escape codes
-			if w := lipgloss.Width(row[1]); w > maxValWidth {
-				maxValWidth = w
-			}
+	maxValueWidth := 0
+	for _, row := range rows {
+		if len(row[0]) > maxKeyWidth {
+			maxKeyWidth = len(row[0])
+		}
+		// Use lipgloss.Width for accurate measurement with ANSI codes
+		valWidth := lipgloss.Width(row[1])
+		if valWidth > maxValueWidth {
+			maxValueWidth = valWidth
 		}
 	}
 
-	// Border for continuation sections (├─┼─┤ top)
-	continuationBorder := lipgloss.Border{
-		Top:          "─",
-		Bottom:       "─",
-		Left:         "│",
-		Right:        "│",
-		TopLeft:      "├",
-		TopRight:     "┤",
-		BottomLeft:   "└",
-		BottomRight:  "┘",
-		MiddleLeft:   "├",
-		MiddleRight:  "┤",
-		Middle:       "│",
-		MiddleTop:    "┼",
-		MiddleBottom: "┴",
+	// Split rows if there's a PR section
+	var mainRows, prRows [][]string
+	if prStartIndex >= 0 {
+		mainRows = rows[:prStartIndex]
+		prRows = rows[prStartIndex:]
+	} else {
+		mainRows = rows
 	}
 
-	// Render each section
-	for i, sec := range sections {
-		isFirst := i == 0
-		isLast := i == len(sections)-1
+	// Style function for table rows
+	styleFunc := func(row, col int) lipgloss.Style {
+		style := lipgloss.NewStyle().Padding(0, 1)
+		if col == 0 {
+			style = style.Bold(true).Width(maxKeyWidth + 2) // +2 for padding
+		} else {
+			// Ensure value column has consistent width
+			style = style.Width(maxValueWidth + 2)
+		}
+		return style
+	}
 
-		border := continuationBorder
-		if isFirst {
-			border = lipgloss.NormalBorder()
+	// Render main table with all rows for consistent width
+	t := table.New().
+		Rows(rows...).
+		Border(lipgloss.NormalBorder()).
+		BorderStyle(dimStyle).
+		BorderColumn(false).
+		StyleFunc(styleFunc)
+
+	// Get the full table to determine width, but we'll only print parts
+	fullTableStr := t.String()
+	fullTableLines := strings.Split(fullTableStr, "\n")
+	contentWidth := lipgloss.Width(fullTableLines[0]) - 2 // -2 for borders
+
+	// Helper to print centered header row
+	printHeader := func(label string) {
+		leftPad := (contentWidth - len(label)) / 2
+		rightPad := contentWidth - len(label) - leftPad
+		headerLine := dimStyle.Render("│") +
+			lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("255")).Render(
+				strings.Repeat(" ", leftPad)+label+strings.Repeat(" ", rightPad)) +
+			dimStyle.Render("│")
+		fmt.Println(headerLine)
+	}
+
+	// Helper to print data row
+	printRow := func(row []string) {
+		keyStyle := lipgloss.NewStyle().Bold(true).Width(maxKeyWidth + 2).Padding(0, 1)
+		valStyle := lipgloss.NewStyle().Padding(0, 1)
+
+		key := keyStyle.Render(row[0])
+		val := valStyle.Render(row[1])
+
+		// Pad value to fill remaining width
+		keyWidth := lipgloss.Width(key)
+		valWidth := lipgloss.Width(val)
+		remainingWidth := contentWidth - keyWidth - valWidth
+		if remainingWidth > 0 {
+			val += strings.Repeat(" ", remainingWidth)
 		}
 
-		t := table.New().
-			Rows(sec...).
-			Border(border).
-			BorderStyle(dimStyle).
-			BorderBottom(isLast).
-			StyleFunc(func(row, col int) lipgloss.Style {
-				style := lipgloss.NewStyle().Padding(0, 1)
-				if col == 0 {
-					style = style.Bold(true).Width(maxKeyWidth + 2) // +2 for padding
-				} else {
-					style = style.Width(maxValWidth + 2)
-				}
-				return style
-			})
-
-		fmt.Print(t.String())
+		fmt.Println(dimStyle.Render("│") + key + val + dimStyle.Render("│"))
 	}
+
+	// Print top border
+	fmt.Println(dimStyle.Render("┌" + strings.Repeat("─", contentWidth) + "┐"))
+
+	// Print Worktree header
+	printHeader(worktreeHeader)
+
+	// Print main rows
+	for _, row := range mainRows {
+		printRow(row)
+	}
+
+	// If PR section exists, add centered header and PR rows
+	if len(prRows) > 0 {
+		printHeader(prHeader)
+		for _, row := range prRows {
+			printRow(row)
+		}
+	}
+
+	// Print bottom border
+	fmt.Println(dimStyle.Render("└" + strings.Repeat("─", contentWidth) + "┘"))
 
 	return nil
 }
@@ -478,3 +530,34 @@ func formatTimeAgo(t time.Time) string {
 		return fmt.Sprintf("%d months ago", months)
 	}
 }
+
+// extractRepoName extracts the repository name from a git remote URL
+// Supports SSH (git@github.com:org/repo.git) and HTTPS (https://github.com/org/repo.git)
+func extractRepoName(url string) string {
+	if url == "" {
+		return ""
+	}
+
+	// Remove .git suffix
+	url = strings.TrimSuffix(url, ".git")
+
+	// Handle SSH format: git@github.com:org/repo
+	if strings.Contains(url, ":") && strings.Contains(url, "@") {
+		parts := strings.Split(url, ":")
+		if len(parts) == 2 {
+			pathParts := strings.Split(parts[1], "/")
+			if len(pathParts) > 0 {
+				return pathParts[len(pathParts)-1]
+			}
+		}
+	}
+
+	// Handle HTTPS format: https://github.com/org/repo
+	parts := strings.Split(url, "/")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+
+	return ""
+}
+

@@ -175,10 +175,16 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 		return nil
 	}
 
+	// Format sort description
+	sortDesc := sortBy
+	if sortBy == "commit" {
+		sortDesc = "recent commit"
+	}
+
 	if currentRepo != "" && len(allWorktrees) != len(worktrees) {
-		fmt.Printf("Listing worktrees for %s (%d of %d). Use --global to show all\n\n", worktrees[0].RepoName, len(worktrees), len(allWorktrees))
+		fmt.Printf("Listing worktrees for %s (%d of %d, sorted by %s). Use --global to show all\n\n", worktrees[0].RepoName, len(worktrees), len(allWorktrees), sortDesc)
 	} else {
-		fmt.Printf("Listing worktrees in %s (%d)\n\n", scanPath, len(worktrees))
+		fmt.Printf("Listing worktrees in %s (%d, sorted by %s)\n\n", scanPath, len(worktrees), sortDesc)
 	}
 
 	// Update merge status for worktrees based on cached PR state
