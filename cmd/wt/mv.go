@@ -49,6 +49,22 @@ func runMv(cmd *MvCmd, cfg *config.Config) error {
 		return err
 	}
 
+	// Filter by repository if specified
+	if len(cmd.Repository) > 0 {
+		repoSet := make(map[string]bool)
+		for _, r := range cmd.Repository {
+			repoSet[r] = true
+		}
+		var filtered []git.Worktree
+		for _, wt := range worktrees {
+			repoName := filepath.Base(wt.MainRepo)
+			if repoSet[repoName] {
+				filtered = append(filtered, wt)
+			}
+		}
+		worktrees = filtered
+	}
+
 	if len(worktrees) == 0 {
 		fmt.Println("No worktrees found in current directory")
 		return nil

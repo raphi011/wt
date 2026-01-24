@@ -537,19 +537,22 @@ func (c *HookCmd) Run(ctx *Context) error {
 
 // MvCmd moves worktrees to a different directory with optional renaming.
 type MvCmd struct {
-	Format string `name:"format" placeholder:"FORMAT" help:"worktree naming format"`
-	DryRun bool   `short:"n" name:"dry-run" negatable:"" help:"show what would be moved"`
-	Force  bool   `short:"f" name:"force" negatable:"" help:"force move dirty worktrees"`
+	Repository []string `short:"r" name:"repository" sep:"," help:"filter by repository name(s) (repeatable, comma-separated)"`
+	Format     string   `name:"format" placeholder:"FORMAT" help:"worktree naming format"`
+	DryRun     bool     `short:"n" name:"dry-run" negatable:"" help:"show what would be moved"`
+	Force      bool     `short:"f" name:"force" negatable:"" help:"force move dirty worktrees"`
 }
 
 func (c *MvCmd) Help() string {
 	return `Scans current directory for worktrees and moves them to destination.
-Use --format to rename during move.
+Use -r to filter by repository name(s). Use --format to rename during move.
 
 Destination is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
   wt mv                              # Move all worktrees to configured dir
+  wt mv -r myrepo                    # Move only myrepo's worktrees
+  wt mv -r repo1,repo2               # Move worktrees from multiple repos
   wt mv --format={branch}            # Move and rename to just branch name
   wt mv --dry-run                    # Preview what would be moved
   wt mv -f                           # Force move even if worktrees are dirty`

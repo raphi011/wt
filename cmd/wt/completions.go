@@ -342,11 +342,31 @@ _wt_completions() {
             ;;
         mv)
             case "$prev" in
+                -r|--repository)
+                    # Complete repo names from worktree_dir
+                    local dir="$WT_WORKTREE_DIR"
+                    if [[ -z "$dir" ]]; then
+                        local config_file=~/.config/wt/config.toml
+                        if [[ -f "$config_file" ]]; then
+                            dir=$(grep '^worktree_dir' "$config_file" 2>/dev/null | sed 's/.*= *"\?\([^"]*\)"\?/\1/' | sed "s|~|$HOME|")
+                        fi
+                    fi
+                    if [[ -d "$dir" ]]; then
+                        local repos=""
+                        for d in "$dir"/*/; do
+                            if [[ -d "$d/.git" ]] || [[ -f "$d/.git" ]]; then
+                                repos="$repos $(basename "$d")"
+                            fi
+                        done
+                        COMPREPLY=($(compgen -W "$repos" -- "$cur"))
+                    fi
+                    return
+                    ;;
                 --format)
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "--format -n --dry-run -f --force" -- "$cur"))
+            COMPREPLY=($(compgen -W "-r --repository --format -n --dry-run -f --force" -- "$cur"))
             ;;
         pr)
             if [[ $cword -eq 2 ]]; then
@@ -786,6 +806,8 @@ _wt() {
                     ;;
                 mv)
                     _arguments \
+                        '*-r[filter by repository name]:repository:__wt_repo_names' \
+                        '*--repository[filter by repository name]:repository:__wt_repo_names' \
                         '--format[worktree naming format]:format:' \
                         '-n[show what would be moved]' \
                         '--dry-run[show what would be moved]' \
@@ -1170,7 +1192,8 @@ complete -c wt -n "__fish_seen_subcommand_from cd" -l hook -d "Run named hook in
 complete -c wt -n "__fish_seen_subcommand_from cd" -l no-hook -d "Skip hooks"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 
-# mv: flags only (destination from config/env)
+# mv: flags (destination from config/env)
+complete -c wt -n "__fish_seen_subcommand_from mv" -s r -l repository -r -a "(__wt_list_repos)" -d "Filter by repository name (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from mv" -l format -d "Worktree naming format"
 complete -c wt -n "__fish_seen_subcommand_from mv" -s n -l dry-run -d "Show what would be moved"
 complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move dirty worktrees"
