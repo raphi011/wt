@@ -215,6 +215,102 @@ func runGitCommand(t *testing.T, dir string, args ...string) string {
 	return string(out)
 }
 
+// makeCommitInWorktree creates a file and commits it in the worktree.
+func makeCommitInWorktree(t *testing.T, worktreePath, filename string) {
+	t.Helper()
+	filePath := filepath.Join(worktreePath, filename)
+	if err := os.WriteFile(filePath, []byte("content for "+filename+"\n"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	runGitCommand(t, worktreePath, "git", "add", filename)
+	runGitCommand(t, worktreePath, "git", "commit", "-m", "Add "+filename)
+}
+
+// mergeBranchToMain merges a branch into main in the main repo and updates origin/main.
+// This makes the branch appear as "merged" when checked with `git branch --merged origin/main`.
+// Requires the repo to have a local bare origin set up (use setupTestRepoWithLocalOrigin).
+func mergeBranchToMain(t *testing.T, repoPath, branch string) {
+	t.Helper()
+	// Get current branch to restore later
+	currentBranch := strings.TrimSpace(runGitCommand(t, repoPath, "git", "rev-parse", "--abbrev-ref", "HEAD"))
+
+	// Checkout main and merge
+	runGitCommand(t, repoPath, "git", "checkout", "main")
+	runGitCommand(t, repoPath, "git", "merge", branch, "--no-edit")
+
+	// Push to origin so origin/main is updated (required for merge detection)
+	runGitCommand(t, repoPath, "git", "push", "origin", "main")
+
+	// Return to original branch if different
+	if currentBranch != "main" && currentBranch != branch {
+		runGitCommand(t, repoPath, "git", "checkout", currentBranch)
+	}
+}
+
+// setupTestRepoWithLocalOrigin creates a git repo with a local bare repo as origin.
+// This is required for tests that use merge detection (git branch --merged origin/main).
+// Returns the path to the repo (not the bare origin).
+func setupTestRepoWithLocalOrigin(t *testing.T, dir, name string) string {
+	t.Helper()
+
+	// Resolve symlinks in dir (needed for macOS where /var -> /private/var)
+	dir = resolvePath(t, dir)
+
+	// Create bare repo as origin
+	barePath := filepath.Join(dir, name+".git")
+	if err := os.MkdirAll(barePath, 0755); err != nil {
+		t.Fatalf("failed to create bare repo dir: %v", err)
+	}
+	runGitCommand(t, barePath, "git", "init", "--bare")
+
+	// Create working repo
+	repoPath := filepath.Join(dir, name)
+	if err := os.MkdirAll(repoPath, 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+
+	// Initialize git repo
+	cmds := [][]string{
+		{"git", "init"},
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test User"},
+		{"git", "config", "commit.gpgsign", "false"},
+	}
+
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create initial commit
+	readmePath := filepath.Join(repoPath, "README.md")
+	if err := os.WriteFile(readmePath, []byte("# "+name+"\n"), 0644); err != nil {
+		t.Fatalf("failed to write README: %v", err)
+	}
+
+	cmds = [][]string{
+		{"git", "add", "README.md"},
+		{"git", "commit", "-m", "Initial commit"},
+	}
+
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Set up origin pointing to bare repo and push
+	runGitCommand(t, repoPath, "git", "remote", "add", "origin", barePath)
+	runGitCommand(t, repoPath, "git", "push", "-u", "origin", "main")
+
+	return repoPath
+}
+
 // populateCache scans worktreeDir for worktrees and populates the cache.
 // This is required for ID-based lookups to work.
 func populateCache(t *testing.T, worktreeDir string) {

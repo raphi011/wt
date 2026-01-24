@@ -118,8 +118,9 @@ func IsBranchMerged(repoPath, branch string) (bool, error) {
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		// Handle both "branch" and "* branch" formats
+		// Handle "branch", "* branch" (current), and "+ branch" (in worktree) formats
 		trimmed = strings.TrimPrefix(trimmed, "* ")
+		trimmed = strings.TrimPrefix(trimmed, "+ ")
 		if trimmed == branch {
 			return true, nil
 		}
@@ -439,8 +440,9 @@ func GetMergedBranches(repoPath string) map[string]bool {
 
 	for _, line := range strings.Split(string(output), "\n") {
 		trimmed := strings.TrimSpace(line)
-		// Handle both "branch" and "* branch" formats
+		// Handle "branch", "* branch" (current), and "+ branch" (in worktree) formats
 		trimmed = strings.TrimPrefix(trimmed, "* ")
+		trimmed = strings.TrimPrefix(trimmed, "+ ")
 		if trimmed != "" {
 			merged[trimmed] = true
 		}

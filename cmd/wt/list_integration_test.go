@@ -1072,19 +1072,6 @@ func runListCommand(t *testing.T, workDir string, cfg *config.Config, cmd *ListC
 	return buf.String(), err
 }
 
-// makeCommitInWorktree creates a commit in a worktree directory.
-func makeCommitInWorktree(t *testing.T, worktreePath, filename string) {
-	t.Helper()
-
-	filePath := filepath.Join(worktreePath, filename)
-	if err := os.WriteFile(filePath, []byte("content for "+filename+"\n"), 0644); err != nil {
-		t.Fatalf("failed to create file: %v", err)
-	}
-
-	runGitCommand(t, worktreePath, "git", "add", filename)
-	runGitCommand(t, worktreePath, "git", "commit", "-m", "Add "+filename)
-}
-
 // makeCommitInWorktreeWithDate creates a commit with a specific date.
 // The date should be in RFC 3339 format (e.g., "2024-01-15T12:00:00Z").
 func makeCommitInWorktreeWithDate(t *testing.T, worktreePath, filename, date string) {
