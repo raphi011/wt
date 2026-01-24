@@ -17,8 +17,8 @@ func ParseRepoArg(repo string) (org, name string) {
 	return "", repo
 }
 
-// FindRepoByName searches direct children of basePath for a git repo with the given name.
-// First checks for exact folder name match with matching origin, then searches all repos by origin.
+// FindRepoByName searches direct children of basePath for a git repo with the given folder name.
+// Matches by folder name only (case-insensitive), excludes worktrees.
 // Returns the full path if found, or an error if not found.
 func FindRepoByName(basePath, name string) (string, error) {
 	entries, err := os.ReadDir(basePath)
@@ -26,41 +26,15 @@ func FindRepoByName(basePath, name string) (string, error) {
 		return "", fmt.Errorf("failed to read directory %s: %w", basePath, err)
 	}
 
-	// First pass: exact folder name match with verified origin
-	for _, entry := range entries {
-		if !entry.IsDir() || entry.Name() != name {
-			continue
-		}
-
-		repoPath := filepath.Join(basePath, entry.Name())
-		if !isGitRepo(repoPath) {
-			continue
-		}
-
-		// Verify origin matches
-		repoName, err := GetRepoNameFrom(repoPath)
-		if err == nil && strings.EqualFold(repoName, name) {
-			return repoPath, nil
-		}
-	}
-
-	// Second pass: search all repos by origin
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
-
+		if !strings.EqualFold(entry.Name(), name) {
+			continue
+		}
 		repoPath := filepath.Join(basePath, entry.Name())
-		if !isGitRepo(repoPath) {
-			continue
-		}
-
-		repoName, err := GetRepoNameFrom(repoPath)
-		if err != nil {
-			continue
-		}
-
-		if strings.EqualFold(repoName, name) {
+		if isMainRepo(repoPath) {
 			return repoPath, nil
 		}
 	}
@@ -85,7 +59,7 @@ func FindSimilarRepos(basePath, search string) []string {
 		}
 
 		repoPath := filepath.Join(basePath, entry.Name())
-		if !isGitRepo(repoPath) {
+		if !isMainRepo(repoPath) {
 			continue
 		}
 
@@ -97,18 +71,19 @@ func FindSimilarRepos(basePath, search string) []string {
 	return matches
 }
 
-// isGitRepo checks if a path is a git repository (has .git dir or file)
-func isGitRepo(path string) bool {
+// isMainRepo checks if path is a main git repository (not a worktree).
+// Main repos have .git as a directory; worktrees have .git as a file.
+func isMainRepo(path string) bool {
 	gitPath := filepath.Join(path, ".git")
 	info, err := os.Stat(gitPath)
 	if err != nil {
 		return false
 	}
-	// .git can be a directory (regular repo) or file (worktree)
-	return info.IsDir() || info.Mode().IsRegular()
+	return info.IsDir()
 }
 
-// FindAllRepos returns paths to all git repositories in basePath (direct children only)
+// FindAllRepos returns paths to all main git repositories in basePath (direct children only).
+// Excludes worktrees (only includes repos where .git is a directory).
 func FindAllRepos(basePath string) ([]string, error) {
 	entries, err := os.ReadDir(basePath)
 	if err != nil {
@@ -122,7 +97,7 @@ func FindAllRepos(basePath string) ([]string, error) {
 		}
 
 		repoPath := filepath.Join(basePath, entry.Name())
-		if isGitRepo(repoPath) {
+		if isMainRepo(repoPath) {
 			repos = append(repos, repoPath)
 		}
 	}

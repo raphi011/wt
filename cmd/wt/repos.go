@@ -67,11 +67,8 @@ func runRepos(cmd *ReposCmd, cfg *config.Config) error {
 			}
 		}
 
-		// Get repo name from origin URL (fallback to folder name)
-		name, err := git.GetRepoNameFrom(repoPath)
-		if err != nil {
-			name = filepath.Base(repoPath)
-		}
+		// Get repo name from folder name
+		name := filepath.Base(repoPath)
 
 		// Get current branch
 		branch, _ := git.GetCurrentBranch(repoPath)

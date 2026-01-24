@@ -44,13 +44,9 @@ func GetRepoNameFrom(repoPath string) (string, error) {
 	return repoName, nil
 }
 
-// GetRepoDisplayName returns the repo name from origin URL, falling back to folder name.
+// GetRepoDisplayName returns the folder name of the repository.
 func GetRepoDisplayName(repoPath string) string {
-	name, err := GetRepoNameFrom(repoPath)
-	if err != nil || name == "" {
-		return filepath.Base(repoPath)
-	}
-	return name
+	return filepath.Base(repoPath)
 }
 
 // GetRepoFolderName returns the actual folder name of the git repo on disk
@@ -536,10 +532,9 @@ func GetCommitsBehind(repoPath, branch string) (int, error) {
 	return count, err
 }
 
-// FindRepoInDirs searches for a repo with the given name in the provided directories.
+// FindRepoInDirs searches for a repo with the given folder name across multiple directories.
 // Returns the absolute path to the repo if found, empty string otherwise.
-// Unlike FindRepoByName in discovery.go, this checks multiple directories and only
-// looks for exact folder name matches with a valid .git directory.
+// Similar to FindRepoByName but checks multiple directories (stops at first match).
 func FindRepoInDirs(repoName string, searchDirs ...string) string {
 	for _, dir := range searchDirs {
 		if dir == "" {
