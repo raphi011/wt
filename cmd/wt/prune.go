@@ -399,7 +399,7 @@ func formatNotRemovableReason(wt *git.Worktree, includeCleanSet bool) string {
 			// -c was set but still not removable - shouldn't happen if not dirty
 			return "not merged (use -f to force)"
 		}
-		return "not merged, but has 0 commits ahead (use -c to include clean worktrees, or -f to force)"
+		return "clean (use -c to include clean worktrees, or -f to force)"
 	}
 
 	// Has commits ahead and not merged
