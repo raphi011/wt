@@ -112,7 +112,7 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-i --id -n --dry-run -f --force -c --include-clean -g --global -R --refresh --reset-cache --hook --no-hook -a --arg" -- "$cur"))
+            COMPREPLY=($(compgen -W "-i --id -n --dry-run -f --force -c --include-clean -g --global -v --verbose -R --refresh --reset-cache --hook --no-hook -a --arg" -- "$cur"))
             ;;
         list|ls)
             case "$prev" in
@@ -618,6 +618,8 @@ _wt() {
                         '--include-clean[also remove clean worktrees]' \
                         '-g[prune all worktrees, not just current repo]' \
                         '--global[prune all worktrees, not just current repo]' \
+                        '-v[show skipped worktrees with reasons]' \
+                        '--verbose[show skipped worktrees with reasons]' \
                         '-R[fetch origin and refresh PR status]' \
                         '--refresh[fetch origin and refresh PR status]' \
                         '--reset-cache[clear cache and reset IDs from 1]' \
@@ -1014,6 +1016,7 @@ complete -c wt -n "__fish_seen_subcommand_from prune p" -s n -l dry-run -d "Prev
 complete -c wt -n "__fish_seen_subcommand_from prune p" -s f -l force -d "Force remove even if not merged/dirty"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -s c -l include-clean -d "Also remove clean worktrees"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -s g -l global -d "Prune all worktrees (not just current repo)"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -s v -l verbose -d "Show skipped worktrees with reasons"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -s R -l refresh -d "Fetch origin and refresh PR status"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -l reset-cache -d "Clear cache and reset IDs from 1"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -l hook -d "Run named hook instead of default"

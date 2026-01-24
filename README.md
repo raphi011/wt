@@ -139,6 +139,9 @@ wt prune -R
 # Preview what would be removed
 wt prune -n
 
+# Verbose dry-run: see what's skipped and why
+wt prune -n -v
+
 # Also remove worktrees with 0 commits (stale checkouts)
 wt prune -c
 
@@ -377,6 +380,8 @@ wt completion zsh > ~/.zfunc/_wt
 ```
 
 ## Command Reference
+
+Common commands have short aliases (shown in `wt --help`): `a`, `ls`, `s`, `p`, `r`, `x`.
 
 | Command | Description |
 |---------|-------------|
