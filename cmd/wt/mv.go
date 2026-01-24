@@ -70,6 +70,25 @@ func runMv(cmd *MvCmd, cfg *config.Config) error {
 		return nil
 	}
 
+	// Determine repo destination: repo_dir if set, otherwise worktree_dir
+	repoDestPath := destPath // default to worktree_dir
+	if cfg.RepoDir != "" {
+		var err error
+		repoDestPath, err = filepath.Abs(cfg.RepoDir)
+		if err != nil {
+			return fmt.Errorf("failed to resolve repo_dir: %w", err)
+		}
+
+		// Validate repo_dir exists
+		if info, err := os.Stat(repoDestPath); os.IsNotExist(err) {
+			return fmt.Errorf("repo_dir does not exist: %s", repoDestPath)
+		} else if err != nil {
+			return fmt.Errorf("failed to check repo_dir: %w", err)
+		} else if !info.IsDir() {
+			return fmt.Errorf("repo_dir is not a directory: %s", repoDestPath)
+		}
+	}
+
 	// Track results
 	var moved, skipped, failed int
 
@@ -125,12 +144,101 @@ func runMv(cmd *MvCmd, cfg *config.Config) error {
 		moved++
 	}
 
-	// Print summary
+	// Print worktree summary
 	fmt.Println()
 	if cmd.DryRun {
-		fmt.Printf("Dry run: %d would be moved, %d skipped\n", moved, skipped)
+		fmt.Printf("Worktrees: %d would be moved, %d skipped\n", moved, skipped)
 	} else {
-		fmt.Printf("Moved: %d, Skipped: %d, Failed: %d\n", moved, skipped, failed)
+		fmt.Printf("Worktrees: %d moved, %d skipped, %d failed\n", moved, skipped, failed)
+	}
+
+	// Find and move main repos in cwd (not worktrees)
+	repos, err := git.FindAllRepos(cwd)
+	if err != nil {
+		return fmt.Errorf("failed to scan for repos: %w", err)
+	}
+
+	// Filter by repository if specified
+	if len(cmd.Repository) > 0 {
+		repoSet := make(map[string]bool)
+		for _, r := range cmd.Repository {
+			repoSet[r] = true
+		}
+		var filtered []string
+		for _, repoPath := range repos {
+			repoName := filepath.Base(repoPath)
+			if repoSet[repoName] {
+				filtered = append(filtered, repoPath)
+			}
+		}
+		repos = filtered
+	}
+
+	if len(repos) == 0 {
+		return nil
+	}
+
+	fmt.Println()
+	var repoMoved, repoSkipped, repoFailed int
+
+	for _, repoPath := range repos {
+		repoName := filepath.Base(repoPath)
+		newPath := filepath.Join(repoDestPath, repoName)
+
+		// Skip if already at destination
+		if repoPath == newPath {
+			fmt.Printf("→ Skipping repo %s: already at destination\n", repoName)
+			repoSkipped++
+			continue
+		}
+
+		// Check if target exists
+		if _, err := os.Stat(newPath); err == nil {
+			fmt.Printf("⚠ Skipping repo %s: target already exists\n", repoName)
+			repoSkipped++
+			continue
+		}
+
+		if cmd.DryRun {
+			fmt.Printf("Would move repo: %s → %s\n", repoPath, newPath)
+			repoMoved++
+			continue
+		}
+
+		// Get worktree list before moving (to update references after)
+		wtInfos, _ := git.ListWorktreesFromRepo(repoPath)
+
+		// Move the repo
+		if err := os.Rename(repoPath, newPath); err != nil {
+			fmt.Printf("✗ Failed to move repo %s: %v\n", repoName, err)
+			repoFailed++
+			continue
+		}
+
+		// Update worktree references to point to new repo location
+		for _, wti := range wtInfos {
+			if wti.Path == repoPath {
+				continue // skip main repo entry
+			}
+			// Check if worktree still exists before updating
+			if _, err := os.Stat(wti.Path); os.IsNotExist(err) {
+				continue
+			}
+			if err := git.UpdateWorktreeGitFile(wti.Path, newPath); err != nil {
+				fmt.Printf("⚠ Warning: failed to update worktree %s: %v\n", filepath.Base(wti.Path), err)
+			}
+		}
+
+		fmt.Printf("✓ Moved repo: %s → %s\n", repoPath, newPath)
+		repoMoved++
+	}
+
+	// Print repo summary
+	fmt.Println()
+	if cmd.DryRun {
+		fmt.Printf("Repos: %d would be moved, %d skipped\n", repoMoved, repoSkipped)
+	} else {
+		fmt.Printf("Repos: %d moved, %d skipped, %d failed\n", repoMoved, repoSkipped, repoFailed)
 	}
 
 	return nil

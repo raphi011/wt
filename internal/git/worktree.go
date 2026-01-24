@@ -699,3 +699,29 @@ func CanRepairWorktree(worktreePath string) bool {
 	// .git file exists but link is invalid - potentially repairable
 	return !IsWorktreeLinkValid(worktreePath)
 }
+
+// UpdateWorktreeGitFile updates a worktree's .git file to point to a new main repo location.
+// Used after moving a repo to update its worktrees' references.
+func UpdateWorktreeGitFile(worktreePath, newRepoPath string) error {
+	gitFile := filepath.Join(worktreePath, ".git")
+
+	// Read current content to get worktree name
+	content, err := os.ReadFile(gitFile)
+	if err != nil {
+		return err
+	}
+
+	// Extract worktree name from old gitdir path
+	// Old: gitdir: /old/repo/.git/worktrees/branch-name
+	line := strings.TrimSpace(string(content))
+	if !strings.HasPrefix(line, "gitdir: ") {
+		return fmt.Errorf("invalid .git file format")
+	}
+	oldGitdir := strings.TrimPrefix(line, "gitdir: ")
+	wtName := filepath.Base(oldGitdir) // e.g., "branch-name"
+
+	// Write new gitdir pointing to new repo location
+	newGitdir := filepath.Join(newRepoPath, ".git", "worktrees", wtName)
+	newContent := fmt.Sprintf("gitdir: %s\n", newGitdir)
+	return os.WriteFile(gitFile, []byte(newContent), 0644)
+}
