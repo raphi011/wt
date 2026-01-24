@@ -46,7 +46,7 @@ wt mv -n          # Preview what would be moved
 wt mv             # Move to configured directories
 ```
 
-Worktrees are moved to `worktree_dir`. Repos are moved to `repo_dir` (if configured, otherwise `worktree_dir`).
+Scans the current directory for git repos and worktrees. Worktrees are moved to `worktree_dir`, repos to `repo_dir` (if configured, otherwise `worktree_dir`).
 
 ### 3. List Worktrees
 
@@ -54,23 +54,7 @@ Worktrees are moved to `worktree_dir`. Repos are moved to `repo_dir` (if configu
 wt list
 ```
 
-You're ready to go! See Quick Start below for common workflows.
-
-## Quick Start
-
-```bash
-# Create config (required - specify your worktree directory)
-wt config init ~/Git/worktrees
-
-# Start working on a new feature
-wt add -b my-feature
-
-# Review a PR
-wt pr checkout 123
-
-# Clean up merged worktrees
-wt prune
-```
+You're ready to go! See Scenarios below for common workflows.
 
 ## Scenarios
 
