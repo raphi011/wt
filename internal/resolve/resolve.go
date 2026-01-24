@@ -16,6 +16,78 @@ type Target struct {
 	Path     string
 }
 
+// FromCurrentWorktree resolves target from the current working directory.
+// Returns error if not inside a git worktree.
+func FromCurrentWorktree() (*Target, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	if !git.IsWorktree(cwd) {
+		return nil, fmt.Errorf("not inside a worktree (use --id to specify target)")
+	}
+
+	branch, err := git.GetCurrentBranch(cwd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current branch: %w", err)
+	}
+
+	mainRepo, err := git.GetMainRepoPath(cwd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get main repo path: %w", err)
+	}
+
+	return &Target{Branch: branch, MainRepo: mainRepo, Path: cwd}, nil
+}
+
+// FromCurrentWorktreeOrRepo resolves target from the current working directory.
+// Works in both worktrees and main repos.
+func FromCurrentWorktreeOrRepo() (*Target, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	if !git.IsInsideRepo() {
+		return nil, fmt.Errorf("not inside a git repository")
+	}
+
+	branch, err := git.GetCurrentBranch(cwd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current branch: %w", err)
+	}
+
+	var mainRepo string
+	if git.IsWorktree(cwd) {
+		mainRepo, err = git.GetMainRepoPath(cwd)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get main repo path: %w", err)
+		}
+	} else {
+		// Inside main repo, use cwd as main repo
+		mainRepo = cwd
+	}
+
+	return &Target{Branch: branch, MainRepo: mainRepo, Path: cwd}, nil
+}
+
+// ByRepoName resolves a target by repository name.
+// Returns target with current branch of that repo.
+func ByRepoName(repoName, repoScanDir string) (*Target, error) {
+	repoPath, err := git.FindRepoByName(repoScanDir, repoName)
+	if err != nil {
+		return nil, err
+	}
+
+	branch, err := git.GetCurrentBranch(repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current branch: %w", err)
+	}
+
+	return &Target{Branch: branch, MainRepo: repoPath, Path: repoPath}, nil
+}
+
 // ByID resolves a worktree target by its numeric ID only.
 // Returns error if ID not found, worktree was removed, or path no longer exists.
 func ByID(id int, scanDir string) (*Target, error) {

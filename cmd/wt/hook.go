@@ -3,8 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
@@ -121,60 +119,20 @@ func runHooksForContext(hookNames []string, cfg *config.Config, ctx hooks.Contex
 	return nil
 }
 
-// resolveHookTargetCurrent resolves the worktree context for the current worktree.
+// resolveHookTargetCurrent resolves the context for the current worktree or repo.
 func resolveHookTargetCurrent() (hooks.Context, error) {
-	cwd, err := os.Getwd()
+	target, err := resolve.FromCurrentWorktreeOrRepo()
 	if err != nil {
-		return hooks.Context{}, fmt.Errorf("failed to get current directory: %w", err)
+		return hooks.Context{}, fmt.Errorf("use -i, -r, or -l when not inside a git repo (run 'wt list' to see IDs)")
 	}
-
-	if !git.IsWorktree(cwd) {
-		return hooks.Context{}, fmt.Errorf("use -i, -r, or -l when not inside a worktree (run 'wt list' to see IDs)")
-	}
-
-	branch, err := git.GetCurrentBranch(cwd)
-	if err != nil {
-		return hooks.Context{}, fmt.Errorf("failed to get current branch: %w", err)
-	}
-
-	mainRepo, err := git.GetMainRepoPath(cwd)
-	if err != nil {
-		return hooks.Context{}, fmt.Errorf("failed to get main repo path: %w", err)
-	}
-
-	ctx := hooks.Context{
-		Path:     cwd,
-		Branch:   branch,
-		MainRepo: mainRepo,
-		Folder:   filepath.Base(mainRepo),
-		Trigger:  "run",
-	}
-	ctx.Repo, _ = git.GetRepoNameFrom(mainRepo)
-
-	return ctx, nil
+	return hooks.ContextFromWorktree(target, "run", nil), nil
 }
 
 // resolveHookTargetByID resolves the worktree context by ID.
-func resolveHookTargetByID(id int, dir string) (hooks.Context, error) {
-	scanPath := dir
-	if scanPath == "" {
-		scanPath = "."
-	}
-	scanPath, err := filepath.Abs(scanPath)
-	if err != nil {
-		return hooks.Context{}, fmt.Errorf("failed to resolve absolute path: %w", err)
-	}
-
-	resolved, err := resolve.ByID(id, scanPath)
+func resolveHookTargetByID(id int, scanPath string) (hooks.Context, error) {
+	target, err := resolve.ByID(id, scanPath)
 	if err != nil {
 		return hooks.Context{}, err
 	}
-
-	// Validate path still exists
-	if _, err := os.Stat(resolved.Path); os.IsNotExist(err) {
-		return hooks.Context{}, fmt.Errorf("worktree path no longer exists: %s (run 'wt list' to refresh)", resolved.Path)
-	}
-
-	ctx := hooks.ContextFromWorktree(resolved, "run", nil)
-	return ctx, nil
+	return hooks.ContextFromWorktree(target, "run", nil), nil
 }

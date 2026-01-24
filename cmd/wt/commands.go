@@ -137,20 +137,22 @@ func (c *ListCmd) Run(ctx *Context) error {
 
 // ShowCmd shows detailed status for a single worktree.
 type ShowCmd struct {
-	ID      int  `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Refresh bool `short:"R" name:"refresh" help:"refresh PR status from API"`
-	JSON    bool `name:"json" help:"output as JSON"`
+	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
+	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
+	Refresh    bool   `short:"R" name:"refresh" help:"refresh PR status from API"`
+	JSON       bool   `name:"json" help:"output as JSON"`
 }
 
 func (c *ShowCmd) Help() string {
-	return `Inside a worktree: --id is optional (defaults to current).
-Outside: specify a worktree ID.
+	return `Inside a worktree or repo: --id is optional (defaults to current branch).
+Outside: specify a worktree ID or repo name.
 
 Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
-  wt show              # Inside worktree, show current
+  wt show              # Inside worktree/repo, show current branch
   wt show -i 3         # By worktree ID
+  wt show -r myrepo    # By repository name
   wt show --refresh    # Refresh PR status from API
   wt show --json       # Output as JSON`
 }
@@ -218,13 +220,14 @@ func (c *CdCmd) Run(ctx *Context) error {
 
 // NoteSetCmd sets a note on a branch.
 type NoteSetCmd struct {
-	Text string `arg:"" required:"" placeholder:"TEXT" help:"note text"`
-	ID   int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
+	Text       string `arg:"" required:"" placeholder:"TEXT" help:"note text"`
+	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
+	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
 }
 
 func (c *NoteSetCmd) Help() string {
-	return `When run inside a worktree, --id is optional (defaults to current branch).
-When run outside, specify a worktree ID.
+	return `When run inside a worktree or repo, --id is optional (defaults to current branch).
+When run outside, specify a worktree ID or repo name.
 
 The note is stored in git config (branch.<name>.description) and displayed
 in 'wt list' and 'wt prune' output.
@@ -232,8 +235,9 @@ in 'wt list' and 'wt prune' output.
 Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
-  wt note set "Working on login flow"      # Inside worktree, current branch
-  wt note set "Working on login" -i 1      # By worktree ID`
+  wt note set "Working on login flow"      # Inside worktree/repo, current branch
+  wt note set "Working on login" -i 1      # By worktree ID
+  wt note set "Working on login" -r myrepo # By repository name`
 }
 
 func (c *NoteSetCmd) Run(ctx *Context) error {
@@ -242,20 +246,22 @@ func (c *NoteSetCmd) Run(ctx *Context) error {
 
 // NoteGetCmd gets a note from a branch.
 type NoteGetCmd struct {
-	ID int `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
+	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
+	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
 }
 
 func (c *NoteGetCmd) Help() string {
-	return `When run inside a worktree, --id is optional (defaults to current branch).
-When run outside, specify a worktree ID.
+	return `When run inside a worktree or repo, --id is optional (defaults to current branch).
+When run outside, specify a worktree ID or repo name.
 
 Prints the note if set, or nothing if no note exists.
 
 Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
-  wt note get        # Inside worktree, current branch
-  wt note get -i 1   # By worktree ID`
+  wt note get           # Inside worktree/repo, current branch
+  wt note get -i 1      # By worktree ID
+  wt note get -r myrepo # By repository name`
 }
 
 func (c *NoteGetCmd) Run(ctx *Context) error {
@@ -264,20 +270,22 @@ func (c *NoteGetCmd) Run(ctx *Context) error {
 
 // NoteClearCmd clears a note from a branch.
 type NoteClearCmd struct {
-	ID int `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
+	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
+	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
 }
 
 func (c *NoteClearCmd) Help() string {
-	return `When run inside a worktree, --id is optional (defaults to current branch).
-When run outside, specify a worktree ID.
+	return `When run inside a worktree or repo, --id is optional (defaults to current branch).
+When run outside, specify a worktree ID or repo name.
 
 Removes the note from the branch. Safe to run even if no note exists.
 
 Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
-  wt note clear        # Inside worktree, current branch
-  wt note clear -i 1   # By worktree ID`
+  wt note clear           # Inside worktree/repo, current branch
+  wt note clear -i 1      # By worktree ID
+  wt note clear -r myrepo # By repository name`
 }
 
 func (c *NoteClearCmd) Run(ctx *Context) error {
@@ -587,28 +595,30 @@ func (c *PrCheckoutCmd) Run(ctx *Context) error {
 
 // PrMergeCmd merges the PR for the current branch.
 type PrMergeCmd struct {
-	ID       int      `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Strategy string   `short:"s" name:"strategy" env:"WT_MERGE_STRATEGY" placeholder:"STRATEGY" help:"merge strategy: squash, rebase, or merge"`
-	Keep     bool     `short:"k" name:"keep" help:"keep worktree and branch after merge"`
-	Hook     string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
-	NoHook   bool     `name:"no-hook" help:"skip post-merge hook" xor:"hook-ctrl"`
-	Env      []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
+	ID         int      `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
+	Repository string   `short:"r" name:"repository" xor:"target" help:"repository name"`
+	Strategy   string   `short:"s" name:"strategy" env:"WT_MERGE_STRATEGY" placeholder:"STRATEGY" help:"merge strategy: squash, rebase, or merge"`
+	Keep       bool     `short:"k" name:"keep" help:"keep worktree and branch after merge"`
+	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	NoHook     bool     `name:"no-hook" help:"skip post-merge hook" xor:"hook-ctrl"`
+	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
 // PrCreateCmd creates a PR for a worktree.
 type PrCreateCmd struct {
-	ID       int    `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Title    string `short:"t" name:"title" required:"" placeholder:"TITLE" help:"PR title"`
-	Body     string `short:"b" name:"body" placeholder:"BODY" help:"PR body (use - to read from stdin)"`
-	BodyFile string `name:"body-file" placeholder:"FILE" help:"read body from file"`
-	Base     string `name:"base" placeholder:"BRANCH" help:"base branch (default: repo's default branch)"`
-	Draft    bool   `name:"draft" help:"create as draft PR"`
-	Web      bool   `short:"w" name:"web" help:"open PR in browser after creation"`
+	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
+	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
+	Title      string `short:"t" name:"title" required:"" placeholder:"TITLE" help:"PR title"`
+	Body       string `short:"b" name:"body" placeholder:"BODY" help:"PR body (use - to read from stdin)"`
+	BodyFile   string `name:"body-file" placeholder:"FILE" help:"read body from file"`
+	Base       string `name:"base" placeholder:"BRANCH" help:"base branch (default: repo's default branch)"`
+	Draft      bool   `name:"draft" help:"create as draft PR"`
+	Web        bool   `short:"w" name:"web" help:"open PR in browser after creation"`
 }
 
 func (c *PrCreateCmd) Help() string {
-	return `Inside a worktree: --id is optional (defaults to current branch).
-Outside: specify a worktree ID.
+	return `Inside a worktree or repo: --id is optional (defaults to current branch).
+Outside: specify a worktree ID or repo name.
 
 The body can be provided via --body, --body-file, or piped from stdin with --body -.
 Use --draft to create a draft PR. Use --web to open the PR in browser after creation.
@@ -616,13 +626,14 @@ Use --draft to create a draft PR. Use --web to open the PR in browser after crea
 Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
-  wt pr create --title "Add feature"                    # Inside worktree
+  wt pr create --title "Add feature"                    # Inside worktree/repo
   wt pr create --title "Add feature" --body "Details"   # With body
   wt pr create --title "Add feature" --body-file=pr.md  # Body from file
   echo "body" | wt pr create --title "Add feature" --body -  # Body from stdin
   wt pr create --title "Add feature" --draft            # Create as draft
   wt pr create --title "Add feature" -w                 # Open in browser after
-  wt pr create --title "Add feature" -i 1               # By worktree ID`
+  wt pr create --title "Add feature" -i 1               # By worktree ID
+  wt pr create --title "Add feature" -r myrepo          # By repository name`
 }
 
 func (c *PrCreateCmd) Run(ctx *Context) error {
@@ -630,18 +641,19 @@ func (c *PrCreateCmd) Run(ctx *Context) error {
 }
 
 func (c *PrMergeCmd) Help() string {
-	return `Inside a worktree: --id is optional (defaults to current branch).
-Outside: specify a worktree ID.
+	return `Inside a worktree or repo: --id is optional (defaults to current branch).
+Outside: specify a worktree ID or repo name.
 
-Merges the PR, removes the worktree, and deletes the local branch.
-Use --keep to preserve the worktree after merge.
+Merges the PR, removes the worktree (if applicable), and deletes the local branch.
+Use --keep to preserve the worktree/branch after merge.
 Merge strategy: flag > WT_MERGE_STRATEGY env > config. GitLab doesn't support rebase.
 
 Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
-  wt pr merge                    # Inside worktree: merge current branch's PR
+  wt pr merge                    # Inside worktree/repo: merge current branch's PR
   wt pr merge -i 1               # By worktree ID
+  wt pr merge -r myrepo          # By repository name
   wt pr merge --keep             # Merge PR only, keep worktree and branch
   wt pr merge -s rebase          # Use rebase merge strategy`
 }
@@ -652,22 +664,24 @@ func (c *PrMergeCmd) Run(ctx *Context) error {
 
 // PrViewCmd shows PR details or opens in browser.
 type PrViewCmd struct {
-	ID  int  `short:"i" name:"id" help:"worktree ID (optional in worktree)"`
-	Web bool `short:"w" name:"web" help:"open PR in browser"`
+	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
+	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
+	Web        bool   `short:"w" name:"web" help:"open PR in browser"`
 }
 
 func (c *PrViewCmd) Help() string {
-	return `Inside a worktree: --id is optional (defaults to current branch).
-Outside: specify a worktree ID.
+	return `Inside a worktree or repo: --id is optional (defaults to current branch).
+Outside: specify a worktree ID or repo name.
 
 Shows PR details for the branch. Use --web to open in browser instead.
 
 Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
-  wt pr view              # Inside worktree: show PR details
-  wt pr view -w           # Inside worktree: open PR in browser
+  wt pr view              # Inside worktree/repo: show PR details
+  wt pr view -w           # Inside worktree/repo: open PR in browser
   wt pr view -i 1         # By worktree ID
+  wt pr view -r myrepo    # By repository name
   wt pr view -i 1 -w      # Open PR in browser by ID`
 }
 

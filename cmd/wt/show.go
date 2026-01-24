@@ -33,6 +33,7 @@ type ShowInfo struct {
 	DiffStats     *DiffStats `json:"diff_stats,omitempty"`
 	IsDirty       bool       `json:"is_dirty"`
 	IsMerged      bool       `json:"is_merged"`
+	IsWorktree    bool       `json:"is_worktree"`
 	Note          string     `json:"note,omitempty"`
 	PR            *PRInfo    `json:"pr,omitempty"`
 }
@@ -62,7 +63,7 @@ func runShow(cmd *ShowCmd, cfg *config.Config) error {
 	}
 
 	// Resolve target worktree
-	info, err := resolveShowTarget(cmd.ID, scanPath)
+	info, err := resolveShowTarget(cmd.ID, cmd.Repository, cfg, scanPath)
 	if err != nil {
 		return err
 	}
@@ -104,7 +105,30 @@ func runShow(cmd *ShowCmd, cfg *config.Config) error {
 }
 
 // resolveShowTarget resolves the worktree target for show command
-func resolveShowTarget(id int, dir string) (*resolve.Target, error) {
+func resolveShowTarget(id int, repository string, cfg *config.Config, dir string) (*resolve.Target, error) {
+	// Resolve by ID if provided
+	if id != 0 {
+		scanPath := dir
+		if scanPath == "" {
+			scanPath = "."
+		}
+		scanPath, err := filepath.Abs(scanPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve absolute path: %w", err)
+		}
+		return resolve.ByID(id, scanPath)
+	}
+
+	// Resolve by repo name if provided
+	if repository != "" {
+		repoScanDir := cfg.RepoScanDir()
+		if repoScanDir == "" {
+			repoScanDir = dir
+		}
+		return resolve.ByRepoName(repository, repoScanDir)
+	}
+
+	// Default: use current working directory
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
@@ -113,65 +137,53 @@ func resolveShowTarget(id int, dir string) (*resolve.Target, error) {
 	inWorktree := git.IsWorktree(cwd)
 	inGitRepo := git.IsInsideRepo()
 
-	// If no ID provided and inside a worktree or git repo, use current branch
-	if id == 0 {
-		if !inWorktree && !inGitRepo {
-			return nil, fmt.Errorf("--id required when not inside a worktree (run 'wt list' to see IDs)")
-		}
-
-		branch, err := git.GetCurrentBranch(cwd)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get current branch: %w", err)
-		}
-
-		var mainRepo string
-		if inWorktree {
-			mainRepo, err = git.GetMainRepoPath(cwd)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get main repo path: %w", err)
-			}
-		} else {
-			// Inside main repo, use cwd as main repo
-			mainRepo = cwd
-		}
-
-		// Get ID from cache if available
-		scanPath := dir
-		if scanPath == "" {
-			scanPath = "."
-		}
-		scanPath, _ = filepath.Abs(scanPath)
-		wtCache, _ := cache.Load(scanPath)
-		wtID := 0
-		if wtCache != nil {
-			key := cache.MakeWorktreeKey(cwd)
-			if entry, ok := wtCache.Worktrees[key]; ok {
-				wtID = entry.ID
-			}
-		}
-
-		return &resolve.Target{ID: wtID, Branch: branch, MainRepo: mainRepo, Path: cwd}, nil
+	if !inWorktree && !inGitRepo {
+		return nil, fmt.Errorf("--id or --repository required when not inside a worktree/repo (run 'wt list' to see IDs)")
 	}
 
-	// Resolve by ID
+	branch, err := git.GetCurrentBranch(cwd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current branch: %w", err)
+	}
+
+	var mainRepo string
+	if inWorktree {
+		mainRepo, err = git.GetMainRepoPath(cwd)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get main repo path: %w", err)
+		}
+	} else {
+		// Inside main repo, use cwd as main repo
+		mainRepo = cwd
+	}
+
+	// Get ID from cache if available
 	scanPath := dir
 	if scanPath == "" {
 		scanPath = "."
 	}
-	scanPath, err = filepath.Abs(scanPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve absolute path: %w", err)
+	scanPath, _ = filepath.Abs(scanPath)
+	wtCache, _ := cache.Load(scanPath)
+	wtID := 0
+	if wtCache != nil {
+		key := cache.MakeWorktreeKey(cwd)
+		if entry, ok := wtCache.Worktrees[key]; ok {
+			wtID = entry.ID
+		}
 	}
 
-	return resolve.ByID(id, scanPath)
+	return &resolve.Target{ID: wtID, Branch: branch, MainRepo: mainRepo, Path: cwd}, nil
 }
 
 func gatherShowInfo(target *resolve.Target, prInfo *forge.PRInfo) *ShowInfo {
+	// Determine if this is a worktree (path differs from main repo)
+	isWorktree := target.Path != target.MainRepo
 	info := &ShowInfo{
-		ID:       target.ID,
-		Path:     target.Path,
-		Branch:   target.Branch,
-		MainRepo: target.MainRepo,
+		ID:         target.ID,
+		Path:       target.Path,
+		Branch:     target.Branch,
+		MainRepo:   target.MainRepo,
+		IsWorktree: isWorktree,
 	}
 
 	// Get origin URL and extract repo name from it
@@ -285,9 +297,15 @@ func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
 	// Build section header
-	worktreeHeader := "Worktree"
-	if info.ID > 0 {
-		worktreeHeader = fmt.Sprintf("Worktree (ID: %d)", info.ID)
+	var worktreeHeader string
+	if info.IsWorktree {
+		if info.ID > 0 {
+			worktreeHeader = fmt.Sprintf("Worktree (ID: %d)", info.ID)
+		} else {
+			worktreeHeader = "Worktree"
+		}
+	} else {
+		worktreeHeader = "Repo"
 	}
 
 	// Build all rows
