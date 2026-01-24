@@ -355,14 +355,8 @@ func matchPattern(pattern, repoSpec string) bool {
 	return pattern == repoSpec
 }
 
-const defaultConfig = `# wt configuration
-
-# Base directory for new worktrees
-# Must be an absolute path or start with ~ (no relative paths like "." or "..")
-# Examples: "/Users/you/Git/worktrees" or "~/Git/worktrees"
-# Can also be set via WT_WORKTREE_DIR env var (env overrides config)
-# worktree_dir = "~/Git/worktrees"
-
+// defaultConfigAfterWorktreeDir is the config content after the worktree_dir line
+const defaultConfigAfterWorktreeDir = `
 # Optional: directory where repositories are stored (for -r/-l repo lookup)
 # If not set, uses worktree_dir for repo scanning
 # Useful when repos live in ~/Code but worktrees go to ~/Git/worktrees
@@ -473,10 +467,20 @@ worktree_format = "{repo}-{branch}"
 #   glab auth login --hostname gitlab.internal.corp
 `
 
+// defaultConfig is the full default config template with worktree_dir commented out
+const defaultConfig = `# wt configuration
+
+# Base directory for new worktrees
+# Must be an absolute path or start with ~ (no relative paths like "." or "..")
+# Examples: "/Users/you/Git/worktrees" or "~/Git/worktrees"
+# Can also be set via WT_WORKTREE_DIR env var (env overrides config)
+# worktree_dir = "~/Git/worktrees"
+` + defaultConfigAfterWorktreeDir
+
 // Init creates a default config file at ~/.config/wt/config.toml
 // If force is true, overwrites existing file
 // Returns the path to the created file
-func Init(force bool) (string, error) {
+func Init(worktreeDir string, force bool) (string, error) {
 	path, err := configPath()
 	if err != nil {
 		return "", err
@@ -495,8 +499,9 @@ func Init(force bool) (string, error) {
 		return "", err
 	}
 
-	// Write default config
-	if err := os.WriteFile(path, []byte(defaultConfig), 0644); err != nil {
+	// Write config with worktree dir
+	content := DefaultConfigWithDir(worktreeDir)
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return "", err
 	}
 
@@ -506,4 +511,13 @@ func Init(force bool) (string, error) {
 // DefaultConfig returns the default configuration content.
 func DefaultConfig() string {
 	return defaultConfig
+}
+
+// DefaultConfigWithDir returns the default configuration with worktree_dir set.
+func DefaultConfigWithDir(worktreeDir string) string {
+	return fmt.Sprintf(`# wt configuration
+
+# Base directory for new worktrees
+worktree_dir = %q
+`+defaultConfigAfterWorktreeDir, worktreeDir)
 }

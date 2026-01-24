@@ -10,11 +10,15 @@ import (
 )
 
 func runConfigInit(cmd *ConfigInitCmd) error {
+	// Validate worktree dir (must be absolute or start with ~)
+	if err := config.ValidatePath(cmd.WorktreeDir, "worktree_dir"); err != nil {
+		return err
+	}
 	if cmd.Stdout {
-		fmt.Print(config.DefaultConfig())
+		fmt.Print(config.DefaultConfigWithDir(cmd.WorktreeDir))
 		return nil
 	}
-	path, err := config.Init(cmd.Force)
+	path, err := config.Init(cmd.WorktreeDir, cmd.Force)
 	if err != nil {
 		return err
 	}

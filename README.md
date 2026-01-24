@@ -30,8 +30,8 @@ Requires `git` in PATH. For GitHub repos: `gh` CLI. For GitLab repos: `glab` CLI
 ## Quick Start
 
 ```bash
-# Create config (optional but recommended)
-wt config init
+# Create config (required - specify your worktree directory)
+wt config init ~/Git/worktrees
 
 # Start working on a new feature
 wt add -b my-feature
@@ -272,9 +272,9 @@ wt doctor --reset
 Config file: `~/.config/wt/config.toml`
 
 ```bash
-wt config init    # Create default config
-wt config show    # Show effective config
-wt config hooks   # List configured hooks
+wt config init ~/Git/worktrees  # Create config with worktree dir
+wt config show                  # Show effective config
+wt config hooks                 # List configured hooks
 ```
 
 ### Basic Settings

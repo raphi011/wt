@@ -440,16 +440,17 @@ func (c *CompletionCmd) Run(ctx *Context) error {
 
 // ConfigInitCmd creates the default config file.
 type ConfigInitCmd struct {
-	Force  bool `short:"f" name:"force" negatable:"" help:"overwrite existing config file"`
-	Stdout bool `short:"s" name:"stdout" help:"print config to stdout instead of writing to file"`
+	WorktreeDir string `arg:"" help:"base directory for worktrees (absolute path or ~/...)"`
+	Force       bool   `short:"f" name:"force" negatable:"" help:"overwrite existing config file"`
+	Stdout      bool   `short:"s" name:"stdout" help:"print config to stdout instead of writing to file"`
 }
 
 func (c *ConfigInitCmd) Help() string {
 	return `Create default config file at ~/.config/wt/config.toml
 Examples:
-  wt config init           # Create config if missing
-  wt config init -f        # Overwrite existing config
-  wt config init -s        # Print default config to stdout`
+  wt config init ~/Git/worktrees     # Create config with worktree dir
+  wt config init ~/Git/worktrees -f  # Overwrite existing config
+  wt config init ~/Git -s            # Print config to stdout`
 }
 
 func (c *ConfigInitCmd) Run(ctx *Context) error {
