@@ -43,8 +43,8 @@ func runMv(cmd *MvCmd, cfg *config.Config) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	// Scan for worktrees in current directory (no dirty check needed for mv)
-	worktrees, err := git.ListWorktrees(cwd, false)
+	// Scan for worktrees in current directory (need dirty check to skip dirty worktrees)
+	worktrees, err := git.ListWorktrees(cwd, true)
 	if err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func runMv(cmd *MvCmd, cfg *config.Config) error {
 
 	if len(worktrees) == 0 {
 		fmt.Println("No worktrees found in current directory")
-		return nil
+		// Continue to process repos even if no worktrees found
 	}
 
 	// Determine repo destination: repo_dir if set, otherwise worktree_dir
@@ -144,12 +144,14 @@ func runMv(cmd *MvCmd, cfg *config.Config) error {
 		moved++
 	}
 
-	// Print worktree summary
-	fmt.Println()
-	if cmd.DryRun {
-		fmt.Printf("Worktrees: %d would be moved, %d skipped\n", moved, skipped)
-	} else {
-		fmt.Printf("Worktrees: %d moved, %d skipped, %d failed\n", moved, skipped, failed)
+	// Print worktree summary (only if there were worktrees to consider)
+	if len(worktrees) > 0 {
+		fmt.Println()
+		if cmd.DryRun {
+			fmt.Printf("Worktrees: %d would be moved, %d skipped\n", moved, skipped)
+		} else {
+			fmt.Printf("Worktrees: %d moved, %d skipped, %d failed\n", moved, skipped, failed)
+		}
 	}
 
 	// Find and move main repos in cwd (not worktrees)
