@@ -35,15 +35,16 @@ func runConfigShow(cmd *ConfigShowCmd, cfg *config.Config) error {
 			Rules []cloneRuleJSON `json:"rules,omitempty"`
 		}
 		type mergeJSON struct {
-			Strategy string `json:"strategy,omitempty"`
+			Strategy string `json:"strategy"`
 		}
 		type configJSON struct {
 			WorktreeDir    string            `json:"worktree_dir,omitempty"`
 			RepoDir        string            `json:"repo_dir,omitempty"`
 			WorktreeFormat string            `json:"worktree_format"`
-			BaseRef        string            `json:"base_ref,omitempty"`
+			BaseRef        string            `json:"base_ref"`
+			DefaultSort    string            `json:"default_sort"`
 			Clone          cloneJSON         `json:"clone"`
-			Merge          mergeJSON         `json:"merge,omitempty"`
+			Merge          mergeJSON         `json:"merge"`
 			Hosts          map[string]string `json:"hosts,omitempty"`
 		}
 
@@ -55,18 +56,32 @@ func runConfigShow(cmd *ConfigShowCmd, cfg *config.Config) error {
 			})
 		}
 
+		baseRef := cfg.BaseRef
+		if baseRef == "" {
+			baseRef = "remote"
+		}
+		defaultSort := cfg.DefaultSort
+		if defaultSort == "" {
+			defaultSort = "id"
+		}
+		mergeStrategy := cfg.Merge.Strategy
+		if mergeStrategy == "" {
+			mergeStrategy = "squash"
+		}
+
 		result := configJSON{
 			WorktreeDir:    cfg.WorktreeDir,
 			RepoDir:        cfg.RepoDir,
 			WorktreeFormat: cfg.WorktreeFormat,
-			BaseRef:        cfg.BaseRef,
+			BaseRef:        baseRef,
+			DefaultSort:    defaultSort,
 			Clone: cloneJSON{
 				Forge: cfg.Clone.Forge,
 				Org:   cfg.Clone.Org,
 				Rules: rules,
 			},
 			Merge: mergeJSON{
-				Strategy: cfg.Merge.Strategy,
+				Strategy: mergeStrategy,
 			},
 			Hosts: cfg.Hosts,
 		}
@@ -80,38 +95,59 @@ func runConfigShow(cmd *ConfigShowCmd, cfg *config.Config) error {
 	}
 
 	// Text output
+	fmt.Printf("# Worktree folder naming format (placeholders: {repo}, {branch}, {folder})\n")
 	fmt.Printf("worktree_format = %q\n", cfg.WorktreeFormat)
 	if cfg.WorktreeDir != "" {
+		fmt.Printf("\n# Base directory for new worktrees\n")
 		fmt.Printf("worktree_dir = %q\n", cfg.WorktreeDir)
 	}
 	if cfg.RepoDir != "" {
+		fmt.Printf("\n# Directory to scan for repos (-r/-l flags)\n")
 		fmt.Printf("repo_dir = %q\n", cfg.RepoDir)
 	}
-	if cfg.BaseRef != "" {
-		fmt.Printf("base_ref = %q\n", cfg.BaseRef)
+	baseRef := cfg.BaseRef
+	if baseRef == "" {
+		baseRef = "remote"
 	}
+	fmt.Printf("\n# Base ref for new branches: \"remote\" (origin/<branch>) or \"local\"\n")
+	fmt.Printf("base_ref = %q\n", baseRef)
+	defaultSort := cfg.DefaultSort
+	if defaultSort == "" {
+		defaultSort = "id"
+	}
+	fmt.Printf("\n# Default sort order for 'wt list': id, repo, branch, commit\n")
+	fmt.Printf("default_sort = %q\n", defaultSort)
 
 	// Clone section
-	fmt.Printf("\n[clone]\n")
+	fmt.Printf("\n# Clone settings for 'wt clone' and 'wt pr checkout'\n")
+	fmt.Printf("[clone]\n")
+	fmt.Printf("# Default forge: \"github\" or \"gitlab\"\n")
 	fmt.Printf("forge = %q\n", cfg.Clone.Forge)
 	if cfg.Clone.Org != "" {
+		fmt.Printf("# Default org when repo specified without org/ prefix\n")
 		fmt.Printf("org = %q\n", cfg.Clone.Org)
 	}
 	for _, rule := range cfg.Clone.Rules {
-		fmt.Printf("\n[[clone.rules]]\n")
+		fmt.Printf("\n# Pattern-based forge rule\n")
+		fmt.Printf("[[clone.rules]]\n")
 		fmt.Printf("pattern = %q\n", rule.Pattern)
 		fmt.Printf("forge = %q\n", rule.Forge)
 	}
 
 	// Merge section
-	if cfg.Merge.Strategy != "" {
-		fmt.Printf("\n[merge]\n")
-		fmt.Printf("strategy = %q\n", cfg.Merge.Strategy)
+	mergeStrategy := cfg.Merge.Strategy
+	if mergeStrategy == "" {
+		mergeStrategy = "squash"
 	}
+	fmt.Printf("\n# Merge settings for 'wt pr merge'\n")
+	fmt.Printf("[merge]\n")
+	fmt.Printf("# Merge strategy: squash, rebase, or merge\n")
+	fmt.Printf("strategy = %q\n", mergeStrategy)
 
 	// Hosts section
 	if len(cfg.Hosts) > 0 {
-		fmt.Printf("\n[hosts]\n")
+		fmt.Printf("\n# Custom host mappings for self-hosted GitHub/GitLab\n")
+		fmt.Printf("[hosts]\n")
 		for host, forgeType := range cfg.Hosts {
 			fmt.Printf("%q = %q\n", host, forgeType)
 		}
