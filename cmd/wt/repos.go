@@ -8,8 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
@@ -132,14 +132,7 @@ func formatReposTable(repos []RepoInfo) string {
 
 	var output strings.Builder
 
-	// Track max widths for each column
-	maxNameWidth := len("NAME")
-	maxBranchWidth := len("BRANCH")
-	maxLabelsWidth := len("LABELS")
-	maxOriginWidth := len("ORIGIN")
-	maxWTWidth := len("WORKTREES")
-
-	// First pass: calculate widths and prepare row data
+	// Prepare row data
 	type rowData struct {
 		name      string
 		branch    string
@@ -156,23 +149,6 @@ func formatReposTable(repos []RepoInfo) string {
 		origin := repo.OriginURL
 		worktrees := fmt.Sprintf("%d", repo.WorktreeCount)
 
-		// Track max widths
-		if len(name) > maxNameWidth {
-			maxNameWidth = len(name)
-		}
-		if len(branch) > maxBranchWidth {
-			maxBranchWidth = len(branch)
-		}
-		if len(labels) > maxLabelsWidth {
-			maxLabelsWidth = len(labels)
-		}
-		if len(origin) > maxOriginWidth {
-			maxOriginWidth = len(origin)
-		}
-		if len(worktrees) > maxWTWidth {
-			maxWTWidth = len(worktrees)
-		}
-
 		rowsData = append(rowsData, rowData{
 			name:      name,
 			branch:    branch,
@@ -182,41 +158,29 @@ func formatReposTable(repos []RepoInfo) string {
 		})
 	}
 
-	// Create table columns with calculated widths + spacing
-	columns := []table.Column{
-		{Title: "NAME", Width: maxNameWidth + 2},
-		{Title: "BRANCH", Width: maxBranchWidth + 2},
-		{Title: "LABELS", Width: maxLabelsWidth + 2},
-		{Title: "ORIGIN", Width: maxOriginWidth + 2},
-		{Title: "WORKTREES", Width: maxWTWidth},
-	}
+	// Build header row
+	headers := []string{"NAME", "BRANCH", "LABELS", "ORIGIN", "WORKTREES"}
 
-	// Build rows
-	var rows []table.Row
+	// Build data rows
+	var rows [][]string
 	for _, rd := range rowsData {
-		rows = append(rows, table.Row{rd.name, rd.branch, rd.labels, rd.origin, rd.worktrees})
+		rows = append(rows, []string{rd.name, rd.branch, rd.labels, rd.origin, rd.worktrees})
 	}
 
-	t := table.New(
-		table.WithColumns(columns),
-		table.WithRows(rows),
-		table.WithFocused(false),
-		table.WithHeight(len(rows)+1),
-	)
+	// Create table with lipgloss/table
+	t := table.New().
+		Headers(headers...).
+		Rows(rows...).
+		Border(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return lipgloss.NewStyle().Bold(true).Padding(0, 1)
+			}
+			return lipgloss.NewStyle().Padding(0, 1)
+		})
 
-	// Style the table
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(true).
-		Padding(0)
-	s.Cell = lipgloss.NewStyle().Padding(0)
-	s.Selected = lipgloss.NewStyle().Padding(0)
-	t.SetStyles(s)
-
-	output.WriteString(t.View())
+	output.WriteString(t.String())
 	output.WriteString("\n")
 
 	return output.String()

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 
 	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/forge"
@@ -21,16 +21,7 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, wtC
 
 	var output strings.Builder
 
-	// Track max widths for each column
-	maxIDWidth := len("ID")
-	maxRepoWidth := len("REPO")
-	maxBranchWidth := len("BRANCH")
-	maxStatusWidth := len("STATUS")
-	maxLastCommitWidth := len("LAST COMMIT")
-	maxNoteWidth := len("NOTE")
-	maxPRWidth := len("PR")
-
-	// First pass: calculate widths and prepare row data
+	// Prepare row data
 	type rowData struct {
 		id         string
 		repo       string
@@ -114,29 +105,6 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, wtC
 			prCol = "-"
 		}
 
-		// Track max widths using plain text (without ANSI codes)
-		if len(id) > maxIDWidth {
-			maxIDWidth = len(id)
-		}
-		if len(repoName) > maxRepoWidth {
-			maxRepoWidth = len(repoName)
-		}
-		if len(branch) > maxBranchWidth {
-			maxBranchWidth = len(branch)
-		}
-		if len(status) > maxStatusWidth {
-			maxStatusWidth = len(status)
-		}
-		if len(lastCommit) > maxLastCommitWidth {
-			maxLastCommitWidth = len(lastCommit)
-		}
-		if len(note) > maxNoteWidth {
-			maxNoteWidth = len(note)
-		}
-		if len(prCol) > maxPRWidth {
-			maxPRWidth = len(prCol)
-		}
-
 		rowsData = append(rowsData, rowData{
 			id:         id,
 			repo:       repoName,
@@ -148,44 +116,29 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, wtC
 		})
 	}
 
-	// Create table columns with calculated widths + spacing
-	columns := []table.Column{
-		{Title: "ID", Width: maxIDWidth + 2},
-		{Title: "REPO", Width: maxRepoWidth + 2},
-		{Title: "BRANCH", Width: maxBranchWidth + 2},
-		{Title: "STATUS", Width: maxStatusWidth + 2},
-		{Title: "LAST COMMIT", Width: maxLastCommitWidth + 2},
-		{Title: "NOTE", Width: maxNoteWidth + 2},
-		{Title: "PR", Width: maxPRWidth},
-	}
+	// Build header row
+	headers := []string{"ID", "REPO", "BRANCH", "STATUS", "LAST COMMIT", "NOTE", "PR"}
 
-	// Build rows
-	var rows []table.Row
+	// Build data rows
+	var rows [][]string
 	for _, rd := range rowsData {
-		rows = append(rows, table.Row{rd.id, rd.repo, rd.branch, rd.status, rd.lastCommit, rd.note, rd.pr})
+		rows = append(rows, []string{rd.id, rd.repo, rd.branch, rd.status, rd.lastCommit, rd.note, rd.pr})
 	}
 
-	t := table.New(
-		table.WithColumns(columns),
-		table.WithRows(rows),
-		table.WithFocused(false),
-		table.WithHeight(len(rows)+1),
-	)
+	// Create table with lipgloss/table
+	t := table.New().
+		Headers(headers...).
+		Rows(rows...).
+		Border(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return lipgloss.NewStyle().Bold(true).Padding(0, 1)
+			}
+			return lipgloss.NewStyle().Padding(0, 1)
+		})
 
-	// Style the table
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(true).
-		Padding(0) // Remove all padding
-	// No padding on cells - table handles spacing
-	s.Cell = lipgloss.NewStyle().Padding(0)
-	s.Selected = lipgloss.NewStyle().Padding(0)
-	t.SetStyles(s)
-
-	output.WriteString(t.View())
+	output.WriteString(t.String())
 	output.WriteString("\n")
 
 	return output.String()

@@ -118,7 +118,8 @@ Completions provide context-aware suggestions for branches, directories, and fla
 
 - **CLI parsing**: `github.com/alecthomas/kong` - Struct-based arg parsing with subcommands and auto-dispatch
 - **UI**: `github.com/charmbracelet/lipgloss` - Terminal styling
-- **UI**: `github.com/charmbracelet/bubbles/table` - Table component
+- **UI**: `github.com/charmbracelet/lipgloss/table` - Table component
+- **UI**: `github.com/charmbracelet/bubbles/spinner` - Spinner component (unused currently)
 - **External**: Requires `git` in PATH; `gh` CLI for GitHub repos, `glab` CLI for GitLab repos
 
 ### Development Guidelines
