@@ -33,11 +33,11 @@ _wt_completions() {
         cword=$COMP_CWORD
     fi
 
-    local commands="add prune list show repos exec cd mv note label hook pr config completion doctor"
+    local commands="add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor"
 
     # Handle subcommand-specific completions
     case "${words[1]}" in
-        add)
+        add|a)
             case "$prev" in
                 -r|--repository)
                     # Complete repo names from worktree_dir
@@ -100,7 +100,7 @@ _wt_completions() {
                 COMPREPLY=($(compgen -W "-b --new-branch -r --repository -l --label --base -f --fetch --note --hook --no-hook -a --arg" -- "$cur"))
             fi
             ;;
-        prune)
+        prune|p)
             case "$prev" in
                 -i|--id)
                     # Complete worktree IDs only
@@ -114,7 +114,7 @@ _wt_completions() {
             esac
             COMPREPLY=($(compgen -W "-i --id -n --dry-run -f --force -c --include-clean -g --global -R --refresh --reset-cache --hook --no-hook -a --arg" -- "$cur"))
             ;;
-        list)
+        list|ls)
             case "$prev" in
                 -s|--sort)
                     COMPREPLY=($(compgen -W "id repo branch commit" -- "$cur"))
@@ -166,7 +166,7 @@ _wt_completions() {
             esac
             COMPREPLY=($(compgen -W "--json -g --global -s --sort -R --refresh -r --repository -l --label" -- "$cur"))
             ;;
-        repos)
+        repos|r)
             case "$prev" in
                 -l|--label)
                     # Complete labels from repos in worktree_dir
@@ -198,7 +198,7 @@ _wt_completions() {
             esac
             COMPREPLY=($(compgen -W "-l --label -s --sort --json" -- "$cur"))
             ;;
-        show)
+        show|s)
             case "$prev" in
                 -i|--id)
                     # Complete worktree IDs only
@@ -209,7 +209,7 @@ _wt_completions() {
             esac
             COMPREPLY=($(compgen -W "-i --id -R --refresh --json" -- "$cur"))
             ;;
-        exec)
+        exec|x)
             case "$prev" in
                 -i|--id)
                     # Complete worktree IDs only
@@ -563,11 +563,17 @@ _wt() {
         command)
             local commands=(
                 'add:Add worktree for branch'
+                'a:Add worktree for branch (alias)'
                 'prune:Prune merged worktrees'
+                'p:Prune merged worktrees (alias)'
                 'list:List worktrees with stable IDs'
+                'ls:List worktrees (alias)'
                 'show:Show worktree details'
+                's:Show worktree details (alias)'
                 'repos:List repositories'
+                'r:List repositories (alias)'
                 'exec:Run command in worktree by ID'
+                'x:Run command in worktree (alias)'
                 'cd:Print worktree path for shell scripting'
                 'mv:Move worktrees to another directory'
                 'note:Manage branch notes'
@@ -582,7 +588,7 @@ _wt() {
             ;;
         args)
             case $words[1] in
-                add)
+                add|a)
                     _arguments \
                         '1:branch:__wt_all_branches' \
                         '-b[create new branch]' \
@@ -600,7 +606,7 @@ _wt() {
                         '*-a[set hook variable KEY=VALUE]:arg:' \
                         '*--arg[set hook variable KEY=VALUE]:arg:'
                     ;;
-                prune)
+                prune|p)
                     _arguments \
                         '-i[worktree ID to remove]:id:__wt_worktree_ids' \
                         '--id[worktree ID to remove]:id:__wt_worktree_ids' \
@@ -620,7 +626,7 @@ _wt() {
                         '*-a[set hook variable KEY=VALUE]:arg:' \
                         '*--arg[set hook variable KEY=VALUE]:arg:'
                     ;;
-                list)
+                list|ls)
                     _arguments \
                         '--json[output as JSON]' \
                         '-g[show all worktrees]' \
@@ -634,7 +640,7 @@ _wt() {
                         '*-l[filter by label]:label:__wt_label_names' \
                         '*--label[filter by label]:label:__wt_label_names'
                     ;;
-                repos)
+                repos|r)
                     _arguments \
                         '-l[filter by label]:label:__wt_label_names' \
                         '--label[filter by label]:label:__wt_label_names' \
@@ -642,7 +648,7 @@ _wt() {
                         '--sort[sort by]:field:(name branch worktrees label)' \
                         '--json[output as JSON]'
                     ;;
-                show)
+                show|s)
                     _arguments \
                         '-i[worktree ID]:id:__wt_worktree_ids' \
                         '--id[worktree ID]:id:__wt_worktree_ids' \
@@ -650,7 +656,7 @@ _wt() {
                         '--refresh[refresh PR status from API]' \
                         '--json[output as JSON]'
                     ;;
-                exec)
+                exec|x)
                     _arguments \
                         '*-i[worktree ID]:id:__wt_worktree_ids' \
                         '*--id[worktree ID]:id:__wt_worktree_ids' \
@@ -968,68 +974,74 @@ const fishCompletions = `# wt completions - supports fish autosuggestions and ta
 complete -c wt -f
 
 # Subcommands (shown in completions and autosuggestions)
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "add" -d "Add worktree for branch"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "prune" -d "Prune merged worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "list" -d "List worktrees with stable IDs"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "show" -d "Show worktree details"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "repos" -d "List repositories"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "exec" -d "Run command in worktree by ID"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "cd" -d "Print worktree path"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "mv" -d "Move worktrees to another directory"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "note" -d "Manage branch notes"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "label" -d "Manage repository labels"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "hook" -d "Run configured hook"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "pr" -d "Work with PRs"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "config" -d "Manage configuration"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "completion" -d "Generate completion script"
-complete -c wt -n "not __fish_seen_subcommand_from add prune list show repos exec cd mv note label hook pr config completion doctor" -a "doctor" -d "Diagnose and repair cache"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "add" -d "Add worktree for branch"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "a" -d "Add worktree (alias)"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "prune" -d "Prune merged worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "p" -d "Prune (alias)"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "list" -d "List worktrees with stable IDs"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "ls" -d "List worktrees (alias)"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "show" -d "Show worktree details"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "s" -d "Show (alias)"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "repos" -d "List repositories"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "r" -d "Repos (alias)"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "exec" -d "Run command in worktree by ID"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "x" -d "Exec (alias)"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "cd" -d "Print worktree path"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "mv" -d "Move worktrees to another directory"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "note" -d "Manage branch notes"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "label" -d "Manage repository labels"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "hook" -d "Run configured hook"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "pr" -d "Work with PRs"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "config" -d "Manage configuration"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "completion" -d "Generate completion script"
+complete -c wt -n "not __fish_seen_subcommand_from add a prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "doctor" -d "Diagnose and repair cache"
 
 # add: branch name (positional), then flags
-complete -c wt -n "__fish_seen_subcommand_from add; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
-complete -c wt -n "__fish_seen_subcommand_from add" -s b -l new-branch -d "Create new branch"
-complete -c wt -n "__fish_seen_subcommand_from add" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
-complete -c wt -n "__fish_seen_subcommand_from add" -s l -l label -r -a "(__wt_list_labels)" -d "Target repos by label (repeatable)"
-complete -c wt -n "__fish_seen_subcommand_from add" -l base -r -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Base branch to create from"
-complete -c wt -n "__fish_seen_subcommand_from add" -s f -l fetch -d "Fetch base branch before creating"
-complete -c wt -n "__fish_seen_subcommand_from add" -l note -r -d "Set note on branch"
-complete -c wt -n "__fish_seen_subcommand_from add" -l hook -d "Run named hook instead of default"
-complete -c wt -n "__fish_seen_subcommand_from add" -l no-hook -d "Skip post-add hook"
-complete -c wt -n "__fish_seen_subcommand_from add" -s a -l arg -r -d "Set hook variable KEY=VALUE"
+complete -c wt -n "__fish_seen_subcommand_from add a; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
+complete -c wt -n "__fish_seen_subcommand_from add a" -s b -l new-branch -d "Create new branch"
+complete -c wt -n "__fish_seen_subcommand_from add a" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from add a" -s l -l label -r -a "(__wt_list_labels)" -d "Target repos by label (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from add a" -l base -r -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Base branch to create from"
+complete -c wt -n "__fish_seen_subcommand_from add a" -s f -l fetch -d "Fetch base branch before creating"
+complete -c wt -n "__fish_seen_subcommand_from add a" -l note -r -d "Set note on branch"
+complete -c wt -n "__fish_seen_subcommand_from add a" -l hook -d "Run named hook instead of default"
+complete -c wt -n "__fish_seen_subcommand_from add a" -l no-hook -d "Skip post-add hook"
+complete -c wt -n "__fish_seen_subcommand_from add a" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 
 # prune: --id flag, then other flags
-complete -c wt -n "__fish_seen_subcommand_from prune" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID to remove"
-complete -c wt -n "__fish_seen_subcommand_from prune" -s n -l dry-run -d "Preview without removing"
-complete -c wt -n "__fish_seen_subcommand_from prune" -s f -l force -d "Force remove even if not merged/dirty"
-complete -c wt -n "__fish_seen_subcommand_from prune" -s c -l include-clean -d "Also remove clean worktrees"
-complete -c wt -n "__fish_seen_subcommand_from prune" -s g -l global -d "Prune all worktrees (not just current repo)"
-complete -c wt -n "__fish_seen_subcommand_from prune" -s R -l refresh -d "Fetch origin and refresh PR status"
-complete -c wt -n "__fish_seen_subcommand_from prune" -l reset-cache -d "Clear cache and reset IDs from 1"
-complete -c wt -n "__fish_seen_subcommand_from prune" -l hook -d "Run named hook instead of default"
-complete -c wt -n "__fish_seen_subcommand_from prune" -l no-hook -d "Skip post-removal hooks"
-complete -c wt -n "__fish_seen_subcommand_from prune" -s a -l arg -r -d "Set hook variable KEY=VALUE"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID to remove"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -s n -l dry-run -d "Preview without removing"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -s f -l force -d "Force remove even if not merged/dirty"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -s c -l include-clean -d "Also remove clean worktrees"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -s g -l global -d "Prune all worktrees (not just current repo)"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -s R -l refresh -d "Fetch origin and refresh PR status"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -l reset-cache -d "Clear cache and reset IDs from 1"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -l hook -d "Run named hook instead of default"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -l no-hook -d "Skip post-removal hooks"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 
 # list: flags only (no positional args)
-complete -c wt -n "__fish_seen_subcommand_from list" -l json -d "Output as JSON"
-complete -c wt -n "__fish_seen_subcommand_from list" -s g -l global -d "Show all worktrees (not just current repo)"
-complete -c wt -n "__fish_seen_subcommand_from list" -s s -l sort -r -a "id repo branch commit" -d "Sort by field"
-complete -c wt -n "__fish_seen_subcommand_from list" -s R -l refresh -d "Fetch origin and refresh PR status"
-complete -c wt -n "__fish_seen_subcommand_from list" -s r -l repository -r -a "(__wt_list_repos)" -d "Filter by repository name (repeatable)"
-complete -c wt -n "__fish_seen_subcommand_from list" -s l -l label -r -a "(__wt_list_labels)" -d "Filter by label (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from list ls" -l json -d "Output as JSON"
+complete -c wt -n "__fish_seen_subcommand_from list ls" -s g -l global -d "Show all worktrees (not just current repo)"
+complete -c wt -n "__fish_seen_subcommand_from list ls" -s s -l sort -r -a "id repo branch commit" -d "Sort by field"
+complete -c wt -n "__fish_seen_subcommand_from list ls" -s R -l refresh -d "Fetch origin and refresh PR status"
+complete -c wt -n "__fish_seen_subcommand_from list ls" -s r -l repository -r -a "(__wt_list_repos)" -d "Filter by repository name (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from list ls" -s l -l label -r -a "(__wt_list_labels)" -d "Filter by label (repeatable)"
 
 # repos: list repositories
-complete -c wt -n "__fish_seen_subcommand_from repos" -s l -l label -r -a "(__wt_list_labels)" -d "Filter by label"
-complete -c wt -n "__fish_seen_subcommand_from repos" -s s -l sort -r -a "name branch worktrees label" -d "Sort by field"
-complete -c wt -n "__fish_seen_subcommand_from repos" -l json -d "Output as JSON"
+complete -c wt -n "__fish_seen_subcommand_from repos r" -s l -l label -r -a "(__wt_list_labels)" -d "Filter by label"
+complete -c wt -n "__fish_seen_subcommand_from repos r" -s s -l sort -r -a "name branch worktrees label" -d "Sort by field"
+complete -c wt -n "__fish_seen_subcommand_from repos r" -l json -d "Output as JSON"
 
 # show: --id flag (optional), then other flags
-complete -c wt -n "__fish_seen_subcommand_from show" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
-complete -c wt -n "__fish_seen_subcommand_from show" -s R -l refresh -d "Refresh PR status from API"
-complete -c wt -n "__fish_seen_subcommand_from show" -l json -d "Output as JSON"
+complete -c wt -n "__fish_seen_subcommand_from show s" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+complete -c wt -n "__fish_seen_subcommand_from show s" -s R -l refresh -d "Refresh PR status from API"
+complete -c wt -n "__fish_seen_subcommand_from show s" -l json -d "Output as JSON"
 
 # exec: --id, -r, -l flags, then -- command
-complete -c wt -n "__fish_seen_subcommand_from exec" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
-complete -c wt -n "__fish_seen_subcommand_from exec" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
-complete -c wt -n "__fish_seen_subcommand_from exec" -s l -l label -r -a "(__wt_list_labels)" -d "Target repos by label (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from exec x" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+complete -c wt -n "__fish_seen_subcommand_from exec x" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from exec x" -s l -l label -r -a "(__wt_list_labels)" -d "Target repos by label (repeatable)"
 
 # cd: --id, -r, or -l flag, then flags
 complete -c wt -n "__fish_seen_subcommand_from cd" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
@@ -1055,18 +1067,18 @@ complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcomm
 complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s i -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
 
 # label: subcommands (list is default, so flags work directly on label)
-complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -a "add" -d "Add a label to a repository"
-complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -a "remove" -d "Remove a label from a repository"
-complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -a "list" -d "List labels for a repository"
-complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -a "clear" -d "Clear all labels from a repository"
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add a remove list clear" -a "add" -d "Add a label to a repository"
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add a remove list clear" -a "remove" -d "Remove a label from a repository"
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add a remove list clear" -a "list" -d "List labels for a repository"
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add a remove list clear" -a "clear" -d "Clear all labels from a repository"
 # label: flags work directly (list is default)
-complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
-complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add remove list clear" -s g -l global -d "List all labels across repos"
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add a remove list clear" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from label; and not __fish_seen_subcommand_from add a remove list clear" -s g -l global -d "List all labels across repos"
 # label add/remove/clear: -r flag
-complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from add remove clear" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from add a remove clear" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
 # label list: -r, -g flags
-complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
-complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list" -s g -l global -d "List all labels across repos"
+complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list ls" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
+complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list ls" -s g -l global -d "List all labels across repos"
 
 # hook: multiple hook names supported, then --id/-r/-l (optional), then flags
 complete -c wt -n "__fish_seen_subcommand_from hook" -a "(__wt_hook_names)" -d "Hook name"
@@ -1163,7 +1175,7 @@ complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subco
 complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init show hooks" -a "hooks" -d "List available hooks"
 complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from init" -s f -l force -d "Overwrite existing config file"
 complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from init" -s s -l stdout -d "Print config to stdout"
-complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from show" -l json -d "Output as JSON"
+complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from show s" -l json -d "Output as JSON"
 complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from hooks" -l json -d "Output as JSON"
 
 # completion

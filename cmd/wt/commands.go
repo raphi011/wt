@@ -765,17 +765,17 @@ type VersionFlag bool
 // CLI is the root command.
 type CLI struct {
 	// Core commands (ungrouped - shown first)
-	Add   AddCmd   `cmd:"" help:"Add worktree for branch"`
-	List  ListCmd  `cmd:"" help:"List worktrees"`
-	Show  ShowCmd  `cmd:"" help:"Show worktree details"`
-	Prune PruneCmd `cmd:"" help:"Prune merged worktrees"`
-	Repos ReposCmd `cmd:"" help:"List repositories"`
+	Add   AddCmd   `cmd:"" aliases:"a" help:"Add worktree for branch"`
+	List  ListCmd  `cmd:"" aliases:"ls" help:"List worktrees"`
+	Show  ShowCmd  `cmd:"" aliases:"s" help:"Show worktree details"`
+	Prune PruneCmd `cmd:"" aliases:"p" help:"Prune merged worktrees"`
+	Repos ReposCmd `cmd:"" aliases:"r" help:"List repositories"`
 
 	// PR commands
 	Pr PrCmd `cmd:"" help:"Work with PRs" group:"pr"`
 
 	// Utility commands
-	Exec  ExecCmd  `cmd:"" help:"Run command in worktree(s) or repo(s)" group:"util"`
+	Exec  ExecCmd  `cmd:"" aliases:"x" help:"Run command in worktree(s) or repo(s)" group:"util"`
 	Cd    CdCmd    `cmd:"" help:"Print worktree path" group:"util"`
 	Mv    MvCmd    `cmd:"" help:"Move worktrees to another directory" group:"util"`
 	Note  NoteCmd  `cmd:"" help:"Manage branch notes" group:"util"`
