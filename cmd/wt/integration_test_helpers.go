@@ -10,10 +10,24 @@ import (
 	"testing"
 )
 
+// resolvePath resolves symlinks in a path.
+// This is needed on macOS where /var is a symlink to /private/var.
+func resolvePath(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatalf("failed to resolve path %s: %v", path, err)
+	}
+	return resolved
+}
+
 // setupTestRepo creates a git repo with initial commit in dir/name.
-// Returns the absolute path to the created repo.
+// Returns the absolute path to the created repo (with symlinks resolved).
 func setupTestRepo(t *testing.T, dir, name string) string {
 	t.Helper()
+
+	// Resolve symlinks in dir (needed for macOS where /var -> /private/var)
+	dir = resolvePath(t, dir)
 
 	repoPath := filepath.Join(dir, name)
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
