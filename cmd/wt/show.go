@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
@@ -274,12 +274,11 @@ func outputShowJSON(info *ShowInfo) error {
 func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 	// Styles
 	titleStyle := lipgloss.NewStyle().Bold(true)
-	labelStyle := lipgloss.NewStyle()
-	valueStyle := lipgloss.NewStyle()
 	greenStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	redStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	yellowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	cyanStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
 	// Header
 	worktreeName := filepath.Base(info.Path)
@@ -288,21 +287,20 @@ func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 		idStr = fmt.Sprintf(" (ID: %d)", info.ID)
 	}
 	fmt.Println(titleStyle.Render(worktreeName + idStr))
-	fmt.Println(strings.Repeat("-", len(worktreeName)+len(idStr)))
 
-	// Basic info
-	fmt.Printf("%s %s\n", labelStyle.Render("Branch:"), valueStyle.Render(info.Branch))
-	fmt.Printf("%s %s\n", labelStyle.Render("Repo:"), valueStyle.Render(info.RepoName))
+	// Build sections
+	var sections [][][]string
 
-	// Time info
+	// Basic info section
+	var basicRows [][]string
+	basicRows = append(basicRows, []string{"Branch", info.Branch})
+	basicRows = append(basicRows, []string{"Repo", info.RepoName})
 	if info.CreatedAt != nil {
-		fmt.Printf("%s %s\n", labelStyle.Render("Created:"), valueStyle.Render(formatTimeAgo(*info.CreatedAt)))
+		basicRows = append(basicRows, []string{"Created", formatTimeAgo(*info.CreatedAt)})
 	}
 	if info.LastCommit != "" {
-		fmt.Printf("%s %s\n", labelStyle.Render("Last commit:"), valueStyle.Render(info.LastCommit))
+		basicRows = append(basicRows, []string{"Last commit", info.LastCommit})
 	}
-
-	fmt.Println()
 
 	// Commits ahead/behind
 	commitStr := ""
@@ -316,9 +314,9 @@ func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 		commitStr += redStyle.Render(fmt.Sprintf("%d behind", info.CommitsBehind))
 	}
 	if commitStr == "" {
-		commitStr = "up to date"
+		commitStr = dimStyle.Render("up to date")
 	}
-	fmt.Printf("%s %s\n", labelStyle.Render("Commits:"), commitStr)
+	basicRows = append(basicRows, []string{"Commits", commitStr})
 
 	// Diff stats
 	if info.DiffStats != nil {
@@ -326,22 +324,23 @@ func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 			greenStyle.Render(fmt.Sprintf("+%d", info.DiffStats.Additions)),
 			redStyle.Render(fmt.Sprintf("-%d", info.DiffStats.Deletions)),
 			info.DiffStats.Files)
-		fmt.Printf("%s %s\n", labelStyle.Render("Changes:"), diffStr)
+		basicRows = append(basicRows, []string{"Changes", diffStr})
 	}
 
 	// Status
-	statusStr := "clean"
+	statusStr := dimStyle.Render("clean")
 	if info.IsDirty {
 		statusStr = yellowStyle.Render("dirty (uncommitted changes)")
 	}
 	if info.IsMerged {
 		statusStr = greenStyle.Render("merged")
 	}
-	fmt.Printf("%s %s\n", labelStyle.Render("Status:"), statusStr)
+	basicRows = append(basicRows, []string{"Status", statusStr})
+	sections = append(sections, basicRows)
 
-	// PR info
+	// PR section
 	if info.PR != nil {
-		fmt.Println()
+		var prRows [][]string
 		stateStyle := yellowStyle
 		switch info.PR.State {
 		case "MERGED":
@@ -349,32 +348,92 @@ func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 		case "CLOSED":
 			stateStyle = redStyle
 		}
-		prHeader := fmt.Sprintf("PR #%d (%s)", info.PR.Number, stateStyle.Render(info.PR.State))
+		prValue := fmt.Sprintf("#%d %s", info.PR.Number, stateStyle.Render(info.PR.State))
 		if info.PR.IsDraft {
-			prHeader += " " + labelStyle.Render("[DRAFT]")
+			prValue += " " + dimStyle.Render("[DRAFT]")
 		}
-		fmt.Println(prHeader)
+		prRows = append(prRows, []string{"PR", prValue})
 
 		if info.PR.Author != "" {
-			fmt.Printf("  %s @%s\n", labelStyle.Render("Author:"), info.PR.Author)
+			prRows = append(prRows, []string{"Author", "@" + info.PR.Author})
 		}
 		if info.PR.URL != "" {
-			fmt.Printf("  %s %s\n", labelStyle.Render("URL:"), cyanStyle.Render(info.PR.URL))
+			prRows = append(prRows, []string{"URL", cyanStyle.Render(info.PR.URL)})
 		}
-		reviewStr := "none"
+		reviewStr := dimStyle.Render("none")
 		if info.PR.IsApproved {
 			reviewStr = greenStyle.Render("approved")
 		}
-		fmt.Printf("  %s %s\n", labelStyle.Render("Reviews:"), reviewStr)
+		prRows = append(prRows, []string{"Reviews", reviewStr})
 		if info.PR.CommentCount > 0 {
-			fmt.Printf("  %s %d\n", labelStyle.Render("Comments:"), info.PR.CommentCount)
+			prRows = append(prRows, []string{"Comments", fmt.Sprintf("%d", info.PR.CommentCount)})
+		}
+		sections = append(sections, prRows)
+	}
+
+	// Note section
+	if info.Note != "" {
+		sections = append(sections, [][]string{{"Note", info.Note}})
+	}
+
+	// Calculate max column widths across all sections for alignment
+	maxKeyWidth := 0
+	maxValWidth := 0
+	for _, sec := range sections {
+		for _, row := range sec {
+			if len(row[0]) > maxKeyWidth {
+				maxKeyWidth = len(row[0])
+			}
+			// Use lipgloss.Width to handle ANSI escape codes
+			if w := lipgloss.Width(row[1]); w > maxValWidth {
+				maxValWidth = w
+			}
 		}
 	}
 
-	// Note
-	if info.Note != "" {
-		fmt.Println()
-		fmt.Printf("%s %s\n", labelStyle.Render("Note:"), info.Note)
+	// Border for continuation sections (├─┼─┤ top)
+	continuationBorder := lipgloss.Border{
+		Top:          "─",
+		Bottom:       "─",
+		Left:         "│",
+		Right:        "│",
+		TopLeft:      "├",
+		TopRight:     "┤",
+		BottomLeft:   "└",
+		BottomRight:  "┘",
+		MiddleLeft:   "├",
+		MiddleRight:  "┤",
+		Middle:       "│",
+		MiddleTop:    "┼",
+		MiddleBottom: "┴",
+	}
+
+	// Render each section
+	for i, sec := range sections {
+		isFirst := i == 0
+		isLast := i == len(sections)-1
+
+		border := continuationBorder
+		if isFirst {
+			border = lipgloss.NormalBorder()
+		}
+
+		t := table.New().
+			Rows(sec...).
+			Border(border).
+			BorderStyle(dimStyle).
+			BorderBottom(isLast).
+			StyleFunc(func(row, col int) lipgloss.Style {
+				style := lipgloss.NewStyle().Padding(0, 1)
+				if col == 0 {
+					style = style.Bold(true).Width(maxKeyWidth + 2) // +2 for padding
+				} else {
+					style = style.Width(maxValWidth + 2)
+				}
+				return style
+			})
+
+		fmt.Print(t.String())
 	}
 
 	return nil
