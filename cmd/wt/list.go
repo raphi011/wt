@@ -193,9 +193,8 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 	// Sort worktrees
 	sortWorktrees(worktrees, pathToID, sortBy)
 
-	// Display table (no items marked for removal in list)
-	toRemoveMap := make(map[string]bool)
-	fmt.Print(ui.FormatWorktreesTable(worktrees, pathToID, wtCache, toRemoveMap, false))
+	// Display table
+	fmt.Print(ui.FormatListTable(worktrees, pathToID, wtCache))
 
 	return nil
 }

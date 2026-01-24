@@ -58,8 +58,9 @@ func (c *AddCmd) Run(ctx *Context) error {
 type PruneCmd struct {
 	ID           []int    `short:"i" name:"id" help:"worktree(s) to remove (by ID, repeatable)"`
 	DryRun       bool     `short:"n" name:"dry-run" negatable:"" help:"preview without removing"`
-	Force        bool     `short:"f" name:"force" help:"force remove even if not merged or has uncommitted changes"`
+	Force        bool     `short:"f" name:"force" help:"force remove targeted worktree (-i) even if not merged or dirty"`
 	IncludeClean bool     `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
+	Verbose      bool     `short:"v" name:"verbose" help:"also show non-prunable worktrees with reasons"`
 	Global       bool     `short:"g" name:"global" help:"prune all worktrees (not just current repo)"`
 	Refresh      bool     `short:"R" name:"refresh" help:"fetch origin and refresh PR status before pruning"`
 	ResetCache   bool     `name:"reset-cache" help:"clear all cached data (PR info, worktree history) and reset IDs from 1"`
@@ -88,6 +89,7 @@ Examples:
   wt prune                      # Remove merged worktrees (uses cached PR info)
   wt prune --global             # Prune all repos (not just current)
   wt prune -n                   # Dry-run: preview without removing
+  wt prune -n --verbose         # Dry-run with skip reasons shown
   wt prune -c                   # Also remove clean (0-commit) worktrees
   wt prune -i 1                 # Remove specific worktree by ID
   wt prune -i 1 -i 2 -i 3       # Remove multiple worktrees by ID
@@ -785,5 +787,5 @@ type CLI struct {
 	Completion CompletionCmd `cmd:"" help:"Generate completion script" group:"config"`
 	Doctor     DoctorCmd     `cmd:"" help:"Diagnose and repair cache" group:"config"`
 
-	Version VersionFlag `short:"v" name:"version" help:"Show version"`
+	Version VersionFlag `name:"version" help:"Show version"`
 }
