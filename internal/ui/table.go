@@ -13,8 +13,62 @@ import (
 	"github.com/raphi011/wt/internal/git"
 )
 
-// FormatWorktreesTable creates a formatted table for worktrees
-func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, wtCache *cache.Cache, toRemove map[string]bool, dryRun bool) string {
+// FormatPruneTable creates a simplified table for prune output with reason column
+func FormatPruneTable(worktrees []git.Worktree, pathToID map[string]int, reasonMap map[string]string, pruneMap map[string]bool) string {
+	if len(worktrees) == 0 {
+		return ""
+	}
+
+	var output strings.Builder
+
+	// Build data rows
+	var rows [][]string
+	for _, wt := range worktrees {
+		id := fmt.Sprintf("%d", pathToID[wt.Path])
+		prune := "✗"
+		if pruneMap[wt.Path] {
+			prune = "✓"
+		}
+		reason := reasonMap[wt.Path]
+		rows = append(rows, []string{id, wt.RepoName, wt.Branch, prune, reason})
+	}
+
+	// Create table with lipgloss/table
+	t := table.New().
+		Headers("ID", "REPO", "BRANCH", "PRUNE", "REASON").
+		Rows(rows...).
+		Border(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return lipgloss.NewStyle().Bold(true).Padding(0, 1)
+			}
+			return lipgloss.NewStyle().Padding(0, 1)
+		})
+
+	output.WriteString(t.String())
+	output.WriteString("\n")
+
+	return output.String()
+}
+
+// FormatSummary formats the summary line
+func FormatSummary(removed, skipped int, dryRun bool) string {
+	var output strings.Builder
+
+	output.WriteString("\n")
+
+	if dryRun {
+		fmt.Fprintf(&output, "Dry run complete - Would remove: %d, Skipped: %d\n", removed, skipped)
+	} else {
+		fmt.Fprintf(&output, "Cleanup complete - Removed: %d, Skipped: %d\n", removed, skipped)
+	}
+
+	return output.String()
+}
+
+// FormatListTable creates a formatted table for list command output
+func FormatListTable(worktrees []git.Worktree, pathToID map[string]int, wtCache *cache.Cache) string {
 	if len(worktrees) == 0 {
 		return ""
 	}
@@ -45,9 +99,7 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, wtC
 
 		// Format status
 		var status string
-		if toRemove[wt.Path] && !dryRun {
-			status = "pruned"
-		} else if wt.IsMerged {
+		if wt.IsMerged {
 			status = "prunable"
 		} else if wt.CommitCount == 0 && !wt.IsDirty {
 			status = "clean"
@@ -140,21 +192,6 @@ func FormatWorktreesTable(worktrees []git.Worktree, pathToID map[string]int, wtC
 
 	output.WriteString(t.String())
 	output.WriteString("\n")
-
-	return output.String()
-}
-
-// FormatSummary formats the summary line
-func FormatSummary(removed, skipped int, dryRun bool) string {
-	var output strings.Builder
-
-	output.WriteString("\n")
-
-	if dryRun {
-		fmt.Fprintf(&output, "Dry run complete - Would remove: %d, Skipped: %d\n", removed, skipped)
-	} else {
-		fmt.Fprintf(&output, "Cleanup complete - Removed: %d, Skipped: %d\n", removed, skipped)
-	}
 
 	return output.String()
 }

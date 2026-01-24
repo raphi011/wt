@@ -20,7 +20,32 @@ import (
 // maxConcurrentPRFetches limits parallel gh API calls to avoid rate limiting
 const maxConcurrentPRFetches = 5
 
+// pruneReason describes why a worktree is being pruned or skipped
+type pruneReason string
+
+const (
+	// Prune reasons (will be removed)
+	reasonMergedPR     pruneReason = "Merged PR"
+	reasonMergedBranch pruneReason = "Merged branch"
+	reasonClean        pruneReason = "Clean"
+
+	// Skip reasons (will not be removed)
+	skipDirty      pruneReason = "Dirty"
+	skipNotMerged  pruneReason = "Not merged"
+	skipHasCommits pruneReason = "Has commits"
+)
+
 func runPrune(cmd *PruneCmd, cfg *config.Config) error {
+	// Validate -f requires -i
+	if cmd.Force && len(cmd.ID) == 0 {
+		return fmt.Errorf("-f/--force requires -i/--id to target specific worktree(s)")
+	}
+
+	// Validate --verbose cannot be used with -i
+	if cmd.Verbose && len(cmd.ID) > 0 {
+		return fmt.Errorf("--verbose cannot be used with -i/--id")
+	}
+
 	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
@@ -152,24 +177,43 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 		return 0
 	})
 
-	// Determine which to remove
+	// Determine which to remove and why
 	var toRemove []git.Worktree
+	var toSkip []git.Worktree
 	toRemoveMap := make(map[string]bool)
-	var skipped int
+	reasonMap := make(map[string]pruneReason)
 
 	for _, wt := range worktrees {
-		shouldRemove := false
-		if wt.IsMerged && !wt.IsDirty {
-			shouldRemove = true
+		var reason pruneReason
+		var skipReason pruneReason
+
+		// Check for PR merged first (highest priority)
+		folderName := filepath.Base(wt.Path)
+		pr := wtCache.GetPRForBranch(folderName)
+		if pr != nil && pr.Fetched && pr.State == "MERGED" && !wt.IsDirty {
+			reason = reasonMergedPR
+		} else if wt.IsMerged && !wt.IsDirty {
+			reason = reasonMergedBranch
 		} else if cmd.IncludeClean && wt.CommitCount == 0 && !wt.IsDirty {
-			shouldRemove = true
+			reason = reasonClean
+		} else {
+			// Determine skip reason
+			if wt.IsDirty {
+				skipReason = skipDirty
+			} else if wt.CommitCount > 0 {
+				skipReason = skipHasCommits
+			} else {
+				skipReason = skipNotMerged
+			}
 		}
 
-		if shouldRemove {
+		if reason != "" {
 			toRemove = append(toRemove, wt)
 			toRemoveMap[wt.Path] = true
+			reasonMap[wt.Path] = reason
 		} else {
-			skipped++
+			toSkip = append(toSkip, wt)
+			reasonMap[wt.Path] = skipReason
 		}
 	}
 
@@ -236,9 +280,20 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 		}
 	}
 
+	// Convert pruneReason map to string map for UI
+	stringReasonMap := make(map[string]string)
+	for path, reason := range reasonMap {
+		stringReasonMap[path] = string(reason)
+	}
+
 	// Display table with actual results
-	if len(removed) > 0 {
-		fmt.Print(ui.FormatWorktreesTable(removed, pathToID, wtCache, removedMap, cmd.DryRun))
+	if len(removed) > 0 || (cmd.Verbose && len(toSkip) > 0) {
+		var displayWorktrees []git.Worktree
+		displayWorktrees = append(displayWorktrees, removed...)
+		if cmd.Verbose {
+			displayWorktrees = append(displayWorktrees, toSkip...)
+		}
+		fmt.Print(ui.FormatPruneTable(displayWorktrees, pathToID, stringReasonMap, toRemoveMap))
 	}
 
 	// Save updated cache (with RemovedAt timestamps)
@@ -247,7 +302,7 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 	}
 
 	// Print summary with actual counts
-	fmt.Print(ui.FormatSummary(len(removed), skipped+len(failed), cmd.DryRun))
+	fmt.Print(ui.FormatSummary(len(removed), len(toSkip)+len(failed), cmd.DryRun))
 
 	return nil
 }
