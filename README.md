@@ -27,6 +27,35 @@ go install github.com/raphi011/wt/cmd/wt@latest
 
 Requires `git` in PATH. For GitHub repos: `gh` CLI. For GitLab repos: `glab` CLI.
 
+## Getting Started
+
+### 1. Create Config
+
+```bash
+wt config init ~/Git/worktrees
+```
+
+This creates `~/.config/wt/config.toml` with your worktree directory.
+
+### 2. Migrate Existing Repos (Optional)
+
+If you have repos and worktrees scattered around, consolidate them:
+
+```bash
+wt mv -n          # Preview what would be moved
+wt mv             # Move to configured directories
+```
+
+Worktrees are moved to `worktree_dir`. Repos are moved to `repo_dir` (if configured, otherwise `worktree_dir`).
+
+### 3. List Worktrees
+
+```bash
+wt list
+```
+
+You're ready to go! See Quick Start below for common workflows.
+
 ## Quick Start
 
 ```bash
