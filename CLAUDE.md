@@ -43,7 +43,7 @@ internal/resolve/        - Target resolution for commands
   └── resolve.go         - ByID resolver (numeric ID lookup)
 internal/ui/             - Terminal UI components
   ├── table.go           - Lipgloss table formatting with colors
-  └── spinner.go         - Bubbletea spinner (unused currently)
+  └── spinner.go         - Bubbletea spinner
 ```
 
 ### Key Design Decisions
@@ -63,63 +63,12 @@ internal/ui/             - Terminal UI components
 
 **MR/PR status** - Uses `gh pr list` or `glab mr list` to fetch merge request info (auto-detected). States: merged, open, closed.
 
-### CLI Commands
-
-- `wt add <branch>` - Add worktree for existing branch (inside repo)
-- `wt add -b <branch>` - Add worktree for new branch
-- `wt add -b <branch> -r <repo> [-r <repo>...]` - Create branch across multiple repos (by name)
-- `wt add -b <branch> -l <label> [-l <label>...]` - Create branch across repos with label
-- `wt prune` - Remove merged+clean worktrees, show table with PR status (use -R/--refresh to fetch latest)
-- `wt prune -i <id>` - Remove specific worktree by ID
-- `wt list [-r <repo>] [-l <label>] [-s id|repo|branch|commit] [--json]` - List worktrees in directory
-- `wt repos [-l <label>] [-s name|branch|worktrees|label] [--json]` - List repositories in directory
-- `wt show [-i <id>]` - Show detailed status for a worktree (commits, changes, PR info)
-- `wt exec -i <id> [-i <id>...] -- <cmd>` - Run command in worktree(s) by ID
-- `wt exec -r <repo> [-l <label>] -- <cmd>` - Run command in repo(s) by name/label
-- `wt cd -i <id>` - Print worktree path by ID
-- `wt cd -r <repo>` - Print repo path by name
-- `wt cd -l <label>` - Print repo path by label (must match exactly one repo)
-- `wt mv` - Move worktrees to configured directory (from env/config)
-- `wt note set/get/clear [-i <id>]` - Manage branch notes (optional ID outside worktree)
-- `wt label add/remove/list/clear` - Manage repository labels (stored in git config as wt.labels)
-- `wt hook <hook> [-i <id>...]` - Run configured hook by name (multi-ID supported)
-- `wt hook <hook> -r <repo> [-l <label>]` - Run hook in repo(s) by name/label
-- `wt pr checkout <number> [org/repo]` - Create worktree for PR (clones repo if org/repo provided)
-- `wt pr checkout <number> -r <repo>` - Create worktree for PR from local repo by name
-- `wt pr create --title "..." [--body "..."]` - Create PR for worktree
-- `wt pr view [-i <id>] [-w]` - View PR details or open in browser
-- `wt pr merge [-i <id>]` - Merge PR and clean up worktree
-- `wt config init` - Create default config file
-- `wt config show` - Show effective configuration
-- `wt config hooks` - List available hooks
-- `wt doctor` - Diagnose and report cache issues
-- `wt doctor --fix` - Auto-fix recoverable cache issues
-- `wt doctor --reset` - Rebuild cache from scratch (loses IDs)
-- `wt completion <shell>` - Generate shell completions (fish, bash, zsh)
-
-### Shell Completions
-
-The tool includes built-in completion scripts for fish, bash, and zsh:
-
-```bash
-# Fish
-wt completion fish > ~/.config/fish/completions/wt.fish
-
-# Bash
-wt completion bash > ~/.local/share/bash-completion/completions/wt
-
-# Zsh (then add ~/.zfunc to fpath in .zshrc)
-wt completion zsh > ~/.zfunc/_wt
-```
-
-Completions provide context-aware suggestions for branches, directories, and flags.
-
 ### Dependencies
 
 - **CLI parsing**: `github.com/alecthomas/kong` - Struct-based arg parsing with subcommands and auto-dispatch
 - **UI**: `github.com/charmbracelet/lipgloss` - Terminal styling
 - **UI**: `github.com/charmbracelet/lipgloss/table` - Table component
-- **UI**: `github.com/charmbracelet/bubbles/spinner` - Spinner component (unused currently)
+- **UI**: `github.com/charmbracelet/bubbles/spinner` - Spinner component
 - **External**: Requires `git` in PATH; `gh` CLI for GitHub repos, `glab` CLI for GitLab repos
 
 ### Development Guidelines
@@ -147,10 +96,6 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 - `--json` - output as JSON
 - `--hook` / `--no-hook` - control hook execution (for add, pr checkout, prune)
 
-**Environment Variables** - Directory configuration via env vars (override config file):
-- `WT_WORKTREE_DIR` - target directory for worktrees
-- `WT_REPO_DIR` - directory to scan for repos
-
 **Forge Feature Parity** - Any feature that involves forge operations (PRs, cloning, etc.) MUST support both GitHub and GitLab. Always:
 - Add methods to the `Forge` interface first
 - Implement in both `github.go` and `gitlab.go`
@@ -170,55 +115,3 @@ Follow **Conventional Commits** for GoReleaser changelog grouping:
 | `test:` | (excluded) | `test: add unit tests` |
 
 Format: `type(scope)!: description` - scope optional, `!` for breaking changes.
-
-### Releasing
-
-Releases are automated via GoReleaser in CI. **Do not use `gh release create` manually** - it won't generate the proper changelog.
-
-**Important**: This repo requires push access to `raphi011/wt`. If using a work machine with different GitHub credentials, you may need to switch accounts or configure SSH keys for the personal account.
-
-```bash
-# 1. Check current version
-git tag --sort=-v:refname | head -1
-
-# 2. Determine next version based on commits since last tag
-git log $(git describe --tags --abbrev=0)..HEAD --oneline
-
-# 3. Ensure all changes are committed and pushed
-git push origin main
-
-# 4. Create annotated tag and push (triggers GoReleaser CI)
-git tag -a v0.X.0 -m "v0.X.0"
-git push origin v0.X.0
-```
-
-Version bumping:
-- `feat:` commits → minor version bump (v0.1.0 → v0.2.0)
-- `fix:` commits only → patch version bump (v0.1.0 → v0.1.1)
-- Breaking changes (`!`) → major version bump (v0.1.0 → v1.0.0)
-
-GoReleaser will:
-- Build binaries for darwin/linux (amd64/arm64)
-- Generate changelog from conventional commits
-- Create GitHub release with assets
-- Update Homebrew tap (cask in `raphi011/homebrew-tap`)
-
-### Homebrew Distribution
-
-Uses **casks** (not formulas) via `homebrew_casks` in `.goreleaser.yaml`. This is correct because:
-- Formulas build from source, casks install pre-compiled binaries
-- GoReleaser produces pre-compiled binaries → casks are semantically correct
-- GoReleaser deprecated `brews` in v2.10, recommends `homebrew_casks`
-
-Install: `brew install --cask raphi011/tap/wt`
-
-Tap repo: `raphi011/homebrew-tap` with cask in `Casks/wt.rb`
-
-### Testing Locally
-
-The tool must be run from within a git repository for `wt add -b` to work (needs origin URL). For testing:
-
-```bash
-cd ~/Git/wt  # Must be in a git repo
-./wt add -b .. test-branch  # Creates ~/Git/wt-test-branch
-```
