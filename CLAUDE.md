@@ -102,6 +102,18 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 - Handle platform-specific limitations explicitly (e.g., GitLab doesn't support rebase merge via CLI)
 - Never call `gh` or `glab` directly outside `internal/forge/`
 
+### Integration Tests
+
+Integration tests are in `cmd/wt/*_integration_test.go` with build tag `//go:build integration`.
+
+**Working Directory Injection** - Commands accept `workDir` parameter instead of using `os.Getwd()`. This enables parallel test execution without `os.Chdir()` race conditions. Test helpers pass `workDir` directly to command functions.
+
+**Stdout Injection** - Commands that produce captured output (`list`, `cd`, `note`) accept an `io.Writer` parameter instead of writing to `os.Stdout`. This enables parallel test execution - tests pass a `bytes.Buffer` to capture output. The `Context` struct has a `Stdout` field that main.go sets to `os.Stdout`.
+
+**macOS Symlink Resolution** - On macOS, `t.TempDir()` returns paths like `/var/folders/...` but git commands may return `/private/var/folders/...` (the resolved symlink). Always use `resolvePath(t, t.TempDir())` helper to resolve symlinks before path comparisons. This helper is defined in `integration_test_helpers.go`.
+
+**All integration tests use `t.Parallel()`** for concurrent execution.
+
 ### Commit Messages
 
 Follow **Conventional Commits** for GoReleaser changelog grouping:

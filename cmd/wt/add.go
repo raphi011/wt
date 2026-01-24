@@ -31,45 +31,42 @@ type createWorktreeParams struct {
 	newBranch bool
 	baseRef   string // already resolved (only used if newBranch=true)
 	note      string
+	workDir   string // working directory for current repo mode
 }
 
 // createWorktree creates a worktree and returns the result.
-// If repoPath is empty, operates on current directory using AddWorktree.
-// Otherwise, operates on the specified repo using CreateWorktreeFrom/OpenWorktreeFrom.
+// Uses repoPath if specified, otherwise uses workDir as the repo path.
+// Operates using CreateWorktreeFrom/OpenWorktreeFrom for path-based operations.
 func createWorktree(p createWorktreeParams) (*successResult, error) {
 	var result *git.CreateWorktreeResult
 	var err error
 	var repoName, folder, mainRepo string
 
-	if p.repoPath == "" {
-		// Current repo mode
-		if p.newBranch {
-			result, err = git.AddWorktree(p.targetDir, p.branch, p.format, true, p.baseRef)
-		} else {
-			result, err = git.AddWorktree(p.targetDir, p.branch, p.format, false, "")
-		}
-		if err != nil {
-			return nil, err
-		}
-		repoName, _ = git.GetRepoName()
-		folder, _ = git.GetRepoFolderName()
-		mainRepo, _ = git.GetMainRepoPath(result.Path)
-		if mainRepo == "" {
-			mainRepo, _ = filepath.Abs(".")
-		}
+	// Use workDir as repoPath when not explicitly specified
+	effectiveRepoPath := p.repoPath
+	if effectiveRepoPath == "" {
+		effectiveRepoPath = p.workDir
+	}
+
+	// Use path-based functions for all operations
+	if p.newBranch {
+		result, err = git.CreateWorktreeFrom(effectiveRepoPath, p.targetDir, p.branch, p.format, p.baseRef)
 	} else {
-		// External repo mode
-		if p.newBranch {
-			result, err = git.CreateWorktreeFrom(p.repoPath, p.targetDir, p.branch, p.format, p.baseRef)
-		} else {
-			result, err = git.OpenWorktreeFrom(p.repoPath, p.targetDir, p.branch, p.format)
-		}
-		if err != nil {
-			return nil, err
-		}
-		repoName = git.GetRepoDisplayName(p.repoPath)
-		folder = filepath.Base(p.repoPath)
-		mainRepo = p.repoPath
+		result, err = git.OpenWorktreeFrom(effectiveRepoPath, p.targetDir, p.branch, p.format)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Get repo metadata using path-based functions
+	repoName, _ = git.GetRepoNameFrom(effectiveRepoPath)
+	if repoName == "" {
+		repoName = git.GetRepoDisplayName(effectiveRepoPath)
+	}
+	folder = filepath.Base(effectiveRepoPath)
+	mainRepo, _ = git.GetMainRepoPath(result.Path)
+	if mainRepo == "" {
+		mainRepo, _ = filepath.Abs(effectiveRepoPath)
 	}
 
 	// Print result
@@ -81,16 +78,8 @@ func createWorktree(p createWorktreeParams) (*successResult, error) {
 
 	// Set note if provided
 	if p.note != "" {
-		noteRepo := p.repoPath
-		if noteRepo == "" {
-			noteRepo, _ = os.Getwd()
-		}
-		if err := git.SetBranchNote(noteRepo, p.branch, p.note); err != nil {
-			if p.repoPath != "" {
-				fmt.Fprintf(os.Stderr, "Warning: failed to set note for %s: %v\n", repoName, err)
-			} else {
-				fmt.Fprintf(os.Stderr, "Warning: failed to set note: %v\n", err)
-			}
+		if err := git.SetBranchNote(effectiveRepoPath, p.branch, p.note); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to set note: %v\n", err)
 		}
 	}
 
@@ -129,17 +118,17 @@ func resolveBaseRef(repoPath, baseBranch string, fetch bool, baseRefConfig strin
 	return baseBranch, nil
 }
 
-func runAdd(cmd *AddCmd, cfg *config.Config) error {
+func runAdd(cmd *AddCmd, cfg *config.Config, workDir string) error {
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
 	}
 
-	insideRepo := git.IsInsideRepo()
+	insideRepo := git.IsInsideRepoPath(workDir)
 
 	// If -r or -l specified, use multi-repo mode
 	if len(cmd.Repository) > 0 || len(cmd.Label) > 0 {
-		return runAddMultiRepo(cmd, cfg, insideRepo)
+		return runAddMultiRepo(cmd, cfg, insideRepo, workDir)
 	}
 
 	// No -r or -l specified
@@ -147,7 +136,7 @@ func runAdd(cmd *AddCmd, cfg *config.Config) error {
 		if cmd.Branch == "" {
 			return fmt.Errorf("branch name required inside git repo")
 		}
-		return runAddInRepo(cmd, cfg)
+		return runAddInRepo(cmd, cfg, workDir)
 	}
 
 	// Outside repo without -r or -l
@@ -155,8 +144,8 @@ func runAdd(cmd *AddCmd, cfg *config.Config) error {
 }
 
 // runAddInRepo handles wt add when inside a git repository (single repo mode)
-func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
-	targetDir, absPath, err := resolveWorktreeTargetDir(cfg)
+func runAddInRepo(cmd *AddCmd, cfg *config.Config, workDir string) error {
+	targetDir, absPath, err := resolveWorktreeTargetDir(cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -164,11 +153,7 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
 	// Resolve base ref if creating new branch
 	var baseRef string
 	if cmd.NewBranch {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("failed to get current directory: %w", err)
-		}
-		baseRef, err = resolveBaseRef(cwd, cmd.Base, cmd.Fetch, cfg.BaseRef)
+		baseRef, err = resolveBaseRef(workDir, cmd.Base, cmd.Fetch, cfg.BaseRef)
 		if err != nil {
 			return err
 		}
@@ -185,6 +170,7 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
 		newBranch: cmd.NewBranch,
 		baseRef:   baseRef,
 		note:      cmd.Note,
+		workDir:   workDir,
 	})
 	if err != nil {
 		return err
@@ -215,7 +201,7 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config) error {
 }
 
 // runAddMultiRepo handles wt add with -r or -l flags for multiple repositories
-func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
+func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool, workDir string) error {
 	if cmd.Branch == "" {
 		return fmt.Errorf("branch name required with --repository or --label")
 	}
@@ -247,7 +233,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 	// If inside repo with -r flag, include current repo first (original behavior)
 	// With -l only, we don't auto-include current repo (only labeled repos)
 	if insideRepo && len(cmd.Repository) > 0 {
-		result, err := createWorktreeInCurrentRepo(cmd, cfg, wtDir)
+		result, err := createWorktreeInCurrentRepo(cmd, cfg, wtDir, workDir)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("(current repo): %w", err))
 		} else {
@@ -326,15 +312,12 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool) error {
 }
 
 // createWorktreeInCurrentRepo creates a worktree in the current git repository
-func createWorktreeInCurrentRepo(cmd *AddCmd, cfg *config.Config, targetDir string) (*successResult, error) {
+func createWorktreeInCurrentRepo(cmd *AddCmd, cfg *config.Config, targetDir string, workDir string) (*successResult, error) {
 	// Resolve base ref if creating new branch
 	var baseRef string
 	if cmd.NewBranch {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get current directory: %w", err)
-		}
-		baseRef, err = resolveBaseRef(cwd, cmd.Base, cmd.Fetch, cfg.BaseRef)
+		var err error
+		baseRef, err = resolveBaseRef(workDir, cmd.Base, cmd.Fetch, cfg.BaseRef)
 		if err != nil {
 			return nil, err
 		}
@@ -351,6 +334,7 @@ func createWorktreeInCurrentRepo(cmd *AddCmd, cfg *config.Config, targetDir stri
 		newBranch: cmd.NewBranch,
 		baseRef:   baseRef,
 		note:      cmd.Note,
+		workDir:   workDir,
 	})
 }
 
@@ -382,16 +366,19 @@ func createWorktreeForRepo(repoPath string, cmd *AddCmd, cfg *config.Config, tar
 	})
 }
 
-// resolveWorktreeTargetDir returns both the target dir (possibly relative) and its absolute path.
-// The relative/configured path is used for git operations, absolute is for display.
-func resolveWorktreeTargetDir(cfg *config.Config) (targetDir string, absPath string, err error) {
+// resolveWorktreeTargetDir returns both the target dir and its absolute path.
+// If cfg.WorktreeDir is empty, uses workDir as the target.
+func resolveWorktreeTargetDir(cfg *config.Config, workDir string) (targetDir string, absPath string, err error) {
 	targetDir = cfg.WorktreeDir
 	if targetDir == "" {
-		targetDir = "."
+		targetDir = workDir
 	}
-	absPath, err = filepath.Abs(targetDir)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to resolve absolute path: %w", err)
+	if !filepath.IsAbs(targetDir) {
+		absPath = filepath.Join(workDir, targetDir)
+	} else {
+		absPath = targetDir
 	}
+	// Clean the path to normalize it
+	absPath = filepath.Clean(absPath)
 	return targetDir, absPath, nil
 }

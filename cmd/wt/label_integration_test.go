@@ -3,7 +3,6 @@
 package main
 
 import (
-	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -17,6 +16,7 @@ import (
 // --- Label Add Tests ---
 
 func TestLabelAdd_CurrentRepo(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
@@ -34,6 +34,7 @@ func TestLabelAdd_CurrentRepo(t *testing.T) {
 }
 
 func TestLabelAdd_ByRepoName(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
@@ -55,6 +56,7 @@ func TestLabelAdd_ByRepoName(t *testing.T) {
 }
 
 func TestLabelAdd_MultipleRepos(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoA := setupTestRepo(t, repoDir, "repo-a")
 	repoB := setupTestRepo(t, repoDir, "repo-b")
@@ -81,6 +83,7 @@ func TestLabelAdd_MultipleRepos(t *testing.T) {
 }
 
 func TestLabelAdd_DuplicateIsIdempotent(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
@@ -109,6 +112,7 @@ func TestLabelAdd_DuplicateIsIdempotent(t *testing.T) {
 }
 
 func TestLabelAdd_AddsToExistingLabels(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
@@ -132,6 +136,7 @@ func TestLabelAdd_AddsToExistingLabels(t *testing.T) {
 }
 
 func TestLabelAdd_ErrorOutsideRepoWithoutFlag(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	cfg := &config.Config{}
@@ -147,6 +152,7 @@ func TestLabelAdd_ErrorOutsideRepoWithoutFlag(t *testing.T) {
 }
 
 func TestLabelAdd_ErrorRepoNotFound(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 
 	cfg := &config.Config{RepoDir: repoDir}
@@ -167,6 +173,7 @@ func TestLabelAdd_ErrorRepoNotFound(t *testing.T) {
 // --- Label Remove Tests ---
 
 func TestLabelRemove_CurrentRepo(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
@@ -187,6 +194,7 @@ func TestLabelRemove_CurrentRepo(t *testing.T) {
 }
 
 func TestLabelRemove_ByRepoName(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
@@ -209,6 +217,7 @@ func TestLabelRemove_ByRepoName(t *testing.T) {
 }
 
 func TestLabelRemove_MultipleRepos(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoA := setupTestRepo(t, repoDir, "repo-a")
 	repoB := setupTestRepo(t, repoDir, "repo-b")
@@ -238,6 +247,7 @@ func TestLabelRemove_MultipleRepos(t *testing.T) {
 }
 
 func TestLabelRemove_NonexistentLabel(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
@@ -251,6 +261,7 @@ func TestLabelRemove_NonexistentLabel(t *testing.T) {
 }
 
 func TestLabelRemove_PreservesOtherLabels(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
@@ -279,6 +290,7 @@ func TestLabelRemove_PreservesOtherLabels(t *testing.T) {
 // --- Label List Tests ---
 
 func TestLabelList_CurrentRepo(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
@@ -294,6 +306,7 @@ func TestLabelList_CurrentRepo(t *testing.T) {
 }
 
 func TestLabelList_ByRepoName(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	setupTestRepo(t, repoDir, "myrepo")
 
@@ -306,6 +319,7 @@ func TestLabelList_ByRepoName(t *testing.T) {
 }
 
 func TestLabelList_MultipleRepos(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoA := setupTestRepo(t, repoDir, "repo-a")
 	repoB := setupTestRepo(t, repoDir, "repo-b")
@@ -322,6 +336,7 @@ func TestLabelList_MultipleRepos(t *testing.T) {
 }
 
 func TestLabelList_Global(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoA := setupTestRepo(t, repoDir, "repo-a")
 	repoB := setupTestRepo(t, repoDir, "repo-b")
@@ -339,6 +354,7 @@ func TestLabelList_Global(t *testing.T) {
 }
 
 func TestLabelList_NoLabels(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
@@ -352,6 +368,7 @@ func TestLabelList_NoLabels(t *testing.T) {
 }
 
 func TestLabelList_ErrorOutsideRepoWithoutFlag(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	cfg := &config.Config{}
@@ -366,6 +383,7 @@ func TestLabelList_ErrorOutsideRepoWithoutFlag(t *testing.T) {
 // --- Label Clear Tests ---
 
 func TestLabelClear_CurrentRepo(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
@@ -385,6 +403,7 @@ func TestLabelClear_CurrentRepo(t *testing.T) {
 }
 
 func TestLabelClear_ByRepoName(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
@@ -404,6 +423,7 @@ func TestLabelClear_ByRepoName(t *testing.T) {
 }
 
 func TestLabelClear_MultipleRepos(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoA := setupTestRepo(t, repoDir, "repo-a")
 	repoB := setupTestRepo(t, repoDir, "repo-b")
@@ -430,6 +450,7 @@ func TestLabelClear_MultipleRepos(t *testing.T) {
 }
 
 func TestLabelClear_NoLabels(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
@@ -443,6 +464,7 @@ func TestLabelClear_NoLabels(t *testing.T) {
 }
 
 func TestLabelClear_ErrorOutsideRepoWithoutFlag(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 
 	cfg := &config.Config{}
@@ -457,6 +479,7 @@ func TestLabelClear_ErrorOutsideRepoWithoutFlag(t *testing.T) {
 // --- Inside Worktree Tests ---
 
 func TestLabelAdd_InsideWorktree(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
 
@@ -480,6 +503,7 @@ func TestLabelAdd_InsideWorktree(t *testing.T) {
 }
 
 func TestLabelList_InsideWorktree(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
 
@@ -500,49 +524,24 @@ func TestLabelList_InsideWorktree(t *testing.T) {
 
 // --- Helper Functions ---
 
-func runLabelAddCommand(t *testing.T, cwd string, cfg *config.Config, cmd *LabelAddCmd) error {
+func runLabelAddCommand(t *testing.T, workDir string, cfg *config.Config, cmd *LabelAddCmd) error {
 	t.Helper()
-	return runInDir(t, cwd, func() error {
-		return runLabelAdd(cmd, cfg)
-	})
+	return runLabelAdd(cmd, cfg, workDir)
 }
 
-func runLabelRemoveCommand(t *testing.T, cwd string, cfg *config.Config, cmd *LabelRemoveCmd) error {
+func runLabelRemoveCommand(t *testing.T, workDir string, cfg *config.Config, cmd *LabelRemoveCmd) error {
 	t.Helper()
-	return runInDir(t, cwd, func() error {
-		return runLabelRemove(cmd, cfg)
-	})
+	return runLabelRemove(cmd, cfg, workDir)
 }
 
-func runLabelListCommand(t *testing.T, cwd string, cfg *config.Config, cmd *LabelListCmd) error {
+func runLabelListCommand(t *testing.T, workDir string, cfg *config.Config, cmd *LabelListCmd) error {
 	t.Helper()
-	return runInDir(t, cwd, func() error {
-		return runLabelList(cmd, cfg)
-	})
+	return runLabelList(cmd, cfg, workDir)
 }
 
-func runLabelClearCommand(t *testing.T, cwd string, cfg *config.Config, cmd *LabelClearCmd) error {
+func runLabelClearCommand(t *testing.T, workDir string, cfg *config.Config, cmd *LabelClearCmd) error {
 	t.Helper()
-	return runInDir(t, cwd, func() error {
-		return runLabelClear(cmd, cfg)
-	})
-}
-
-// runInDir runs a function in the specified directory, then restores the original cwd.
-func runInDir(t *testing.T, cwd string, fn func() error) error {
-	t.Helper()
-
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldWd)
-
-	if err := os.Chdir(cwd); err != nil {
-		t.Fatalf("failed to change to directory %s: %v", cwd, err)
-	}
-
-	return fn()
+	return runLabelClear(cmd, cfg, workDir)
 }
 
 // getRepoLabels gets all labels from a repo using git config

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/raphi011/wt/internal/config"
@@ -10,7 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runCd(cmd *CdCmd, cfg *config.Config) error {
+func runCd(cmd *CdCmd, cfg *config.Config, _ string, out io.Writer) error {
 	// Determine targeting mode
 	hasID := cmd.ID != 0
 	hasRepo := cmd.Repository != ""
@@ -27,19 +28,19 @@ func runCd(cmd *CdCmd, cfg *config.Config) error {
 
 	// Mode: by label (no hooks for label mode)
 	if hasLabel {
-		return runCdForLabel(cmd.Label, scanPath, cfg)
+		return runCdForLabel(cmd.Label, scanPath, cfg, out)
 	}
 
 	// Mode: by repo name (no hooks for repo mode)
 	if hasRepo {
-		return runCdForRepo(cmd.Repository, scanPath, cfg)
+		return runCdForRepo(cmd.Repository, scanPath, cfg, out)
 	}
 
 	// Mode: by ID (worktree)
-	return runCdForID(cmd, cfg, scanPath)
+	return runCdForID(cmd, cfg, scanPath, out)
 }
 
-func runCdForID(cmd *CdCmd, cfg *config.Config, scanPath string) error {
+func runCdForID(cmd *CdCmd, cfg *config.Config, scanPath string, out io.Writer) error {
 
 	target, err := resolve.ByID(cmd.ID, scanPath)
 	if err != nil {
@@ -55,7 +56,7 @@ func runCdForID(cmd *CdCmd, cfg *config.Config, scanPath string) error {
 		return fmt.Errorf("path no longer exists: %s", path)
 	}
 
-	fmt.Println(path)
+	fmt.Fprintln(out, path)
 
 	// Run hooks
 	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandCd)
@@ -76,7 +77,7 @@ func runCdForID(cmd *CdCmd, cfg *config.Config, scanPath string) error {
 	return nil
 }
 
-func runCdForRepo(repoName string, dir string, cfg *config.Config) error {
+func runCdForRepo(repoName string, dir string, cfg *config.Config, out io.Writer) error {
 	scanDir, err := resolveRepoScanDir(dir, cfg)
 	if err != nil {
 		return err
@@ -91,11 +92,11 @@ func runCdForRepo(repoName string, dir string, cfg *config.Config) error {
 		return fmt.Errorf("path no longer exists: %s", repoPath)
 	}
 
-	fmt.Println(repoPath)
+	fmt.Fprintln(out, repoPath)
 	return nil
 }
 
-func runCdForLabel(label string, dir string, cfg *config.Config) error {
+func runCdForLabel(label string, dir string, cfg *config.Config, out io.Writer) error {
 	scanDir, err := resolveRepoScanDir(dir, cfg)
 	if err != nil {
 		return err
@@ -119,6 +120,6 @@ func runCdForLabel(label string, dir string, cfg *config.Config) error {
 		return fmt.Errorf("path no longer exists: %s", repoPath)
 	}
 
-	fmt.Println(repoPath)
+	fmt.Fprintln(out, repoPath)
 	return nil
 }

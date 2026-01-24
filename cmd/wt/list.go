@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -14,7 +15,7 @@ import (
 	"github.com/raphi011/wt/internal/ui"
 )
 
-func runList(cmd *ListCmd, cfg *config.Config) error {
+func runList(cmd *ListCmd, cfg *config.Config, workDir string, out io.Writer) error {
 	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
@@ -86,7 +87,7 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 		}
 	} else if !cmd.Global {
 		// Default behavior: filter by current repo if inside one
-		currentRepo = git.GetCurrentRepoMainPath()
+		currentRepo = git.GetCurrentRepoMainPathFrom(workDir)
 		if currentRepo != "" {
 			var filtered []git.Worktree
 			for _, wt := range allWorktrees {
@@ -161,7 +162,7 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(data))
+		fmt.Fprintln(out, string(data))
 		return nil
 	}
 
@@ -169,8 +170,8 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 		// No worktrees found - show appropriate message
 		if currentRepo != "" && len(allWorktrees) > 0 {
 			// We're in a repo but no worktrees for this repo (others exist)
-			fmt.Printf("No worktrees found for current repository\n")
-			fmt.Printf("Use --global to show all %d worktrees\n", len(allWorktrees))
+			fmt.Fprintf(out, "No worktrees found for current repository\n")
+			fmt.Fprintf(out, "Use --global to show all %d worktrees\n", len(allWorktrees))
 		}
 		return nil
 	}
@@ -182,9 +183,9 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 	}
 
 	if currentRepo != "" && len(allWorktrees) != len(worktrees) {
-		fmt.Printf("Listing worktrees for %s (%d of %d, sorted by %s). Use --global to show all\n\n", worktrees[0].RepoName, len(worktrees), len(allWorktrees), sortDesc)
+		fmt.Fprintf(out, "Listing worktrees for %s (%d of %d, sorted by %s). Use --global to show all\n\n", worktrees[0].RepoName, len(worktrees), len(allWorktrees), sortDesc)
 	} else {
-		fmt.Printf("Listing worktrees in %s (%d, sorted by %s)\n\n", scanPath, len(worktrees), sortDesc)
+		fmt.Fprintf(out, "Listing worktrees in %s (%d, sorted by %s)\n\n", scanPath, len(worktrees), sortDesc)
 	}
 
 	// Update merge status for worktrees based on cached PR state
@@ -200,7 +201,7 @@ func runList(cmd *ListCmd, cfg *config.Config) error {
 	sortWorktrees(worktrees, pathToID, sortBy)
 
 	// Display table
-	fmt.Print(ui.FormatListTable(worktrees, pathToID, wtCache))
+	fmt.Fprint(out, ui.FormatListTable(worktrees, pathToID, wtCache))
 
 	return nil
 }

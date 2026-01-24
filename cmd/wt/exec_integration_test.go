@@ -561,21 +561,9 @@ func TestExec_StripLeadingDashes(t *testing.T) {
 }
 
 // runExecCommand runs wt exec with the given config and command in the specified directory.
-func runExecCommand(t *testing.T, cwd string, cfg *config.Config, cmd *ExecCmd) error {
+func runExecCommand(t *testing.T, workDir string, cfg *config.Config, cmd *ExecCmd) error {
 	t.Helper()
-
-	// Save and restore working directory
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldWd)
-
-	if err := os.Chdir(cwd); err != nil {
-		t.Fatalf("failed to change to directory %s: %v", cwd, err)
-	}
-
-	return runExec(cmd, cfg)
+	return runExec(cmd, cfg, workDir)
 }
 
 // Note: populateCache is defined in integration_test_helpers.go

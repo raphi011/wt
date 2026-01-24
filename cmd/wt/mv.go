@@ -10,7 +10,7 @@ import (
 	"github.com/raphi011/wt/internal/git"
 )
 
-func runMv(cmd *MvCmd, cfg *config.Config) error {
+func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
 	// Validate worktree format
 	if err := format.ValidateFormat(cmd.Format); err != nil {
 		return fmt.Errorf("invalid format: %w", err)
@@ -22,11 +22,14 @@ func runMv(cmd *MvCmd, cfg *config.Config) error {
 		return fmt.Errorf("destination not configured: set WT_WORKTREE_DIR env var or worktree_dir in config")
 	}
 
-	// Validate destination path
-	destPath, err := filepath.Abs(dest)
-	if err != nil {
-		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	// Validate destination path - resolve relative paths against workDir
+	var destPath string
+	if filepath.IsAbs(dest) {
+		destPath = dest
+	} else {
+		destPath = filepath.Join(workDir, dest)
 	}
+	destPath = filepath.Clean(destPath)
 
 	// Check if destination directory exists
 	if info, err := os.Stat(destPath); os.IsNotExist(err) {
@@ -37,14 +40,8 @@ func runMv(cmd *MvCmd, cfg *config.Config) error {
 		return fmt.Errorf("destination is not a directory: %s", destPath)
 	}
 
-	// Get current directory
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
-	}
-
-	// Scan for worktrees in current directory (need dirty check to skip dirty worktrees)
-	worktrees, err := git.ListWorktrees(cwd, true)
+	// Scan for worktrees in working directory (need dirty check to skip dirty worktrees)
+	worktrees, err := git.ListWorktrees(workDir, true)
 	if err != nil {
 		return err
 	}
@@ -73,11 +70,12 @@ func runMv(cmd *MvCmd, cfg *config.Config) error {
 	// Determine repo destination: repo_dir if set, otherwise worktree_dir
 	repoDestPath := destPath // default to worktree_dir
 	if cfg.RepoDir != "" {
-		var err error
-		repoDestPath, err = filepath.Abs(cfg.RepoDir)
-		if err != nil {
-			return fmt.Errorf("failed to resolve repo_dir: %w", err)
+		if filepath.IsAbs(cfg.RepoDir) {
+			repoDestPath = cfg.RepoDir
+		} else {
+			repoDestPath = filepath.Join(workDir, cfg.RepoDir)
 		}
+		repoDestPath = filepath.Clean(repoDestPath)
 
 		// Validate repo_dir exists
 		if info, err := os.Stat(repoDestPath); os.IsNotExist(err) {
@@ -154,8 +152,8 @@ func runMv(cmd *MvCmd, cfg *config.Config) error {
 		}
 	}
 
-	// Find and move main repos in cwd (not worktrees)
-	repos, err := git.FindAllRepos(cwd)
+	// Find and move main repos in workDir (not worktrees)
+	repos, err := git.FindAllRepos(workDir)
 	if err != nil {
 		return fmt.Errorf("failed to scan for repos: %w", err)
 	}

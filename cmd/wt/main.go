@@ -19,6 +19,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 	}
 
+	// Get working directory for context
+	workDir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "wt: failed to get working directory: %v\n", err)
+		os.Exit(1)
+	}
+
 	parser, err := kong.New(&cli,
 		kong.Name("wt"),
 		kong.Description("Git worktree manager with GitHub/GitLab integration"),
@@ -57,7 +64,7 @@ func main() {
 		cli.Mv.Format = cfg.WorktreeFormat
 	}
 
-	err = ctx.Run(&Context{Config: &cfg})
+	err = ctx.Run(&Context{Config: &cfg, WorkDir: workDir, Stdout: os.Stdout})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr)

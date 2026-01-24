@@ -23,3 +23,10 @@ func IsInsideRepo() bool {
 	err := runCmd(cmd)
 	return err == nil
 }
+
+// IsInsideRepoPath returns true if the given path is inside a git repository
+func IsInsideRepoPath(path string) bool {
+	cmd := exec.Command("git", "-C", path, "rev-parse", "--is-inside-work-tree")
+	err := runCmd(cmd)
+	return err == nil
+}

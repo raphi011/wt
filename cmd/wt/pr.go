@@ -19,7 +19,7 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config) error {
+func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config, workDir string) error {
 	// Validate mutual exclusion: positional org/repo and -r flag can't both be used
 	if cmd.Repo != "" && cmd.Repository != "" {
 		return fmt.Errorf("cannot use both positional org/repo argument and -r/--repository flag\nUse 'wt pr checkout %d %s' (clone mode) OR 'wt pr checkout %d -r %s' (local mode)", cmd.Number, cmd.Repo, cmd.Number, cmd.Repository)
@@ -31,7 +31,7 @@ func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config) error {
 	}
 
 	// Worktree target dir from config
-	dir, absPath, err := resolveWorktreeTargetDir(cfg)
+	dir, absPath, err := resolveWorktreeTargetDir(cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -189,8 +189,8 @@ func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config) error {
 	return hooks.RunAll(hookMatches, ctx)
 }
 
-func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {
-	target, err := resolvePrTarget(cmd.ID, cmd.Repository, cfg)
+func runPrMerge(cmd *PrMergeCmd, cfg *config.Config, workDir string) error {
+	target, err := resolvePrTarget(cmd.ID, cmd.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -294,17 +294,17 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config) error {
 	ctx.Repo, _ = git.GetRepoNameFrom(target.MainRepo)
 
 	// If worktree was removed or was main repo, run hooks from main repo
-	workDir := target.Path
+	hookWorkDir := target.Path
 	if !cmd.Keep || isMainRepo {
-		workDir = target.MainRepo
+		hookWorkDir = target.MainRepo
 	}
 
-	hooks.RunAllNonFatal(hookMatches, ctx, workDir)
+	hooks.RunAllNonFatal(hookMatches, ctx, hookWorkDir)
 	return nil
 }
 
-func runPrCreate(cmd *PrCreateCmd, cfg *config.Config) error {
-	target, err := resolvePrTarget(cmd.ID, cmd.Repository, cfg)
+func runPrCreate(cmd *PrCreateCmd, cfg *config.Config, workDir string) error {
+	target, err := resolvePrTarget(cmd.ID, cmd.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -393,8 +393,8 @@ func runPrCreate(cmd *PrCreateCmd, cfg *config.Config) error {
 	return nil
 }
 
-func runPrView(cmd *PrViewCmd, cfg *config.Config) error {
-	target, err := resolvePrTarget(cmd.ID, cmd.Repository, cfg)
+func runPrView(cmd *PrViewCmd, cfg *config.Config, workDir string) error {
+	target, err := resolvePrTarget(cmd.ID, cmd.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -425,8 +425,8 @@ func runPrView(cmd *PrViewCmd, cfg *config.Config) error {
 // resolvePrTarget resolves target for pr commands with 3 modes:
 // 1. --id: by worktree ID
 // 2. -r: by repository name
-// 3. neither: use cwd (worktree or main repo)
-func resolvePrTarget(id int, repository string, cfg *config.Config) (*resolve.Target, error) {
+// 3. neither: use workDir (worktree or main repo)
+func resolvePrTarget(id int, repository string, cfg *config.Config, workDir string) (*resolve.Target, error) {
 	if id != 0 {
 		scanPath, err := cfg.GetAbsWorktreeDir()
 		if err != nil {
@@ -447,7 +447,7 @@ func resolvePrTarget(id int, repository string, cfg *config.Config) (*resolve.Ta
 		return resolve.ByRepoName(repository, repoScanDir)
 	}
 
-	return resolve.FromCurrentWorktreeOrRepo()
+	return resolve.FromWorktreeOrRepoPath(workDir)
 }
 
 // openBrowser opens the specified URL in the default browser

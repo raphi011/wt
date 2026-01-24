@@ -308,6 +308,38 @@ func GetCurrentRepoMainPath() string {
 	return mainRepo
 }
 
+// GetCurrentRepoMainPathFrom returns the main repository path from the given path
+// Works whether you're in the main repo or a worktree
+// Returns empty string if not in a git repo
+func GetCurrentRepoMainPathFrom(path string) string {
+	// First check if we're in a git repo at all
+	cmd := exec.Command("git", "-C", path, "rev-parse", "--show-toplevel")
+	output, err := outputCmd(cmd)
+	if err != nil {
+		return ""
+	}
+	toplevel := strings.TrimSpace(string(output))
+
+	// Check if we're in a worktree by seeing if .git is a file (not dir)
+	gitPath := filepath.Join(toplevel, ".git")
+	info, err := os.Stat(gitPath)
+	if err != nil {
+		return ""
+	}
+
+	if info.IsDir() {
+		// Main repo - toplevel is the main repo path
+		return toplevel
+	}
+
+	// Worktree - need to resolve main repo from .git file
+	mainRepo, err := GetMainRepoPath(toplevel)
+	if err != nil {
+		return ""
+	}
+	return mainRepo
+}
+
 // GetOriginURL gets the origin URL for a repository
 func GetOriginURL(repoPath string) (string, error) {
 	cmd := exec.Command("git", "-C", repoPath, "remote", "get-url", "origin")

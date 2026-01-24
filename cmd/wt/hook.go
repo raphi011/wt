@@ -10,7 +10,7 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runHookRun(cmd *HookCmd, cfg *config.Config) error {
+func runHookRun(cmd *HookCmd, cfg *config.Config, workDir string) error {
 	// Validate all hooks exist upfront
 	var missing []string
 	for _, name := range cmd.Hooks {
@@ -41,7 +41,7 @@ func runHookRun(cmd *HookCmd, cfg *config.Config) error {
 
 	// If no targeting specified, use current worktree
 	if !hasID && !hasRepo {
-		ctx, err := resolveHookTargetCurrent()
+		ctx, err := resolveHookTargetCurrentPath(workDir)
 		if err != nil {
 			return err
 		}
@@ -122,6 +122,15 @@ func runHooksForContext(hookNames []string, cfg *config.Config, ctx hooks.Contex
 // resolveHookTargetCurrent resolves the context for the current worktree or repo.
 func resolveHookTargetCurrent() (hooks.Context, error) {
 	target, err := resolve.FromCurrentWorktreeOrRepo()
+	if err != nil {
+		return hooks.Context{}, fmt.Errorf("use -i, -r, or -l when not inside a git repo (run 'wt list' to see IDs)")
+	}
+	return hooks.ContextFromWorktree(target, "run", nil), nil
+}
+
+// resolveHookTargetCurrentPath resolves the context for the given path (worktree or repo).
+func resolveHookTargetCurrentPath(workDir string) (hooks.Context, error) {
+	target, err := resolve.FromWorktreeOrRepoPath(workDir)
 	if err != nil {
 		return hooks.Context{}, fmt.Errorf("use -i, -r, or -l when not inside a git repo (run 'wt list' to see IDs)")
 	}

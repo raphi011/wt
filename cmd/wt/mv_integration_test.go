@@ -12,9 +12,10 @@ import (
 )
 
 func TestMv_MoveWorktreesToWorktreeDir(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	destDir := resolvePath(t, t.TempDir())
 
 	// Create repo in source dir
 	repoPath := setupTestRepo(t, sourceDir, "myrepo")
@@ -64,10 +65,11 @@ func TestMv_MoveWorktreesToWorktreeDir(t *testing.T) {
 }
 
 func TestMv_MoveReposToRepoDir(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
-	sourceDir := t.TempDir()
-	worktreeDestDir := t.TempDir()
-	repoDestDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
 
 	// Create repo in source dir
 	repoPath := setupTestRepo(t, sourceDir, "myrepo")
@@ -111,9 +113,10 @@ func TestMv_MoveReposToRepoDir(t *testing.T) {
 }
 
 func TestMv_MoveReposToWorktreeDirWhenNoRepoDir(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	destDir := resolvePath(t, t.TempDir())
 
 	// Create repo only (no worktrees)
 	repoPath := setupTestRepo(t, sourceDir, "myrepo")
@@ -145,9 +148,10 @@ func TestMv_MoveReposToWorktreeDirWhenNoRepoDir(t *testing.T) {
 }
 
 func TestMv_SkipWorktreeIfTargetExists(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	destDir := resolvePath(t, t.TempDir())
 
 	// Create repo and worktree in source
 	repoPath := setupTestRepo(t, sourceDir, "myrepo")
@@ -180,9 +184,10 @@ func TestMv_SkipWorktreeIfTargetExists(t *testing.T) {
 }
 
 func TestMv_SkipRepoIfTargetExists(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	destDir := resolvePath(t, t.TempDir())
 
 	// Create repo in source
 	repoPath := setupTestRepo(t, sourceDir, "myrepo")
@@ -210,9 +215,10 @@ func TestMv_SkipRepoIfTargetExists(t *testing.T) {
 }
 
 func TestMv_DryRunDoesNotMove(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	destDir := resolvePath(t, t.TempDir())
 
 	// Create repo and worktree
 	repoPath := setupTestRepo(t, sourceDir, "myrepo")
@@ -248,9 +254,10 @@ func TestMv_DryRunDoesNotMove(t *testing.T) {
 }
 
 func TestMv_FilterByRepository(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	destDir := resolvePath(t, t.TempDir())
 
 	// Create two repos with worktrees
 	repoA := setupTestRepo(t, sourceDir, "repo-a")
@@ -288,9 +295,10 @@ func TestMv_FilterByRepository(t *testing.T) {
 }
 
 func TestMv_SkipDirtyWorktree(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	destDir := resolvePath(t, t.TempDir())
 
 	// Create repo and worktree
 	repoPath := setupTestRepo(t, sourceDir, "myrepo")
@@ -325,9 +333,10 @@ func TestMv_SkipDirtyWorktree(t *testing.T) {
 }
 
 func TestMv_ForceMovesDirtyWorktree(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	destDir := resolvePath(t, t.TempDir())
 
 	// Create repo and worktree
 	repoPath := setupTestRepo(t, sourceDir, "myrepo")
@@ -369,9 +378,10 @@ func TestMv_ForceMovesDirtyWorktree(t *testing.T) {
 }
 
 func TestMv_SkipIfAlreadyAtDestination(t *testing.T) {
+	t.Parallel()
 	// Setup: worktree already in worktree_dir
-	destDir := t.TempDir()
-	repoDir := t.TempDir()
+	destDir := resolvePath(t, t.TempDir())
+	repoDir := resolvePath(t, t.TempDir())
 
 	// Create repo in repo dir
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
@@ -404,10 +414,11 @@ func TestMv_SkipIfAlreadyAtDestination(t *testing.T) {
 }
 
 func TestMv_WorktreeReferenceUpdatedAfterRepoMove(t *testing.T) {
+	t.Parallel()
 	// Setup: repo in source, worktree in different location
-	sourceDir := t.TempDir()
-	worktreeDir := t.TempDir()
-	repoDestDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
 
 	// Create repo in source
 	repoPath := setupTestRepo(t, sourceDir, "myrepo")
@@ -444,10 +455,11 @@ func TestMv_WorktreeReferenceUpdatedAfterRepoMove(t *testing.T) {
 }
 
 func TestMv_MultipleWorktreesFromSameRepo(t *testing.T) {
+	t.Parallel()
 	// Setup
-	sourceDir := t.TempDir()
-	worktreeDestDir := t.TempDir()
-	repoDestDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
 
 	// Create repo with 3 worktrees
 	repoPath := setupTestRepo(t, sourceDir, "myrepo")
@@ -495,9 +507,10 @@ func TestMv_MultipleWorktreesFromSameRepo(t *testing.T) {
 }
 
 func TestMv_EmptyDirectory(t *testing.T) {
+	t.Parallel()
 	// Setup empty directory
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	destDir := resolvePath(t, t.TempDir())
 
 	cfg := &config.Config{
 		WorktreeDir:    destDir,
@@ -515,8 +528,9 @@ func TestMv_EmptyDirectory(t *testing.T) {
 }
 
 func TestMv_DestinationDoesNotExist(t *testing.T) {
-	sourceDir := t.TempDir()
-	nonExistentDir := filepath.Join(t.TempDir(), "does-not-exist")
+	t.Parallel()
+	sourceDir := resolvePath(t, t.TempDir())
+	nonExistentDir := filepath.Join(resolvePath(t, t.TempDir()), "does-not-exist")
 
 	// Create a repo so there's something to move
 	setupTestRepo(t, sourceDir, "myrepo")
@@ -541,7 +555,8 @@ func TestMv_DestinationDoesNotExist(t *testing.T) {
 }
 
 func TestMv_NoWorktreeDirConfigured(t *testing.T) {
-	sourceDir := t.TempDir()
+	t.Parallel()
+	sourceDir := resolvePath(t, t.TempDir())
 	setupTestRepo(t, sourceDir, "myrepo")
 
 	cfg := &config.Config{
@@ -564,9 +579,10 @@ func TestMv_NoWorktreeDirConfigured(t *testing.T) {
 }
 
 func TestMv_CustomFormatRenamesWorktree(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	destDir := resolvePath(t, t.TempDir())
 
 	// Create repo and worktree with default naming
 	repoPath := setupTestRepo(t, sourceDir, "myrepo")
@@ -603,9 +619,10 @@ func TestMv_CustomFormatRenamesWorktree(t *testing.T) {
 }
 
 func TestMv_FolderFormatPlaceholder(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
-	sourceDir := t.TempDir()
-	destDir := t.TempDir()
+	sourceDir := resolvePath(t, t.TempDir())
+	destDir := resolvePath(t, t.TempDir())
 
 	// Create repo with folder name different from origin name
 	repoPath := setupTestRepo(t, sourceDir, "my-local-folder")
@@ -635,19 +652,7 @@ func TestMv_FolderFormatPlaceholder(t *testing.T) {
 }
 
 // runMvCommand runs wt mv with the given config and command in the specified directory.
-func runMvCommand(t *testing.T, cwd string, cfg *config.Config, cmd *MvCmd) error {
+func runMvCommand(t *testing.T, workDir string, cfg *config.Config, cmd *MvCmd) error {
 	t.Helper()
-
-	// Save and restore working directory
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldWd)
-
-	if err := os.Chdir(cwd); err != nil {
-		t.Fatalf("failed to change to directory %s: %v", cwd, err)
-	}
-
-	return runMv(cmd, cfg)
+	return runMv(cmd, cfg, workDir)
 }

@@ -35,7 +35,7 @@ const (
 	skipHasCommits pruneReason = "Has commits"
 )
 
-func runPrune(cmd *PruneCmd, cfg *config.Config) error {
+func runPrune(cmd *PruneCmd, cfg *config.Config, workDir string) error {
 	// Validate -f requires -i
 	if cmd.Force && len(cmd.ID) == 0 {
 		return fmt.Errorf("-f/--force requires -i/--id to target specific worktree(s)")
@@ -86,7 +86,7 @@ func runPrune(cmd *PruneCmd, cfg *config.Config) error {
 	worktrees := allWorktrees
 	var currentRepo string
 	if !cmd.Global {
-		currentRepo = git.GetCurrentRepoMainPath()
+		currentRepo = git.GetCurrentRepoMainPathFrom(workDir)
 		if currentRepo != "" {
 			var filtered []git.Worktree
 			for _, wt := range allWorktrees {

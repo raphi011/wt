@@ -1,13 +1,17 @@
 package main
 
 import (
+	"io"
+
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 )
 
 // Context is passed to all command Run() methods.
 type Context struct {
-	Config *config.Config
+	Config  *config.Config
+	WorkDir string    // Injected working directory (for testability)
+	Stdout  io.Writer // Injected stdout (for testability)
 }
 
 // BeforeApply runs before any command and verifies git is available.
@@ -51,7 +55,7 @@ Examples:
 }
 
 func (c *AddCmd) Run(ctx *Context) error {
-	return runAdd(c, ctx.Config)
+	return runAdd(c, ctx.Config, ctx.WorkDir)
 }
 
 // PruneCmd removes merged and clean worktrees.
@@ -100,7 +104,7 @@ Examples:
 }
 
 func (c *PruneCmd) Run(ctx *Context) error {
-	return runPrune(c, ctx.Config)
+	return runPrune(c, ctx.Config, ctx.WorkDir)
 }
 
 // ListCmd lists worktrees in a directory.
@@ -132,7 +136,7 @@ Examples:
 }
 
 func (c *ListCmd) Run(ctx *Context) error {
-	return runList(c, ctx.Config)
+	return runList(c, ctx.Config, ctx.WorkDir, ctx.Stdout)
 }
 
 // ShowCmd shows detailed status for a single worktree.
@@ -158,7 +162,7 @@ Examples:
 }
 
 func (c *ShowCmd) Run(ctx *Context) error {
-	return runShow(c, ctx.Config)
+	return runShow(c, ctx.Config, ctx.WorkDir)
 }
 
 // ExecCmd runs a command in one or more worktrees by ID, or in repos by name/label.
@@ -185,7 +189,7 @@ Examples:
 }
 
 func (c *ExecCmd) Run(ctx *Context) error {
-	return runExec(c, ctx.Config)
+	return runExec(c, ctx.Config, ctx.WorkDir)
 }
 
 // CdCmd prints the path of a worktree or repo for shell scripting.
@@ -215,7 +219,7 @@ Examples:
 }
 
 func (c *CdCmd) Run(ctx *Context) error {
-	return runCd(c, ctx.Config)
+	return runCd(c, ctx.Config, ctx.WorkDir, ctx.Stdout)
 }
 
 // NoteSetCmd sets a note on a branch.
@@ -241,7 +245,7 @@ Examples:
 }
 
 func (c *NoteSetCmd) Run(ctx *Context) error {
-	return runNoteSet(c, ctx.Config)
+	return runNoteSet(c, ctx.Config, ctx.WorkDir, ctx.Stdout)
 }
 
 // NoteGetCmd gets a note from a branch.
@@ -265,7 +269,7 @@ Examples:
 }
 
 func (c *NoteGetCmd) Run(ctx *Context) error {
-	return runNoteGet(c, ctx.Config)
+	return runNoteGet(c, ctx.Config, ctx.WorkDir, ctx.Stdout)
 }
 
 // NoteClearCmd clears a note from a branch.
@@ -289,7 +293,7 @@ Examples:
 }
 
 func (c *NoteClearCmd) Run(ctx *Context) error {
-	return runNoteClear(c, ctx.Config)
+	return runNoteClear(c, ctx.Config, ctx.WorkDir, ctx.Stdout)
 }
 
 // NoteCmd manages branch notes. Get is default subcommand.
@@ -330,7 +334,7 @@ Examples:
 }
 
 func (c *LabelAddCmd) Run(ctx *Context) error {
-	return runLabelAdd(c, ctx.Config)
+	return runLabelAdd(c, ctx.Config, ctx.WorkDir)
 }
 
 // LabelRemoveCmd removes a label from a repository.
@@ -351,7 +355,7 @@ Examples:
 }
 
 func (c *LabelRemoveCmd) Run(ctx *Context) error {
-	return runLabelRemove(c, ctx.Config)
+	return runLabelRemove(c, ctx.Config, ctx.WorkDir)
 }
 
 // LabelListCmd lists labels for a repository.
@@ -373,7 +377,7 @@ Examples:
 }
 
 func (c *LabelListCmd) Run(ctx *Context) error {
-	return runLabelList(c, ctx.Config)
+	return runLabelList(c, ctx.Config, ctx.WorkDir)
 }
 
 // LabelClearCmd clears all labels from a repository.
@@ -393,7 +397,7 @@ Examples:
 }
 
 func (c *LabelClearCmd) Run(ctx *Context) error {
-	return runLabelClear(c, ctx.Config)
+	return runLabelClear(c, ctx.Config, ctx.WorkDir)
 }
 
 // LabelCmd manages repository labels.
@@ -533,7 +537,7 @@ Examples:
 }
 
 func (c *HookCmd) Run(ctx *Context) error {
-	return runHookRun(c, ctx.Config)
+	return runHookRun(c, ctx.Config, ctx.WorkDir)
 }
 
 // MvCmd moves worktrees to a different directory with optional renaming.
@@ -566,7 +570,7 @@ Examples:
 }
 
 func (c *MvCmd) Run(ctx *Context) error {
-	return runMv(c, ctx.Config)
+	return runMv(c, ctx.Config, ctx.WorkDir)
 }
 
 // PrCheckoutCmd creates a worktree for a PR, cloning the repo if needed.
@@ -600,7 +604,7 @@ Examples:
 }
 
 func (c *PrCheckoutCmd) Run(ctx *Context) error {
-	return runPrCheckout(c, ctx.Config)
+	return runPrCheckout(c, ctx.Config, ctx.WorkDir)
 }
 
 // PrMergeCmd merges the PR for the current branch.
@@ -647,7 +651,7 @@ Examples:
 }
 
 func (c *PrCreateCmd) Run(ctx *Context) error {
-	return runPrCreate(c, ctx.Config)
+	return runPrCreate(c, ctx.Config, ctx.WorkDir)
 }
 
 func (c *PrMergeCmd) Help() string {
@@ -669,7 +673,7 @@ Examples:
 }
 
 func (c *PrMergeCmd) Run(ctx *Context) error {
-	return runPrMerge(c, ctx.Config)
+	return runPrMerge(c, ctx.Config, ctx.WorkDir)
 }
 
 // PrViewCmd shows PR details or opens in browser.
@@ -696,7 +700,7 @@ Examples:
 }
 
 func (c *PrViewCmd) Run(ctx *Context) error {
-	return runPrView(c, ctx.Config)
+	return runPrView(c, ctx.Config, ctx.WorkDir)
 }
 
 // PrCmd works with PRs.

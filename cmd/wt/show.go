@@ -56,14 +56,14 @@ type PRInfo struct {
 	CommentCount int    `json:"comment_count,omitempty"`
 }
 
-func runShow(cmd *ShowCmd, cfg *config.Config) error {
+func runShow(cmd *ShowCmd, cfg *config.Config, workDir string) error {
 	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
 	// Resolve target worktree
-	info, err := resolveShowTarget(cmd.ID, cmd.Repository, cfg, scanPath)
+	info, err := resolveShowTarget(cmd.ID, cmd.Repository, cfg, scanPath, workDir)
 	if err != nil {
 		return err
 	}
@@ -105,7 +105,7 @@ func runShow(cmd *ShowCmd, cfg *config.Config) error {
 }
 
 // resolveShowTarget resolves the worktree target for show command
-func resolveShowTarget(id int, repository string, cfg *config.Config, dir string) (*resolve.Target, error) {
+func resolveShowTarget(id int, repository string, cfg *config.Config, dir string, workDir string) (*resolve.Target, error) {
 	// Resolve by ID if provided
 	if id != 0 {
 		scanPath := dir
@@ -128,33 +128,28 @@ func resolveShowTarget(id int, repository string, cfg *config.Config, dir string
 		return resolve.ByRepoName(repository, repoScanDir)
 	}
 
-	// Default: use current working directory
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current directory: %w", err)
-	}
-
-	inWorktree := git.IsWorktree(cwd)
-	inGitRepo := git.IsInsideRepo()
+	// Default: use working directory
+	inWorktree := git.IsWorktree(workDir)
+	inGitRepo := git.IsInsideRepoPath(workDir)
 
 	if !inWorktree && !inGitRepo {
 		return nil, fmt.Errorf("--id or --repository required when not inside a worktree/repo (run 'wt list' to see IDs)")
 	}
 
-	branch, err := git.GetCurrentBranch(cwd)
+	branch, err := git.GetCurrentBranch(workDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current branch: %w", err)
 	}
 
 	var mainRepo string
 	if inWorktree {
-		mainRepo, err = git.GetMainRepoPath(cwd)
+		mainRepo, err = git.GetMainRepoPath(workDir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get main repo path: %w", err)
 		}
 	} else {
-		// Inside main repo, use cwd as main repo
-		mainRepo = cwd
+		// Inside main repo, use workDir as main repo
+		mainRepo = workDir
 	}
 
 	// Get ID from cache if available
@@ -166,13 +161,13 @@ func resolveShowTarget(id int, repository string, cfg *config.Config, dir string
 	wtCache, _ := cache.Load(scanPath)
 	wtID := 0
 	if wtCache != nil {
-		key := cache.MakeWorktreeKey(cwd)
+		key := cache.MakeWorktreeKey(workDir)
 		if entry, ok := wtCache.Worktrees[key]; ok {
 			wtID = entry.ID
 		}
 	}
 
-	return &resolve.Target{ID: wtID, Branch: branch, MainRepo: mainRepo, Path: cwd}, nil
+	return &resolve.Target{ID: wtID, Branch: branch, MainRepo: mainRepo, Path: workDir}, nil
 }
 
 func gatherShowInfo(target *resolve.Target, prInfo *forge.PRInfo) *ShowInfo {

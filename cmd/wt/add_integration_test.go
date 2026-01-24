@@ -12,6 +12,7 @@ import (
 )
 
 func TestAdd_ExistingBranchInsideRepo(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
 	sourceDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -44,6 +45,7 @@ func TestAdd_ExistingBranchInsideRepo(t *testing.T) {
 }
 
 func TestAdd_NewBranchInsideRepo(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
 	sourceDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -78,6 +80,7 @@ func TestAdd_NewBranchInsideRepo(t *testing.T) {
 }
 
 func TestAdd_NewBranchFromCustomBase(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
 	sourceDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -119,6 +122,7 @@ func TestAdd_NewBranchFromCustomBase(t *testing.T) {
 }
 
 func TestAdd_WithNote(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
 	sourceDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -150,6 +154,7 @@ func TestAdd_WithNote(t *testing.T) {
 }
 
 func TestAdd_WorktreeAlreadyExists(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
 	sourceDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -178,6 +183,7 @@ func TestAdd_WorktreeAlreadyExists(t *testing.T) {
 }
 
 func TestAdd_MultiRepoByName(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -219,6 +225,7 @@ func TestAdd_MultiRepoByName(t *testing.T) {
 }
 
 func TestAdd_MultiRepoByLabel(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -274,6 +281,7 @@ func TestAdd_MultiRepoByLabel(t *testing.T) {
 }
 
 func TestAdd_ErrorMissingBranchInsideRepo(t *testing.T) {
+	t.Parallel()
 	// Setup
 	sourceDir := t.TempDir()
 	repoPath := setupTestRepo(t, sourceDir, "myrepo")
@@ -296,6 +304,7 @@ func TestAdd_ErrorMissingBranchInsideRepo(t *testing.T) {
 }
 
 func TestAdd_ErrorOutsideRepoWithoutRepoFlag(t *testing.T) {
+	t.Parallel()
 	// Setup
 	tempDir := t.TempDir()
 
@@ -319,6 +328,7 @@ func TestAdd_ErrorOutsideRepoWithoutRepoFlag(t *testing.T) {
 }
 
 func TestAdd_ErrorRepoNotFound(t *testing.T) {
+	t.Parallel()
 	// Setup
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -344,6 +354,7 @@ func TestAdd_ErrorRepoNotFound(t *testing.T) {
 }
 
 func TestAdd_ErrorLabelNotFound(t *testing.T) {
+	t.Parallel()
 	// Setup
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -372,6 +383,7 @@ func TestAdd_ErrorLabelNotFound(t *testing.T) {
 }
 
 func TestAdd_CustomWorktreeFormat(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
 	sourceDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -407,6 +419,7 @@ func TestAdd_CustomWorktreeFormat(t *testing.T) {
 }
 
 func TestAdd_WorktreeDirDefaultsToCurrent(t *testing.T) {
+	t.Parallel()
 	// Setup
 	sourceDir := t.TempDir()
 	repoPath := setupTestRepo(t, sourceDir, "myrepo")
@@ -434,6 +447,7 @@ func TestAdd_WorktreeDirDefaultsToCurrent(t *testing.T) {
 }
 
 func TestAdd_InsideRepoWithRepoFlag(t *testing.T) {
+	t.Parallel()
 	// When inside repo with -r flag, should create worktree in both current repo and specified repo
 
 	// Setup temp directories
@@ -478,6 +492,7 @@ func TestAdd_InsideRepoWithRepoFlag(t *testing.T) {
 }
 
 func TestAdd_NewBranchMultiRepo(t *testing.T) {
+	t.Parallel()
 	// Test creating new branches in multiple repos
 
 	// Setup temp directories
@@ -523,6 +538,7 @@ func TestAdd_NewBranchMultiRepo(t *testing.T) {
 }
 
 func TestAdd_BranchWithSlashes(t *testing.T) {
+	t.Parallel()
 	// Test branch names with slashes (feature/name format)
 
 	// Setup temp directories
@@ -558,6 +574,7 @@ func TestAdd_BranchWithSlashes(t *testing.T) {
 }
 
 func TestAdd_ErrorBranchDoesNotExist(t *testing.T) {
+	t.Parallel()
 	// Setup
 	sourceDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -579,6 +596,7 @@ func TestAdd_ErrorBranchDoesNotExist(t *testing.T) {
 }
 
 func TestAdd_ErrorBranchAlreadyCheckedOut(t *testing.T) {
+	t.Parallel()
 	// Setup
 	sourceDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -607,6 +625,7 @@ func TestAdd_ErrorBranchAlreadyCheckedOut(t *testing.T) {
 }
 
 func TestAdd_CombineRepoAndLabel(t *testing.T) {
+	t.Parallel()
 	// Test using both -r and -l together
 
 	// Setup temp directories
@@ -663,6 +682,7 @@ func TestAdd_CombineRepoAndLabel(t *testing.T) {
 }
 
 func TestAdd_MultipleLabels(t *testing.T) {
+	t.Parallel()
 	// Test using multiple -l flags
 
 	// Setup temp directories
@@ -718,6 +738,7 @@ func TestAdd_MultipleLabels(t *testing.T) {
 }
 
 func TestAdd_InsideRepoWithLabelOnly(t *testing.T) {
+	t.Parallel()
 	// When inside repo with -l only (no -r), should NOT auto-include current repo
 
 	// Setup temp directories
@@ -763,6 +784,7 @@ func TestAdd_InsideRepoWithLabelOnly(t *testing.T) {
 }
 
 func TestAdd_NoHookFlag(t *testing.T) {
+	t.Parallel()
 	// Test --no-hook flag skips hooks
 
 	// Setup
@@ -795,6 +817,7 @@ func TestAdd_NoHookFlag(t *testing.T) {
 }
 
 func TestAdd_PartialFailureMultiRepo(t *testing.T) {
+	t.Parallel()
 	// Test that partial failures are reported but don't stop other repos
 
 	// Setup temp directories
@@ -832,19 +855,7 @@ func TestAdd_PartialFailureMultiRepo(t *testing.T) {
 }
 
 // runAddCommand runs wt add with the given config and command in the specified directory.
-func runAddCommand(t *testing.T, cwd string, cfg *config.Config, cmd *AddCmd) error {
+func runAddCommand(t *testing.T, workDir string, cfg *config.Config, cmd *AddCmd) error {
 	t.Helper()
-
-	// Save and restore working directory
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldWd)
-
-	if err := os.Chdir(cwd); err != nil {
-		t.Fatalf("failed to change to directory %s: %v", cwd, err)
-	}
-
-	return runAdd(cmd, cfg)
+	return runAdd(cmd, cfg, workDir)
 }

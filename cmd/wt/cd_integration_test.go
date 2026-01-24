@@ -4,7 +4,6 @@ package main
 
 import (
 	"bytes"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +12,7 @@ import (
 )
 
 func TestCd_ByWorktreeID(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
@@ -45,6 +45,7 @@ func TestCd_ByWorktreeID(t *testing.T) {
 }
 
 func TestCd_ByWorktreeIDWithProjectFlag(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
@@ -79,6 +80,7 @@ func TestCd_ByWorktreeIDWithProjectFlag(t *testing.T) {
 }
 
 func TestCd_ByRepoName(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -109,6 +111,7 @@ func TestCd_ByRepoName(t *testing.T) {
 }
 
 func TestCd_ByLabel(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -140,6 +143,7 @@ func TestCd_ByLabel(t *testing.T) {
 }
 
 func TestCd_MultipleWorktrees(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
@@ -183,6 +187,7 @@ func TestCd_MultipleWorktrees(t *testing.T) {
 }
 
 func TestCd_ErrorNoTargetSpecified(t *testing.T) {
+	t.Parallel()
 	worktreeDir := t.TempDir()
 
 	cfg := &config.Config{
@@ -204,6 +209,7 @@ func TestCd_ErrorNoTargetSpecified(t *testing.T) {
 }
 
 func TestCd_ErrorInvalidID(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
@@ -232,6 +238,7 @@ func TestCd_ErrorInvalidID(t *testing.T) {
 }
 
 func TestCd_ErrorRepoNotFound(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
 
@@ -258,6 +265,7 @@ func TestCd_ErrorRepoNotFound(t *testing.T) {
 }
 
 func TestCd_ErrorLabelNotFound(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
 
@@ -284,6 +292,7 @@ func TestCd_ErrorLabelNotFound(t *testing.T) {
 }
 
 func TestCd_ErrorMultipleReposMatchLabel(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
 
@@ -314,6 +323,7 @@ func TestCd_ErrorMultipleReposMatchLabel(t *testing.T) {
 }
 
 func TestCd_NoHookFlag(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
@@ -347,6 +357,7 @@ func TestCd_NoHookFlag(t *testing.T) {
 }
 
 func TestCd_MultipleReposSameWorktreeDir(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
@@ -415,6 +426,7 @@ func TestCd_MultipleReposSameWorktreeDir(t *testing.T) {
 }
 
 func TestCd_WorktreeDirFromEnvOrConfig(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
@@ -447,6 +459,7 @@ func TestCd_WorktreeDirFromEnvOrConfig(t *testing.T) {
 }
 
 func TestCd_BranchWithSlashesInName(t *testing.T) {
+	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
@@ -479,6 +492,7 @@ func TestCd_BranchWithSlashesInName(t *testing.T) {
 }
 
 func TestCd_RepoUsesWorktreeDirIfNoRepoDir(t *testing.T) {
+	t.Parallel()
 	// When repo_dir not set, -r should scan worktree_dir for repos
 	worktreeDir := t.TempDir()
 
@@ -508,6 +522,7 @@ func TestCd_RepoUsesWorktreeDirIfNoRepoDir(t *testing.T) {
 }
 
 func TestCd_LabelUsesWorktreeDirIfNoRepoDir(t *testing.T) {
+	t.Parallel()
 	// When repo_dir not set, -l should scan worktree_dir for repos
 	worktreeDir := t.TempDir()
 
@@ -539,34 +554,11 @@ func TestCd_LabelUsesWorktreeDirIfNoRepoDir(t *testing.T) {
 
 // runCdCommand runs wt cd with the given config and command in the specified directory.
 // Returns the printed output (path).
-func runCdCommand(t *testing.T, cwd string, cfg *config.Config, cmd *CdCmd) (string, error) {
+func runCdCommand(t *testing.T, workDir string, cfg *config.Config, cmd *CdCmd) (string, error) {
 	t.Helper()
-
-	// Save and restore working directory
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldWd)
-
-	if err := os.Chdir(cwd); err != nil {
-		t.Fatalf("failed to change to directory %s: %v", cwd, err)
-	}
-
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	runErr := runCd(cmd, cfg)
-
-	w.Close()
-	os.Stdout = oldStdout
-
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
-
-	return buf.String(), runErr
+	err := runCd(cmd, cfg, workDir, &buf)
+	return buf.String(), err
 }
 
 // Note: populateCache is defined in integration_test_helpers.go

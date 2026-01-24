@@ -4,7 +4,6 @@ package main
 
 import (
 	"bytes"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -15,6 +14,7 @@ import (
 // === note set tests ===
 
 func TestNoteSet_ByID(t *testing.T) {
+	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
 
@@ -45,6 +45,7 @@ func TestNoteSet_ByID(t *testing.T) {
 }
 
 func TestNoteSet_ByRepoName(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
 
@@ -73,6 +74,7 @@ func TestNoteSet_ByRepoName(t *testing.T) {
 }
 
 func TestNoteSet_InsideWorktree(t *testing.T) {
+	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
 
@@ -101,6 +103,7 @@ func TestNoteSet_InsideWorktree(t *testing.T) {
 }
 
 func TestNoteSet_InsideMainRepo(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 
 	repoPath := setupTestRepo(t, repoDir, "myrepo")
@@ -125,6 +128,7 @@ func TestNoteSet_InsideMainRepo(t *testing.T) {
 }
 
 func TestNoteSet_OverwriteExisting(t *testing.T) {
+	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
 
@@ -173,6 +177,7 @@ func TestNoteSet_OverwriteExisting(t *testing.T) {
 // === note get tests ===
 
 func TestNoteGet_ByID(t *testing.T) {
+	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
 
@@ -205,6 +210,7 @@ func TestNoteGet_ByID(t *testing.T) {
 }
 
 func TestNoteGet_ByRepoName(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
 
@@ -234,6 +240,7 @@ func TestNoteGet_ByRepoName(t *testing.T) {
 }
 
 func TestNoteGet_InsideWorktree(t *testing.T) {
+	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
 
@@ -263,6 +270,7 @@ func TestNoteGet_InsideWorktree(t *testing.T) {
 }
 
 func TestNoteGet_NoNoteExists(t *testing.T) {
+	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
 
@@ -293,6 +301,7 @@ func TestNoteGet_NoNoteExists(t *testing.T) {
 }
 
 func TestNoteGet_DefaultSubcommand(t *testing.T) {
+	t.Parallel()
 	// Test that `wt note -i 1` works (get is default subcommand)
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
@@ -329,6 +338,7 @@ func TestNoteGet_DefaultSubcommand(t *testing.T) {
 // === note clear tests ===
 
 func TestNoteClear_ByID(t *testing.T) {
+	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
 
@@ -361,6 +371,7 @@ func TestNoteClear_ByID(t *testing.T) {
 }
 
 func TestNoteClear_ByRepoName(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
 
@@ -390,6 +401,7 @@ func TestNoteClear_ByRepoName(t *testing.T) {
 }
 
 func TestNoteClear_InsideWorktree(t *testing.T) {
+	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
 
@@ -419,6 +431,7 @@ func TestNoteClear_InsideWorktree(t *testing.T) {
 }
 
 func TestNoteClear_NonExistentNote(t *testing.T) {
+	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
 
@@ -454,6 +467,7 @@ func TestNoteClear_NonExistentNote(t *testing.T) {
 // === error cases ===
 
 func TestNoteGet_ErrorInvalidID(t *testing.T) {
+	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
 
@@ -479,6 +493,7 @@ func TestNoteGet_ErrorInvalidID(t *testing.T) {
 }
 
 func TestNoteGet_ErrorRepoNotFound(t *testing.T) {
+	t.Parallel()
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
 
@@ -505,6 +520,7 @@ func TestNoteGet_ErrorRepoNotFound(t *testing.T) {
 }
 
 func TestNoteSet_ErrorInvalidID(t *testing.T) {
+	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
 
@@ -531,6 +547,7 @@ func TestNoteSet_ErrorInvalidID(t *testing.T) {
 }
 
 func TestNoteClear_ErrorInvalidID(t *testing.T) {
+	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
 
@@ -557,63 +574,21 @@ func TestNoteClear_ErrorInvalidID(t *testing.T) {
 
 // === helper functions ===
 
-func runNoteSetCommand(t *testing.T, cwd string, cfg *config.Config, cmd *NoteSetCmd) error {
+func runNoteSetCommand(t *testing.T, workDir string, cfg *config.Config, cmd *NoteSetCmd) error {
 	t.Helper()
-
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldWd)
-
-	if err := os.Chdir(cwd); err != nil {
-		t.Fatalf("failed to change to directory %s: %v", cwd, err)
-	}
-
-	return runNoteSet(cmd, cfg)
-}
-
-func runNoteGetCommand(t *testing.T, cwd string, cfg *config.Config, cmd *NoteGetCmd) (string, error) {
-	t.Helper()
-
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldWd)
-
-	if err := os.Chdir(cwd); err != nil {
-		t.Fatalf("failed to change to directory %s: %v", cwd, err)
-	}
-
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	runErr := runNoteGet(cmd, cfg)
-
-	w.Close()
-	os.Stdout = oldStdout
-
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
-
-	return buf.String(), runErr
+	return runNoteSet(cmd, cfg, workDir, &buf)
 }
 
-func runNoteClearCommand(t *testing.T, cwd string, cfg *config.Config, cmd *NoteClearCmd) error {
+func runNoteGetCommand(t *testing.T, workDir string, cfg *config.Config, cmd *NoteGetCmd) (string, error) {
 	t.Helper()
+	var buf bytes.Buffer
+	err := runNoteGet(cmd, cfg, workDir, &buf)
+	return buf.String(), err
+}
 
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldWd)
-
-	if err := os.Chdir(cwd); err != nil {
-		t.Fatalf("failed to change to directory %s: %v", cwd, err)
-	}
-
-	return runNoteClear(cmd, cfg)
+func runNoteClearCommand(t *testing.T, workDir string, cfg *config.Config, cmd *NoteClearCmd) error {
+	t.Helper()
+	var buf bytes.Buffer
+	return runNoteClear(cmd, cfg, workDir, &buf)
 }

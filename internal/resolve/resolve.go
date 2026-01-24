@@ -23,22 +23,27 @@ func FromCurrentWorktree() (*Target, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
+	return FromWorktreePath(cwd)
+}
 
-	if !git.IsWorktree(cwd) {
+// FromWorktreePath resolves target from the given path.
+// Returns error if the path is not inside a git worktree.
+func FromWorktreePath(path string) (*Target, error) {
+	if !git.IsWorktree(path) {
 		return nil, fmt.Errorf("not inside a worktree (use --id to specify target)")
 	}
 
-	branch, err := git.GetCurrentBranch(cwd)
+	branch, err := git.GetCurrentBranch(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current branch: %w", err)
 	}
 
-	mainRepo, err := git.GetMainRepoPath(cwd)
+	mainRepo, err := git.GetMainRepoPath(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get main repo path: %w", err)
 	}
 
-	return &Target{Branch: branch, MainRepo: mainRepo, Path: cwd}, nil
+	return &Target{Branch: branch, MainRepo: mainRepo, Path: path}, nil
 }
 
 // FromCurrentWorktreeOrRepo resolves target from the current working directory.
@@ -48,28 +53,33 @@ func FromCurrentWorktreeOrRepo() (*Target, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
+	return FromWorktreeOrRepoPath(cwd)
+}
 
-	if !git.IsInsideRepo() {
+// FromWorktreeOrRepoPath resolves target from the given path.
+// Works in both worktrees and main repos.
+func FromWorktreeOrRepoPath(path string) (*Target, error) {
+	if !git.IsInsideRepoPath(path) {
 		return nil, fmt.Errorf("not inside a git repository")
 	}
 
-	branch, err := git.GetCurrentBranch(cwd)
+	branch, err := git.GetCurrentBranch(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current branch: %w", err)
 	}
 
 	var mainRepo string
-	if git.IsWorktree(cwd) {
-		mainRepo, err = git.GetMainRepoPath(cwd)
+	if git.IsWorktree(path) {
+		mainRepo, err = git.GetMainRepoPath(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get main repo path: %w", err)
 		}
 	} else {
-		// Inside main repo, use cwd as main repo
-		mainRepo = cwd
+		// Inside main repo, use path as main repo
+		mainRepo = path
 	}
 
-	return &Target{Branch: branch, MainRepo: mainRepo, Path: cwd}, nil
+	return &Target{Branch: branch, MainRepo: mainRepo, Path: path}, nil
 }
 
 // ByRepoName resolves a target by repository name.
