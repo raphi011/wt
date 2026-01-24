@@ -4,152 +4,12 @@ package main
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
 )
-
-// setupTestRepo creates a git repo with initial commit in dir/name.
-// Returns the absolute path to the created repo.
-func setupTestRepo(t *testing.T, dir, name string) string {
-	t.Helper()
-
-	repoPath := filepath.Join(dir, name)
-	if err := os.MkdirAll(repoPath, 0755); err != nil {
-		t.Fatalf("failed to create repo dir: %v", err)
-	}
-
-	// Initialize git repo
-	cmds := [][]string{
-		{"git", "init"},
-		{"git", "config", "user.email", "test@test.com"},
-		{"git", "config", "user.name", "Test User"},
-	}
-
-	for _, args := range cmds {
-		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Dir = repoPath
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
-		}
-	}
-
-	// Create initial commit
-	readmePath := filepath.Join(repoPath, "README.md")
-	if err := os.WriteFile(readmePath, []byte("# "+name+"\n"), 0644); err != nil {
-		t.Fatalf("failed to write README: %v", err)
-	}
-
-	cmds = [][]string{
-		{"git", "add", "README.md"},
-		{"git", "commit", "-m", "Initial commit"},
-	}
-
-	for _, args := range cmds {
-		cmd := exec.Command(args[0], args[1:]...)
-		cmd.Dir = repoPath
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
-		}
-	}
-
-	// Set up a fake origin for repo name extraction
-	cmd := exec.Command("git", "remote", "add", "origin", "https://github.com/test/"+name+".git")
-	cmd.Dir = repoPath
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to add remote: %v\n%s", err, out)
-	}
-
-	return repoPath
-}
-
-// setupWorktree creates a worktree from repoPath at worktreePath for the given branch.
-// Creates a new branch if it doesn't exist.
-func setupWorktree(t *testing.T, repoPath, worktreePath, branch string) {
-	t.Helper()
-
-	// Create a new branch and worktree
-	cmd := exec.Command("git", "worktree", "add", "-b", branch, worktreePath)
-	cmd.Dir = repoPath
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to create worktree: %v\n%s", err, out)
-	}
-}
-
-// setupExistingWorktree creates a worktree for an existing branch.
-func setupExistingWorktree(t *testing.T, repoPath, worktreePath, branch string) {
-	t.Helper()
-
-	cmd := exec.Command("git", "worktree", "add", worktreePath, branch)
-	cmd.Dir = repoPath
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to create worktree: %v\n%s", err, out)
-	}
-}
-
-// runMvCommand runs wt mv with the given config and command in the specified directory.
-func runMvCommand(t *testing.T, cwd string, cfg *config.Config, cmd *MvCmd) error {
-	t.Helper()
-
-	// Save and restore working directory
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldWd)
-
-	if err := os.Chdir(cwd); err != nil {
-		t.Fatalf("failed to change to directory %s: %v", cwd, err)
-	}
-
-	return runMv(cmd, cfg)
-}
-
-// verifyWorktreeWorks checks that git status works in the worktree.
-func verifyWorktreeWorks(t *testing.T, worktreePath string) {
-	t.Helper()
-
-	cmd := exec.Command("git", "status")
-	cmd.Dir = worktreePath
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Errorf("worktree %s is broken: git status failed: %v\n%s", worktreePath, err, out)
-	}
-}
-
-// verifyGitdirPoints checks that the worktree .git file points to the expected repo.
-func verifyGitdirPoints(t *testing.T, worktreePath, expectedRepoPath string) {
-	t.Helper()
-
-	gitFile := filepath.Join(worktreePath, ".git")
-	content, err := os.ReadFile(gitFile)
-	if err != nil {
-		t.Fatalf("failed to read .git file: %v", err)
-	}
-
-	line := strings.TrimSpace(string(content))
-	if !strings.HasPrefix(line, "gitdir: ") {
-		t.Fatalf("invalid .git file format: %s", line)
-	}
-
-	gitdir := strings.TrimPrefix(line, "gitdir: ")
-	// gitdir should contain the repo path
-	if !strings.Contains(gitdir, expectedRepoPath) {
-		t.Errorf("worktree .git file points to %s, expected to contain %s", gitdir, expectedRepoPath)
-	}
-}
-
-// makeDirty creates uncommitted changes in a worktree.
-func makeDirty(t *testing.T, worktreePath string) {
-	t.Helper()
-
-	filePath := filepath.Join(worktreePath, "dirty.txt")
-	if err := os.WriteFile(filePath, []byte("uncommitted changes\n"), 0644); err != nil {
-		t.Fatalf("failed to create dirty file: %v", err)
-	}
-}
 
 func TestMv_MoveWorktreesToWorktreeDir(t *testing.T) {
 	// Setup temp directories
@@ -772,4 +632,22 @@ func TestMv_FolderFormatPlaceholder(t *testing.T) {
 	}
 
 	verifyWorktreeWorks(t, newWorktreePath)
+}
+
+// runMvCommand runs wt mv with the given config and command in the specified directory.
+func runMvCommand(t *testing.T, cwd string, cfg *config.Config, cmd *MvCmd) error {
+	t.Helper()
+
+	// Save and restore working directory
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	defer os.Chdir(oldWd)
+
+	if err := os.Chdir(cwd); err != nil {
+		t.Fatalf("failed to change to directory %s: %v", cwd, err)
+	}
+
+	return runMv(cmd, cfg)
 }

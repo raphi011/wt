@@ -1,0 +1,198 @@
+//go:build integration
+
+package main
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// setupTestRepo creates a git repo with initial commit in dir/name.
+// Returns the absolute path to the created repo.
+func setupTestRepo(t *testing.T, dir, name string) string {
+	t.Helper()
+
+	repoPath := filepath.Join(dir, name)
+	if err := os.MkdirAll(repoPath, 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+
+	// Initialize git repo
+	cmds := [][]string{
+		{"git", "init"},
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test User"},
+	}
+
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create initial commit
+	readmePath := filepath.Join(repoPath, "README.md")
+	if err := os.WriteFile(readmePath, []byte("# "+name+"\n"), 0644); err != nil {
+		t.Fatalf("failed to write README: %v", err)
+	}
+
+	cmds = [][]string{
+		{"git", "add", "README.md"},
+		{"git", "commit", "-m", "Initial commit"},
+	}
+
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Set up a fake origin for repo name extraction
+	cmd := exec.Command("git", "remote", "add", "origin", "https://github.com/test/"+name+".git")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to add remote: %v\n%s", err, out)
+	}
+
+	return repoPath
+}
+
+// setupWorktree creates a worktree from repoPath at worktreePath for the given branch.
+// Creates a new branch if it doesn't exist.
+func setupWorktree(t *testing.T, repoPath, worktreePath, branch string) {
+	t.Helper()
+
+	// Create a new branch and worktree
+	cmd := exec.Command("git", "worktree", "add", "-b", branch, worktreePath)
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to create worktree: %v\n%s", err, out)
+	}
+}
+
+// setupExistingWorktree creates a worktree for an existing branch.
+func setupExistingWorktree(t *testing.T, repoPath, worktreePath, branch string) {
+	t.Helper()
+
+	cmd := exec.Command("git", "worktree", "add", worktreePath, branch)
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to create worktree: %v\n%s", err, out)
+	}
+}
+
+// verifyWorktreeWorks checks that git status works in the worktree.
+func verifyWorktreeWorks(t *testing.T, worktreePath string) {
+	t.Helper()
+
+	cmd := exec.Command("git", "status")
+	cmd.Dir = worktreePath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Errorf("worktree %s is broken: git status failed: %v\n%s", worktreePath, err, out)
+	}
+}
+
+// verifyGitdirPoints checks that the worktree .git file points to the expected repo.
+func verifyGitdirPoints(t *testing.T, worktreePath, expectedRepoPath string) {
+	t.Helper()
+
+	gitFile := filepath.Join(worktreePath, ".git")
+	content, err := os.ReadFile(gitFile)
+	if err != nil {
+		t.Fatalf("failed to read .git file: %v", err)
+	}
+
+	line := strings.TrimSpace(string(content))
+	if !strings.HasPrefix(line, "gitdir: ") {
+		t.Fatalf("invalid .git file format: %s", line)
+	}
+
+	gitdir := strings.TrimPrefix(line, "gitdir: ")
+	// gitdir should contain the repo path
+	if !strings.Contains(gitdir, expectedRepoPath) {
+		t.Errorf("worktree .git file points to %s, expected to contain %s", gitdir, expectedRepoPath)
+	}
+}
+
+// makeDirty creates uncommitted changes in a worktree.
+func makeDirty(t *testing.T, worktreePath string) {
+	t.Helper()
+
+	filePath := filepath.Join(worktreePath, "dirty.txt")
+	if err := os.WriteFile(filePath, []byte("uncommitted changes\n"), 0644); err != nil {
+		t.Fatalf("failed to create dirty file: %v", err)
+	}
+}
+
+// createBranch creates a branch (without checking it out)
+func createBranch(t *testing.T, repoPath, branch string) {
+	t.Helper()
+	runGitCommand(t, repoPath, "git", "branch", branch)
+}
+
+// verifyBranchExists verifies a branch exists
+func verifyBranchExists(t *testing.T, repoPath, branch string) {
+	t.Helper()
+	out := runGitCommand(t, repoPath, "git", "branch", "--list", branch)
+	if !strings.Contains(out, branch) {
+		t.Errorf("branch %s should exist in repo", branch)
+	}
+}
+
+// makeCommitOnBranch makes a commit on a specific branch
+func makeCommitOnBranch(t *testing.T, repoPath, branch, filename string) {
+	t.Helper()
+	// Checkout branch
+	runGitCommand(t, repoPath, "git", "checkout", branch)
+	// Create file
+	filePath := filepath.Join(repoPath, filename)
+	if err := os.WriteFile(filePath, []byte("content for "+filename+"\n"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	// Commit
+	runGitCommand(t, repoPath, "git", "add", filename)
+	runGitCommand(t, repoPath, "git", "commit", "-m", "Add "+filename)
+	// Return to main
+	runGitCommand(t, repoPath, "git", "checkout", "main")
+}
+
+// setRepoLabel sets a label on a repo using git config wt.labels (comma-separated)
+func setRepoLabel(t *testing.T, repoPath, label string) {
+	t.Helper()
+	runGitCommand(t, repoPath, "git", "config", "wt.labels", label)
+}
+
+// getBranchNote gets the branch description (note)
+func getBranchNote(t *testing.T, repoPath, branch string) string {
+	t.Helper()
+	cmd := exec.Command("git", "-C", repoPath, "config", "branch."+branch+".description")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		// Exit code 1 means no note set
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return ""
+		}
+		t.Fatalf("failed to get branch note: %v\n%s", err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// runGitCommand runs a git command and returns output
+func runGitCommand(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+	}
+	return string(out)
+}
