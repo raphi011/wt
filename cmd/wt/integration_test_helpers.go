@@ -42,6 +42,7 @@ func setupTestRepo(t *testing.T, dir, name string) string {
 		{"git", "init"},
 		{"git", "config", "user.email", "test@test.com"},
 		{"git", "config", "user.name", "Test User"},
+		{"git", "config", "commit.gpgsign", "false"},
 	}
 
 	for _, args := range cmds {
