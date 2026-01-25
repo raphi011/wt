@@ -2,6 +2,7 @@ package forge
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -58,6 +59,59 @@ func (g *GitLab) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 	}
 
 	// glab returns an array of MRs with various fields
+	var prs []struct {
+		IID    int    `json:"iid"`
+		State  string `json:"state"` // opened, merged, closed
+		Draft  bool   `json:"draft"`
+		WebURL string `json:"web_url"`
+		Author struct {
+			Username string `json:"username"`
+		} `json:"author"`
+		UserNotesCount int   `json:"user_notes_count"`
+		ApprovedBy     []any `json:"approved_by"` // just need to check if non-empty
+		Approved       bool  `json:"approved"`
+	}
+	if err := json.Unmarshal(output, &prs); err != nil {
+		return nil, fmt.Errorf("failed to parse glab output: %w", err)
+	}
+
+	if len(prs) == 0 {
+		// No MR found - return marker indicating we checked
+		return &PRInfo{
+			Fetched:  true,
+			CachedAt: time.Now(),
+		}, nil
+	}
+
+	pr := prs[0]
+	return &PRInfo{
+		Number:       pr.IID,
+		State:        normalizeGitLabState(pr.State),
+		IsDraft:      pr.Draft,
+		URL:          pr.WebURL,
+		Author:       pr.Author.Username,
+		CommentCount: pr.UserNotesCount,
+		HasReviews:   len(pr.ApprovedBy) > 0,
+		IsApproved:   pr.Approved,
+		CachedAt:     time.Now(),
+		Fetched:      true,
+	}, nil
+}
+
+// GetPRForBranchContext fetches PR info for a branch using glab CLI with context support.
+func (g *GitLab) GetPRForBranchContext(ctx context.Context, repoURL, branch string) (*PRInfo, error) {
+	projectPath := extractGitLabProject(repoURL)
+
+	output, err := cmd.OutputContext(ctx, "", "glab", "mr", "list",
+		"-R", projectPath,
+		"--source-branch", branch,
+		"--state", "all",
+		"-F", "json",
+		"-P", "1") // limit to 1
+	if err != nil {
+		return nil, fmt.Errorf("glab command failed: %v", err)
+	}
+
 	var prs []struct {
 		IID    int    `json:"iid"`
 		State  string `json:"state"` // opened, merged, closed
@@ -158,6 +212,36 @@ func (g *GitLab) CloneRepo(repoSpec, destPath string) (string, error) {
 
 	c := exec.Command("glab", "repo", "clone", repoSpec, clonePath)
 	if err := cmd.Run(c); err != nil {
+		return "", fmt.Errorf("glab repo clone failed: %v", err)
+	}
+
+	return clonePath, nil
+}
+
+// CloneRepoContext clones a GitLab repo using glab CLI with context support.
+func (g *GitLab) CloneRepoContext(ctx context.Context, repoSpec, destPath string) (string, error) {
+	parts := strings.Split(repoSpec, "/")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("invalid repo spec %q: expected group/repo format", repoSpec)
+	}
+	repoName := parts[len(parts)-1]
+	if repoName == "" {
+		return "", fmt.Errorf("invalid repo spec %q: repo name must not be empty", repoSpec)
+	}
+	// Validate at least one non-empty group
+	hasGroup := false
+	for i := 0; i < len(parts)-1; i++ {
+		if parts[i] != "" {
+			hasGroup = true
+			break
+		}
+	}
+	if !hasGroup {
+		return "", fmt.Errorf("invalid repo spec %q: group must not be empty", repoSpec)
+	}
+	clonePath := filepath.Join(destPath, repoName)
+
+	if err := cmd.RunContext(ctx, "", "glab", "repo", "clone", repoSpec, clonePath); err != nil {
 		return "", fmt.Errorf("glab repo clone failed: %v", err)
 	}
 

@@ -2,9 +2,27 @@
 
 This document outlines the use cases for introducing Go's `context` package into the wt codebase.
 
-## Current State
+## Implementation Status
 
-The codebase does not use `context.Context`. External commands are executed via `os/exec.Command` without timeout or cancellation support. Output writers are passed explicitly through function parameters.
+### Completed (Phase 1)
+
+- [x] `internal/log` package with context-aware logger
+- [x] `internal/cmd/exec.go` - `RunContext` and `OutputContext` with verbose logging
+- [x] `--verbose` / `-v` global flag
+- [x] Signal handling in `main.go` (`signal.NotifyContext`)
+- [x] `internal/git/exec.go` - `runGit` and `outputGit` helpers
+- [x] `internal/git/repo.go` - `FetchBranchContext`, `FetchDefaultBranchContext`
+- [x] `internal/forge/github.go` - `GetPRForBranchContext`, `CloneRepoContext`
+- [x] `internal/forge/gitlab.go` - `GetPRForBranchContext`, `CloneRepoContext`
+
+### Remaining (Phase 2+)
+
+- [ ] Update commands to pass context through to git/forge operations
+- [ ] Migrate remaining git functions to use context
+- [ ] Add timeouts for network operations
+- [ ] Add timeouts for hook execution
+
+## Use Cases
 
 ## Use Cases
 

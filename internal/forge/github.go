@@ -2,6 +2,7 @@ package forge
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -92,6 +93,56 @@ func (g *GitHub) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
 	}, nil
 }
 
+// GetPRForBranchContext fetches PR info for a branch using gh CLI with context support.
+func (g *GitHub) GetPRForBranchContext(ctx context.Context, repoURL, branch string) (*PRInfo, error) {
+	output, err := cmd.OutputContext(ctx, "", "gh", "pr", "list",
+		"-R", repoURL,
+		"--head", branch,
+		"--state", "all",
+		"--json", "number,state,isDraft,url,author,comments,reviewDecision",
+		"--limit", "1")
+	if err != nil {
+		return nil, fmt.Errorf("gh command failed: %v", err)
+	}
+
+	var prs []struct {
+		Number  int    `json:"number"`
+		State   string `json:"state"`
+		IsDraft bool   `json:"isDraft"`
+		URL     string `json:"url"`
+		Author  struct {
+			Login string `json:"login"`
+		} `json:"author"`
+		Comments       []any  `json:"comments"` // just need the count
+		ReviewDecision string `json:"reviewDecision"`
+	}
+	if err := json.Unmarshal(output, &prs); err != nil {
+		return nil, fmt.Errorf("failed to parse gh output: %w", err)
+	}
+
+	if len(prs) == 0 {
+		// No PR found - return marker indicating we checked
+		return &PRInfo{
+			Fetched:  true,
+			CachedAt: time.Now(),
+		}, nil
+	}
+
+	pr := prs[0]
+	return &PRInfo{
+		Number:       pr.Number,
+		State:        pr.State, // GitHub already uses OPEN, MERGED, CLOSED
+		IsDraft:      pr.IsDraft,
+		URL:          pr.URL,
+		Author:       pr.Author.Login,
+		CommentCount: len(pr.Comments),
+		HasReviews:   pr.ReviewDecision != "",
+		IsApproved:   pr.ReviewDecision == "APPROVED",
+		CachedAt:     time.Now(),
+		Fetched:      true,
+	}, nil
+}
+
 // GetPRBranch fetches the head branch name for a PR number using gh CLI
 func (g *GitHub) GetPRBranch(repoURL string, number int) (string, error) {
 	c := exec.Command("gh", "pr", "view",
@@ -137,6 +188,25 @@ func (g *GitHub) CloneRepo(repoSpec, destPath string) (string, error) {
 
 	c := exec.Command("gh", "repo", "clone", repoSpec, clonePath)
 	if err := cmd.Run(c); err != nil {
+		return "", fmt.Errorf("gh repo clone failed: %v", err)
+	}
+
+	return clonePath, nil
+}
+
+// CloneRepoContext clones a GitHub repo using gh CLI with context support.
+func (g *GitHub) CloneRepoContext(ctx context.Context, repoSpec, destPath string) (string, error) {
+	parts := strings.Split(repoSpec, "/")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid repo spec %q: expected org/repo format", repoSpec)
+	}
+	org, repoName := parts[0], parts[1]
+	if org == "" || repoName == "" {
+		return "", fmt.Errorf("invalid repo spec %q: org and repo must not be empty", repoSpec)
+	}
+	clonePath := filepath.Join(destPath, repoName)
+
+	if err := cmd.RunContext(ctx, "", "gh", "repo", "clone", repoSpec, clonePath); err != nil {
 		return "", fmt.Errorf("gh repo clone failed: %v", err)
 	}
 
