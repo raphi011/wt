@@ -16,7 +16,7 @@ import (
 	"github.com/raphi011/wt/internal/ui"
 )
 
-func runList(ctx context.Context, cmd *ListCmd, cfg *config.Config, workDir string, out io.Writer) error {
+func (c *ListCmd) runList(ctx context.Context, cfg *config.Config, workDir string, out io.Writer) error {
 	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
@@ -50,7 +50,7 @@ func runList(ctx context.Context, cmd *ListCmd, cfg *config.Config, workDir stri
 	pathToID := wtCache.SyncWorktrees(wtInfos)
 
 	// Refresh PR status if requested
-	if cmd.Refresh {
+	if c.Refresh {
 		sp := ui.NewSpinner("Fetching PR status...")
 		sp.Start()
 		refreshPRStatus(ctx, allWorktrees, wtCache, cfg, sp)
@@ -58,7 +58,7 @@ func runList(ctx context.Context, cmd *ListCmd, cfg *config.Config, workDir stri
 	}
 
 	// Resolve sort order: flag > config > "id"
-	sortBy := cmd.Sort
+	sortBy := c.Sort
 	if sortBy == "" {
 		sortBy = cfg.DefaultSort
 	}
@@ -69,11 +69,11 @@ func runList(ctx context.Context, cmd *ListCmd, cfg *config.Config, workDir stri
 	// Filter worktrees based on flags
 	worktrees := allWorktrees
 	var currentRepo string
-	hasRepoOrLabelFilter := len(cmd.Repository) > 0 || len(cmd.Label) > 0
+	hasRepoOrLabelFilter := len(c.Repository) > 0 || len(c.Label) > 0
 
 	if hasRepoOrLabelFilter {
 		// Filter by -r and/or -l flags (overrides current repo filter)
-		repoPaths, errs := collectRepoPaths(ctx, cmd.Repository, cmd.Label, scanPath, cfg)
+		repoPaths, errs := collectRepoPaths(ctx, c.Repository, c.Label, scanPath, cfg)
 		for _, e := range errs {
 			fmt.Fprintf(os.Stderr, "Warning: %v\n", e)
 		}
@@ -86,7 +86,7 @@ func runList(ctx context.Context, cmd *ListCmd, cfg *config.Config, workDir stri
 			}
 			worktrees = filtered
 		}
-	} else if !cmd.Global {
+	} else if !c.Global {
 		// Default behavior: filter by current repo if inside one
 		currentRepo = git.GetCurrentRepoMainPathFrom(ctx, workDir)
 		if currentRepo != "" {
@@ -108,7 +108,7 @@ func runList(ctx context.Context, cmd *ListCmd, cfg *config.Config, workDir stri
 	// Sort worktrees for JSON output
 	sortWorktrees(worktrees, pathToID, sortBy)
 
-	if cmd.JSON {
+	if c.JSON {
 		// Build JSON output with IDs and PR info
 		type prJSON struct {
 			Number     int    `json:"number"`

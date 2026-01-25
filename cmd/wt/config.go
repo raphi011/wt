@@ -9,16 +9,16 @@ import (
 	"github.com/raphi011/wt/internal/config"
 )
 
-func runConfigInit(cmd *ConfigInitCmd) error {
+func (c *ConfigInitCmd) runConfigInit() error {
 	// Validate worktree dir (must be absolute or start with ~)
-	if err := config.ValidatePath(cmd.WorktreeDir, "worktree_dir"); err != nil {
+	if err := config.ValidatePath(c.WorktreeDir, "worktree_dir"); err != nil {
 		return err
 	}
-	if cmd.Stdout {
-		fmt.Print(config.DefaultConfigWithDir(cmd.WorktreeDir))
+	if c.Stdout {
+		fmt.Print(config.DefaultConfigWithDir(c.WorktreeDir))
 		return nil
 	}
-	path, err := config.Init(cmd.WorktreeDir, cmd.Force)
+	path, err := config.Init(c.WorktreeDir, c.Force)
 	if err != nil {
 		return err
 	}
@@ -26,8 +26,8 @@ func runConfigInit(cmd *ConfigInitCmd) error {
 	return nil
 }
 
-func runConfigShow(cmd *ConfigShowCmd, cfg *config.Config) error {
-	if cmd.JSON {
+func (c *ConfigShowCmd) runConfigShow(cfg *config.Config) error {
+	if c.JSON {
 		// Build JSON output structure
 		type cloneRuleJSON struct {
 			Pattern string `json:"pattern"`
@@ -160,10 +160,10 @@ func runConfigShow(cmd *ConfigShowCmd, cfg *config.Config) error {
 	return nil
 }
 
-func runConfigHooks(cmd *ConfigHooksCmd, cfg *config.Config) error {
+func (c *ConfigHooksCmd) runConfigHooks(cfg *config.Config) error {
 	hooksConfig := cfg.Hooks
 
-	if cmd.JSON {
+	if c.JSON {
 		type hookJSON struct {
 			Name        string   `json:"name"`
 			Command     string   `json:"command"`

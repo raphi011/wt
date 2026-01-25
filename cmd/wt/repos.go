@@ -26,7 +26,7 @@ type RepoInfo struct {
 	WorktreeCount int      `json:"worktree_count"`
 }
 
-func runRepos(ctx context.Context, cmd *ReposCmd, cfg *config.Config) error {
+func (c *ReposCmd) runRepos(ctx context.Context, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
@@ -55,10 +55,10 @@ func runRepos(ctx context.Context, cmd *ReposCmd, cfg *config.Config) error {
 		labels, _ := git.GetLabels(ctx, repoPath)
 
 		// Filter by label if specified
-		if cmd.Label != "" {
+		if c.Label != "" {
 			hasLabel := false
 			for _, l := range labels {
-				if l == cmd.Label {
+				if l == c.Label {
 					hasLabel = true
 					break
 				}
@@ -95,9 +95,9 @@ func runRepos(ctx context.Context, cmd *ReposCmd, cfg *config.Config) error {
 	}
 
 	// Sort repos
-	sortRepos(repos, cmd.Sort)
+	sortRepos(repos, c.Sort)
 
-	if cmd.JSON {
+	if c.JSON {
 		data, err := json.MarshalIndent(repos, "", "  ")
 		if err != nil {
 			return err
@@ -107,8 +107,8 @@ func runRepos(ctx context.Context, cmd *ReposCmd, cfg *config.Config) error {
 	}
 
 	if len(repos) == 0 {
-		if cmd.Label != "" {
-			fmt.Printf("No repositories found with label %q\n", cmd.Label)
+		if c.Label != "" {
+			fmt.Printf("No repositories found with label %q\n", c.Label)
 		} else {
 			fmt.Printf("No repositories found in %s\n", absScanDir)
 		}

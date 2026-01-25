@@ -11,13 +11,13 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runNoteSet(ctx context.Context, cmd *NoteSetCmd, cfg *config.Config, workDir string, out io.Writer) error {
-	target, err := resolveNoteTarget(ctx, cmd.ID, cmd.Repository, cfg, workDir)
+func (c *NoteSetCmd) runNoteSet(ctx context.Context, cfg *config.Config, workDir string, out io.Writer) error {
+	target, err := resolveNoteTarget(ctx, c.ID, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
 
-	if err := git.SetBranchNote(ctx, target.MainRepo, target.Branch, cmd.Text); err != nil {
+	if err := git.SetBranchNote(ctx, target.MainRepo, target.Branch, c.Text); err != nil {
 		return fmt.Errorf("failed to set note: %w", err)
 	}
 	repoName := filepath.Base(target.MainRepo)
@@ -25,8 +25,8 @@ func runNoteSet(ctx context.Context, cmd *NoteSetCmd, cfg *config.Config, workDi
 	return nil
 }
 
-func runNoteGet(ctx context.Context, cmd *NoteGetCmd, cfg *config.Config, workDir string, out io.Writer) error {
-	target, err := resolveNoteTarget(ctx, cmd.ID, cmd.Repository, cfg, workDir)
+func (c *NoteGetCmd) runNoteGet(ctx context.Context, cfg *config.Config, workDir string, out io.Writer) error {
+	target, err := resolveNoteTarget(ctx, c.ID, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -41,8 +41,8 @@ func runNoteGet(ctx context.Context, cmd *NoteGetCmd, cfg *config.Config, workDi
 	return nil
 }
 
-func runNoteClear(ctx context.Context, cmd *NoteClearCmd, cfg *config.Config, workDir string, out io.Writer) error {
-	target, err := resolveNoteTarget(ctx, cmd.ID, cmd.Repository, cfg, workDir)
+func (c *NoteClearCmd) runNoteClear(ctx context.Context, cfg *config.Config, workDir string, out io.Writer) error {
+	target, err := resolveNoteTarget(ctx, c.ID, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}

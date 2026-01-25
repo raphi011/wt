@@ -20,10 +20,10 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runPrCheckout(ctx context.Context, cmd *PrCheckoutCmd, cfg *config.Config, workDir string) error {
+func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context, cfg *config.Config, workDir string) error {
 	// Validate mutual exclusion: positional org/repo and -r flag can't both be used
-	if cmd.Repo != "" && cmd.Repository != "" {
-		return fmt.Errorf("cannot use both positional org/repo argument and -r/--repository flag\nUse 'wt pr checkout %d %s' (clone mode) OR 'wt pr checkout %d -r %s' (local mode)", cmd.Number, cmd.Repo, cmd.Number, cmd.Repository)
+	if c.Repo != "" && c.Repository != "" {
+		return fmt.Errorf("cannot use both positional org/repo argument and -r/--repository flag\nUse 'wt pr checkout %d %s' (clone mode) OR 'wt pr checkout %d -r %s' (local mode)", c.Number, c.Repo, c.Number, c.Repository)
 	}
 
 	// Validate worktree format
@@ -47,14 +47,14 @@ func runPrCheckout(ctx context.Context, cmd *PrCheckoutCmd, cfg *config.Config, 
 	var f forge.Forge
 
 	// Clone mode: positional Repo arg with org/repo format
-	if cmd.Repo != "" {
+	if c.Repo != "" {
 		// Validate org/repo format (must contain /)
-		if !strings.Contains(cmd.Repo, "/") {
-			return fmt.Errorf("clone mode requires org/repo format (e.g., 'org/repo'), got %q\nTo use a local repo by name, use: wt pr checkout %d -r %s", cmd.Repo, cmd.Number, cmd.Repo)
+		if !strings.Contains(c.Repo, "/") {
+			return fmt.Errorf("clone mode requires org/repo format (e.g., 'org/repo'), got %q\nTo use a local repo by name, use: wt pr checkout %d -r %s", c.Repo, c.Number, c.Repo)
 		}
 
 		// Parse org/repo - use clone.org if org not specified
-		org, name := git.ParseRepoArg(cmd.Repo)
+		org, name := git.ParseRepoArg(c.Repo)
 		if org == "" {
 			if cfg.Clone.Org == "" {
 				return fmt.Errorf("repository must be in org/repo format, or configure [clone] org in config")
@@ -65,11 +65,11 @@ func runPrCheckout(ctx context.Context, cmd *PrCheckoutCmd, cfg *config.Config, 
 
 		// Check if repo already exists locally
 		if existingPath, err := git.FindRepoByName(repoScanDir, name); err == nil {
-			return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr checkout %d -r %s' instead", name, existingPath, cmd.Number, name)
+			return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr checkout %d -r %s' instead", name, existingPath, c.Number, name)
 		}
 
-		// Determine forge: cmd.Forge > cfg.Clone rules > cfg.Clone.Forge
-		forgeName := cmd.Forge
+		// Determine forge: c.Forge > cfg.Clone rules > cfg.Clone.Forge
+		forgeName := c.Forge
 		if forgeName == "" {
 			forgeName = cfg.Clone.GetForgeForRepo(repoSpec)
 		}
@@ -88,15 +88,15 @@ func runPrCheckout(ctx context.Context, cmd *PrCheckoutCmd, cfg *config.Config, 
 		fmt.Printf("✓ Cloned to %s\n", repoPath)
 	} else {
 		// Local mode: -r flag or current directory
-		if cmd.Repository != "" {
+		if c.Repository != "" {
 			// -r flag: find repo locally by name
-			foundPath, err := git.FindRepoByName(repoScanDir, cmd.Repository)
+			foundPath, err := git.FindRepoByName(repoScanDir, c.Repository)
 			if err != nil {
-				similar := git.FindSimilarRepos(repoScanDir, cmd.Repository)
+				similar := git.FindSimilarRepos(repoScanDir, c.Repository)
 				if len(similar) > 0 {
-					return fmt.Errorf("repository %q not found in %s\nDid you mean: %s", cmd.Repository, repoScanDir, strings.Join(similar, ", "))
+					return fmt.Errorf("repository %q not found in %s\nDid you mean: %s", c.Repository, repoScanDir, strings.Join(similar, ", "))
 				}
-				return fmt.Errorf("repository %q not found in %s", cmd.Repository, repoScanDir)
+				return fmt.Errorf("repository %q not found in %s", c.Repository, repoScanDir)
 			}
 			repoPath = foundPath
 			fmt.Printf("Using repo at %s\n", repoPath)
@@ -127,13 +127,13 @@ func runPrCheckout(ctx context.Context, cmd *PrCheckoutCmd, cfg *config.Config, 
 	var branch string
 	wtCache, err := cache.Load(dir)
 	if err == nil {
-		branch = wtCache.GetBranchByPRNumber(originURL, cmd.Number)
+		branch = wtCache.GetBranchByPRNumber(originURL, c.Number)
 	}
 
 	if branch == "" {
 		// Cache miss - fetch from network
-		fmt.Printf("Fetching PR #%d...\n", cmd.Number)
-		branch, err = f.GetPRBranch(ctx, originURL, cmd.Number)
+		fmt.Printf("Fetching PR #%d...\n", c.Number)
+		branch, err = f.GetPRBranch(ctx, originURL, c.Number)
 		if err != nil {
 			return fmt.Errorf("failed to get PR branch: %w", err)
 		}
@@ -153,23 +153,23 @@ func runPrCheckout(ctx context.Context, cmd *PrCheckoutCmd, cfg *config.Config, 
 	}
 
 	// Set note if provided
-	if cmd.Note != "" {
+	if c.Note != "" {
 		absRepoPath, err := filepath.Abs(repoPath)
 		if err != nil {
 			return fmt.Errorf("failed to get absolute repo path: %w", err)
 		}
-		if err := git.SetBranchNote(ctx, absRepoPath, branch, cmd.Note); err != nil {
+		if err := git.SetBranchNote(ctx, absRepoPath, branch, c.Note); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to set note: %v\n", err)
 		}
 	}
 
 	// Run post-add hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandPR)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, c.Hook, c.NoHook, hooks.CommandPR)
 	if err != nil {
 		return err
 	}
 
-	env, err := hooks.ParseEnvWithStdin(cmd.Env)
+	env, err := hooks.ParseEnvWithStdin(c.Env)
 	if err != nil {
 		return err
 	}
@@ -190,8 +190,8 @@ func runPrCheckout(ctx context.Context, cmd *PrCheckoutCmd, cfg *config.Config, 
 	return hooks.RunAll(hookMatches, hookCtx)
 }
 
-func runPrMerge(ctx context.Context, cmd *PrMergeCmd, cfg *config.Config, workDir string) error {
-	target, err := resolvePrTarget(ctx, cmd.ID, cmd.Repository, cfg, workDir)
+func (c *PrMergeCmd) runPrMerge(ctx context.Context, cfg *config.Config, workDir string) error {
+	target, err := resolvePrTarget(ctx, c.ID, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -226,7 +226,7 @@ func runPrMerge(ctx context.Context, cmd *PrMergeCmd, cfg *config.Config, workDi
 	}
 
 	// Resolve merge strategy: flag > config > default
-	strategy := cmd.Strategy
+	strategy := c.Strategy
 	if strategy == "" {
 		strategy = cfg.Merge.Strategy
 	}
@@ -247,7 +247,7 @@ func runPrMerge(ctx context.Context, cmd *PrMergeCmd, cfg *config.Config, workDi
 	fmt.Printf("✓ PR #%d merged\n", pr.Number)
 
 	// Cleanup (unless --keep)
-	if !cmd.Keep {
+	if !c.Keep {
 		// Only remove worktree if we're operating on one (not main repo)
 		if !isMainRepo {
 			// Build worktree struct for removal
@@ -274,12 +274,12 @@ func runPrMerge(ctx context.Context, cmd *PrMergeCmd, cfg *config.Config, workDi
 	}
 
 	// Run hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandMerge)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, c.Hook, c.NoHook, hooks.CommandMerge)
 	if err != nil {
 		return err
 	}
 
-	env, err := hooks.ParseEnvWithStdin(cmd.Env)
+	env, err := hooks.ParseEnvWithStdin(c.Env)
 	if err != nil {
 		return err
 	}
@@ -296,7 +296,7 @@ func runPrMerge(ctx context.Context, cmd *PrMergeCmd, cfg *config.Config, workDi
 
 	// If worktree was removed or was main repo, run hooks from main repo
 	hookWorkDir := target.Path
-	if !cmd.Keep || isMainRepo {
+	if !c.Keep || isMainRepo {
 		hookWorkDir = target.MainRepo
 	}
 
@@ -304,8 +304,8 @@ func runPrMerge(ctx context.Context, cmd *PrMergeCmd, cfg *config.Config, workDi
 	return nil
 }
 
-func runPrCreate(ctx context.Context, cmd *PrCreateCmd, cfg *config.Config, workDir string) error {
-	target, err := resolvePrTarget(ctx, cmd.ID, cmd.Repository, cfg, workDir)
+func (c *PrCreateCmd) runPrCreate(ctx context.Context, cfg *config.Config, workDir string) error {
+	target, err := resolvePrTarget(ctx, c.ID, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -321,15 +321,15 @@ func runPrCreate(ctx context.Context, cmd *PrCreateCmd, cfg *config.Config, work
 	}
 
 	// Get body content
-	body := cmd.Body
-	if cmd.BodyFile != "" {
+	body := c.Body
+	if c.BodyFile != "" {
 		// Read body from file
-		content, err := os.ReadFile(cmd.BodyFile)
+		content, err := os.ReadFile(c.BodyFile)
 		if err != nil {
 			return fmt.Errorf("failed to read body file: %w", err)
 		}
 		body = string(content)
-	} else if cmd.Body == "-" {
+	} else if c.Body == "-" {
 		// Read body from stdin
 		content, err := io.ReadAll(os.Stdin)
 		if err != nil {
@@ -340,11 +340,11 @@ func runPrCreate(ctx context.Context, cmd *PrCreateCmd, cfg *config.Config, work
 
 	// Create PR params
 	params := forge.CreatePRParams{
-		Title: cmd.Title,
+		Title: c.Title,
 		Body:  body,
-		Base:  cmd.Base,
+		Base:  c.Base,
 		Head:  target.Branch,
-		Draft: cmd.Draft,
+		Draft: c.Draft,
 	}
 
 	// Create the PR
@@ -366,13 +366,13 @@ func runPrCreate(ctx context.Context, cmd *PrCreateCmd, cfg *config.Config, work
 	wtCache, err := cache.Load(scanDir)
 	if err == nil {
 		state := "OPEN"
-		if cmd.Draft {
+		if c.Draft {
 			state = "DRAFT"
 		}
 		prInfo := &cache.PRInfo{
 			Number:   result.Number,
 			State:    state,
-			IsDraft:  cmd.Draft,
+			IsDraft:  c.Draft,
 			URL:      result.URL,
 			CachedAt: time.Now(),
 			Fetched:  true,
@@ -385,7 +385,7 @@ func runPrCreate(ctx context.Context, cmd *PrCreateCmd, cfg *config.Config, work
 	}
 
 	// Open in browser if requested
-	if cmd.Web && result.URL != "" {
+	if c.Web && result.URL != "" {
 		if err := openBrowser(result.URL); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to open browser: %v\n", err)
 		}
@@ -394,8 +394,8 @@ func runPrCreate(ctx context.Context, cmd *PrCreateCmd, cfg *config.Config, work
 	return nil
 }
 
-func runPrView(ctx context.Context, cmd *PrViewCmd, cfg *config.Config, workDir string) error {
-	target, err := resolvePrTarget(ctx, cmd.ID, cmd.Repository, cfg, workDir)
+func (c *PrViewCmd) runPrView(ctx context.Context, cfg *config.Config, workDir string) error {
+	target, err := resolvePrTarget(ctx, c.ID, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -420,7 +420,7 @@ func runPrView(ctx context.Context, cmd *PrViewCmd, cfg *config.Config, workDir 
 	}
 
 	// View the PR
-	return f.ViewPR(ctx, originURL, pr.Number, cmd.Web)
+	return f.ViewPR(ctx, originURL, pr.Number, c.Web)
 }
 
 // resolvePrTarget resolves target for pr commands with 3 modes:
