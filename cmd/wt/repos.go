@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"io"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -25,7 +26,7 @@ type RepoInfo struct {
 	WorktreeCount int      `json:"worktree_count"`
 }
 
-func runRepos(cmd *ReposCmd, cfg *config.Config) error {
+func runRepos(cmd *ReposCmd, cfg *config.Config, stdout io.Writer) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
@@ -48,7 +49,7 @@ func runRepos(cmd *ReposCmd, cfg *config.Config) error {
 	}
 
 	// Gather info for each repo
-	var repos []RepoInfo
+	repos := []RepoInfo{}
 	for _, repoPath := range repoPaths {
 		// Get labels
 		labels, _ := git.GetLabels(repoPath)
@@ -101,23 +102,23 @@ func runRepos(cmd *ReposCmd, cfg *config.Config) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(data))
+		fmt.Fprintln(stdout, string(data))
 		return nil
 	}
 
 	if len(repos) == 0 {
 		if cmd.Label != "" {
-			fmt.Printf("No repositories found with label %q\n", cmd.Label)
+			fmt.Fprintf(stdout, "No repositories found with label %q\n", cmd.Label)
 		} else {
-			fmt.Printf("No repositories found in %s\n", absScanDir)
+			fmt.Fprintf(stdout, "No repositories found in %s\n", absScanDir)
 		}
 		return nil
 	}
 
-	fmt.Printf("Repositories in %s (%d)\n\n", absScanDir, len(repos))
+	fmt.Fprintf(stdout, "Repositories in %s (%d)\n\n", absScanDir, len(repos))
 
 	// Build table
-	fmt.Print(formatReposTable(repos))
+	fmt.Fprint(stdout, formatReposTable(repos))
 
 	return nil
 }

@@ -745,7 +745,7 @@ Examples:
 }
 
 func (c *ReposCmd) Run(ctx *Context) error {
-	return runRepos(c, ctx.Config)
+	return runRepos(c, ctx.Config, ctx.Stdout)
 }
 
 // DoctorCmd diagnoses and repairs cache issues.
