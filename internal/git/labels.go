@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"os/exec"
 	"slices"
 	"strings"
@@ -10,9 +11,8 @@ const labelsConfigKey = "wt.labels"
 
 // GetLabels returns the labels for a repository
 // Returns empty slice if no labels are set
-func GetLabels(repoPath string) ([]string, error) {
-	cmd := exec.Command("git", "-C", repoPath, "config", "--local", labelsConfigKey)
-	output, err := outputCmd(cmd)
+func GetLabels(ctx context.Context, repoPath string) ([]string, error) {
+	output, err := outputGit(ctx, repoPath, "config", "--local", labelsConfigKey)
 	if err != nil {
 		// Exit code 1 means the config key doesn't exist - not an error
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
@@ -39,19 +39,18 @@ func GetLabels(repoPath string) ([]string, error) {
 }
 
 // SetLabels sets the labels for a repository (replaces existing)
-func SetLabels(repoPath string, labels []string) error {
+func SetLabels(ctx context.Context, repoPath string, labels []string) error {
 	if len(labels) == 0 {
-		return ClearLabels(repoPath)
+		return ClearLabels(ctx, repoPath)
 	}
 
 	value := strings.Join(labels, ",")
-	cmd := exec.Command("git", "-C", repoPath, "config", "--local", labelsConfigKey, value)
-	return runCmd(cmd)
+	return runGit(ctx, repoPath, "config", "--local", labelsConfigKey, value)
 }
 
 // AddLabel adds a label to a repository (if not already present)
-func AddLabel(repoPath, label string) error {
-	labels, err := GetLabels(repoPath)
+func AddLabel(ctx context.Context, repoPath, label string) error {
+	labels, err := GetLabels(ctx, repoPath)
 	if err != nil {
 		return err
 	}
@@ -62,12 +61,12 @@ func AddLabel(repoPath, label string) error {
 	}
 
 	labels = append(labels, label)
-	return SetLabels(repoPath, labels)
+	return SetLabels(ctx, repoPath, labels)
 }
 
 // RemoveLabel removes a label from a repository
-func RemoveLabel(repoPath, label string) error {
-	labels, err := GetLabels(repoPath)
+func RemoveLabel(ctx context.Context, repoPath, label string) error {
+	labels, err := GetLabels(ctx, repoPath)
 	if err != nil {
 		return err
 	}
@@ -75,13 +74,12 @@ func RemoveLabel(repoPath, label string) error {
 	// Filter out the label
 	newLabels := slices.DeleteFunc(labels, func(l string) bool { return l == label })
 
-	return SetLabels(repoPath, newLabels)
+	return SetLabels(ctx, repoPath, newLabels)
 }
 
 // ClearLabels removes all labels from a repository
-func ClearLabels(repoPath string) error {
-	cmd := exec.Command("git", "-C", repoPath, "config", "--local", "--unset", labelsConfigKey)
-	if err := runCmd(cmd); err != nil {
+func ClearLabels(ctx context.Context, repoPath string) error {
+	if err := runGit(ctx, repoPath, "config", "--local", "--unset", labelsConfigKey); err != nil {
 		// Exit code 5 means the key doesn't exist - not an error for clearing
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 5 {
 			return nil
@@ -92,8 +90,8 @@ func ClearLabels(repoPath string) error {
 }
 
 // HasLabel checks if a repository has a specific label
-func HasLabel(repoPath, label string) (bool, error) {
-	labels, err := GetLabels(repoPath)
+func HasLabel(ctx context.Context, repoPath, label string) (bool, error) {
+	labels, err := GetLabels(ctx, repoPath)
 	if err != nil {
 		return false, err
 	}
@@ -103,7 +101,7 @@ func HasLabel(repoPath, label string) (bool, error) {
 
 // FindReposByLabel scans a directory for repos with the given label
 // Returns paths to matching repositories
-func FindReposByLabel(scanDir, label string) ([]string, error) {
+func FindReposByLabel(ctx context.Context, scanDir, label string) ([]string, error) {
 	repos, err := FindAllRepos(scanDir)
 	if err != nil {
 		return nil, err
@@ -111,7 +109,7 @@ func FindReposByLabel(scanDir, label string) ([]string, error) {
 
 	var matches []string
 	for _, repoPath := range repos {
-		has, err := HasLabel(repoPath, label)
+		has, err := HasLabel(ctx, repoPath, label)
 		if err != nil {
 			continue // Skip repos with errors
 		}

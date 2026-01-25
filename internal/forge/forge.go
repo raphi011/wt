@@ -1,6 +1,8 @@
 package forge
 
 import (
+	"context"
+
 	"github.com/raphi011/wt/internal/cache"
 )
 
@@ -28,28 +30,28 @@ type Forge interface {
 	Name() string
 
 	// Check verifies the CLI is installed and authenticated
-	Check() error
+	Check(ctx context.Context) error
 
 	// GetPRForBranch fetches PR info for a branch
-	GetPRForBranch(repoURL, branch string) (*PRInfo, error)
+	GetPRForBranch(ctx context.Context, repoURL, branch string) (*PRInfo, error)
 
 	// GetPRBranch gets the source branch name for a PR number
-	GetPRBranch(repoURL string, number int) (string, error)
+	GetPRBranch(ctx context.Context, repoURL string, number int) (string, error)
 
 	// CloneRepo clones a repository to destPath, returns the full clone path
-	CloneRepo(repoSpec, destPath string) (string, error)
+	CloneRepo(ctx context.Context, repoSpec, destPath string) (string, error)
 
 	// CreatePR creates a new PR/MR
-	CreatePR(repoURL string, params CreatePRParams) (*CreatePRResult, error)
+	CreatePR(ctx context.Context, repoURL string, params CreatePRParams) (*CreatePRResult, error)
 
 	// MergePR merges a PR by number with the given strategy
 	// strategy: "squash", "rebase", or "merge"
 	// Returns error if repo doesn't allow the requested merge strategy
-	MergePR(repoURL string, number int, strategy string) error
+	MergePR(ctx context.Context, repoURL string, number int, strategy string) error
 
 	// ViewPR shows PR details or opens in browser
 	// If web is true, opens in browser; otherwise shows details in terminal
-	ViewPR(repoURL string, number int, web bool) error
+	ViewPR(ctx context.Context, repoURL string, number int, web bool) error
 
 	// FormatState returns a human-readable PR state
 	FormatState(state string) string

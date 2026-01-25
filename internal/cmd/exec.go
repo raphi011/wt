@@ -10,33 +10,6 @@ import (
 	"github.com/raphi011/wt/internal/log"
 )
 
-// Run executes a command and returns stderr in the error message if it fails
-func Run(cmd *exec.Cmd) error {
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if errMsg := strings.TrimSpace(stderr.String()); errMsg != "" {
-			return fmt.Errorf("%s", errMsg)
-		}
-		return err
-	}
-	return nil
-}
-
-// Output executes a command and returns stdout, with stderr in error if it fails
-func Output(cmd *exec.Cmd) ([]byte, error) {
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	output, err := cmd.Output()
-	if err != nil {
-		if errMsg := strings.TrimSpace(stderr.String()); errMsg != "" {
-			return nil, fmt.Errorf("%s", errMsg)
-		}
-		return nil, err
-	}
-	return output, nil
-}
-
 // RunContext executes a command with context support and verbose logging.
 func RunContext(ctx context.Context, dir, name string, args ...string) error {
 	log.FromContext(ctx).Command(name, args...)
