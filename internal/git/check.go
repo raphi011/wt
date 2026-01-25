@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 )
@@ -18,15 +19,13 @@ func CheckGit() error {
 }
 
 // IsInsideRepo returns true if the current working directory is inside a git repository
-func IsInsideRepo() bool {
-	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
-	err := runCmd(cmd)
+func IsInsideRepo(ctx context.Context) bool {
+	err := runGit(ctx, "", "rev-parse", "--is-inside-work-tree")
 	return err == nil
 }
 
 // IsInsideRepoPath returns true if the given path is inside a git repository
-func IsInsideRepoPath(path string) bool {
-	cmd := exec.Command("git", "-C", path, "rev-parse", "--is-inside-work-tree")
-	err := runCmd(cmd)
+func IsInsideRepoPath(ctx context.Context, path string) bool {
+	err := runGit(ctx, path, "rev-parse", "--is-inside-work-tree")
 	return err == nil
 }

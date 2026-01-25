@@ -1,9 +1,9 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -28,7 +28,7 @@ type Worktree struct {
 }
 
 // GetWorktreeInfo returns info for a single worktree at the given path
-func GetWorktreeInfo(path string) (*Worktree, error) {
+func GetWorktreeInfo(ctx context.Context, path string) (*Worktree, error) {
 	gitFile := filepath.Join(path, ".git")
 
 	// Check if it's a worktree (has .git file, not directory)
@@ -47,7 +47,7 @@ func GetWorktreeInfo(path string) (*Worktree, error) {
 	}
 
 	// Get branch
-	branch, err := GetCurrentBranch(path)
+	branch, err := GetCurrentBranch(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get branch: %w", err)
 	}
@@ -56,29 +56,29 @@ func GetWorktreeInfo(path string) (*Worktree, error) {
 	repoName := filepath.Base(mainRepo)
 
 	// Get origin URL (errors treated as empty string)
-	originURL, _ := GetOriginURL(mainRepo)
+	originURL, _ := GetOriginURL(ctx, mainRepo)
 
 	// Get merge status (errors treated as "not merged" - safe default)
-	isMerged, _ := IsBranchMerged(mainRepo, branch)
+	isMerged, _ := IsBranchMerged(ctx, mainRepo, branch)
 
 	// Get commit count if not merged (errors treated as 0 commits)
 	var commitCount int
 	if !isMerged {
-		commitCount, _ = GetCommitCount(mainRepo, branch)
+		commitCount, _ = GetCommitCount(ctx, mainRepo, branch)
 	}
 
 	// Check dirty status via git status --porcelain
-	isDirty := IsDirty(path)
+	isDirty := IsDirty(ctx, path)
 
 	// Get last commit time (errors treated as empty/zero values)
-	lastCommit, _ := GetLastCommitRelative(path)
-	lastCommitTime, _ := GetLastCommitTime(path)
+	lastCommit, _ := GetLastCommitRelative(ctx, path)
+	lastCommitTime, _ := GetLastCommitTime(ctx, path)
 
 	// Get branch note (errors treated as empty string)
-	note, _ := GetBranchNote(mainRepo, branch)
+	note, _ := GetBranchNote(ctx, mainRepo, branch)
 
 	// Check if branch has upstream
-	hasUpstream := GetUpstreamBranch(mainRepo, branch) != ""
+	hasUpstream := GetUpstreamBranch(ctx, mainRepo, branch) != ""
 
 	return &Worktree{
 		Path:           path,
@@ -99,7 +99,7 @@ func GetWorktreeInfo(path string) (*Worktree, error) {
 // ListWorktrees scans a directory for git worktrees with batched git calls per repo.
 // If includeDirty is true, checks each worktree for dirty status (adds subprocess calls).
 // For 10 worktrees across 2 repos: ~8 calls (list) or ~18 calls with dirty checks (tidy).
-func ListWorktrees(scanDir string, includeDirty bool) ([]Worktree, error) {
+func ListWorktrees(ctx context.Context, scanDir string, includeDirty bool) ([]Worktree, error) {
 	entries, err := os.ReadDir(scanDir)
 	if err != nil {
 		return nil, err
@@ -155,7 +155,7 @@ func ListWorktrees(scanDir string, includeDirty bool) ([]Worktree, error) {
 
 	for mainRepo := range mainRepos {
 		// Get all worktrees from this repo in one call
-		wtInfos, err := ListWorktreesFromRepo(mainRepo)
+		wtInfos, err := ListWorktreesFromRepo(ctx, mainRepo)
 		if err != nil {
 			continue
 		}
@@ -165,16 +165,16 @@ func ListWorktrees(scanDir string, includeDirty bool) ([]Worktree, error) {
 		}
 
 		// Get origin URL once
-		originURL, _ := GetOriginURL(mainRepo)
+		originURL, _ := GetOriginURL(ctx, mainRepo)
 		repoOrigins[mainRepo] = originURL
 
 		// Get all branch notes and upstreams in one call
-		notes, upstreams := GetAllBranchConfig(mainRepo)
+		notes, upstreams := GetAllBranchConfig(ctx, mainRepo)
 		repoNotes[mainRepo] = notes
 		repoUpstreams[mainRepo] = upstreams
 
 		// Get merged branches in one call
-		repoMerged[mainRepo] = GetMergedBranches(mainRepo)
+		repoMerged[mainRepo] = GetMergedBranches(ctx, mainRepo)
 	}
 
 	// Phase 3: Build worktrees by merging batched data
@@ -195,7 +195,7 @@ func ListWorktrees(scanDir string, includeDirty bool) ([]Worktree, error) {
 		// Get commit count if not merged
 		var commitCount int
 		if !isMerged && branch != "(detached)" {
-			commitCount, _ = GetCommitCount(p.mainRepo, branch)
+			commitCount, _ = GetCommitCount(ctx, p.mainRepo, branch)
 		}
 
 		// Get note for this branch
@@ -211,13 +211,13 @@ func ListWorktrees(scanDir string, includeDirty bool) ([]Worktree, error) {
 		}
 
 		// Get last commit time (relative and absolute)
-		lastCommit, _ := GetLastCommitRelative(p.path)
-		lastCommitTime, _ := GetLastCommitTime(p.path)
+		lastCommit, _ := GetLastCommitRelative(ctx, p.path)
+		lastCommitTime, _ := GetLastCommitTime(ctx, p.path)
 
 		// Phase 4: Only check dirty status if requested
 		var isDirty bool
 		if includeDirty {
-			isDirty = IsDirty(p.path)
+			isDirty = IsDirty(ctx, p.path)
 		}
 
 		worktrees = append(worktrees, Worktree{
@@ -248,18 +248,18 @@ type CreateWorktreeResult struct {
 // AddWorktree creates a git worktree at basePath/<formatted-name>
 // If createNew is true, creates a new branch (-b flag); otherwise checks out existing branch
 // baseRef is the starting point for new branches (e.g., "origin/main")
-func AddWorktree(basePath, branch, worktreeFmt string, createNew bool, baseRef string) (*CreateWorktreeResult, error) {
+func AddWorktree(ctx context.Context, basePath, branch, worktreeFmt string, createNew bool, baseRef string) (*CreateWorktreeResult, error) {
 	if createNew {
-		return createWorktreeInternal(basePath, branch, worktreeFmt, baseRef)
+		return createWorktreeInternal(ctx, basePath, branch, worktreeFmt, baseRef)
 	}
-	return openWorktreeInternal(basePath, branch, worktreeFmt)
+	return openWorktreeInternal(ctx, basePath, branch, worktreeFmt)
 }
 
 // createWorktreeInternal creates a new git worktree with a new branch
 // baseRef is the starting point for the new branch (e.g., "origin/main", "main", or empty for HEAD)
-func createWorktreeInternal(basePath, branch, worktreeFmt, baseRef string) (*CreateWorktreeResult, error) {
+func createWorktreeInternal(ctx context.Context, basePath, branch, worktreeFmt, baseRef string) (*CreateWorktreeResult, error) {
 	// Check if branch already exists
-	exists, err := BranchExists(branch)
+	exists, err := BranchExists(ctx, branch)
 	if err != nil {
 		return nil, err
 	}
@@ -268,13 +268,13 @@ func createWorktreeInternal(basePath, branch, worktreeFmt, baseRef string) (*Cre
 	}
 
 	// Get repo name from origin URL
-	gitOrigin, err := GetRepoName()
+	gitOrigin, err := GetRepoName(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get folder name from disk
-	folderName, err := GetRepoFolderName()
+	folderName, err := GetRepoFolderName(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -307,13 +307,13 @@ func createWorktreeInternal(basePath, branch, worktreeFmt, baseRef string) (*Cre
 
 	// Create worktree with new branch
 	// If baseRef is provided, use it as the starting point
-	var cmd *exec.Cmd
+	var args []string
 	if baseRef != "" {
-		cmd = exec.Command("git", "worktree", "add", worktreePath, "-b", branch, baseRef)
+		args = []string{"worktree", "add", worktreePath, "-b", branch, baseRef}
 	} else {
-		cmd = exec.Command("git", "worktree", "add", worktreePath, "-b", branch)
+		args = []string{"worktree", "add", worktreePath, "-b", branch}
 	}
-	if err := runCmd(cmd); err != nil {
+	if err := runGit(ctx, "", args...); err != nil {
 		return nil, fmt.Errorf("failed to create worktree: %v", err)
 	}
 
@@ -323,17 +323,16 @@ func createWorktreeInternal(basePath, branch, worktreeFmt, baseRef string) (*Cre
 // CreateWorktreeFrom creates a worktree from a specified repository path
 // Used when working with a repo that isn't the current working directory
 // baseRef is the starting point for the new branch (e.g., "origin/main", or empty for HEAD)
-func CreateWorktreeFrom(repoPath, basePath, branch, worktreeFmt, baseRef string) (*CreateWorktreeResult, error) {
+func CreateWorktreeFrom(ctx context.Context, repoPath, basePath, branch, worktreeFmt, baseRef string) (*CreateWorktreeResult, error) {
 	absRepoPath, err := filepath.Abs(repoPath)
 	if err != nil {
 		return nil, err
 	}
 
 	// Check if branch already exists in the repo
-	cmd := exec.Command("git", "-C", absRepoPath, "rev-parse", "--verify", "refs/heads/"+branch)
-	if runCmd(cmd) == nil {
+	if runGit(ctx, absRepoPath, "rev-parse", "--verify", "refs/heads/"+branch) == nil {
 		// Branch exists, check if it's already checked out
-		wtPath, err := getBranchWorktreeFrom(absRepoPath, branch)
+		wtPath, err := getBranchWorktreeFrom(ctx, absRepoPath, branch)
 		if err != nil {
 			return nil, err
 		}
@@ -342,11 +341,11 @@ func CreateWorktreeFrom(repoPath, basePath, branch, worktreeFmt, baseRef string)
 			return &CreateWorktreeResult{Path: wtPath, AlreadyExists: true}, nil
 		}
 		// Branch exists but not checked out - use OpenWorktreeFrom instead
-		return OpenWorktreeFrom(absRepoPath, basePath, branch, worktreeFmt)
+		return OpenWorktreeFrom(ctx, absRepoPath, basePath, branch, worktreeFmt)
 	}
 
 	// Get repo name from origin URL
-	gitOrigin, err := GetRepoNameFrom(absRepoPath)
+	gitOrigin, err := GetRepoNameFrom(ctx, absRepoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -382,13 +381,13 @@ func CreateWorktreeFrom(repoPath, basePath, branch, worktreeFmt, baseRef string)
 
 	// Create worktree with new branch from the specified repo
 	// If baseRef is provided, use it as the starting point
-	var createCmd *exec.Cmd
+	var args []string
 	if baseRef != "" {
-		createCmd = exec.Command("git", "-C", absRepoPath, "worktree", "add", worktreePath, "-b", branch, baseRef)
+		args = []string{"worktree", "add", worktreePath, "-b", branch, baseRef}
 	} else {
-		createCmd = exec.Command("git", "-C", absRepoPath, "worktree", "add", worktreePath, "-b", branch)
+		args = []string{"worktree", "add", worktreePath, "-b", branch}
 	}
-	if err := runCmd(createCmd); err != nil {
+	if err := runGit(ctx, absRepoPath, args...); err != nil {
 		return nil, fmt.Errorf("failed to create worktree: %v", err)
 	}
 
@@ -396,9 +395,9 @@ func CreateWorktreeFrom(repoPath, basePath, branch, worktreeFmt, baseRef string)
 }
 
 // OpenWorktreeFrom creates a worktree for an existing branch in a specified repo
-func OpenWorktreeFrom(absRepoPath, basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
+func OpenWorktreeFrom(ctx context.Context, absRepoPath, basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
 	// Get repo name from origin URL
-	gitOrigin, err := GetRepoNameFrom(absRepoPath)
+	gitOrigin, err := GetRepoNameFrom(ctx, absRepoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -433,8 +432,7 @@ func OpenWorktreeFrom(absRepoPath, basePath, branch, worktreeFmt string) (*Creat
 	}
 
 	// Create worktree for existing branch (no -b flag)
-	cmd := exec.Command("git", "-C", absRepoPath, "worktree", "add", worktreePath, branch)
-	if err := runCmd(cmd); err != nil {
+	if err := runGit(ctx, absRepoPath, "worktree", "add", worktreePath, branch); err != nil {
 		return nil, fmt.Errorf("failed to create worktree: %v", err)
 	}
 
@@ -442,9 +440,8 @@ func OpenWorktreeFrom(absRepoPath, basePath, branch, worktreeFmt string) (*Creat
 }
 
 // getBranchWorktreeFrom returns the worktree path if branch is checked out in the given repo
-func getBranchWorktreeFrom(repoPath, branch string) (string, error) {
-	cmd := exec.Command("git", "-C", repoPath, "worktree", "list", "--porcelain")
-	output, err := outputCmd(cmd)
+func getBranchWorktreeFrom(ctx context.Context, repoPath, branch string) (string, error) {
+	output, err := outputGit(ctx, repoPath, "worktree", "list", "--porcelain")
 	if err != nil {
 		return "", fmt.Errorf("failed to list worktrees: %v", err)
 	}
@@ -472,9 +469,9 @@ func getBranchWorktreeFrom(repoPath, branch string) (string, error) {
 }
 
 // openWorktreeInternal creates a worktree for an existing local branch
-func openWorktreeInternal(basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
+func openWorktreeInternal(ctx context.Context, basePath, branch, worktreeFmt string) (*CreateWorktreeResult, error) {
 	// Check if branch exists
-	exists, err := BranchExists(branch)
+	exists, err := BranchExists(ctx, branch)
 	if err != nil {
 		return nil, err
 	}
@@ -483,7 +480,7 @@ func openWorktreeInternal(basePath, branch, worktreeFmt string) (*CreateWorktree
 	}
 
 	// Check if branch is already checked out in another worktree
-	wtPath, err := GetBranchWorktree(branch)
+	wtPath, err := GetBranchWorktree(ctx, branch)
 	if err != nil {
 		return nil, err
 	}
@@ -492,13 +489,13 @@ func openWorktreeInternal(basePath, branch, worktreeFmt string) (*CreateWorktree
 	}
 
 	// Get repo name from origin URL
-	gitOrigin, err := GetRepoName()
+	gitOrigin, err := GetRepoName(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get folder name from disk
-	folderName, err := GetRepoFolderName()
+	folderName, err := GetRepoFolderName(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -530,8 +527,7 @@ func openWorktreeInternal(basePath, branch, worktreeFmt string) (*CreateWorktree
 	}
 
 	// Create worktree for existing branch (no -b flag)
-	cmd := exec.Command("git", "worktree", "add", worktreePath, branch)
-	if err := runCmd(cmd); err != nil {
+	if err := runGit(ctx, "", "worktree", "add", worktreePath, branch); err != nil {
 		return nil, fmt.Errorf("failed to create worktree: %v", err)
 	}
 
@@ -539,31 +535,28 @@ func openWorktreeInternal(basePath, branch, worktreeFmt string) (*CreateWorktree
 }
 
 // RemoveWorktree removes a git worktree
-func RemoveWorktree(worktree Worktree, force bool) error {
-	args := []string{"-C", worktree.MainRepo, "worktree", "remove", worktree.Path}
+func RemoveWorktree(ctx context.Context, worktree Worktree, force bool) error {
+	args := []string{"worktree", "remove", worktree.Path}
 	if force {
 		args = append(args, "--force")
 	}
 
-	cmd := exec.Command("git", args...)
-	return runCmd(cmd)
+	return runGit(ctx, worktree.MainRepo, args...)
 }
 
 // MoveWorktree moves a git worktree to a new path
-func MoveWorktree(worktree Worktree, newPath string, force bool) error {
-	args := []string{"-C", worktree.MainRepo, "worktree", "move", worktree.Path, newPath}
+func MoveWorktree(ctx context.Context, worktree Worktree, newPath string, force bool) error {
+	args := []string{"worktree", "move", worktree.Path, newPath}
 	if force {
 		args = append(args, "--force")
 	}
 
-	cmd := exec.Command("git", args...)
-	return runCmd(cmd)
+	return runGit(ctx, worktree.MainRepo, args...)
 }
 
 // PruneWorktrees prunes stale worktree references
-func PruneWorktrees(repoPath string) error {
-	cmd := exec.Command("git", "-C", repoPath, "worktree", "prune")
-	return runCmd(cmd)
+func PruneWorktrees(ctx context.Context, repoPath string) error {
+	return runGit(ctx, repoPath, "worktree", "prune")
 }
 
 // GroupWorktreesByRepo groups worktrees by their main repository
@@ -590,23 +583,20 @@ func IsWorktree(path string) bool {
 
 // RepairWorktree attempts to repair broken links for a single worktree.
 // Uses `git worktree repair <path>` from the main repo.
-func RepairWorktree(repoPath, worktreePath string) error {
-	cmd := exec.Command("git", "-C", repoPath, "worktree", "repair", worktreePath)
-	return runCmd(cmd)
+func RepairWorktree(ctx context.Context, repoPath, worktreePath string) error {
+	return runGit(ctx, repoPath, "worktree", "repair", worktreePath)
 }
 
 // RepairWorktreesFromRepo repairs all worktrees for a repository.
 // Uses `git worktree repair` without arguments to repair all.
-func RepairWorktreesFromRepo(repoPath string) error {
-	cmd := exec.Command("git", "-C", repoPath, "worktree", "repair")
-	return runCmd(cmd)
+func RepairWorktreesFromRepo(ctx context.Context, repoPath string) error {
+	return runGit(ctx, repoPath, "worktree", "repair")
 }
 
 // ListPrunableWorktrees returns worktree paths that git considers stale.
 // Uses `git worktree prune --dry-run` and parses the output.
-func ListPrunableWorktrees(repoPath string) ([]string, error) {
-	cmd := exec.Command("git", "-C", repoPath, "worktree", "prune", "--dry-run", "-v")
-	output, err := outputCmd(cmd)
+func ListPrunableWorktrees(ctx context.Context, repoPath string) ([]string, error) {
+	output, err := outputGit(ctx, repoPath, "worktree", "prune", "--dry-run", "-v")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list prunable worktrees: %v", err)
 	}
@@ -699,4 +689,3 @@ func CanRepairWorktree(worktreePath string) bool {
 	// .git file exists but link is invalid - potentially repairable
 	return !IsWorktreeLinkValid(worktreePath)
 }
-

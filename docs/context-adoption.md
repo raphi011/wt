@@ -10,17 +10,26 @@ This document outlines the use cases for introducing Go's `context` package into
 - [x] `internal/cmd/exec.go` - `RunContext` and `OutputContext` with verbose logging
 - [x] `--verbose` / `-v` global flag
 - [x] Signal handling in `main.go` (`signal.NotifyContext`)
-- [x] `internal/git/exec.go` - `runGit` and `outputGit` helpers
-- [x] `internal/git/repo.go` - `FetchBranchContext`, `FetchDefaultBranchContext`
-- [x] `internal/forge/github.go` - `GetPRForBranchContext`, `CloneRepoContext`
-- [x] `internal/forge/gitlab.go` - `GetPRForBranchContext`, `CloneRepoContext`
 
-### Remaining (Phase 2+)
+### Completed (Phase 2)
 
-- [ ] Update commands to pass context through to git/forge operations
-- [ ] Migrate remaining git functions to use context
+- [x] `internal/git/exec.go` - `runGit` and `outputGit` context-only helpers
+- [x] `internal/git/repo.go` - all functions migrated to context
+- [x] `internal/git/worktree.go` - all functions migrated to context
+- [x] `internal/git/notes.go` - all functions migrated to context
+- [x] `internal/git/labels.go` - all functions migrated to context
+- [x] `internal/git/check.go` - all functions migrated to context
+- [x] `internal/forge/forge.go` - interface updated with context parameters
+- [x] `internal/forge/github.go` - all methods migrated to context
+- [x] `internal/forge/gitlab.go` - all methods migrated to context
+- [x] Removed non-context versions of exec functions
+
+### Remaining (Phase 3)
+
+- [ ] Update command implementations in `cmd/wt/` to pass context to git/forge operations
 - [ ] Add timeouts for network operations
 - [ ] Add timeouts for hook execution
+- [ ] Remove explicit `io.Writer` parameters where logger suffices
 
 ## Use Cases
 

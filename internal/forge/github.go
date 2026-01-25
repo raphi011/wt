@@ -1,7 +1,6 @@
 package forge
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -23,14 +22,13 @@ func (g *GitHub) Name() string {
 }
 
 // Check verifies that gh CLI is available and authenticated
-func (g *GitHub) Check() error {
+func (g *GitHub) Check(ctx context.Context) error {
 	_, err := exec.LookPath("gh")
 	if err != nil {
 		return fmt.Errorf("gh not found: please install GitHub CLI (https://cli.github.com)")
 	}
 
-	c := exec.Command("gh", "auth", "status")
-	if err := cmd.Run(c); err != nil {
+	if err := cmd.RunContext(ctx, "", "gh", "auth", "status"); err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "not logged") || strings.Contains(errMsg, "no accounts") {
 			return fmt.Errorf("gh not authenticated: please run 'gh auth login'")
@@ -42,59 +40,7 @@ func (g *GitHub) Check() error {
 }
 
 // GetPRForBranch fetches PR info for a branch using gh CLI
-func (g *GitHub) GetPRForBranch(repoURL, branch string) (*PRInfo, error) {
-	c := exec.Command("gh", "pr", "list",
-		"-R", repoURL,
-		"--head", branch,
-		"--state", "all",
-		"--json", "number,state,isDraft,url,author,comments,reviewDecision",
-		"--limit", "1")
-
-	output, err := cmd.Output(c)
-	if err != nil {
-		return nil, fmt.Errorf("gh command failed: %v", err)
-	}
-
-	var prs []struct {
-		Number  int    `json:"number"`
-		State   string `json:"state"`
-		IsDraft bool   `json:"isDraft"`
-		URL     string `json:"url"`
-		Author  struct {
-			Login string `json:"login"`
-		} `json:"author"`
-		Comments       []any  `json:"comments"` // just need the count
-		ReviewDecision string `json:"reviewDecision"`
-	}
-	if err := json.Unmarshal(output, &prs); err != nil {
-		return nil, fmt.Errorf("failed to parse gh output: %w", err)
-	}
-
-	if len(prs) == 0 {
-		// No PR found - return marker indicating we checked
-		return &PRInfo{
-			Fetched:  true,
-			CachedAt: time.Now(),
-		}, nil
-	}
-
-	pr := prs[0]
-	return &PRInfo{
-		Number:       pr.Number,
-		State:        pr.State, // GitHub already uses OPEN, MERGED, CLOSED
-		IsDraft:      pr.IsDraft,
-		URL:          pr.URL,
-		Author:       pr.Author.Login,
-		CommentCount: len(pr.Comments),
-		HasReviews:   pr.ReviewDecision != "",
-		IsApproved:   pr.ReviewDecision == "APPROVED",
-		CachedAt:     time.Now(),
-		Fetched:      true,
-	}, nil
-}
-
-// GetPRForBranchContext fetches PR info for a branch using gh CLI with context support.
-func (g *GitHub) GetPRForBranchContext(ctx context.Context, repoURL, branch string) (*PRInfo, error) {
+func (g *GitHub) GetPRForBranch(ctx context.Context, repoURL, branch string) (*PRInfo, error) {
 	output, err := cmd.OutputContext(ctx, "", "gh", "pr", "list",
 		"-R", repoURL,
 		"--head", branch,
@@ -144,13 +90,11 @@ func (g *GitHub) GetPRForBranchContext(ctx context.Context, repoURL, branch stri
 }
 
 // GetPRBranch fetches the head branch name for a PR number using gh CLI
-func (g *GitHub) GetPRBranch(repoURL string, number int) (string, error) {
-	c := exec.Command("gh", "pr", "view",
+func (g *GitHub) GetPRBranch(ctx context.Context, repoURL string, number int) (string, error) {
+	output, err := cmd.OutputContext(ctx, "", "gh", "pr", "view",
 		fmt.Sprintf("%d", number),
 		"-R", repoURL,
 		"--json", "headRefName,isCrossRepository")
-
-	output, err := cmd.Output(c)
 	if err != nil {
 		return "", fmt.Errorf("gh command failed: %v", err)
 	}
@@ -175,27 +119,7 @@ func (g *GitHub) GetPRBranch(repoURL string, number int) (string, error) {
 }
 
 // CloneRepo clones a GitHub repo using gh CLI
-func (g *GitHub) CloneRepo(repoSpec, destPath string) (string, error) {
-	parts := strings.Split(repoSpec, "/")
-	if len(parts) != 2 {
-		return "", fmt.Errorf("invalid repo spec %q: expected org/repo format", repoSpec)
-	}
-	org, repoName := parts[0], parts[1]
-	if org == "" || repoName == "" {
-		return "", fmt.Errorf("invalid repo spec %q: org and repo must not be empty", repoSpec)
-	}
-	clonePath := filepath.Join(destPath, repoName)
-
-	c := exec.Command("gh", "repo", "clone", repoSpec, clonePath)
-	if err := cmd.Run(c); err != nil {
-		return "", fmt.Errorf("gh repo clone failed: %v", err)
-	}
-
-	return clonePath, nil
-}
-
-// CloneRepoContext clones a GitHub repo using gh CLI with context support.
-func (g *GitHub) CloneRepoContext(ctx context.Context, repoSpec, destPath string) (string, error) {
+func (g *GitHub) CloneRepo(ctx context.Context, repoSpec, destPath string) (string, error) {
 	parts := strings.Split(repoSpec, "/")
 	if len(parts) != 2 {
 		return "", fmt.Errorf("invalid repo spec %q: expected org/repo format", repoSpec)
@@ -214,7 +138,7 @@ func (g *GitHub) CloneRepoContext(ctx context.Context, repoSpec, destPath string
 }
 
 // CreatePR creates a new PR using gh CLI
-func (g *GitHub) CreatePR(repoURL string, params CreatePRParams) (*CreatePRResult, error) {
+func (g *GitHub) CreatePR(ctx context.Context, repoURL string, params CreatePRParams) (*CreatePRResult, error) {
 	args := []string{"pr", "create",
 		"-R", repoURL,
 		"--title", params.Title,
@@ -231,25 +155,22 @@ func (g *GitHub) CreatePR(repoURL string, params CreatePRParams) (*CreatePRResul
 		args = append(args, "--draft")
 	}
 
-	c := exec.Command("gh", args...)
-	var stdout bytes.Buffer
-	c.Stdout = &stdout
-
-	if err := cmd.Run(c); err != nil {
+	output, err := cmd.OutputContext(ctx, "", "gh", args...)
+	if err != nil {
 		return nil, fmt.Errorf("gh pr create failed: %v", err)
 	}
 
 	// Parse PR URL from stdout (gh pr create outputs the URL)
-	prURL := strings.TrimSpace(stdout.String())
+	prURL := strings.TrimSpace(string(output))
 	if prURL == "" {
 		return nil, fmt.Errorf("gh pr create returned empty output")
 	}
 
 	// Extract PR number from URL (e.g., https://github.com/org/repo/pull/123)
-	parts := strings.Split(prURL, "/")
+	urlParts := strings.Split(prURL, "/")
 	var prNumber int
-	if len(parts) > 0 {
-		fmt.Sscanf(parts[len(parts)-1], "%d", &prNumber)
+	if len(urlParts) > 0 {
+		fmt.Sscanf(urlParts[len(urlParts)-1], "%d", &prNumber)
 	}
 
 	return &CreatePRResult{
@@ -259,7 +180,7 @@ func (g *GitHub) CreatePR(repoURL string, params CreatePRParams) (*CreatePRResul
 }
 
 // MergePR merges a PR by number with the given strategy
-func (g *GitHub) MergePR(repoURL string, number int, strategy string) error {
+func (g *GitHub) MergePR(ctx context.Context, repoURL string, number int, strategy string) error {
 	// Map strategy to gh flag
 	strategyFlag := "--squash" // default
 	switch strategy {
@@ -269,24 +190,22 @@ func (g *GitHub) MergePR(repoURL string, number int, strategy string) error {
 		strategyFlag = "--merge"
 	}
 
-	c := exec.Command("gh", "pr", "merge", fmt.Sprintf("%d", number),
+	if err := cmd.RunContext(ctx, "", "gh", "pr", "merge", fmt.Sprintf("%d", number),
 		"-R", repoURL,
 		strategyFlag,
-		"--delete-branch")
-
-	if err := cmd.Run(c); err != nil {
+		"--delete-branch"); err != nil {
 		return fmt.Errorf("merge failed: %v", err)
 	}
 	return nil
 }
 
 // ViewPR shows PR details or opens in browser
-func (g *GitHub) ViewPR(repoURL string, number int, web bool) error {
+func (g *GitHub) ViewPR(ctx context.Context, repoURL string, number int, web bool) error {
 	args := []string{"pr", "view", fmt.Sprintf("%d", number), "-R", repoURL}
 	if web {
 		args = append(args, "--web")
 	}
-	c := exec.Command("gh", args...)
+	c := exec.CommandContext(ctx, "gh", args...)
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	return c.Run()
