@@ -566,7 +566,7 @@ Examples:
   wt mv -r repo1,repo2               # Move worktrees and repos for multiple repos
   wt mv --format={branch}            # Move and rename worktrees
   wt mv --dry-run                    # Preview what would be moved
-  wt mv -f                           # Force move dirty worktrees`
+  wt mv -f                           # Force move locked worktrees`
 }
 
 func (c *MvCmd) Run(ctx *Context) error {
