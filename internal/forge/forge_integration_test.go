@@ -182,18 +182,21 @@ func TestGitHub_PRWorkflow(t *testing.T) {
 
 	// Setup: create branch and push
 	t.Run("Setup", func(t *testing.T) {
-		// Configure git user for CI environment
-		c := exec.Command("git", "-C", testClonePath, "config", "user.email", "test@example.com")
-		if err := c.Run(); err != nil {
-			t.Fatalf("git config user.email failed: %v", err)
-		}
-		c = exec.Command("git", "-C", testClonePath, "config", "user.name", "Test User")
-		if err := c.Run(); err != nil {
-			t.Fatalf("git config user.name failed: %v", err)
+		// Configure git for CI environment
+		for _, cfg := range [][]string{
+			{"user.email", "test@example.com"},
+			{"user.name", "Test User"},
+			{"credential.helper", ""}, // Clear any existing helper
+			{"credential.helper", "!gh auth git-credential"}, // Use gh for auth
+		} {
+			c := exec.Command("git", "-C", testClonePath, "config", cfg[0], cfg[1])
+			if err := c.Run(); err != nil {
+				t.Fatalf("git config %s failed: %v", cfg[0], err)
+			}
 		}
 
 		// Fetch latest main and create branch from it
-		c = exec.Command("git", "-C", testClonePath, "fetch", "origin", "main")
+		c := exec.Command("git", "-C", testClonePath, "fetch", "origin", "main")
 		if err := c.Run(); err != nil {
 			t.Fatalf("git fetch failed: %v", err)
 		}
