@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -10,7 +11,7 @@ import (
 
 // collectRepoPaths collects unique repository paths from -r and -l flags.
 // Returns a map of repo paths (for deduplication) and any errors encountered.
-func collectRepoPaths(repos []string, labels []string, scanDir string, cfg *config.Config) (map[string]bool, []error) {
+func collectRepoPaths(ctx context.Context, repos []string, labels []string, scanDir string, cfg *config.Config) (map[string]bool, []error) {
 	var errs []error
 	repoPaths := make(map[string]bool)
 
@@ -32,7 +33,7 @@ func collectRepoPaths(repos []string, labels []string, scanDir string, cfg *conf
 
 	// Process -l flags (labels)
 	for _, label := range labels {
-		paths, err := git.FindReposByLabel(repoScanDir, label)
+		paths, err := git.FindReposByLabel(ctx, repoScanDir, label)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("label %q: %w", label, err))
 			continue

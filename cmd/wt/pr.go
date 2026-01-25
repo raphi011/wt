@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -19,7 +20,7 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config, workDir string) error {
+func runPrCheckout(ctx context.Context, cmd *PrCheckoutCmd, cfg *config.Config, workDir string) error {
 	// Validate mutual exclusion: positional org/repo and -r flag can't both be used
 	if cmd.Repo != "" && cmd.Repository != "" {
 		return fmt.Errorf("cannot use both positional org/repo argument and -r/--repository flag\nUse 'wt pr checkout %d %s' (clone mode) OR 'wt pr checkout %d -r %s' (local mode)", cmd.Number, cmd.Repo, cmd.Number, cmd.Repository)
@@ -74,13 +75,13 @@ func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config, workDir string) error
 		}
 
 		f = forge.ByName(forgeName)
-		if err := f.Check(); err != nil {
+		if err := f.Check(ctx); err != nil {
 			return err
 		}
 
 		// Clone the repo to repoScanDir (repo_dir if set, else worktree_dir)
 		fmt.Printf("Cloning %s to %s (using %s)...\n", repoSpec, repoScanDir, forgeName)
-		repoPath, err = f.CloneRepo(repoSpec, repoScanDir)
+		repoPath, err = f.CloneRepo(ctx, repoSpec, repoScanDir)
 		if err != nil {
 			return fmt.Errorf("failed to clone repo: %w", err)
 		}
@@ -105,19 +106,19 @@ func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config, workDir string) error
 		}
 
 		// Get origin URL and detect forge
-		originURL, err := git.GetOriginURL(repoPath)
+		originURL, err := git.GetOriginURL(ctx, repoPath)
 		if err != nil {
 			return fmt.Errorf("failed to get origin URL: %w", err)
 		}
 
 		f = forge.Detect(originURL, cfg.Hosts)
-		if err := f.Check(); err != nil {
+		if err := f.Check(ctx); err != nil {
 			return err
 		}
 	}
 
 	// Get origin URL from repo (may have just been cloned)
-	originURL, err := git.GetOriginURL(repoPath)
+	originURL, err := git.GetOriginURL(ctx, repoPath)
 	if err != nil {
 		return fmt.Errorf("failed to get origin URL: %w", err)
 	}
@@ -132,7 +133,7 @@ func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config, workDir string) error
 	if branch == "" {
 		// Cache miss - fetch from network
 		fmt.Printf("Fetching PR #%d...\n", cmd.Number)
-		branch, err = f.GetPRBranch(originURL, cmd.Number)
+		branch, err = f.GetPRBranch(ctx, originURL, cmd.Number)
 		if err != nil {
 			return fmt.Errorf("failed to get PR branch: %w", err)
 		}
@@ -140,7 +141,7 @@ func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config, workDir string) error
 
 	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
 
-	result, err := git.CreateWorktreeFrom(repoPath, dir, branch, cfg.WorktreeFormat, "")
+	result, err := git.CreateWorktreeFrom(ctx, repoPath, dir, branch, cfg.WorktreeFormat, "")
 	if err != nil {
 		return err
 	}
@@ -157,7 +158,7 @@ func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config, workDir string) error
 		if err != nil {
 			return fmt.Errorf("failed to get absolute repo path: %w", err)
 		}
-		if err := git.SetBranchNote(absRepoPath, branch, cmd.Note); err != nil {
+		if err := git.SetBranchNote(ctx, absRepoPath, branch, cmd.Note); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to set note: %v\n", err)
 		}
 	}
@@ -173,24 +174,24 @@ func runPrCheckout(cmd *PrCheckoutCmd, cfg *config.Config, workDir string) error
 		return err
 	}
 
-	ctx := hooks.Context{
+	hookCtx := hooks.Context{
 		Path:    result.Path,
 		Branch:  branch,
 		Folder:  filepath.Base(repoPath),
 		Trigger: string(hooks.CommandPR),
 		Env:     env,
 	}
-	ctx.Repo, _ = git.GetRepoNameFrom(repoPath)
-	ctx.MainRepo, _ = git.GetMainRepoPath(result.Path)
-	if ctx.MainRepo == "" {
-		ctx.MainRepo, _ = filepath.Abs(repoPath)
+	hookCtx.Repo, _ = git.GetRepoNameFrom(ctx, repoPath)
+	hookCtx.MainRepo, _ = git.GetMainRepoPath(result.Path)
+	if hookCtx.MainRepo == "" {
+		hookCtx.MainRepo, _ = filepath.Abs(repoPath)
 	}
 
-	return hooks.RunAll(hookMatches, ctx)
+	return hooks.RunAll(hookMatches, hookCtx)
 }
 
-func runPrMerge(cmd *PrMergeCmd, cfg *config.Config, workDir string) error {
-	target, err := resolvePrTarget(cmd.ID, cmd.Repository, cfg, workDir)
+func runPrMerge(ctx context.Context, cmd *PrMergeCmd, cfg *config.Config, workDir string) error {
+	target, err := resolvePrTarget(ctx, cmd.ID, cmd.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -199,18 +200,18 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config, workDir string) error {
 	isMainRepo := target.Path == target.MainRepo
 
 	// Get origin URL and detect forge
-	originURL, err := git.GetOriginURL(target.MainRepo)
+	originURL, err := git.GetOriginURL(ctx, target.MainRepo)
 	if err != nil {
 		return fmt.Errorf("failed to get origin URL: %w", err)
 	}
 	f := forge.Detect(originURL, cfg.Hosts)
-	if err := f.Check(); err != nil {
+	if err := f.Check(ctx); err != nil {
 		return err
 	}
 
 	// Get PR for current branch
 	fmt.Printf("Checking PR status for branch %s...\n", target.Branch)
-	pr, err := f.GetPRForBranch(originURL, target.Branch)
+	pr, err := f.GetPRForBranch(ctx, originURL, target.Branch)
 	if err != nil {
 		return fmt.Errorf("failed to get PR info: %w", err)
 	}
@@ -240,7 +241,7 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config, workDir string) error {
 
 	// Merge the PR
 	fmt.Printf("Merging PR #%d (%s)...\n", pr.Number, strategy)
-	if err := f.MergePR(originURL, pr.Number, strategy); err != nil {
+	if err := f.MergePR(ctx, originURL, pr.Number, strategy); err != nil {
 		return err
 	}
 	fmt.Printf("✓ PR #%d merged\n", pr.Number)
@@ -257,14 +258,14 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config, workDir string) error {
 			}
 
 			fmt.Printf("Removing worktree...\n")
-			if err := git.RemoveWorktree(wt, true); err != nil {
+			if err := git.RemoveWorktree(ctx, wt, true); err != nil {
 				return fmt.Errorf("failed to remove worktree: %w", err)
 			}
-			git.PruneWorktrees(target.MainRepo)
+			git.PruneWorktrees(ctx, target.MainRepo)
 		}
 
 		fmt.Printf("Deleting local branch %s...\n", target.Branch)
-		if err := git.DeleteLocalBranch(target.MainRepo, target.Branch, true); err != nil {
+		if err := git.DeleteLocalBranch(ctx, target.MainRepo, target.Branch, true); err != nil {
 			// Don't fail - branch might already be gone or worktree removal handled it
 			fmt.Fprintf(os.Stderr, "Warning: failed to delete local branch: %v\n", err)
 		}
@@ -283,7 +284,7 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config, workDir string) error {
 		return err
 	}
 
-	ctx := hooks.Context{
+	hookCtx := hooks.Context{
 		Path:     target.Path,
 		Branch:   target.Branch,
 		MainRepo: target.MainRepo,
@@ -291,7 +292,7 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config, workDir string) error {
 		Trigger:  string(hooks.CommandMerge),
 		Env:      env,
 	}
-	ctx.Repo, _ = git.GetRepoNameFrom(target.MainRepo)
+	hookCtx.Repo, _ = git.GetRepoNameFrom(ctx, target.MainRepo)
 
 	// If worktree was removed or was main repo, run hooks from main repo
 	hookWorkDir := target.Path
@@ -299,23 +300,23 @@ func runPrMerge(cmd *PrMergeCmd, cfg *config.Config, workDir string) error {
 		hookWorkDir = target.MainRepo
 	}
 
-	hooks.RunAllNonFatal(hookMatches, ctx, hookWorkDir)
+	hooks.RunAllNonFatal(hookMatches, hookCtx, hookWorkDir)
 	return nil
 }
 
-func runPrCreate(cmd *PrCreateCmd, cfg *config.Config, workDir string) error {
-	target, err := resolvePrTarget(cmd.ID, cmd.Repository, cfg, workDir)
+func runPrCreate(ctx context.Context, cmd *PrCreateCmd, cfg *config.Config, workDir string) error {
+	target, err := resolvePrTarget(ctx, cmd.ID, cmd.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
 
 	// Get origin URL and detect forge
-	originURL, err := git.GetOriginURL(target.MainRepo)
+	originURL, err := git.GetOriginURL(ctx, target.MainRepo)
 	if err != nil {
 		return fmt.Errorf("failed to get origin URL: %w", err)
 	}
 	f := forge.Detect(originURL, cfg.Hosts)
-	if err := f.Check(); err != nil {
+	if err := f.Check(ctx); err != nil {
 		return err
 	}
 
@@ -348,7 +349,7 @@ func runPrCreate(cmd *PrCreateCmd, cfg *config.Config, workDir string) error {
 
 	// Create the PR
 	fmt.Printf("Creating PR for branch %s...\n", target.Branch)
-	result, err := f.CreatePR(originURL, params)
+	result, err := f.CreatePR(ctx, originURL, params)
 	if err != nil {
 		return err
 	}
@@ -393,24 +394,24 @@ func runPrCreate(cmd *PrCreateCmd, cfg *config.Config, workDir string) error {
 	return nil
 }
 
-func runPrView(cmd *PrViewCmd, cfg *config.Config, workDir string) error {
-	target, err := resolvePrTarget(cmd.ID, cmd.Repository, cfg, workDir)
+func runPrView(ctx context.Context, cmd *PrViewCmd, cfg *config.Config, workDir string) error {
+	target, err := resolvePrTarget(ctx, cmd.ID, cmd.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
 
 	// Get origin URL and detect forge
-	originURL, err := git.GetOriginURL(target.MainRepo)
+	originURL, err := git.GetOriginURL(ctx, target.MainRepo)
 	if err != nil {
 		return fmt.Errorf("failed to get origin URL: %w", err)
 	}
 	f := forge.Detect(originURL, cfg.Hosts)
-	if err := f.Check(); err != nil {
+	if err := f.Check(ctx); err != nil {
 		return err
 	}
 
 	// Get PR for current branch
-	pr, err := f.GetPRForBranch(originURL, target.Branch)
+	pr, err := f.GetPRForBranch(ctx, originURL, target.Branch)
 	if err != nil {
 		return fmt.Errorf("failed to get PR info: %w", err)
 	}
@@ -419,14 +420,14 @@ func runPrView(cmd *PrViewCmd, cfg *config.Config, workDir string) error {
 	}
 
 	// View the PR
-	return f.ViewPR(originURL, pr.Number, cmd.Web)
+	return f.ViewPR(ctx, originURL, pr.Number, cmd.Web)
 }
 
 // resolvePrTarget resolves target for pr commands with 3 modes:
 // 1. --id: by worktree ID
 // 2. -r: by repository name
 // 3. neither: use workDir (worktree or main repo)
-func resolvePrTarget(id int, repository string, cfg *config.Config, workDir string) (*resolve.Target, error) {
+func resolvePrTarget(ctx context.Context, id int, repository string, cfg *config.Config, workDir string) (*resolve.Target, error) {
 	if id != 0 {
 		scanPath, err := cfg.GetAbsWorktreeDir()
 		if err != nil {
@@ -444,10 +445,10 @@ func resolvePrTarget(id int, repository string, cfg *config.Config, workDir stri
 				return nil, fmt.Errorf("failed to resolve absolute path: %w", err)
 			}
 		}
-		return resolve.ByRepoName(repository, repoScanDir)
+		return resolve.ByRepoName(ctx, repository, repoScanDir)
 	}
 
-	return resolve.FromWorktreeOrRepoPath(workDir)
+	return resolve.FromWorktreeOrRepoPath(ctx, workDir)
 }
 
 // openBrowser opens the specified URL in the default browser

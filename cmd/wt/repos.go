@@ -2,6 +2,7 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -25,7 +26,7 @@ type RepoInfo struct {
 	WorktreeCount int      `json:"worktree_count"`
 }
 
-func runRepos(cmd *ReposCmd, cfg *config.Config) error {
+func runRepos(ctx context.Context, cmd *ReposCmd, cfg *config.Config) error {
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
@@ -51,7 +52,7 @@ func runRepos(cmd *ReposCmd, cfg *config.Config) error {
 	var repos []RepoInfo
 	for _, repoPath := range repoPaths {
 		// Get labels
-		labels, _ := git.GetLabels(repoPath)
+		labels, _ := git.GetLabels(ctx, repoPath)
 
 		// Filter by label if specified
 		if cmd.Label != "" {
@@ -71,13 +72,13 @@ func runRepos(cmd *ReposCmd, cfg *config.Config) error {
 		name := filepath.Base(repoPath)
 
 		// Get current branch
-		branch, _ := git.GetCurrentBranch(repoPath)
+		branch, _ := git.GetCurrentBranch(ctx, repoPath)
 
 		// Get origin URL
-		originURL, _ := git.GetOriginURL(repoPath)
+		originURL, _ := git.GetOriginURL(ctx, repoPath)
 
 		// Count worktrees (excluding the main repo itself)
-		wtInfos, _ := git.ListWorktreesFromRepo(repoPath)
+		wtInfos, _ := git.ListWorktreesFromRepo(ctx, repoPath)
 		worktreeCount := 0
 		if len(wtInfos) > 1 {
 			worktreeCount = len(wtInfos) - 1 // Subtract 1 for the main worktree

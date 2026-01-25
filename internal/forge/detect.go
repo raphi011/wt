@@ -1,6 +1,7 @@
 package forge
 
 import (
+	"context"
 	"net/url"
 	"strings"
 
@@ -29,8 +30,8 @@ func Detect(remoteURL string, hostMap map[string]string) Forge {
 
 // DetectFromRepo detects the forge for a repository by reading its origin URL.
 // Returns GitHub as default if detection fails.
-func DetectFromRepo(repoPath string, hostMap map[string]string) Forge {
-	url, err := git.GetOriginURL(repoPath)
+func DetectFromRepo(ctx context.Context, repoPath string, hostMap map[string]string) Forge {
+	url, err := git.GetOriginURL(ctx, repoPath)
 	if err != nil {
 		return &GitHub{}
 	}

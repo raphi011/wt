@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -56,14 +57,14 @@ type PRInfo struct {
 	CommentCount int    `json:"comment_count,omitempty"`
 }
 
-func runShow(cmd *ShowCmd, cfg *config.Config, workDir string) error {
+func runShow(ctx context.Context, cmd *ShowCmd, cfg *config.Config, workDir string) error {
 	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
 	// Resolve target worktree
-	info, err := resolveShowTarget(cmd.ID, cmd.Repository, cfg, scanPath, workDir)
+	info, err := resolveShowTarget(ctx, cmd.ID, cmd.Repository, cfg, scanPath, workDir)
 	if err != nil {
 		return err
 	}
@@ -77,13 +78,13 @@ func runShow(cmd *ShowCmd, cfg *config.Config, workDir string) error {
 
 	// Get PR info from cache or refresh
 	var prInfo *forge.PRInfo
-	originURL, _ := git.GetOriginURL(info.MainRepo)
+	originURL, _ := git.GetOriginURL(ctx, info.MainRepo)
 	folderName := filepath.Base(info.Path)
 	if originURL != "" {
 		if cmd.Refresh {
 			sp := ui.NewSpinner("Fetching PR status...")
 			sp.Start()
-			prInfo = fetchPRForBranch(originURL, info.MainRepo, info.Branch, folderName, wtCache, cfg)
+			prInfo = fetchPRForBranch(ctx, originURL, info.MainRepo, info.Branch, folderName, wtCache, cfg)
 			sp.Stop()
 			// Save updated cache
 			if err := cache.Save(scanPath, wtCache); err != nil {
@@ -95,7 +96,7 @@ func runShow(cmd *ShowCmd, cfg *config.Config, workDir string) error {
 	}
 
 	// Gather additional info
-	showInfo := gatherShowInfo(info, prInfo)
+	showInfo := gatherShowInfo(ctx, info, prInfo)
 
 	if cmd.JSON {
 		return outputShowJSON(showInfo)
@@ -105,7 +106,7 @@ func runShow(cmd *ShowCmd, cfg *config.Config, workDir string) error {
 }
 
 // resolveShowTarget resolves the worktree target for show command
-func resolveShowTarget(id int, repository string, cfg *config.Config, dir string, workDir string) (*resolve.Target, error) {
+func resolveShowTarget(ctx context.Context, id int, repository string, cfg *config.Config, dir string, workDir string) (*resolve.Target, error) {
 	// Resolve by ID if provided
 	if id != 0 {
 		scanPath := dir
@@ -125,18 +126,18 @@ func resolveShowTarget(id int, repository string, cfg *config.Config, dir string
 		if repoScanDir == "" {
 			repoScanDir = dir
 		}
-		return resolve.ByRepoName(repository, repoScanDir)
+		return resolve.ByRepoName(ctx, repository, repoScanDir)
 	}
 
 	// Default: use working directory
 	inWorktree := git.IsWorktree(workDir)
-	inGitRepo := git.IsInsideRepoPath(workDir)
+	inGitRepo := git.IsInsideRepoPath(ctx, workDir)
 
 	if !inWorktree && !inGitRepo {
 		return nil, fmt.Errorf("--id or --repository required when not inside a worktree/repo (run 'wt list' to see IDs)")
 	}
 
-	branch, err := git.GetCurrentBranch(workDir)
+	branch, err := git.GetCurrentBranch(ctx, workDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current branch: %w", err)
 	}
@@ -170,7 +171,7 @@ func resolveShowTarget(id int, repository string, cfg *config.Config, dir string
 	return &resolve.Target{ID: wtID, Branch: branch, MainRepo: mainRepo, Path: workDir}, nil
 }
 
-func gatherShowInfo(target *resolve.Target, prInfo *forge.PRInfo) *ShowInfo {
+func gatherShowInfo(ctx context.Context, target *resolve.Target, prInfo *forge.PRInfo) *ShowInfo {
 	// Determine if this is a worktree (path differs from main repo)
 	isWorktree := target.Path != target.MainRepo
 	info := &ShowInfo{
@@ -182,7 +183,7 @@ func gatherShowInfo(target *resolve.Target, prInfo *forge.PRInfo) *ShowInfo {
 	}
 
 	// Get origin URL and extract repo name from it
-	info.OriginURL, _ = git.GetOriginURL(target.MainRepo)
+	info.OriginURL, _ = git.GetOriginURL(ctx, target.MainRepo)
 	info.RepoName = extractRepoName(info.OriginURL)
 	if info.RepoName == "" {
 		// Fallback to local folder name
@@ -190,19 +191,19 @@ func gatherShowInfo(target *resolve.Target, prInfo *forge.PRInfo) *ShowInfo {
 	}
 
 	// Get commits ahead
-	commitsAhead, err := git.GetCommitCount(target.MainRepo, target.Branch)
+	commitsAhead, err := git.GetCommitCount(ctx, target.MainRepo, target.Branch)
 	if err == nil {
 		info.CommitsAhead = commitsAhead
 	}
 
 	// Get commits behind
-	commitsBehind, err := git.GetCommitsBehind(target.MainRepo, target.Branch)
+	commitsBehind, err := git.GetCommitsBehind(ctx, target.MainRepo, target.Branch)
 	if err == nil {
 		info.CommitsBehind = commitsBehind
 	}
 
 	// Get diff stats
-	diffStats, err := git.GetDiffStats(target.MainRepo, target.Branch)
+	diffStats, err := git.GetDiffStats(ctx, target.MainRepo, target.Branch)
 	if err == nil && (diffStats.Additions > 0 || diffStats.Deletions > 0 || diffStats.Files > 0) {
 		info.DiffStats = &DiffStats{
 			Additions: diffStats.Additions,
@@ -212,26 +213,26 @@ func gatherShowInfo(target *resolve.Target, prInfo *forge.PRInfo) *ShowInfo {
 	}
 
 	// Get dirty status
-	info.IsDirty = git.IsDirty(target.Path)
+	info.IsDirty = git.IsDirty(ctx, target.Path)
 
 	// Get merge status
-	isMerged, _ := git.IsBranchMerged(target.MainRepo, target.Branch)
+	isMerged, _ := git.IsBranchMerged(ctx, target.MainRepo, target.Branch)
 	info.IsMerged = isMerged
 	if prInfo != nil && prInfo.State == "MERGED" {
 		info.IsMerged = true
 	}
 
 	// Get last commit time
-	info.LastCommit, _ = git.GetLastCommitRelative(target.Path)
+	info.LastCommit, _ = git.GetLastCommitRelative(ctx, target.Path)
 
 	// Get branch creation time
-	createdAt, err := git.GetBranchCreatedTime(target.MainRepo, target.Branch)
+	createdAt, err := git.GetBranchCreatedTime(ctx, target.MainRepo, target.Branch)
 	if err == nil {
 		info.CreatedAt = &createdAt
 	}
 
 	// Get note
-	info.Note, _ = git.GetBranchNote(target.MainRepo, target.Branch)
+	info.Note, _ = git.GetBranchNote(ctx, target.MainRepo, target.Branch)
 
 	// Convert PR info
 	if prInfo != nil && prInfo.Number > 0 {
@@ -249,21 +250,21 @@ func gatherShowInfo(target *resolve.Target, prInfo *forge.PRInfo) *ShowInfo {
 	return info
 }
 
-func fetchPRForBranch(originURL, mainRepo, branch, folderName string, wtCache *cache.Cache, cfg *config.Config) *forge.PRInfo {
+func fetchPRForBranch(ctx context.Context, originURL, mainRepo, branch, folderName string, wtCache *cache.Cache, cfg *config.Config) *forge.PRInfo {
 	// Check if branch has upstream
-	upstreamBranch := git.GetUpstreamBranch(mainRepo, branch)
+	upstreamBranch := git.GetUpstreamBranch(ctx, mainRepo, branch)
 	if upstreamBranch == "" {
 		return nil
 	}
 
 	// Detect forge
 	f := forge.Detect(originURL, cfg.Hosts)
-	if err := f.Check(); err != nil {
+	if err := f.Check(ctx); err != nil {
 		return nil
 	}
 
 	// Fetch PR info
-	pr, err := f.GetPRForBranch(originURL, upstreamBranch)
+	pr, err := f.GetPRForBranch(ctx, originURL, upstreamBranch)
 	if err != nil {
 		return nil
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,7 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/git"
 )
 
-func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
+func runMv(ctx context.Context, cmd *MvCmd, cfg *config.Config, workDir string) error {
 	// Validate worktree format
 	if err := format.ValidateFormat(cmd.Format); err != nil {
 		return fmt.Errorf("invalid format: %w", err)
@@ -41,7 +42,7 @@ func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
 	}
 
 	// Scan for worktrees in working directory
-	worktrees, err := git.ListWorktrees(workDir, false)
+	worktrees, err := git.ListWorktrees(ctx, workDir, false)
 	if err != nil {
 		return err
 	}
@@ -114,7 +115,7 @@ func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
 	// and git worktree repair can't find them
 	var nestedWorktrees []git.Worktree
 	for _, repoPath := range repos {
-		wtInfos, err := git.ListWorktreesFromRepo(repoPath)
+		wtInfos, err := git.ListWorktreesFromRepo(ctx, repoPath)
 		if err != nil {
 			continue
 		}
@@ -128,7 +129,7 @@ func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
 				continue
 			}
 			// Build full Worktree struct for nested worktree
-			wtInfo, err := git.GetWorktreeInfo(wti.Path)
+			wtInfo, err := git.GetWorktreeInfo(ctx, wti.Path)
 			if err != nil {
 				fmt.Printf("⚠ Warning: failed to get info for nested worktree %s: %v\n", wti.Path, err)
 				continue
@@ -168,7 +169,7 @@ func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
 			}
 
 			// Move the nested worktree out of the repo
-			if err := git.MoveWorktree(wt, newPath, cmd.Force); err != nil {
+			if err := git.MoveWorktree(ctx, wt, newPath, cmd.Force); err != nil {
 				fmt.Printf("✗ Failed to move nested %s: %v\n", filepath.Base(wt.Path), err)
 				nestedFailed++
 				continue
@@ -227,7 +228,7 @@ func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
 			}
 
 			// Repair all worktree references to point to new repo location
-			if err := git.RepairWorktreesFromRepo(newPath); err != nil {
+			if err := git.RepairWorktreesFromRepo(ctx, newPath); err != nil {
 				fmt.Printf("⚠ Warning: failed to repair worktrees for %s: %v\n", repoName, err)
 			}
 
@@ -290,7 +291,7 @@ func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
 		}
 
 		// Move the worktree (MainRepo already points to new repo location if repo was moved)
-		if err := git.MoveWorktree(wt, newPath, cmd.Force); err != nil {
+		if err := git.MoveWorktree(ctx, wt, newPath, cmd.Force); err != nil {
 			fmt.Printf("✗ Failed to move %s: %v\n", filepath.Base(wt.Path), err)
 			failed++
 			continue

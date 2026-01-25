@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -11,7 +12,7 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runExec(cmd *ExecCmd, cfg *config.Config, _ string) error {
+func runExec(ctx context.Context, cmd *ExecCmd, cfg *config.Config, _ string) error {
 	// Strip leading "--" if present (kong passthrough includes it)
 	command := cmd.Command
 	if len(command) > 0 && command[0] == "--" {
@@ -42,7 +43,7 @@ func runExec(cmd *ExecCmd, cfg *config.Config, _ string) error {
 	}
 
 	// Mode: by repo/label
-	return runExecForRepos(cmd.Repository, cmd.Label, command, scanPath, cfg)
+	return runExecForRepos(ctx, cmd.Repository, cmd.Label, command, scanPath, cfg)
 }
 
 func runExecForIDs(ids []int, command []string, scanPath string) error {
@@ -59,13 +60,13 @@ func runExecForIDs(ids []int, command []string, scanPath string) error {
 	return nil
 }
 
-func runExecForRepos(repos []string, labels []string, command []string, dir string, cfg *config.Config) error {
+func runExecForRepos(ctx context.Context, repos []string, labels []string, command []string, dir string, cfg *config.Config) error {
 	scanDir, err := resolveRepoScanDir(dir, cfg)
 	if err != nil {
 		return err
 	}
 
-	repoPaths, errs := collectRepoPaths(repos, labels, scanDir, cfg)
+	repoPaths, errs := collectRepoPaths(ctx, repos, labels, scanDir, cfg)
 
 	// Execute command in each repo
 	for repoPath := range repoPaths {

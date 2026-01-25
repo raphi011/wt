@@ -2,6 +2,7 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,7 +16,7 @@ import (
 	"github.com/raphi011/wt/internal/ui"
 )
 
-func runList(cmd *ListCmd, cfg *config.Config, workDir string, out io.Writer) error {
+func runList(ctx context.Context, cmd *ListCmd, cfg *config.Config, workDir string, out io.Writer) error {
 	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
@@ -29,7 +30,7 @@ func runList(cmd *ListCmd, cfg *config.Config, workDir string, out io.Writer) er
 	defer unlock()
 
 	// List worktrees (no dirty check needed for list)
-	allWorktrees, err := git.ListWorktrees(scanPath, false)
+	allWorktrees, err := git.ListWorktrees(ctx, scanPath, false)
 	if err != nil {
 		return err
 	}
@@ -52,7 +53,7 @@ func runList(cmd *ListCmd, cfg *config.Config, workDir string, out io.Writer) er
 	if cmd.Refresh {
 		sp := ui.NewSpinner("Fetching PR status...")
 		sp.Start()
-		refreshPRStatus(allWorktrees, wtCache, cfg, sp)
+		refreshPRStatus(ctx, allWorktrees, wtCache, cfg, sp)
 		sp.Stop()
 	}
 
@@ -72,7 +73,7 @@ func runList(cmd *ListCmd, cfg *config.Config, workDir string, out io.Writer) er
 
 	if hasRepoOrLabelFilter {
 		// Filter by -r and/or -l flags (overrides current repo filter)
-		repoPaths, errs := collectRepoPaths(cmd.Repository, cmd.Label, scanPath, cfg)
+		repoPaths, errs := collectRepoPaths(ctx, cmd.Repository, cmd.Label, scanPath, cfg)
 		for _, e := range errs {
 			fmt.Fprintf(os.Stderr, "Warning: %v\n", e)
 		}
@@ -87,7 +88,7 @@ func runList(cmd *ListCmd, cfg *config.Config, workDir string, out io.Writer) er
 		}
 	} else if !cmd.Global {
 		// Default behavior: filter by current repo if inside one
-		currentRepo = git.GetCurrentRepoMainPathFrom(workDir)
+		currentRepo = git.GetCurrentRepoMainPathFrom(ctx, workDir)
 		if currentRepo != "" {
 			var filtered []git.Worktree
 			for _, wt := range allWorktrees {
@@ -201,7 +202,7 @@ func runList(cmd *ListCmd, cfg *config.Config, workDir string, out io.Writer) er
 	sortWorktrees(worktrees, pathToID, sortBy)
 
 	// Display table
-	fmt.Fprint(out, ui.FormatListTable(worktrees, pathToID, wtCache))
+	fmt.Fprint(out, ui.FormatListTable(ctx, worktrees, pathToID, wtCache))
 
 	return nil
 }

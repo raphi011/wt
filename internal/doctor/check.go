@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -92,7 +93,7 @@ func checkCacheIssues(wtCache *cache.Cache, scanPath string) []Issue {
 }
 
 // checkGitLinkIssues checks for broken git worktree links.
-func checkGitLinkIssues(wtCache *cache.Cache, scanPath string, cfg *config.Config) []Issue {
+func checkGitLinkIssues(ctx context.Context, wtCache *cache.Cache, scanPath string, cfg *config.Config) []Issue {
 	var issues []Issue
 
 	// Track repos we've checked for prunable worktrees
@@ -205,7 +206,7 @@ func checkGitLinkIssues(wtCache *cache.Cache, scanPath string, cfg *config.Confi
 
 	// Check for prunable worktrees in each repo (git's stale references)
 	for repoPath := range checkedRepos {
-		prunable, err := git.ListPrunableWorktrees(repoPath)
+		prunable, err := git.ListPrunableWorktrees(ctx, repoPath)
 		if err != nil {
 			continue
 		}
@@ -223,7 +224,7 @@ func checkGitLinkIssues(wtCache *cache.Cache, scanPath string, cfg *config.Confi
 }
 
 // checkOrphanIssues finds untracked worktrees and ghost entries.
-func checkOrphanIssues(wtCache *cache.Cache, scanPath string, cfg *config.Config) []Issue {
+func checkOrphanIssues(ctx context.Context, wtCache *cache.Cache, scanPath string, cfg *config.Config) []Issue {
 	var issues []Issue
 
 	// Build set of known worktree paths from cache
@@ -318,7 +319,7 @@ func checkOrphanIssues(wtCache *cache.Cache, scanPath string, cfg *config.Config
 		}
 
 		// Check if git knows about this worktree
-		worktrees, err := git.ListWorktreesFromRepo(entry.RepoPath)
+		worktrees, err := git.ListWorktreesFromRepo(ctx, entry.RepoPath)
 		if err != nil {
 			continue
 		}

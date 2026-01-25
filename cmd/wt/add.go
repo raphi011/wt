@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -37,7 +38,7 @@ type createWorktreeParams struct {
 // createWorktree creates a worktree and returns the result.
 // Uses repoPath if specified, otherwise uses workDir as the repo path.
 // Operates using CreateWorktreeFrom/OpenWorktreeFrom for path-based operations.
-func createWorktree(p createWorktreeParams) (*successResult, error) {
+func createWorktree(ctx context.Context, p createWorktreeParams) (*successResult, error) {
 	var result *git.CreateWorktreeResult
 	var err error
 	var repoName, folder, mainRepo string
@@ -50,16 +51,16 @@ func createWorktree(p createWorktreeParams) (*successResult, error) {
 
 	// Use path-based functions for all operations
 	if p.newBranch {
-		result, err = git.CreateWorktreeFrom(effectiveRepoPath, p.targetDir, p.branch, p.format, p.baseRef)
+		result, err = git.CreateWorktreeFrom(ctx, effectiveRepoPath, p.targetDir, p.branch, p.format, p.baseRef)
 	} else {
-		result, err = git.OpenWorktreeFrom(effectiveRepoPath, p.targetDir, p.branch, p.format)
+		result, err = git.OpenWorktreeFrom(ctx, effectiveRepoPath, p.targetDir, p.branch, p.format)
 	}
 	if err != nil {
 		return nil, err
 	}
 
 	// Get repo metadata using path-based functions
-	repoName, _ = git.GetRepoNameFrom(effectiveRepoPath)
+	repoName, _ = git.GetRepoNameFrom(ctx, effectiveRepoPath)
 	if repoName == "" {
 		repoName = git.GetRepoDisplayName(effectiveRepoPath)
 	}
@@ -78,7 +79,7 @@ func createWorktree(p createWorktreeParams) (*successResult, error) {
 
 	// Set note if provided
 	if p.note != "" {
-		if err := git.SetBranchNote(effectiveRepoPath, p.branch, p.note); err != nil {
+		if err := git.SetBranchNote(ctx, effectiveRepoPath, p.branch, p.note); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to set note: %v\n", err)
 		}
 	}
@@ -96,16 +97,16 @@ func createWorktree(p createWorktreeParams) (*successResult, error) {
 // resolveBaseRef determines the base ref for creating a new branch.
 // If fetch is true, fetches the base branch from origin first.
 // Returns the full ref (e.g., "origin/main" or "main") based on config.
-func resolveBaseRef(repoPath, baseBranch string, fetch bool, baseRefConfig string) (string, error) {
+func resolveBaseRef(ctx context.Context, repoPath, baseBranch string, fetch bool, baseRefConfig string) (string, error) {
 	// Determine base branch (default: auto-detected main/master)
 	if baseBranch == "" {
-		baseBranch = git.GetDefaultBranch(repoPath)
+		baseBranch = git.GetDefaultBranch(ctx, repoPath)
 	}
 
 	// Fetch if requested
 	if fetch {
 		fmt.Printf("Fetching origin/%s...\n", baseBranch)
-		if err := git.FetchBranch(repoPath, baseBranch); err != nil {
+		if err := git.FetchBranch(ctx, repoPath, baseBranch); err != nil {
 			return "", err
 		}
 	}
@@ -118,17 +119,17 @@ func resolveBaseRef(repoPath, baseBranch string, fetch bool, baseRefConfig strin
 	return baseBranch, nil
 }
 
-func runAdd(cmd *AddCmd, cfg *config.Config, workDir string) error {
+func runAdd(ctx context.Context, cmd *AddCmd, cfg *config.Config, workDir string) error {
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)
 	}
 
-	insideRepo := git.IsInsideRepoPath(workDir)
+	insideRepo := git.IsInsideRepoPath(ctx, workDir)
 
 	// If -r or -l specified, use multi-repo mode
 	if len(cmd.Repository) > 0 || len(cmd.Label) > 0 {
-		return runAddMultiRepo(cmd, cfg, insideRepo, workDir)
+		return runAddMultiRepo(ctx, cmd, cfg, insideRepo, workDir)
 	}
 
 	// No -r or -l specified
@@ -136,7 +137,7 @@ func runAdd(cmd *AddCmd, cfg *config.Config, workDir string) error {
 		if cmd.Branch == "" {
 			return fmt.Errorf("branch name required inside git repo")
 		}
-		return runAddInRepo(cmd, cfg, workDir)
+		return runAddInRepo(ctx, cmd, cfg, workDir)
 	}
 
 	// Outside repo without -r or -l
@@ -144,7 +145,7 @@ func runAdd(cmd *AddCmd, cfg *config.Config, workDir string) error {
 }
 
 // runAddInRepo handles wt add when inside a git repository (single repo mode)
-func runAddInRepo(cmd *AddCmd, cfg *config.Config, workDir string) error {
+func runAddInRepo(ctx context.Context, cmd *AddCmd, cfg *config.Config, workDir string) error {
 	targetDir, absPath, err := resolveWorktreeTargetDir(cfg, workDir)
 	if err != nil {
 		return err
@@ -153,7 +154,7 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config, workDir string) error {
 	// Resolve base ref if creating new branch
 	var baseRef string
 	if cmd.NewBranch {
-		baseRef, err = resolveBaseRef(workDir, cmd.Base, cmd.Fetch, cfg.BaseRef)
+		baseRef, err = resolveBaseRef(ctx, workDir, cmd.Base, cmd.Fetch, cfg.BaseRef)
 		if err != nil {
 			return err
 		}
@@ -162,7 +163,7 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config, workDir string) error {
 		fmt.Printf("Adding worktree for branch %s in %s\n", cmd.Branch, absPath)
 	}
 
-	result, err := createWorktree(createWorktreeParams{
+	result, err := createWorktree(ctx, createWorktreeParams{
 		repoPath:  "",
 		targetDir: targetDir,
 		branch:    cmd.Branch,
@@ -187,7 +188,7 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config, workDir string) error {
 		return err
 	}
 
-	ctx := hooks.Context{
+	hookCtx := hooks.Context{
 		Path:     result.Path,
 		Branch:   result.Branch,
 		Repo:     result.RepoName,
@@ -197,11 +198,11 @@ func runAddInRepo(cmd *AddCmd, cfg *config.Config, workDir string) error {
 		Env:      env,
 	}
 
-	return hooks.RunAll(hookMatches, ctx)
+	return hooks.RunAll(hookMatches, hookCtx)
 }
 
 // runAddMultiRepo handles wt add with -r or -l flags for multiple repositories
-func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool, workDir string) error {
+func runAddMultiRepo(ctx context.Context, cmd *AddCmd, cfg *config.Config, insideRepo bool, workDir string) error {
 	if cmd.Branch == "" {
 		return fmt.Errorf("branch name required with --repository or --label")
 	}
@@ -233,7 +234,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool, workDir s
 	// If inside repo with -r flag, include current repo first (original behavior)
 	// With -l only, we don't auto-include current repo (only labeled repos)
 	if insideRepo && len(cmd.Repository) > 0 {
-		result, err := createWorktreeInCurrentRepo(cmd, cfg, wtDir, workDir)
+		result, err := createWorktreeInCurrentRepo(ctx, cmd, cfg, wtDir, workDir)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("(current repo): %w", err))
 		} else {
@@ -256,7 +257,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool, workDir s
 
 	// Process -l flags (labels)
 	for _, label := range cmd.Label {
-		paths, err := git.FindReposByLabel(repoScanDir, label)
+		paths, err := git.FindReposByLabel(ctx, repoScanDir, label)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("label %q: %w", label, err))
 			continue
@@ -272,7 +273,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool, workDir s
 
 	// Process each unique repository
 	for repoPath := range repoPaths {
-		result, err := createWorktreeForRepo(repoPath, cmd, cfg, wtDir)
+		result, err := createWorktreeForRepo(ctx, repoPath, cmd, cfg, wtDir)
 		repoName := git.GetRepoDisplayName(repoPath)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
@@ -293,7 +294,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool, workDir s
 	}
 
 	for _, r := range results {
-		ctx := hooks.Context{
+		hookCtx := hooks.Context{
 			Path:     r.Path,
 			Branch:   r.Branch,
 			Repo:     r.RepoName,
@@ -302,7 +303,7 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool, workDir s
 			Trigger:  string(hooks.CommandAdd),
 			Env:      env,
 		}
-		hooks.RunForEach(hookMatches, ctx, r.Path)
+		hooks.RunForEach(hookMatches, hookCtx, r.Path)
 	}
 
 	if len(errs) > 0 {
@@ -312,12 +313,12 @@ func runAddMultiRepo(cmd *AddCmd, cfg *config.Config, insideRepo bool, workDir s
 }
 
 // createWorktreeInCurrentRepo creates a worktree in the current git repository
-func createWorktreeInCurrentRepo(cmd *AddCmd, cfg *config.Config, targetDir string, workDir string) (*successResult, error) {
+func createWorktreeInCurrentRepo(ctx context.Context, cmd *AddCmd, cfg *config.Config, targetDir string, workDir string) (*successResult, error) {
 	// Resolve base ref if creating new branch
 	var baseRef string
 	if cmd.NewBranch {
 		var err error
-		baseRef, err = resolveBaseRef(workDir, cmd.Base, cmd.Fetch, cfg.BaseRef)
+		baseRef, err = resolveBaseRef(ctx, workDir, cmd.Base, cmd.Fetch, cfg.BaseRef)
 		if err != nil {
 			return nil, err
 		}
@@ -326,7 +327,7 @@ func createWorktreeInCurrentRepo(cmd *AddCmd, cfg *config.Config, targetDir stri
 		fmt.Printf("Adding worktree for branch %s (current repo) in %s\n", cmd.Branch, targetDir)
 	}
 
-	return createWorktree(createWorktreeParams{
+	return createWorktree(ctx, createWorktreeParams{
 		repoPath:  "",
 		targetDir: targetDir,
 		branch:    cmd.Branch,
@@ -339,14 +340,14 @@ func createWorktreeInCurrentRepo(cmd *AddCmd, cfg *config.Config, targetDir stri
 }
 
 // createWorktreeForRepo creates a worktree for a specified repository
-func createWorktreeForRepo(repoPath string, cmd *AddCmd, cfg *config.Config, targetDir string) (*successResult, error) {
+func createWorktreeForRepo(ctx context.Context, repoPath string, cmd *AddCmd, cfg *config.Config, targetDir string) (*successResult, error) {
 	repoName := git.GetRepoDisplayName(repoPath)
 
 	// Resolve base ref if creating new branch
 	var baseRef string
 	if cmd.NewBranch {
 		var err error
-		baseRef, err = resolveBaseRef(repoPath, cmd.Base, cmd.Fetch, cfg.BaseRef)
+		baseRef, err = resolveBaseRef(ctx, repoPath, cmd.Base, cmd.Fetch, cfg.BaseRef)
 		if err != nil {
 			return nil, err
 		}
@@ -355,7 +356,7 @@ func createWorktreeForRepo(repoPath string, cmd *AddCmd, cfg *config.Config, tar
 		fmt.Printf("Adding worktree for branch %s in %s (%s)\n", cmd.Branch, targetDir, repoName)
 	}
 
-	return createWorktree(createWorktreeParams{
+	return createWorktree(ctx, createWorktreeParams{
 		repoPath:  repoPath,
 		targetDir: targetDir,
 		branch:    cmd.Branch,

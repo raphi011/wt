@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -9,7 +10,7 @@ import (
 )
 
 // fixAllIssues applies fixes for all detected issues.
-func fixAllIssues(wtCache *cache.Cache, issues []Issue, scanPath string) error {
+func fixAllIssues(ctx context.Context, wtCache *cache.Cache, issues []Issue, scanPath string) error {
 	var fixed int
 	var failed int
 
@@ -33,11 +34,11 @@ func fixAllIssues(wtCache *cache.Cache, issues []Issue, scanPath string) error {
 				if repoPath, err := git.GetMainRepoPath(entry.Path); err == nil {
 					entry.RepoPath = repoPath
 				}
-				if branch, err := git.GetCurrentBranch(entry.Path); err == nil {
+				if branch, err := git.GetCurrentBranch(ctx, entry.Path); err == nil {
 					entry.Branch = branch
 				}
 				if entry.RepoPath != "" {
-					entry.OriginURL, _ = git.GetOriginURL(entry.RepoPath)
+					entry.OriginURL, _ = git.GetOriginURL(ctx, entry.RepoPath)
 				}
 				fmt.Printf("  ✓ Updated metadata for %q\n", issue.Key)
 				fixed++
@@ -55,7 +56,7 @@ func fixAllIssues(wtCache *cache.Cache, issues []Issue, scanPath string) error {
 			// Try to repair using git worktree repair
 			if issue.RepoPath != "" {
 				if entry, ok := wtCache.Worktrees[issue.Key]; ok && entry.Path != "" {
-					if err := git.RepairWorktree(issue.RepoPath, entry.Path); err != nil {
+					if err := git.RepairWorktree(ctx, issue.RepoPath, entry.Path); err != nil {
 						fmt.Printf("  ✗ Failed to repair %q: %v\n", issue.Key, err)
 						failed++
 					} else {
@@ -63,7 +64,7 @@ func fixAllIssues(wtCache *cache.Cache, issues []Issue, scanPath string) error {
 						if entry.RepoPath != issue.RepoPath {
 							entry.RepoPath = issue.RepoPath
 							// Update origin URL from new repo location
-							if originURL, err := git.GetOriginURL(issue.RepoPath); err == nil {
+							if originURL, err := git.GetOriginURL(ctx, issue.RepoPath); err == nil {
 								entry.OriginURL = originURL
 							}
 							fmt.Printf("  ✓ Repaired git links for %q (updated repo path)\n", issue.Key)
@@ -81,7 +82,7 @@ func fixAllIssues(wtCache *cache.Cache, issues []Issue, scanPath string) error {
 		case "prune":
 			// Prune stale git worktree references
 			if issue.RepoPath != "" {
-				if err := git.PruneWorktrees(issue.RepoPath); err != nil {
+				if err := git.PruneWorktrees(ctx, issue.RepoPath); err != nil {
 					fmt.Printf("  ✗ Failed to prune %q: %v\n", issue.Key, err)
 					failed++
 				} else {
@@ -96,7 +97,7 @@ func fixAllIssues(wtCache *cache.Cache, issues []Issue, scanPath string) error {
 		case "add_to_cache":
 			// Add untracked worktree to cache
 			path := filepath.Join(scanPath, issue.Key)
-			wtInfo, err := git.GetWorktreeInfo(path)
+			wtInfo, err := git.GetWorktreeInfo(ctx, path)
 			if err != nil {
 				fmt.Printf("  ✗ Failed to get info for %q: %v\n", issue.Key, err)
 				failed++
@@ -123,14 +124,14 @@ func fixAllIssues(wtCache *cache.Cache, issues []Issue, scanPath string) error {
 			}
 
 			// Repair the worktree using the found repo
-			if err := git.RepairWorktree(issue.RepoPath, path); err != nil {
+			if err := git.RepairWorktree(ctx, issue.RepoPath, path); err != nil {
 				fmt.Printf("  ✗ Failed to repair %q: %v\n", issue.Key, err)
 				failed++
 				continue
 			}
 
 			// Now get worktree info and add to cache
-			wtInfo, err := git.GetWorktreeInfo(path)
+			wtInfo, err := git.GetWorktreeInfo(ctx, path)
 			if err != nil {
 				fmt.Printf("  ✗ Repaired %q but failed to get info: %v\n", issue.Key, err)
 				failed++
@@ -169,11 +170,11 @@ func fixAllIssues(wtCache *cache.Cache, issues []Issue, scanPath string) error {
 }
 
 // rebuildCache rebuilds the cache from scratch.
-func rebuildCache(scanPath string) error {
+func rebuildCache(ctx context.Context, scanPath string) error {
 	fmt.Println("Rebuilding cache from scratch...")
 
 	// Scan for worktrees
-	worktrees, err := git.ListWorktrees(scanPath, false)
+	worktrees, err := git.ListWorktrees(ctx, scanPath, false)
 	if err != nil {
 		return fmt.Errorf("failed to scan worktrees: %w", err)
 	}
