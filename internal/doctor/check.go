@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/config"
@@ -32,17 +31,7 @@ func checkCacheIssues(wtCache *cache.Cache, scanPath string) []Issue {
 			continue
 		}
 
-		// Check 1: Old format key (contains "::")
-		if strings.Contains(key, "::") {
-			issues = append(issues, Issue{
-				Key:         key,
-				Description: "orphaned key (old format)",
-				FixAction:   "remove",
-			})
-			continue
-		}
-
-		// Check 2: Stale entry (path doesn't exist)
+		// Check 1: Stale entry (path doesn't exist)
 		if entry.Path != "" {
 			if _, err := os.Stat(entry.Path); os.IsNotExist(err) {
 				issues = append(issues, Issue{
@@ -54,7 +43,7 @@ func checkCacheIssues(wtCache *cache.Cache, scanPath string) []Issue {
 			}
 		}
 
-		// Check 3: Wrong path (folder exists elsewhere in worktree_dir)
+		// Check 2: Wrong path (folder exists elsewhere in worktree_dir)
 		expectedPath := filepath.Join(scanPath, key)
 		if entry.Path != "" && entry.Path != expectedPath {
 			if _, err := os.Stat(expectedPath); err == nil {
@@ -67,7 +56,7 @@ func checkCacheIssues(wtCache *cache.Cache, scanPath string) []Issue {
 			}
 		}
 
-		// Check 4: Missing metadata (repo_path or branch)
+		// Check 3: Missing metadata (repo_path or branch)
 		if entry.Path != "" && entry.RepoPath == "" {
 			if _, err := os.Stat(entry.Path); err == nil {
 				issues = append(issues, Issue{
@@ -80,7 +69,7 @@ func checkCacheIssues(wtCache *cache.Cache, scanPath string) []Issue {
 		}
 	}
 
-	// Check 5: Duplicate IDs
+	// Check 4: Duplicate IDs
 	idCounts := make(map[int][]string)
 	for key, entry := range wtCache.Worktrees {
 		if entry.RemovedAt == nil {
