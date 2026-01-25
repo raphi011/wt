@@ -816,8 +816,8 @@ _wt() {
                         '--format[worktree naming format]:format:' \
                         '-n[show what would be moved]' \
                         '--dry-run[show what would be moved]' \
-                        '-f[force move dirty worktrees]' \
-                        '--force[force move dirty worktrees]'
+                        '-f[force move locked worktrees]' \
+                        '--force[force move locked worktrees]'
                     ;;
                 pr)
                     _arguments -C \
@@ -1202,7 +1202,7 @@ complete -c wt -n "__fish_seen_subcommand_from cd" -s a -l arg -r -d "Set hook v
 complete -c wt -n "__fish_seen_subcommand_from mv" -s r -l repository -r -a "(__wt_list_repos)" -d "Filter by repository name (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from mv" -l format -d "Worktree naming format"
 complete -c wt -n "__fish_seen_subcommand_from mv" -s n -l dry-run -d "Show what would be moved"
-complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move dirty worktrees"
+complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move locked worktrees"
 
 # note: subcommands (get is default, so flags work directly on note)
 complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "set" -d "Set a note on a branch"
