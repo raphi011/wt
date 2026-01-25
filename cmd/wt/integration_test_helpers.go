@@ -3,11 +3,13 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/git"
@@ -347,4 +349,51 @@ func populateCache(t *testing.T, worktreeDir string) {
 	if err := cache.Save(worktreeDir, wtCache); err != nil {
 		t.Fatalf("failed to save cache: %v", err)
 	}
+}
+
+// populateCacheWithPR populates the cache and sets PR info for a worktree.
+// folderName is the worktree folder name (e.g., "repo-feature").
+// prState should be "MERGED", "OPEN", or "CLOSED".
+func populateCacheWithPR(t *testing.T, worktreeDir, folderName, prState string, prNumber int) {
+	t.Helper()
+
+	// First populate the cache normally
+	populateCache(t, worktreeDir)
+
+	// Load cache again to add PR info
+	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
+	if err != nil {
+		t.Fatalf("failed to load cache: %v", err)
+	}
+	defer unlock()
+
+	// Set PR info for the worktree
+	pr := &cache.PRInfo{
+		Number:   prNumber,
+		State:    prState,
+		Fetched:  true,
+		URL:      "https://github.com/test/repo/pull/" + fmt.Sprintf("%d", prNumber),
+		Author:   "testuser",
+		CachedAt: time.Now(),
+	}
+	wtCache.SetPRForBranch(folderName, pr)
+
+	// Save cache
+	if err := cache.Save(worktreeDir, wtCache); err != nil {
+		t.Fatalf("failed to save cache: %v", err)
+	}
+}
+
+// getCommitHash returns the commit hash of HEAD in the given worktree/repo path.
+func getCommitHash(t *testing.T, path string) string {
+	t.Helper()
+	out := runGitCommand(t, path, "git", "rev-parse", "HEAD")
+	return strings.TrimSpace(out)
+}
+
+// getParentCommitHash returns the parent commit hash of HEAD in the given worktree/repo path.
+func getParentCommitHash(t *testing.T, path string) string {
+	t.Helper()
+	out := runGitCommand(t, path, "git", "rev-parse", "HEAD^")
+	return strings.TrimSpace(out)
 }

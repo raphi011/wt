@@ -859,3 +859,65 @@ func runAddCommand(t *testing.T, workDir string, cfg *config.Config, cmd *AddCmd
 	t.Helper()
 	return runAdd(cmd, cfg, workDir)
 }
+
+func TestAdd_FetchFlag_UsesRemoteBase(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := resolvePath(t, t.TempDir())
+
+	// Create repo with local origin (so we have a real remote to fetch from)
+	repoPath := setupTestRepoWithLocalOrigin(t, repoDir, "myrepo")
+
+	// Make a commit on origin/main that's NOT in local main yet
+	// First, get the path to the bare origin
+	barePath := filepath.Join(repoDir, "myrepo.git")
+
+	// Clone the bare repo to a temp location to make a commit
+	tempClonePath := filepath.Join(repoDir, "temp-clone")
+	runGitCommand(t, repoDir, "git", "clone", barePath, tempClonePath)
+	runGitCommand(t, tempClonePath, "git", "config", "user.email", "test@test.com")
+	runGitCommand(t, tempClonePath, "git", "config", "user.name", "Test User")
+	runGitCommand(t, tempClonePath, "git", "config", "commit.gpgsign", "false")
+
+	// Create a file and commit it in the temp clone
+	originOnlyFile := filepath.Join(tempClonePath, "origin-only.txt")
+	if err := os.WriteFile(originOnlyFile, []byte("content from origin\n"), 0644); err != nil {
+		t.Fatalf("failed to write origin-only file: %v", err)
+	}
+	runGitCommand(t, tempClonePath, "git", "add", "origin-only.txt")
+	runGitCommand(t, tempClonePath, "git", "commit", "-m", "Add origin-only file")
+	runGitCommand(t, tempClonePath, "git", "push", "origin", "main")
+
+	// At this point:
+	// - origin/main has the new commit (with origin-only.txt)
+	// - local main does NOT have this commit (hasn't fetched yet)
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+		// BaseRef intentionally NOT set to "local" - we want to use remote
+	}
+
+	cmd := &AddCmd{
+		Branch:    "feature-from-fetched",
+		NewBranch: true,
+		Fetch:     true, // This should fetch and use origin/main
+	}
+
+	if err := runAddCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt add -b --fetch failed: %v", err)
+	}
+
+	// Verify worktree created
+	expectedPath := filepath.Join(worktreeDir, "myrepo-feature-from-fetched")
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("worktree not created at %s", expectedPath)
+	}
+
+	// Verify the new worktree has the origin-only file (was based on fetched origin/main)
+	originFile := filepath.Join(expectedPath, "origin-only.txt")
+	if _, err := os.Stat(originFile); os.IsNotExist(err) {
+		t.Errorf("origin-only.txt should exist (branch based on fetched origin/main)")
+	}
+}

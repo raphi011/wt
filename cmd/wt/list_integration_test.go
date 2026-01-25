@@ -1092,3 +1092,128 @@ func makeCommitInWorktreeWithDate(t *testing.T, worktreePath, filename, date str
 		t.Fatalf("failed to run git commit: %v\n%s", err, out)
 	}
 }
+
+func TestList_ShowsPRStatus(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories (resolve symlinks for macOS compatibility)
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := resolvePath(t, t.TempDir())
+
+	// Create repo with worktree
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
+	setupWorktree(t, repoPath, worktreePath, "feature")
+
+	// Populate cache WITH PR info
+	populateCacheWithPR(t, worktreeDir, "myrepo-feature", "OPEN", 789)
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	cmd := &ListCmd{
+		JSON: true,
+	}
+
+	output, err := runListCommand(t, worktreeDir, cfg, cmd)
+	if err != nil {
+		t.Fatalf("wt list --json failed: %v", err)
+	}
+
+	// Parse JSON to verify PR info is included
+	var worktrees []map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
+		t.Fatalf("failed to parse JSON output: %v", err)
+	}
+
+	if len(worktrees) != 1 {
+		t.Fatalf("expected 1 worktree, got %d", len(worktrees))
+	}
+
+	wt := worktrees[0]
+
+	// Verify PR field exists and has correct structure
+	prRaw, hasPR := wt["pr"]
+	if !hasPR {
+		t.Fatal("expected pr field in output")
+	}
+
+	pr, ok := prRaw.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected pr to be object, got %T", prRaw)
+	}
+
+	// Verify PR number
+	prNumber := int(pr["number"].(float64))
+	if prNumber != 789 {
+		t.Errorf("expected PR number 789, got %d", prNumber)
+	}
+
+	// Verify PR state
+	prState := pr["state"].(string)
+	if prState != "OPEN" {
+		t.Errorf("expected PR state OPEN, got %s", prState)
+	}
+
+	// Verify URL is present
+	prURL, hasURL := pr["url"].(string)
+	if !hasURL || prURL == "" {
+		t.Error("expected PR URL to be present")
+	}
+}
+
+func TestList_ShowsPRStatusMerged(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories (resolve symlinks for macOS compatibility)
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := resolvePath(t, t.TempDir())
+
+	// Create repo with worktree
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	worktreePath := filepath.Join(worktreeDir, "myrepo-merged-branch")
+	setupWorktree(t, repoPath, worktreePath, "merged-branch")
+
+	// Populate cache WITH PR info showing MERGED state
+	populateCacheWithPR(t, worktreeDir, "myrepo-merged-branch", "MERGED", 101)
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	cmd := &ListCmd{
+		JSON: true,
+	}
+
+	output, err := runListCommand(t, worktreeDir, cfg, cmd)
+	if err != nil {
+		t.Fatalf("wt list --json failed: %v", err)
+	}
+
+	// Parse JSON to verify PR info is included
+	var worktrees []map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
+		t.Fatalf("failed to parse JSON output: %v", err)
+	}
+
+	if len(worktrees) != 1 {
+		t.Fatalf("expected 1 worktree, got %d", len(worktrees))
+	}
+
+	wt := worktrees[0]
+
+	// Verify PR field exists
+	prRaw, hasPR := wt["pr"]
+	if !hasPR {
+		t.Fatal("expected pr field in output")
+	}
+
+	pr := prRaw.(map[string]interface{})
+
+	// Verify PR state is MERGED
+	prState := pr["state"].(string)
+	if prState != "MERGED" {
+		t.Errorf("expected PR state MERGED, got %s", prState)
+	}
+}

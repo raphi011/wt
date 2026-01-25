@@ -598,3 +598,69 @@ func verifyWorktreeExists(t *testing.T, path string) {
 		t.Errorf("worktree should still exist: %s", path)
 	}
 }
+
+func TestPrune_MergedPR_RemovesWorktree(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := resolvePath(t, t.TempDir())
+
+	// Create repo (use simple setup - PR status comes from cache, not merge detection)
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
+	setupWorktree(t, repoPath, worktreePath, "feature")
+
+	// Make a commit so we have something
+	makeCommitInWorktree(t, worktreePath, "feature.txt")
+
+	// Populate cache WITH PR info showing MERGED state
+	populateCacheWithPR(t, worktreeDir, "myrepo-feature", "MERGED", 123)
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	cmd := &PruneCmd{
+		Global: true, // Outside repo, need global
+	}
+
+	if err := runPruneCommand(t, worktreeDir, cfg, cmd); err != nil {
+		t.Fatalf("wt prune failed: %v", err)
+	}
+
+	// Verify worktree was removed (PR state=MERGED makes it prunable)
+	verifyWorktreeRemoved(t, worktreePath)
+}
+
+func TestPrune_OpenPR_KeepsWorktree(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := resolvePath(t, t.TempDir())
+
+	// Create repo
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
+	setupWorktree(t, repoPath, worktreePath, "feature")
+
+	// Make a commit so we have something
+	makeCommitInWorktree(t, worktreePath, "feature.txt")
+
+	// Populate cache WITH PR info showing OPEN state
+	populateCacheWithPR(t, worktreeDir, "myrepo-feature", "OPEN", 456)
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	cmd := &PruneCmd{
+		Global: true,
+	}
+
+	if err := runPruneCommand(t, worktreeDir, cfg, cmd); err != nil {
+		t.Fatalf("wt prune failed: %v", err)
+	}
+
+	// Verify worktree still exists (PR state=OPEN means NOT prunable)
+	verifyWorktreeExists(t, worktreePath)
+}
