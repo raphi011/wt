@@ -545,7 +545,7 @@ type MvCmd struct {
 	Repository []string `short:"r" name:"repository" sep:"," help:"filter by repository name(s) (repeatable, comma-separated)"`
 	Format     string   `name:"format" placeholder:"FORMAT" help:"worktree naming format"`
 	DryRun     bool     `short:"n" name:"dry-run" negatable:"" help:"show what would be moved"`
-	Force      bool     `short:"f" name:"force" negatable:"" help:"force move dirty worktrees"`
+	Force      bool     `short:"f" name:"force" negatable:"" help:"force move locked worktrees"`
 }
 
 func (c *MvCmd) Help() string {

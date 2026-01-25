@@ -40,8 +40,8 @@ func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
 		return fmt.Errorf("destination is not a directory: %s", destPath)
 	}
 
-	// Scan for worktrees in working directory (need dirty check to skip dirty worktrees)
-	worktrees, err := git.ListWorktrees(workDir, true)
+	// Scan for worktrees in working directory
+	worktrees, err := git.ListWorktrees(workDir, false)
 	if err != nil {
 		return err
 	}
@@ -141,13 +141,6 @@ func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
 	var nestedMoved, nestedSkipped, nestedFailed int
 	if len(nestedWorktrees) > 0 {
 		for _, wt := range nestedWorktrees {
-			// Check if dirty and force not set
-			if wt.IsDirty && !cmd.Force {
-				fmt.Printf("⚠ Skipping nested %s: dirty working directory (use -f to force)\n", filepath.Base(wt.Path))
-				nestedSkipped++
-				continue
-			}
-
 			// Get repo info for formatting
 			gitOrigin := wt.RepoName
 			folderName := filepath.Base(wt.MainRepo)
@@ -263,13 +256,6 @@ func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
 	var moved, skipped, failed int
 
 	for _, wt := range worktrees {
-		// Check if dirty and force not set
-		if wt.IsDirty && !cmd.Force {
-			fmt.Printf("⚠ Skipping %s: dirty working directory (use -f to force)\n", filepath.Base(wt.Path))
-			skipped++
-			continue
-		}
-
 		// Get repo info for formatting
 		gitOrigin := wt.RepoName
 		folderName := filepath.Base(wt.MainRepo)

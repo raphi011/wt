@@ -294,7 +294,7 @@ func TestMv_FilterByRepository(t *testing.T) {
 	}
 }
 
-func TestMv_SkipDirtyWorktree(t *testing.T) {
+func TestMv_MovesDirtyWorktree(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
 	sourceDir := resolvePath(t, t.TempDir())
@@ -315,54 +315,15 @@ func TestMv_SkipDirtyWorktree(t *testing.T) {
 
 	cmd := &MvCmd{
 		Format: config.DefaultWorktreeFormat,
-		Force:  false,
 	}
 	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
 		t.Fatalf("wt mv failed: %v", err)
 	}
 
-	// Verify worktree NOT moved (dirty)
-	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-		t.Errorf("dirty worktree should still be at %s", worktreePath)
-	}
-
-	newWorktreePath := filepath.Join(destDir, "myrepo-feature")
-	if _, err := os.Stat(newWorktreePath); !os.IsNotExist(err) {
-		t.Errorf("dirty worktree should not be moved to %s", newWorktreePath)
-	}
-}
-
-func TestMv_ForceMovesDirtyWorktree(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories
-	sourceDir := resolvePath(t, t.TempDir())
-	destDir := resolvePath(t, t.TempDir())
-
-	// Create repo and worktree
-	repoPath := setupTestRepo(t, sourceDir, "myrepo")
-	worktreePath := filepath.Join(sourceDir, "myrepo-feature")
-	setupWorktree(t, repoPath, worktreePath, "feature")
-
-	// Make worktree dirty
-	makeDirty(t, worktreePath)
-
-	cfg := &config.Config{
-		WorktreeDir:    destDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &MvCmd{
-		Format: config.DefaultWorktreeFormat,
-		Force:  true,
-	}
-	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
-		t.Fatalf("wt mv -f failed: %v", err)
-	}
-
-	// Verify worktree moved despite being dirty
+	// Verify worktree was moved (dirty worktrees are moved, uncommitted changes preserved)
 	newWorktreePath := filepath.Join(destDir, "myrepo-feature")
 	if _, err := os.Stat(newWorktreePath); os.IsNotExist(err) {
-		t.Errorf("dirty worktree should be moved to %s with -f flag", newWorktreePath)
+		t.Errorf("dirty worktree should be moved to %s", newWorktreePath)
 	}
 
 	// Verify old location is gone
@@ -370,11 +331,14 @@ func TestMv_ForceMovesDirtyWorktree(t *testing.T) {
 		t.Errorf("old worktree path should not exist: %s", worktreePath)
 	}
 
-	// Verify dirty file is still there
+	// Verify dirty file is still there (uncommitted changes preserved)
 	dirtyFile := filepath.Join(newWorktreePath, "dirty.txt")
 	if _, err := os.Stat(dirtyFile); os.IsNotExist(err) {
 		t.Errorf("dirty file should exist at %s", dirtyFile)
 	}
+
+	// Verify worktree still works
+	verifyWorktreeWorks(t, newWorktreePath)
 }
 
 func TestMv_SkipIfAlreadyAtDestination(t *testing.T) {
@@ -819,7 +783,7 @@ func TestMv_MixedNestedAndExternalWorktrees(t *testing.T) {
 	verifyWorktreeWorks(t, newExternalWtPath)
 }
 
-func TestMv_NestedWorktreeSkippedIfDirty(t *testing.T) {
+func TestMv_NestedDirtyWorktreeMoved(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
 	sourceDir := resolvePath(t, t.TempDir())
@@ -845,32 +809,32 @@ func TestMv_NestedWorktreeSkippedIfDirty(t *testing.T) {
 
 	cmd := &MvCmd{
 		Format: config.DefaultWorktreeFormat,
-		Force:  false,
 	}
 	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
 		t.Fatalf("wt mv failed: %v", err)
 	}
 
-	// Repo should still move (it's moved after nested worktrees are processed)
+	// Repo should be moved
 	newRepoPath := filepath.Join(repoDestDir, "myrepo")
 	if _, err := os.Stat(newRepoPath); os.IsNotExist(err) {
 		t.Errorf("repo should be moved to %s", newRepoPath)
 	}
 
-	// Nested worktree should NOT be moved to worktree_dir (it's dirty)
+	// Nested worktree should be moved to worktree_dir (dirty worktrees are moved)
 	newWtPath := filepath.Join(worktreeDestDir, "myrepo-feature")
-	if _, err := os.Stat(newWtPath); !os.IsNotExist(err) {
-		t.Errorf("dirty nested worktree should NOT be moved to %s", newWtPath)
+	if _, err := os.Stat(newWtPath); os.IsNotExist(err) {
+		t.Errorf("nested worktree should be moved to %s", newWtPath)
 	}
 
-	// Nested worktree should still exist inside the moved repo
-	movedNestedPath := filepath.Join(newRepoPath, "worktrees", "feature")
-	if _, err := os.Stat(movedNestedPath); os.IsNotExist(err) {
-		t.Errorf("dirty nested worktree should remain at %s", movedNestedPath)
+	// Verify dirty file is preserved
+	dirtyFile := filepath.Join(newWtPath, "dirty.txt")
+	if _, err := os.Stat(dirtyFile); os.IsNotExist(err) {
+		t.Errorf("dirty file should exist at %s", dirtyFile)
 	}
 
-	// Verify the nested worktree still works (should be repaired by git worktree repair)
-	verifyWorktreeWorks(t, movedNestedPath)
+	// Verify worktree points to new repo and works
+	verifyGitdirPoints(t, newWtPath, newRepoPath)
+	verifyWorktreeWorks(t, newWtPath)
 }
 
 // runMvCommand runs wt mv with the given config and command in the specified directory.
