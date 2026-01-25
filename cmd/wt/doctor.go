@@ -7,9 +7,9 @@ import (
 	"github.com/raphi011/wt/internal/doctor"
 )
 
-func runDoctor(ctx context.Context, cmd *DoctorCmd, cfg *config.Config) error {
-	if cmd.Reset {
+func (c *DoctorCmd) runDoctor(ctx context.Context, cfg *config.Config) error {
+	if c.Reset {
 		return doctor.Reset(ctx, cfg)
 	}
-	return doctor.Run(ctx, cfg, cmd.Fix)
+	return doctor.Run(ctx, cfg, c.Fix)
 }

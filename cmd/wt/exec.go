@@ -12,9 +12,9 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runExec(ctx context.Context, cmd *ExecCmd, cfg *config.Config, _ string) error {
+func (c *ExecCmd) runExec(ctx context.Context, cfg *config.Config, _ string) error {
 	// Strip leading "--" if present (kong passthrough includes it)
-	command := cmd.Command
+	command := c.Command
 	if len(command) > 0 && command[0] == "--" {
 		command = command[1:]
 	}
@@ -25,8 +25,8 @@ func runExec(ctx context.Context, cmd *ExecCmd, cfg *config.Config, _ string) er
 	}
 
 	// Determine targeting mode
-	hasID := len(cmd.ID) > 0
-	hasRepo := len(cmd.Repository) > 0 || len(cmd.Label) > 0
+	hasID := len(c.ID) > 0
+	hasRepo := len(c.Repository) > 0 || len(c.Label) > 0
 
 	if !hasID && !hasRepo {
 		return fmt.Errorf("specify target: -i <id>, -r <repo>, or -l <label>")
@@ -39,11 +39,11 @@ func runExec(ctx context.Context, cmd *ExecCmd, cfg *config.Config, _ string) er
 
 	// Mode: by ID (worktrees)
 	if hasID {
-		return runExecForIDs(cmd.ID, command, scanPath)
+		return runExecForIDs(c.ID, command, scanPath)
 	}
 
 	// Mode: by repo/label
-	return runExecForRepos(ctx, cmd.Repository, cmd.Label, command, scanPath, cfg)
+	return runExecForRepos(ctx, c.Repository, c.Label, command, scanPath, cfg)
 }
 
 func runExecForIDs(ids []int, command []string, scanPath string) error {

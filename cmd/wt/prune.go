@@ -36,14 +36,14 @@ const (
 	skipHasCommits pruneReason = "Has commits"
 )
 
-func runPrune(ctx context.Context, cmd *PruneCmd, cfg *config.Config, workDir string) error {
+func (c *PruneCmd) runPrune(ctx context.Context, cfg *config.Config, workDir string) error {
 	// Validate -f requires -i
-	if cmd.Force && len(cmd.ID) == 0 {
+	if c.Force && len(c.ID) == 0 {
 		return fmt.Errorf("-f/--force requires -i/--id to target specific worktree(s)")
 	}
 
 	// Validate --verbose cannot be used with -i
-	if cmd.Verbose && len(cmd.ID) > 0 {
+	if c.Verbose && len(c.ID) > 0 {
 		return fmt.Errorf("--verbose cannot be used with -i/--id")
 	}
 
@@ -53,14 +53,14 @@ func runPrune(ctx context.Context, cmd *PruneCmd, cfg *config.Config, workDir st
 	}
 
 	// If IDs are specified, handle targeted worktree removal
-	if len(cmd.ID) > 0 {
-		if cmd.ResetCache {
+	if len(c.ID) > 0 {
+		if c.ResetCache {
 			return fmt.Errorf("--reset-cache cannot be used with --id")
 		}
-		return runPruneTargets(ctx, cmd, cfg, scanPath)
+		return c.runPruneTargets(ctx, cfg, scanPath)
 	}
 
-	if cmd.DryRun {
+	if c.DryRun {
 		fmt.Printf("Pruning worktrees in %s (dry run)\n", scanPath)
 	} else {
 		fmt.Printf("Pruning worktrees in %s\n", scanPath)
@@ -86,7 +86,7 @@ func runPrune(ctx context.Context, cmd *PruneCmd, cfg *config.Config, workDir st
 	// If in a git repo and not using --global, filter to only prune worktrees from that repo
 	worktrees := allWorktrees
 	var currentRepo string
-	if !cmd.Global {
+	if !c.Global {
 		currentRepo = git.GetCurrentRepoMainPathFrom(ctx, workDir)
 		if currentRepo != "" {
 			var filtered []git.Worktree
@@ -114,7 +114,7 @@ func runPrune(ctx context.Context, cmd *PruneCmd, cfg *config.Config, workDir st
 	defer unlock()
 
 	// Reset cache if requested (before sync so worktrees get fresh IDs)
-	if cmd.ResetCache {
+	if c.ResetCache {
 		wtCache.Reset()
 		fmt.Println("Cache reset: PR info cleared, IDs will be reassigned from 1")
 	}
@@ -134,7 +134,7 @@ func runPrune(ctx context.Context, cmd *PruneCmd, cfg *config.Config, workDir st
 	pathToID := wtCache.SyncWorktrees(wtInfos)
 
 	// Refresh: fetch remotes and PR status
-	if cmd.Refresh {
+	if c.Refresh {
 		// Group by repo for fetching
 		grouped := git.GroupWorktreesByRepo(worktrees)
 
@@ -195,7 +195,7 @@ func runPrune(ctx context.Context, cmd *PruneCmd, cfg *config.Config, workDir st
 			reason = reasonMergedPR
 		} else if wt.IsMerged && !wt.IsDirty {
 			reason = reasonMergedBranch
-		} else if cmd.IncludeClean && wt.CommitCount == 0 && !wt.IsDirty {
+		} else if c.IncludeClean && wt.CommitCount == 0 && !wt.IsDirty {
 			reason = reasonClean
 		} else {
 			// Determine skip reason
@@ -219,12 +219,12 @@ func runPrune(ctx context.Context, cmd *PruneCmd, cfg *config.Config, workDir st
 	}
 
 	// Select hooks for prune (before removing, so we can report errors early)
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandPrune)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, c.Hook, c.NoHook, hooks.CommandPrune)
 	if err != nil {
 		return err
 	}
 
-	env, err := hooks.ParseEnvWithStdin(cmd.Env)
+	env, err := hooks.ParseEnvWithStdin(c.Env)
 	if err != nil {
 		return err
 	}
@@ -236,7 +236,7 @@ func runPrune(ctx context.Context, cmd *PruneCmd, cfg *config.Config, workDir st
 
 	// Remove worktrees (or just mark for dry run)
 	if len(toRemove) > 0 {
-		if cmd.DryRun {
+		if c.DryRun {
 			// Dry run: all would be removed
 			removed = toRemove
 			for _, wt := range toRemove {
@@ -288,10 +288,10 @@ func runPrune(ctx context.Context, cmd *PruneCmd, cfg *config.Config, workDir st
 	}
 
 	// Display table with actual results
-	if len(removed) > 0 || (cmd.Verbose && len(toSkip) > 0) {
+	if len(removed) > 0 || (c.Verbose && len(toSkip) > 0) {
 		var displayWorktrees []git.Worktree
 		displayWorktrees = append(displayWorktrees, removed...)
-		if cmd.Verbose {
+		if c.Verbose {
 			displayWorktrees = append(displayWorktrees, toSkip...)
 		}
 		fmt.Print(ui.FormatPruneTable(displayWorktrees, pathToID, stringReasonMap, toRemoveMap))
@@ -303,16 +303,16 @@ func runPrune(ctx context.Context, cmd *PruneCmd, cfg *config.Config, workDir st
 	}
 
 	// Print summary with actual counts
-	fmt.Print(ui.FormatSummary(len(removed), len(toSkip)+len(failed), cmd.DryRun))
+	fmt.Print(ui.FormatSummary(len(removed), len(toSkip)+len(failed), c.DryRun))
 
 	return nil
 }
 
 // runPruneTargets handles removal of multiple targeted worktrees by ID
-func runPruneTargets(ctx context.Context, cmd *PruneCmd, cfg *config.Config, scanPath string) error {
+func (c *PruneCmd) runPruneTargets(ctx context.Context, cfg *config.Config, scanPath string) error {
 	var errs []error
-	for _, id := range cmd.ID {
-		if err := runPruneTargetByID(ctx, id, cmd, cfg, scanPath); err != nil {
+	for _, id := range c.ID {
+		if err := c.runPruneTargetByID(ctx, id, cfg, scanPath); err != nil {
 			errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
 		}
 	}
@@ -323,7 +323,7 @@ func runPruneTargets(ctx context.Context, cmd *PruneCmd, cfg *config.Config, sca
 }
 
 // runPruneTargetByID handles removal of a single targeted worktree by ID
-func runPruneTargetByID(ctx context.Context, id int, cmd *PruneCmd, cfg *config.Config, scanPath string) error {
+func (c *PruneCmd) runPruneTargetByID(ctx context.Context, id int, cfg *config.Config, scanPath string) error {
 	// Resolve target by ID
 	target, err := resolve.ByID(id, scanPath)
 	if err != nil {
@@ -337,34 +337,34 @@ func runPruneTargetByID(ctx context.Context, id int, cmd *PruneCmd, cfg *config.
 	}
 
 	// Check if removable (unless force)
-	if !cmd.Force {
+	if !c.Force {
 		isPrunable := (wt.IsMerged && !wt.IsDirty) ||
-			(cmd.IncludeClean && wt.CommitCount == 0 && !wt.IsDirty)
+			(c.IncludeClean && wt.CommitCount == 0 && !wt.IsDirty)
 		if !isPrunable {
 			return fmt.Errorf("worktree %q is not removable: %s",
-				target.Branch, formatNotRemovableReason(wt, cmd.IncludeClean))
+				target.Branch, formatNotRemovableReason(wt, c.IncludeClean))
 		}
 	}
 
 	// Dry run output
-	if cmd.DryRun {
+	if c.DryRun {
 		fmt.Printf("Would remove worktree: %s (%s)\n", target.Branch, target.Path)
 		return nil
 	}
 
 	// Select hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandPrune)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, c.Hook, c.NoHook, hooks.CommandPrune)
 	if err != nil {
 		return err
 	}
 
-	env, err := hooks.ParseEnvWithStdin(cmd.Env)
+	env, err := hooks.ParseEnvWithStdin(c.Env)
 	if err != nil {
 		return err
 	}
 
 	// Remove worktree
-	if err := git.RemoveWorktree(ctx, *wt, cmd.Force); err != nil {
+	if err := git.RemoveWorktree(ctx, *wt, c.Force); err != nil {
 		return fmt.Errorf("failed to remove worktree: %w", err)
 	}
 

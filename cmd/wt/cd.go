@@ -12,11 +12,11 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runCd(ctx context.Context, cmd *CdCmd, cfg *config.Config, _ string, out io.Writer) error {
+func (c *CdCmd) runCd(ctx context.Context, cfg *config.Config, _ string, out io.Writer) error {
 	// Determine targeting mode
-	hasID := cmd.ID != 0
-	hasRepo := cmd.Repository != ""
-	hasLabel := cmd.Label != ""
+	hasID := c.ID != 0
+	hasRepo := c.Repository != ""
+	hasLabel := c.Label != ""
 
 	if !hasID && !hasRepo && !hasLabel {
 		return fmt.Errorf("specify target: -i <id>, -r <repo>, or -l <label>")
@@ -29,27 +29,26 @@ func runCd(ctx context.Context, cmd *CdCmd, cfg *config.Config, _ string, out io
 
 	// Mode: by label (no hooks for label mode)
 	if hasLabel {
-		return runCdForLabel(ctx, cmd.Label, scanPath, cfg, out)
+		return runCdForLabel(ctx, c.Label, scanPath, cfg, out)
 	}
 
 	// Mode: by repo name (no hooks for repo mode)
 	if hasRepo {
-		return runCdForRepo(cmd.Repository, scanPath, cfg, out)
+		return runCdForRepo(c.Repository, scanPath, cfg, out)
 	}
 
 	// Mode: by ID (worktree)
-	return runCdForID(cmd, cfg, scanPath, out)
+	return c.runCdForID(cfg, scanPath, out)
 }
 
-func runCdForID(cmd *CdCmd, cfg *config.Config, scanPath string, out io.Writer) error {
-
-	target, err := resolve.ByID(cmd.ID, scanPath)
+func (c *CdCmd) runCdForID(cfg *config.Config, scanPath string, out io.Writer) error {
+	target, err := resolve.ByID(c.ID, scanPath)
 	if err != nil {
 		return err
 	}
 
 	path := target.Path
-	if cmd.Project {
+	if c.Project {
 		path = target.MainRepo
 	}
 
@@ -60,13 +59,13 @@ func runCdForID(cmd *CdCmd, cfg *config.Config, scanPath string, out io.Writer) 
 	fmt.Fprintln(out, path)
 
 	// Run hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, cmd.Hook, cmd.NoHook, hooks.CommandCd)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, c.Hook, c.NoHook, hooks.CommandCd)
 	if err != nil {
 		return err
 	}
 
 	if len(hookMatches) > 0 {
-		env, err := hooks.ParseEnvWithStdin(cmd.Env)
+		env, err := hooks.ParseEnvWithStdin(c.Env)
 		if err != nil {
 			return err
 		}

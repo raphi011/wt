@@ -57,14 +57,14 @@ type PRInfo struct {
 	CommentCount int    `json:"comment_count,omitempty"`
 }
 
-func runShow(ctx context.Context, cmd *ShowCmd, cfg *config.Config, workDir string) error {
+func (c *ShowCmd) runShow(ctx context.Context, cfg *config.Config, workDir string) error {
 	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
 	// Resolve target worktree
-	info, err := resolveShowTarget(ctx, cmd.ID, cmd.Repository, cfg, scanPath, workDir)
+	info, err := resolveShowTarget(ctx, c.ID, c.Repository, cfg, scanPath, workDir)
 	if err != nil {
 		return err
 	}
@@ -81,7 +81,7 @@ func runShow(ctx context.Context, cmd *ShowCmd, cfg *config.Config, workDir stri
 	originURL, _ := git.GetOriginURL(ctx, info.MainRepo)
 	folderName := filepath.Base(info.Path)
 	if originURL != "" {
-		if cmd.Refresh {
+		if c.Refresh {
 			sp := ui.NewSpinner("Fetching PR status...")
 			sp.Start()
 			prInfo = fetchPRForBranch(ctx, originURL, info.MainRepo, info.Branch, folderName, wtCache, cfg)
@@ -98,7 +98,7 @@ func runShow(ctx context.Context, cmd *ShowCmd, cfg *config.Config, workDir stri
 	// Gather additional info
 	showInfo := gatherShowInfo(ctx, info, prInfo)
 
-	if cmd.JSON {
+	if c.JSON {
 		return outputShowJSON(showInfo)
 	}
 

@@ -66,8 +66,8 @@ func resolveLabelRepos(ctx context.Context, repos []string, cfg *config.Config, 
 	return repoPaths, nil
 }
 
-func runLabelAdd(ctx context.Context, cmd *LabelAddCmd, cfg *config.Config, workDir string) error {
-	repoPaths, err := resolveLabelRepos(ctx, cmd.Repository, cfg, workDir)
+func (c *LabelAddCmd) runLabelAdd(ctx context.Context, cfg *config.Config, workDir string) error {
+	repoPaths, err := resolveLabelRepos(ctx, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -75,18 +75,18 @@ func runLabelAdd(ctx context.Context, cmd *LabelAddCmd, cfg *config.Config, work
 	var errs []error
 	for _, repoPath := range repoPaths {
 		repoName := filepath.Base(repoPath)
-		if err := git.AddLabel(ctx, repoPath, cmd.Label); err != nil {
+		if err := git.AddLabel(ctx, repoPath, c.Label); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
 			continue
 		}
-		fmt.Printf("Label %q added to %s\n", cmd.Label, repoName)
+		fmt.Printf("Label %q added to %s\n", c.Label, repoName)
 	}
 
 	return errors.Join(errs...)
 }
 
-func runLabelRemove(ctx context.Context, cmd *LabelRemoveCmd, cfg *config.Config, workDir string) error {
-	repoPaths, err := resolveLabelRepos(ctx, cmd.Repository, cfg, workDir)
+func (c *LabelRemoveCmd) runLabelRemove(ctx context.Context, cfg *config.Config, workDir string) error {
+	repoPaths, err := resolveLabelRepos(ctx, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -94,23 +94,23 @@ func runLabelRemove(ctx context.Context, cmd *LabelRemoveCmd, cfg *config.Config
 	var errs []error
 	for _, repoPath := range repoPaths {
 		repoName := filepath.Base(repoPath)
-		if err := git.RemoveLabel(ctx, repoPath, cmd.Label); err != nil {
+		if err := git.RemoveLabel(ctx, repoPath, c.Label); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
 			continue
 		}
-		fmt.Printf("Label %q removed from %s\n", cmd.Label, repoName)
+		fmt.Printf("Label %q removed from %s\n", c.Label, repoName)
 	}
 
 	return errors.Join(errs...)
 }
 
-func runLabelList(ctx context.Context, cmd *LabelListCmd, cfg *config.Config, workDir string) error {
+func (c *LabelListCmd) runLabelList(ctx context.Context, cfg *config.Config, workDir string) error {
 	// If --global flag, list labels from all repos in directory
-	if cmd.Global {
-		return runLabelListGlobal(ctx, cmd, cfg)
+	if c.Global {
+		return c.runLabelListGlobal(ctx, cfg)
 	}
 
-	repoPaths, err := resolveLabelRepos(ctx, cmd.Repository, cfg, workDir)
+	repoPaths, err := resolveLabelRepos(ctx, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
@@ -138,7 +138,7 @@ func runLabelList(ctx context.Context, cmd *LabelListCmd, cfg *config.Config, wo
 	return nil
 }
 
-func runLabelListGlobal(ctx context.Context, cmd *LabelListCmd, cfg *config.Config) error {
+func (c *LabelListCmd) runLabelListGlobal(ctx context.Context, cfg *config.Config) error {
 	// Use repo_dir from config if available, fallback to cwd
 	scanDir := cfg.RepoScanDir()
 	if scanDir == "" {
@@ -178,8 +178,8 @@ func runLabelListGlobal(ctx context.Context, cmd *LabelListCmd, cfg *config.Conf
 	return nil
 }
 
-func runLabelClear(ctx context.Context, cmd *LabelClearCmd, cfg *config.Config, workDir string) error {
-	repoPaths, err := resolveLabelRepos(ctx, cmd.Repository, cfg, workDir)
+func (c *LabelClearCmd) runLabelClear(ctx context.Context, cfg *config.Config, workDir string) error {
+	repoPaths, err := resolveLabelRepos(ctx, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}

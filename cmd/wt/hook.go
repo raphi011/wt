@@ -11,10 +11,10 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runHookRun(ctx context.Context, cmd *HookCmd, cfg *config.Config, workDir string) error {
+func (c *HookCmd) runHookRun(ctx context.Context, cfg *config.Config, workDir string) error {
 	// Validate all hooks exist upfront
 	var missing []string
-	for _, name := range cmd.Hooks {
+	for _, name := range c.Hooks {
 		if _, exists := cfg.Hooks.Hooks[name]; !exists {
 			missing = append(missing, name)
 		}
@@ -31,14 +31,14 @@ func runHookRun(ctx context.Context, cmd *HookCmd, cfg *config.Config, workDir s
 	}
 
 	// Parse env variables
-	env, err := hooks.ParseEnvWithStdin(cmd.Env)
+	env, err := hooks.ParseEnvWithStdin(c.Env)
 	if err != nil {
 		return err
 	}
 
 	// Determine targeting mode
-	hasID := len(cmd.ID) > 0
-	hasRepo := len(cmd.Repository) > 0 || len(cmd.Label) > 0
+	hasID := len(c.ID) > 0
+	hasRepo := len(c.Repository) > 0 || len(c.Label) > 0
 
 	// If no targeting specified, use current worktree
 	if !hasID && !hasRepo {
@@ -47,8 +47,8 @@ func runHookRun(ctx context.Context, cmd *HookCmd, cfg *config.Config, workDir s
 			return err
 		}
 		hookCtx.Env = env
-		hookCtx.DryRun = cmd.DryRun
-		return runHooksForContext(cmd.Hooks, cfg, hookCtx)
+		hookCtx.DryRun = c.DryRun
+		return runHooksForContext(c.Hooks, cfg, hookCtx)
 	}
 
 	scanPath, err := cfg.GetAbsWorktreeDir()
@@ -59,8 +59,8 @@ func runHookRun(ctx context.Context, cmd *HookCmd, cfg *config.Config, workDir s
 	// Mode: by ID (worktrees)
 	if hasID {
 		var errs []error
-		for _, id := range cmd.ID {
-			if err := runHookForID(id, cmd.Hooks, scanPath, cfg, env, cmd.DryRun); err != nil {
+		for _, id := range c.ID {
+			if err := runHookForID(id, c.Hooks, scanPath, cfg, env, c.DryRun); err != nil {
 				errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
 			}
 		}
@@ -71,7 +71,7 @@ func runHookRun(ctx context.Context, cmd *HookCmd, cfg *config.Config, workDir s
 	}
 
 	// Mode: by repo/label
-	return runHookForRepos(ctx, cmd.Repository, cmd.Label, cmd.Hooks, scanPath, cfg, env, cmd.DryRun)
+	return runHookForRepos(ctx, c.Repository, c.Label, c.Hooks, scanPath, cfg, env, c.DryRun)
 }
 
 func runHookForID(id int, hookNames []string, scanPath string, cfg *config.Config, env map[string]string, dryRun bool) error {

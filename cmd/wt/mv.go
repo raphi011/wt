@@ -11,9 +11,9 @@ import (
 	"github.com/raphi011/wt/internal/git"
 )
 
-func runMv(ctx context.Context, cmd *MvCmd, cfg *config.Config, workDir string) error {
+func (c *MvCmd) runMv(ctx context.Context, cfg *config.Config, workDir string) error {
 	// Validate worktree format
-	if err := format.ValidateFormat(cmd.Format); err != nil {
+	if err := format.ValidateFormat(c.Format); err != nil {
 		return fmt.Errorf("invalid format: %w", err)
 	}
 
@@ -48,9 +48,9 @@ func runMv(ctx context.Context, cmd *MvCmd, cfg *config.Config, workDir string) 
 	}
 
 	// Filter by repository if specified
-	if len(cmd.Repository) > 0 {
+	if len(c.Repository) > 0 {
 		repoSet := make(map[string]bool)
-		for _, r := range cmd.Repository {
+		for _, r := range c.Repository {
 			repoSet[r] = true
 		}
 		var filtered []git.Worktree
@@ -95,9 +95,9 @@ func runMv(ctx context.Context, cmd *MvCmd, cfg *config.Config, workDir string) 
 	}
 
 	// Filter repos by repository if specified
-	if len(cmd.Repository) > 0 {
+	if len(c.Repository) > 0 {
 		repoSet := make(map[string]bool)
-		for _, r := range cmd.Repository {
+		for _, r := range c.Repository {
 			repoSet[r] = true
 		}
 		var filtered []string
@@ -147,7 +147,7 @@ func runMv(ctx context.Context, cmd *MvCmd, cfg *config.Config, workDir string) 
 			folderName := filepath.Base(wt.MainRepo)
 
 			// Format new worktree name
-			newName := format.FormatWorktreeName(cmd.Format, format.FormatParams{
+			newName := format.FormatWorktreeName(c.Format, format.FormatParams{
 				GitOrigin:  gitOrigin,
 				BranchName: wt.Branch,
 				FolderName: folderName,
@@ -162,14 +162,14 @@ func runMv(ctx context.Context, cmd *MvCmd, cfg *config.Config, workDir string) 
 				continue
 			}
 
-			if cmd.DryRun {
+			if c.DryRun {
 				fmt.Printf("Would move nested: %s → %s\n", wt.Path, newPath)
 				nestedMoved++
 				continue
 			}
 
 			// Move the nested worktree out of the repo
-			if err := git.MoveWorktree(ctx, wt, newPath, cmd.Force); err != nil {
+			if err := git.MoveWorktree(ctx, wt, newPath, c.Force); err != nil {
 				fmt.Printf("✗ Failed to move nested %s: %v\n", filepath.Base(wt.Path), err)
 				nestedFailed++
 				continue
@@ -181,7 +181,7 @@ func runMv(ctx context.Context, cmd *MvCmd, cfg *config.Config, workDir string) 
 
 		// Print nested worktree summary
 		fmt.Println()
-		if cmd.DryRun {
+		if c.DryRun {
 			fmt.Printf("Nested worktrees: %d would be moved, %d skipped\n", nestedMoved, nestedSkipped)
 		} else {
 			fmt.Printf("Nested worktrees: %d moved, %d skipped, %d failed\n", nestedMoved, nestedSkipped, nestedFailed)
@@ -213,7 +213,7 @@ func runMv(ctx context.Context, cmd *MvCmd, cfg *config.Config, workDir string) 
 				continue
 			}
 
-			if cmd.DryRun {
+			if c.DryRun {
 				fmt.Printf("Would move repo: %s → %s\n", repoPath, newPath)
 				repoMoves[repoPath] = newPath
 				repoMoved++
@@ -239,7 +239,7 @@ func runMv(ctx context.Context, cmd *MvCmd, cfg *config.Config, workDir string) 
 
 		// Print repo summary
 		fmt.Println()
-		if cmd.DryRun {
+		if c.DryRun {
 			fmt.Printf("Repos: %d would be moved, %d skipped\n", repoMoved, repoSkipped)
 		} else {
 			fmt.Printf("Repos: %d moved, %d skipped, %d failed\n", repoMoved, repoSkipped, repoFailed)
@@ -262,7 +262,7 @@ func runMv(ctx context.Context, cmd *MvCmd, cfg *config.Config, workDir string) 
 		folderName := filepath.Base(wt.MainRepo)
 
 		// Format new worktree name
-		newName := format.FormatWorktreeName(cmd.Format, format.FormatParams{
+		newName := format.FormatWorktreeName(c.Format, format.FormatParams{
 			GitOrigin:  gitOrigin,
 			BranchName: wt.Branch,
 			FolderName: folderName,
@@ -284,14 +284,14 @@ func runMv(ctx context.Context, cmd *MvCmd, cfg *config.Config, workDir string) 
 			continue
 		}
 
-		if cmd.DryRun {
+		if c.DryRun {
 			fmt.Printf("Would move: %s → %s\n", wt.Path, newPath)
 			moved++
 			continue
 		}
 
 		// Move the worktree (MainRepo already points to new repo location if repo was moved)
-		if err := git.MoveWorktree(ctx, wt, newPath, cmd.Force); err != nil {
+		if err := git.MoveWorktree(ctx, wt, newPath, c.Force); err != nil {
 			fmt.Printf("✗ Failed to move %s: %v\n", filepath.Base(wt.Path), err)
 			failed++
 			continue
@@ -304,7 +304,7 @@ func runMv(ctx context.Context, cmd *MvCmd, cfg *config.Config, workDir string) 
 	// Print worktree summary (only if there were worktrees to consider)
 	if len(worktrees) > 0 {
 		fmt.Println()
-		if cmd.DryRun {
+		if c.DryRun {
 			fmt.Printf("Worktrees: %d would be moved, %d skipped\n", moved, skipped)
 		} else {
 			fmt.Printf("Worktrees: %d moved, %d skipped, %d failed\n", moved, skipped, failed)

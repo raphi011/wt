@@ -2,8 +2,8 @@ package main
 
 import "fmt"
 
-func runCompletion(cmd *CompletionCmd) error {
-	switch cmd.Shell {
+func (c *CompletionCmd) runCompletion() error {
+	switch c.Shell {
 	case "fish":
 		fmt.Print(fishCompletions)
 		return nil
@@ -14,7 +14,7 @@ func runCompletion(cmd *CompletionCmd) error {
 		fmt.Print(zshCompletions)
 		return nil
 	default:
-		return fmt.Errorf("unsupported shell: %s (supported: fish, bash, zsh)", cmd.Shell)
+		return fmt.Errorf("unsupported shell: %s (supported: fish, bash, zsh)", c.Shell)
 	}
 }
 
