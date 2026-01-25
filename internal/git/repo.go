@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -192,6 +193,20 @@ func FetchBranch(repoPath, branch string) error {
 		return fmt.Errorf("failed to fetch origin/%s: %v", branch, err)
 	}
 	return nil
+}
+
+// FetchBranchContext fetches a specific branch from origin with context support.
+func FetchBranchContext(ctx context.Context, repoPath, branch string) error {
+	if err := runGit(ctx, repoPath, "fetch", "origin", branch, "--quiet"); err != nil {
+		return fmt.Errorf("failed to fetch origin/%s: %v", branch, err)
+	}
+	return nil
+}
+
+// FetchDefaultBranchContext fetches the default branch (main/master) from origin with context support.
+func FetchDefaultBranchContext(ctx context.Context, repoPath string) error {
+	defaultBranch := GetDefaultBranch(repoPath)
+	return FetchBranchContext(ctx, repoPath, defaultBranch)
 }
 
 // GetMainRepoPath extracts main repo path from .git file in worktree

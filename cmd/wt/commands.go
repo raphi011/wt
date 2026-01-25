@@ -1,17 +1,25 @@
 package main
 
 import (
+	"context"
 	"io"
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/log"
 )
 
 // Context is passed to all command Run() methods.
 type Context struct {
 	Config  *config.Config
-	WorkDir string    // Injected working directory (for testability)
-	Stdout  io.Writer // Injected stdout (for testability)
+	WorkDir string          // Injected working directory (for testability)
+	Stdout  io.Writer       // Injected stdout (for testability)
+	Ctx     context.Context // Context for cancellation and logging
+}
+
+// Logger returns the logger from the context.
+func (c *Context) Logger() *log.Logger {
+	return log.FromContext(c.Ctx)
 }
 
 // BeforeApply runs before any command and verifies git is available.
@@ -815,5 +823,6 @@ type CLI struct {
 	Completion CompletionCmd `cmd:"" help:"Generate completion script" group:"config"`
 	Doctor     DoctorCmd     `cmd:"" help:"Diagnose and repair cache" group:"config"`
 
+	Verbose bool        `short:"v" name:"verbose" help:"Show external commands being executed"`
 	Version VersionFlag `name:"version" help:"Show version"`
 }

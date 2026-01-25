@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/alecthomas/kong"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/log"
 )
 
 func main() {
@@ -64,7 +68,15 @@ func main() {
 		cli.Mv.Format = cfg.WorktreeFormat
 	}
 
-	err = ctx.Run(&Context{Config: &cfg, WorkDir: workDir, Stdout: os.Stdout})
+	// Create context with signal handling for graceful cancellation
+	bgCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	// Create logger with verbose mode from CLI flag
+	logger := log.New(os.Stdout, cli.Verbose)
+	bgCtx = log.WithLogger(bgCtx, logger)
+
+	err = ctx.Run(&Context{Config: &cfg, WorkDir: workDir, Stdout: os.Stdout, Ctx: bgCtx})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr)
