@@ -651,6 +651,228 @@ func TestMv_FolderFormatPlaceholder(t *testing.T) {
 	verifyWorktreeWorks(t, newWorktreePath)
 }
 
+func TestMv_NestedWorktreeMovedToWorktreeDir(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	sourceDir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create repo in source dir
+	repoPath := setupTestRepo(t, sourceDir, "myrepo")
+
+	// Create a NESTED worktree inside the repo directory
+	nestedWorktreePath := filepath.Join(repoPath, "worktrees", "feature")
+	if err := os.MkdirAll(filepath.Dir(nestedWorktreePath), 0755); err != nil {
+		t.Fatalf("failed to create nested worktrees dir: %v", err)
+	}
+	setupWorktree(t, repoPath, nestedWorktreePath, "feature")
+
+	// Verify nested worktree is inside repo
+	if !strings.HasPrefix(nestedWorktreePath, repoPath) {
+		t.Fatalf("test setup error: worktree should be nested inside repo")
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	cmd := &MvCmd{
+		Format: config.DefaultWorktreeFormat,
+	}
+	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv failed: %v", err)
+	}
+
+	// Verify nested worktree was moved to worktree_dir (not left inside repo)
+	newWorktreePath := filepath.Join(worktreeDestDir, "myrepo-feature")
+	if _, err := os.Stat(newWorktreePath); os.IsNotExist(err) {
+		t.Errorf("nested worktree should be moved to %s", newWorktreePath)
+	}
+
+	// Verify old nested path no longer exists
+	if _, err := os.Stat(nestedWorktreePath); !os.IsNotExist(err) {
+		t.Errorf("old nested worktree path should not exist: %s", nestedWorktreePath)
+	}
+
+	// Verify repo moved to repo_dir
+	newRepoPath := filepath.Join(repoDestDir, "myrepo")
+	if _, err := os.Stat(newRepoPath); os.IsNotExist(err) {
+		t.Errorf("repo should be moved to %s", newRepoPath)
+	}
+
+	// Verify worktree's .git file points to new repo location
+	verifyGitdirPoints(t, newWorktreePath, newRepoPath)
+
+	// Verify worktree still works
+	verifyWorktreeWorks(t, newWorktreePath)
+}
+
+func TestMv_MultipleNestedWorktrees(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	sourceDir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create repo with multiple nested worktrees
+	repoPath := setupTestRepo(t, sourceDir, "myrepo")
+
+	// Create worktrees dir inside repo
+	worktreesDir := filepath.Join(repoPath, "worktrees")
+	if err := os.MkdirAll(worktreesDir, 0755); err != nil {
+		t.Fatalf("failed to create worktrees dir: %v", err)
+	}
+
+	// Create 3 nested worktrees
+	for _, branch := range []string{"feature1", "feature2", "feature3"} {
+		wtPath := filepath.Join(worktreesDir, branch)
+		setupWorktree(t, repoPath, wtPath, branch)
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	cmd := &MvCmd{
+		Format: config.DefaultWorktreeFormat,
+	}
+	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv failed: %v", err)
+	}
+
+	// Verify all nested worktrees moved to worktree_dir
+	newRepoPath := filepath.Join(repoDestDir, "myrepo")
+	for _, branch := range []string{"feature1", "feature2", "feature3"} {
+		newWtPath := filepath.Join(worktreeDestDir, "myrepo-"+branch)
+		if _, err := os.Stat(newWtPath); os.IsNotExist(err) {
+			t.Errorf("nested worktree %s should be moved to %s", branch, newWtPath)
+			continue
+		}
+
+		// Verify each worktree points to new repo and works
+		verifyGitdirPoints(t, newWtPath, newRepoPath)
+		verifyWorktreeWorks(t, newWtPath)
+	}
+
+	// Verify no worktrees directory left in repo
+	oldWorktreesDir := filepath.Join(newRepoPath, "worktrees")
+	if entries, err := os.ReadDir(oldWorktreesDir); err == nil && len(entries) > 0 {
+		t.Errorf("worktrees directory in repo should be empty after move, found: %v", entries)
+	}
+}
+
+func TestMv_MixedNestedAndExternalWorktrees(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	sourceDir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create repo
+	repoPath := setupTestRepo(t, sourceDir, "myrepo")
+
+	// Create a nested worktree inside the repo
+	nestedWtPath := filepath.Join(repoPath, "worktrees", "nested-feature")
+	if err := os.MkdirAll(filepath.Dir(nestedWtPath), 0755); err != nil {
+		t.Fatalf("failed to create nested worktrees dir: %v", err)
+	}
+	setupWorktree(t, repoPath, nestedWtPath, "nested-feature")
+
+	// Create an external worktree (sibling to repo)
+	externalWtPath := filepath.Join(sourceDir, "myrepo-external-feature")
+	setupWorktree(t, repoPath, externalWtPath, "external-feature")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	cmd := &MvCmd{
+		Format: config.DefaultWorktreeFormat,
+	}
+	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv failed: %v", err)
+	}
+
+	newRepoPath := filepath.Join(repoDestDir, "myrepo")
+
+	// Verify nested worktree moved to worktree_dir
+	newNestedWtPath := filepath.Join(worktreeDestDir, "myrepo-nested-feature")
+	if _, err := os.Stat(newNestedWtPath); os.IsNotExist(err) {
+		t.Errorf("nested worktree should be moved to %s", newNestedWtPath)
+	}
+	verifyGitdirPoints(t, newNestedWtPath, newRepoPath)
+	verifyWorktreeWorks(t, newNestedWtPath)
+
+	// Verify external worktree also moved to worktree_dir
+	newExternalWtPath := filepath.Join(worktreeDestDir, "myrepo-external-feature")
+	if _, err := os.Stat(newExternalWtPath); os.IsNotExist(err) {
+		t.Errorf("external worktree should be moved to %s", newExternalWtPath)
+	}
+	verifyGitdirPoints(t, newExternalWtPath, newRepoPath)
+	verifyWorktreeWorks(t, newExternalWtPath)
+}
+
+func TestMv_NestedWorktreeSkippedIfDirty(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	sourceDir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create repo with nested worktree
+	repoPath := setupTestRepo(t, sourceDir, "myrepo")
+	nestedWtPath := filepath.Join(repoPath, "worktrees", "feature")
+	if err := os.MkdirAll(filepath.Dir(nestedWtPath), 0755); err != nil {
+		t.Fatalf("failed to create nested worktrees dir: %v", err)
+	}
+	setupWorktree(t, repoPath, nestedWtPath, "feature")
+
+	// Make nested worktree dirty
+	makeDirty(t, nestedWtPath)
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	cmd := &MvCmd{
+		Format: config.DefaultWorktreeFormat,
+		Force:  false,
+	}
+	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv failed: %v", err)
+	}
+
+	// Repo should still move (it's moved after nested worktrees are processed)
+	newRepoPath := filepath.Join(repoDestDir, "myrepo")
+	if _, err := os.Stat(newRepoPath); os.IsNotExist(err) {
+		t.Errorf("repo should be moved to %s", newRepoPath)
+	}
+
+	// Nested worktree should NOT be moved to worktree_dir (it's dirty)
+	newWtPath := filepath.Join(worktreeDestDir, "myrepo-feature")
+	if _, err := os.Stat(newWtPath); !os.IsNotExist(err) {
+		t.Errorf("dirty nested worktree should NOT be moved to %s", newWtPath)
+	}
+
+	// Nested worktree should still exist inside the moved repo
+	movedNestedPath := filepath.Join(newRepoPath, "worktrees", "feature")
+	if _, err := os.Stat(movedNestedPath); os.IsNotExist(err) {
+		t.Errorf("dirty nested worktree should remain at %s", movedNestedPath)
+	}
+
+	// Verify the nested worktree still works (should be repaired by git worktree repair)
+	verifyWorktreeWorks(t, movedNestedPath)
+}
+
 // runMvCommand runs wt mv with the given config and command in the specified directory.
 func runMvCommand(t *testing.T, workDir string, cfg *config.Config, cmd *MvCmd) error {
 	t.Helper()

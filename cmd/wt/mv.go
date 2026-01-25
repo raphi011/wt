@@ -109,10 +109,95 @@ func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
 		repos = filtered
 	}
 
+	// Find nested worktrees (worktrees inside repo directories)
+	// These must be moved OUT before the repo moves, otherwise they move with the repo
+	// and git worktree repair can't find them
+	var nestedWorktrees []git.Worktree
+	for _, repoPath := range repos {
+		wtInfos, err := git.ListWorktreesFromRepo(repoPath)
+		if err != nil {
+			continue
+		}
+		for _, wti := range wtInfos {
+			// Skip main repo entry
+			if wti.Path == repoPath {
+				continue
+			}
+			// Check if worktree is nested inside repo directory
+			if !isNestedPath(wti.Path, repoPath) {
+				continue
+			}
+			// Build full Worktree struct for nested worktree
+			wtInfo, err := git.GetWorktreeInfo(wti.Path)
+			if err != nil {
+				fmt.Printf("⚠ Warning: failed to get info for nested worktree %s: %v\n", wti.Path, err)
+				continue
+			}
+			nestedWorktrees = append(nestedWorktrees, *wtInfo)
+		}
+	}
+
+	// Move nested worktrees first (before repos move)
+	var nestedMoved, nestedSkipped, nestedFailed int
+	if len(nestedWorktrees) > 0 {
+		for _, wt := range nestedWorktrees {
+			// Check if dirty and force not set
+			if wt.IsDirty && !cmd.Force {
+				fmt.Printf("⚠ Skipping nested %s: dirty working directory (use -f to force)\n", filepath.Base(wt.Path))
+				nestedSkipped++
+				continue
+			}
+
+			// Get repo info for formatting
+			gitOrigin := wt.RepoName
+			folderName := filepath.Base(wt.MainRepo)
+
+			// Format new worktree name
+			newName := format.FormatWorktreeName(cmd.Format, format.FormatParams{
+				GitOrigin:  gitOrigin,
+				BranchName: wt.Branch,
+				FolderName: folderName,
+			})
+
+			newPath := filepath.Join(destPath, newName)
+
+			// Check if target path already exists
+			if _, err := os.Stat(newPath); err == nil {
+				fmt.Printf("⚠ Skipping nested %s: target path already exists: %s\n", filepath.Base(wt.Path), newPath)
+				nestedSkipped++
+				continue
+			}
+
+			if cmd.DryRun {
+				fmt.Printf("Would move nested: %s → %s\n", wt.Path, newPath)
+				nestedMoved++
+				continue
+			}
+
+			// Move the nested worktree out of the repo
+			if err := git.MoveWorktree(wt, newPath, cmd.Force); err != nil {
+				fmt.Printf("✗ Failed to move nested %s: %v\n", filepath.Base(wt.Path), err)
+				nestedFailed++
+				continue
+			}
+
+			fmt.Printf("✓ Moved nested: %s → %s\n", wt.Path, newPath)
+			nestedMoved++
+		}
+
+		// Print nested worktree summary
+		fmt.Println()
+		if cmd.DryRun {
+			fmt.Printf("Nested worktrees: %d would be moved, %d skipped\n", nestedMoved, nestedSkipped)
+		} else {
+			fmt.Printf("Nested worktrees: %d moved, %d skipped, %d failed\n", nestedMoved, nestedSkipped, nestedFailed)
+		}
+	}
+
 	// Track repo moves: old path -> new path (needed to update worktree MainRepo references)
 	repoMoves := make(map[string]string)
 
-	// Move repos first (before worktrees) to ensure worktree .git files point to valid repos
+	// Move repos (nested worktrees already moved out)
 	var repoMoved, repoSkipped, repoFailed int
 
 	if len(repos) > 0 {
@@ -240,4 +325,14 @@ func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
 	}
 
 	return nil
+}
+
+// isNestedPath returns true if childPath is inside parentPath.
+func isNestedPath(childPath, parentPath string) bool {
+	// Clean paths for consistent comparison
+	child := filepath.Clean(childPath)
+	parent := filepath.Clean(parentPath)
+
+	// Child must start with parent path + separator
+	return len(child) > len(parent) && child[:len(parent)] == parent && child[len(parent)] == filepath.Separator
 }
