@@ -23,5 +23,11 @@ jobs:
       - name: Test
         run: go test -v ./...
 
+      - name: Verify gh CLI
+        run: gh --version
+
       - name: Integration Test
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          WT_TEST_GITHUB_REPO: raphi011/wt-test
         run: go test -tags=integration -v ./...
