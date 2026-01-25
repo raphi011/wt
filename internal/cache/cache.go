@@ -33,9 +33,6 @@ func (m *PRInfo) IsStale() bool {
 	return time.Since(m.CachedAt) > CacheMaxAge
 }
 
-// PRCache maps origin URL -> branch -> PR info (legacy format)
-type PRCache map[string]map[string]*PRInfo
-
 // WorktreeIDEntry stores the ID for a worktree with rich metadata for repair
 type WorktreeIDEntry struct {
 	ID        int        `json:"id"`
@@ -49,7 +46,6 @@ type WorktreeIDEntry struct {
 
 // Cache is the unified cache structure stored in .wt-cache.json
 type Cache struct {
-	PRs       PRCache                     `json:"prs,omitempty"`
 	Worktrees map[string]*WorktreeIDEntry `json:"worktrees,omitempty"` // key: folder name (e.g., "repo-feature-branch")
 	NextID    int                         `json:"next_id,omitempty"`
 }
@@ -78,7 +74,6 @@ func Load(scanDir string) (*Cache, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &Cache{
-				PRs:       make(PRCache),
 				Worktrees: make(map[string]*WorktreeIDEntry),
 				NextID:    1,
 			}, nil
@@ -86,41 +81,22 @@ func Load(scanDir string) (*Cache, error) {
 		return nil, err
 	}
 
-	// Try to unmarshal as new unified format
 	var cache Cache
 	if err := json.Unmarshal(data, &cache); err != nil {
-		// Try old format (PRCache only)
-		var oldCache PRCache
-		if err := json.Unmarshal(data, &oldCache); err != nil {
-			// Corrupted - start fresh
-			return &Cache{
-				PRs:       make(PRCache),
-				Worktrees: make(map[string]*WorktreeIDEntry),
-				NextID:    1,
-			}, nil
-		}
-		// Migrate from old format
+		// Corrupted - start fresh
 		return &Cache{
-			PRs:       oldCache,
 			Worktrees: make(map[string]*WorktreeIDEntry),
 			NextID:    1,
 		}, nil
 	}
 
 	// Initialize nil maps
-	if cache.PRs == nil {
-		cache.PRs = make(PRCache)
-	}
 	if cache.Worktrees == nil {
 		cache.Worktrees = make(map[string]*WorktreeIDEntry)
 	}
 	if cache.NextID < 1 {
 		cache.NextID = 1
 	}
-
-	// Clear old PRs map (omitted on save via omitempty)
-	// Old PR data in the PRs map is no longer used; PR info is now in WorktreeIDEntry
-	cache.PRs = nil
 
 	return &cache, nil
 }
@@ -328,7 +304,6 @@ func (c *Cache) SyncWorktrees(worktrees []WorktreeInfo) map[string]int {
 // Reset clears all cached data and resets NextID to 1.
 // Active worktrees will get new IDs on next sync.
 func (c *Cache) Reset() {
-	c.PRs = nil
 	c.Worktrees = make(map[string]*WorktreeIDEntry)
 	c.NextID = 1
 }

@@ -15,11 +15,6 @@ func fixAllIssues(wtCache *cache.Cache, issues []Issue, scanPath string) error {
 
 	for _, issue := range issues {
 		switch issue.FixAction {
-		case "remove":
-			delete(wtCache.Worktrees, issue.Key)
-			fmt.Printf("  ✓ Removed orphaned entry %q\n", issue.Key)
-			fixed++
-
 		case "mark_removed":
 			cache.MarkRemovedByKey(wtCache, issue.Key)
 			fmt.Printf("  ✓ Marked %q as removed\n", issue.Key)

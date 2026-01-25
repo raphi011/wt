@@ -123,10 +123,6 @@ func TestLoad_NonExistent(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	// New cache initializes PRs map (will be set to nil only when loading existing cache)
-	if cache.PRs == nil {
-		t.Error("expected PRs to be initialized for new cache")
-	}
 	if cache.Worktrees == nil {
 		t.Error("expected Worktrees to be initialized")
 	}
@@ -177,43 +173,6 @@ func TestLoad_NewFormat(t *testing.T) {
 	}
 	if entry.Branch != "feature" {
 		t.Errorf("expected Branch = 'feature', got %q", entry.Branch)
-	}
-}
-
-func TestLoad_OldFormat(t *testing.T) {
-	t.Parallel()
-
-	dir := t.TempDir()
-	cachePath := filepath.Join(dir, ".wt-cache.json")
-
-	// Write cache in old format (just PRCache)
-	data := `{
-		"git@github.com:user/repo.git": {
-			"main": {
-				"number": 1,
-				"state": "OPEN",
-				"url": "https://github.com/user/repo/pull/1"
-			}
-		}
-	}`
-	if err := os.WriteFile(cachePath, []byte(data), 0600); err != nil {
-		t.Fatalf("failed to write cache file: %v", err)
-	}
-
-	cache, err := Load(dir)
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-
-	// Old format should be migrated but PRs cleared
-	if cache.PRs != nil {
-		t.Error("expected PRs to be nil after migration")
-	}
-	if cache.Worktrees == nil {
-		t.Error("expected Worktrees to be initialized")
-	}
-	if cache.NextID != 1 {
-		t.Errorf("expected NextID = 1, got %d", cache.NextID)
 	}
 }
 
@@ -892,9 +851,6 @@ func TestCache_Reset(t *testing.T) {
 	t.Parallel()
 
 	cache := &Cache{
-		PRs: PRCache{
-			"origin": {"branch": &PRInfo{Number: 1}},
-		},
 		Worktrees: map[string]*WorktreeIDEntry{
 			"repo-feature": {ID: 5},
 		},
@@ -903,9 +859,6 @@ func TestCache_Reset(t *testing.T) {
 
 	cache.Reset()
 
-	if cache.PRs != nil {
-		t.Error("expected PRs to be nil after reset")
-	}
 	if len(cache.Worktrees) != 0 {
 		t.Errorf("expected Worktrees to be empty, got %d entries", len(cache.Worktrees))
 	}
