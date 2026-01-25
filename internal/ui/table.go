@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -68,7 +69,7 @@ func FormatSummary(removed, skipped int, dryRun bool) string {
 }
 
 // FormatListTable creates a formatted table for list command output
-func FormatListTable(worktrees []git.Worktree, pathToID map[string]int, wtCache *cache.Cache) string {
+func FormatListTable(ctx context.Context, worktrees []git.Worktree, pathToID map[string]int, wtCache *cache.Cache) string {
 	if len(worktrees) == 0 {
 		return ""
 	}
@@ -131,7 +132,7 @@ func FormatListTable(worktrees []git.Worktree, pathToID map[string]int, wtCache 
 			prCol = "?"
 		} else if pr.Number > 0 {
 			// PR exists - show details
-			f := forge.DetectFromRepo(wt.MainRepo, nil)
+			f := forge.DetectFromRepo(ctx, wt.MainRepo, nil)
 			state := f.FormatState(pr.State)
 			if pr.IsDraft && pr.State == "OPEN" {
 				state = "draft"

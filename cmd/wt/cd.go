@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -11,7 +12,7 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runCd(cmd *CdCmd, cfg *config.Config, _ string, out io.Writer) error {
+func runCd(ctx context.Context, cmd *CdCmd, cfg *config.Config, _ string, out io.Writer) error {
 	// Determine targeting mode
 	hasID := cmd.ID != 0
 	hasRepo := cmd.Repository != ""
@@ -28,7 +29,7 @@ func runCd(cmd *CdCmd, cfg *config.Config, _ string, out io.Writer) error {
 
 	// Mode: by label (no hooks for label mode)
 	if hasLabel {
-		return runCdForLabel(cmd.Label, scanPath, cfg, out)
+		return runCdForLabel(ctx, cmd.Label, scanPath, cfg, out)
 	}
 
 	// Mode: by repo name (no hooks for repo mode)
@@ -96,13 +97,13 @@ func runCdForRepo(repoName string, dir string, cfg *config.Config, out io.Writer
 	return nil
 }
 
-func runCdForLabel(label string, dir string, cfg *config.Config, out io.Writer) error {
+func runCdForLabel(ctx context.Context, label string, dir string, cfg *config.Config, out io.Writer) error {
 	scanDir, err := resolveRepoScanDir(dir, cfg)
 	if err != nil {
 		return err
 	}
 
-	repos, err := git.FindReposByLabel(scanDir, label)
+	repos, err := git.FindReposByLabel(ctx, scanDir, label)
 	if err != nil {
 		return err
 	}

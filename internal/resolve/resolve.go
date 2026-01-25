@@ -1,6 +1,7 @@
 package resolve
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -18,22 +19,22 @@ type Target struct {
 
 // FromCurrentWorktree resolves target from the current working directory.
 // Returns error if not inside a git worktree.
-func FromCurrentWorktree() (*Target, error) {
+func FromCurrentWorktree(ctx context.Context) (*Target, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
-	return FromWorktreePath(cwd)
+	return FromWorktreePath(ctx, cwd)
 }
 
 // FromWorktreePath resolves target from the given path.
 // Returns error if the path is not inside a git worktree.
-func FromWorktreePath(path string) (*Target, error) {
+func FromWorktreePath(ctx context.Context, path string) (*Target, error) {
 	if !git.IsWorktree(path) {
 		return nil, fmt.Errorf("not inside a worktree (use --id to specify target)")
 	}
 
-	branch, err := git.GetCurrentBranch(path)
+	branch, err := git.GetCurrentBranch(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current branch: %w", err)
 	}
@@ -48,22 +49,22 @@ func FromWorktreePath(path string) (*Target, error) {
 
 // FromCurrentWorktreeOrRepo resolves target from the current working directory.
 // Works in both worktrees and main repos.
-func FromCurrentWorktreeOrRepo() (*Target, error) {
+func FromCurrentWorktreeOrRepo(ctx context.Context) (*Target, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
-	return FromWorktreeOrRepoPath(cwd)
+	return FromWorktreeOrRepoPath(ctx, cwd)
 }
 
 // FromWorktreeOrRepoPath resolves target from the given path.
 // Works in both worktrees and main repos.
-func FromWorktreeOrRepoPath(path string) (*Target, error) {
-	if !git.IsInsideRepoPath(path) {
+func FromWorktreeOrRepoPath(ctx context.Context, path string) (*Target, error) {
+	if !git.IsInsideRepoPath(ctx, path) {
 		return nil, fmt.Errorf("not inside a git repository")
 	}
 
-	branch, err := git.GetCurrentBranch(path)
+	branch, err := git.GetCurrentBranch(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current branch: %w", err)
 	}
@@ -84,13 +85,13 @@ func FromWorktreeOrRepoPath(path string) (*Target, error) {
 
 // ByRepoName resolves a target by repository name.
 // Returns target with current branch of that repo.
-func ByRepoName(repoName, repoScanDir string) (*Target, error) {
+func ByRepoName(ctx context.Context, repoName, repoScanDir string) (*Target, error) {
 	repoPath, err := git.FindRepoByName(repoScanDir, repoName)
 	if err != nil {
 		return nil, err
 	}
 
-	branch, err := git.GetCurrentBranch(repoPath)
+	branch, err := git.GetCurrentBranch(ctx, repoPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current branch: %w", err)
 	}

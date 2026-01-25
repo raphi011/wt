@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -10,13 +11,13 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runNoteSet(cmd *NoteSetCmd, cfg *config.Config, workDir string, out io.Writer) error {
-	target, err := resolveNoteTarget(cmd.ID, cmd.Repository, cfg, workDir)
+func runNoteSet(ctx context.Context, cmd *NoteSetCmd, cfg *config.Config, workDir string, out io.Writer) error {
+	target, err := resolveNoteTarget(ctx, cmd.ID, cmd.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
 
-	if err := git.SetBranchNote(target.MainRepo, target.Branch, cmd.Text); err != nil {
+	if err := git.SetBranchNote(ctx, target.MainRepo, target.Branch, cmd.Text); err != nil {
 		return fmt.Errorf("failed to set note: %w", err)
 	}
 	repoName := filepath.Base(target.MainRepo)
@@ -24,13 +25,13 @@ func runNoteSet(cmd *NoteSetCmd, cfg *config.Config, workDir string, out io.Writ
 	return nil
 }
 
-func runNoteGet(cmd *NoteGetCmd, cfg *config.Config, workDir string, out io.Writer) error {
-	target, err := resolveNoteTarget(cmd.ID, cmd.Repository, cfg, workDir)
+func runNoteGet(ctx context.Context, cmd *NoteGetCmd, cfg *config.Config, workDir string, out io.Writer) error {
+	target, err := resolveNoteTarget(ctx, cmd.ID, cmd.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
 
-	note, err := git.GetBranchNote(target.MainRepo, target.Branch)
+	note, err := git.GetBranchNote(ctx, target.MainRepo, target.Branch)
 	if err != nil {
 		return fmt.Errorf("failed to get note: %w", err)
 	}
@@ -40,13 +41,13 @@ func runNoteGet(cmd *NoteGetCmd, cfg *config.Config, workDir string, out io.Writ
 	return nil
 }
 
-func runNoteClear(cmd *NoteClearCmd, cfg *config.Config, workDir string, out io.Writer) error {
-	target, err := resolveNoteTarget(cmd.ID, cmd.Repository, cfg, workDir)
+func runNoteClear(ctx context.Context, cmd *NoteClearCmd, cfg *config.Config, workDir string, out io.Writer) error {
+	target, err := resolveNoteTarget(ctx, cmd.ID, cmd.Repository, cfg, workDir)
 	if err != nil {
 		return err
 	}
 
-	if err := git.ClearBranchNote(target.MainRepo, target.Branch); err != nil {
+	if err := git.ClearBranchNote(ctx, target.MainRepo, target.Branch); err != nil {
 		return fmt.Errorf("failed to clear note: %w", err)
 	}
 	repoName := filepath.Base(target.MainRepo)
@@ -58,7 +59,7 @@ func runNoteClear(cmd *NoteClearCmd, cfg *config.Config, workDir string, out io.
 // 1. --id: by worktree ID
 // 2. -r: by repository name
 // 3. neither: use workDir (worktree or main repo)
-func resolveNoteTarget(id int, repository string, cfg *config.Config, workDir string) (*resolve.Target, error) {
+func resolveNoteTarget(ctx context.Context, id int, repository string, cfg *config.Config, workDir string) (*resolve.Target, error) {
 	if id != 0 {
 		scanPath, err := cfg.GetAbsWorktreeDir()
 		if err != nil {
@@ -76,8 +77,8 @@ func resolveNoteTarget(id int, repository string, cfg *config.Config, workDir st
 				return nil, fmt.Errorf("failed to resolve absolute path: %w", err)
 			}
 		}
-		return resolve.ByRepoName(repository, repoScanDir)
+		return resolve.ByRepoName(ctx, repository, repoScanDir)
 	}
 
-	return resolve.FromWorktreeOrRepoPath(workDir)
+	return resolve.FromWorktreeOrRepoPath(ctx, workDir)
 }

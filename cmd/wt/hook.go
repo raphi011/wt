@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func runHookRun(cmd *HookCmd, cfg *config.Config, workDir string) error {
+func runHookRun(ctx context.Context, cmd *HookCmd, cfg *config.Config, workDir string) error {
 	// Validate all hooks exist upfront
 	var missing []string
 	for _, name := range cmd.Hooks {
@@ -41,13 +42,13 @@ func runHookRun(cmd *HookCmd, cfg *config.Config, workDir string) error {
 
 	// If no targeting specified, use current worktree
 	if !hasID && !hasRepo {
-		ctx, err := resolveHookTargetCurrentPath(workDir)
+		hookCtx, err := resolveHookTargetCurrentPath(ctx, workDir)
 		if err != nil {
 			return err
 		}
-		ctx.Env = env
-		ctx.DryRun = cmd.DryRun
-		return runHooksForContext(cmd.Hooks, cfg, ctx)
+		hookCtx.Env = env
+		hookCtx.DryRun = cmd.DryRun
+		return runHooksForContext(cmd.Hooks, cfg, hookCtx)
 	}
 
 	scanPath, err := cfg.GetAbsWorktreeDir()
@@ -70,7 +71,7 @@ func runHookRun(cmd *HookCmd, cfg *config.Config, workDir string) error {
 	}
 
 	// Mode: by repo/label
-	return runHookForRepos(cmd.Repository, cmd.Label, cmd.Hooks, scanPath, cfg, env, cmd.DryRun)
+	return runHookForRepos(ctx, cmd.Repository, cmd.Label, cmd.Hooks, scanPath, cfg, env, cmd.DryRun)
 }
 
 func runHookForID(id int, hookNames []string, scanPath string, cfg *config.Config, env map[string]string, dryRun bool) error {
@@ -83,13 +84,13 @@ func runHookForID(id int, hookNames []string, scanPath string, cfg *config.Confi
 	return runHooksForContext(hookNames, cfg, ctx)
 }
 
-func runHookForRepos(repos []string, labels []string, hookNames []string, dir string, cfg *config.Config, env map[string]string, dryRun bool) error {
+func runHookForRepos(ctx context.Context, repos []string, labels []string, hookNames []string, dir string, cfg *config.Config, env map[string]string, dryRun bool) error {
 	scanDir, err := resolveRepoScanDir(dir, cfg)
 	if err != nil {
 		return err
 	}
 
-	repoPaths, errs := collectRepoPaths(repos, labels, scanDir, cfg)
+	repoPaths, errs := collectRepoPaths(ctx, repos, labels, scanDir, cfg)
 
 	// Run hooks for each repo
 	for repoPath := range repoPaths {
@@ -120,8 +121,8 @@ func runHooksForContext(hookNames []string, cfg *config.Config, ctx hooks.Contex
 }
 
 // resolveHookTargetCurrent resolves the context for the current worktree or repo.
-func resolveHookTargetCurrent() (hooks.Context, error) {
-	target, err := resolve.FromCurrentWorktreeOrRepo()
+func resolveHookTargetCurrent(ctx context.Context) (hooks.Context, error) {
+	target, err := resolve.FromCurrentWorktreeOrRepo(ctx)
 	if err != nil {
 		return hooks.Context{}, fmt.Errorf("use -i, -r, or -l when not inside a git repo (run 'wt list' to see IDs)")
 	}
@@ -129,8 +130,8 @@ func resolveHookTargetCurrent() (hooks.Context, error) {
 }
 
 // resolveHookTargetCurrentPath resolves the context for the given path (worktree or repo).
-func resolveHookTargetCurrentPath(workDir string) (hooks.Context, error) {
-	target, err := resolve.FromWorktreeOrRepoPath(workDir)
+func resolveHookTargetCurrentPath(ctx context.Context, workDir string) (hooks.Context, error) {
+	target, err := resolve.FromWorktreeOrRepoPath(ctx, workDir)
 	if err != nil {
 		return hooks.Context{}, fmt.Errorf("use -i, -r, or -l when not inside a git repo (run 'wt list' to see IDs)")
 	}

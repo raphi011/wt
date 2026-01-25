@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/raphi011/wt/internal/cache"
@@ -8,7 +9,7 @@ import (
 )
 
 // Run performs diagnostic checks on the worktree cache and optionally fixes issues.
-func Run(cfg *config.Config, fix bool) error {
+func Run(ctx context.Context, cfg *config.Config, fix bool) error {
 	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
@@ -36,7 +37,7 @@ func Run(cfg *config.Config, fix bool) error {
 
 	// Category 2: Git link checks
 	fmt.Println("Checking git links...")
-	gitIssues := checkGitLinkIssues(wtCache, scanPath, cfg)
+	gitIssues := checkGitLinkIssues(ctx, wtCache, scanPath, cfg)
 	for i := range gitIssues {
 		gitIssues[i].Category = CategoryGit
 	}
@@ -55,7 +56,7 @@ func Run(cfg *config.Config, fix bool) error {
 
 	// Category 3: Orphan checks
 	fmt.Println("Checking for orphans...")
-	orphanIssues := checkOrphanIssues(wtCache, scanPath, cfg)
+	orphanIssues := checkOrphanIssues(ctx, wtCache, scanPath, cfg)
 	for i := range orphanIssues {
 		orphanIssues[i].Category = CategoryOrphan
 	}
@@ -83,7 +84,7 @@ func Run(cfg *config.Config, fix bool) error {
 	printIssuesByCategory(allIssues)
 
 	if fix {
-		return fixAllIssues(wtCache, allIssues, scanPath)
+		return fixAllIssues(ctx, wtCache, allIssues, scanPath)
 	}
 
 	fmt.Println("\nRun 'wt doctor --fix' to repair.")
@@ -91,7 +92,7 @@ func Run(cfg *config.Config, fix bool) error {
 }
 
 // Reset rebuilds the cache from scratch, discarding all existing entries.
-func Reset(cfg *config.Config) error {
+func Reset(ctx context.Context, cfg *config.Config) error {
 	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
@@ -103,7 +104,7 @@ func Reset(cfg *config.Config) error {
 	}
 	defer lock.Unlock()
 
-	return rebuildCache(scanPath)
+	return rebuildCache(ctx, scanPath)
 }
 
 // printSummary prints a categorized summary.

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -48,7 +49,7 @@ func TestGetMainRepoPath(t *testing.T) {
 func TestGetDefaultBranch(t *testing.T) {
 	// This test requires a real git repo, so we skip in CI
 	// but the function should return "main" or "master" as fallback
-	result := GetDefaultBranch("/nonexistent/path")
+	result := GetDefaultBranch(context.Background(), "/nonexistent/path")
 	if result != "main" && result != "master" {
 		t.Errorf("expected main or master as fallback, got %s", result)
 	}

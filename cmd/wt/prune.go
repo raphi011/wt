@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -35,7 +36,7 @@ const (
 	skipHasCommits pruneReason = "Has commits"
 )
 
-func runPrune(cmd *PruneCmd, cfg *config.Config, workDir string) error {
+func runPrune(ctx context.Context, cmd *PruneCmd, cfg *config.Config, workDir string) error {
 	// Validate -f requires -i
 	if cmd.Force && len(cmd.ID) == 0 {
 		return fmt.Errorf("-f/--force requires -i/--id to target specific worktree(s)")
@@ -56,7 +57,7 @@ func runPrune(cmd *PruneCmd, cfg *config.Config, workDir string) error {
 		if cmd.ResetCache {
 			return fmt.Errorf("--reset-cache cannot be used with --id")
 		}
-		return runPruneTargets(cmd, cfg, scanPath)
+		return runPruneTargets(ctx, cmd, cfg, scanPath)
 	}
 
 	if cmd.DryRun {
@@ -70,7 +71,7 @@ func runPrune(cmd *PruneCmd, cfg *config.Config, workDir string) error {
 	sp.Start()
 
 	// List all worktrees (include dirty check for prune decisions)
-	allWorktrees, err := git.ListWorktrees(scanPath, true)
+	allWorktrees, err := git.ListWorktrees(ctx, scanPath, true)
 	if err != nil {
 		sp.Stop()
 		return err
@@ -86,7 +87,7 @@ func runPrune(cmd *PruneCmd, cfg *config.Config, workDir string) error {
 	worktrees := allWorktrees
 	var currentRepo string
 	if !cmd.Global {
-		currentRepo = git.GetCurrentRepoMainPathFrom(workDir)
+		currentRepo = git.GetCurrentRepoMainPathFrom(ctx, workDir)
 		if currentRepo != "" {
 			var filtered []git.Worktree
 			for _, wt := range allWorktrees {
@@ -142,16 +143,16 @@ func runPrune(cmd *PruneCmd, cfg *config.Config, workDir string) error {
 			if len(wts) == 0 {
 				continue
 			}
-			defaultBranch := git.GetDefaultBranch(wts[0].MainRepo)
+			defaultBranch := git.GetDefaultBranch(ctx, wts[0].MainRepo)
 			sp.UpdateMessage(fmt.Sprintf("Fetching origin/%s for %s...", defaultBranch, repoName))
-			if err := git.FetchDefaultBranch(wts[0].MainRepo); err != nil {
+			if err := git.FetchDefaultBranch(ctx, wts[0].MainRepo); err != nil {
 				// Non-fatal: log warning but continue
 				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 			}
 		}
 
 		sp.UpdateMessage("Fetching PR status...")
-		refreshPRStatus(worktrees, wtCache, cfg, sp)
+		refreshPRStatus(ctx, worktrees, wtCache, cfg, sp)
 	}
 
 	// Update merge status for worktrees based on cached PR state
@@ -244,7 +245,7 @@ func runPrune(cmd *PruneCmd, cfg *config.Config, workDir string) error {
 		} else {
 			// Actual removal
 			for _, wt := range toRemove {
-				if err := git.RemoveWorktree(wt, true); err != nil {
+				if err := git.RemoveWorktree(ctx, wt, true); err != nil {
 					fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", wt.Path, err)
 					failed = append(failed, wt)
 					continue
@@ -257,7 +258,7 @@ func runPrune(cmd *PruneCmd, cfg *config.Config, workDir string) error {
 				removedMap[wt.Path] = true
 
 				// Run prune hooks for this worktree
-				ctx := hooks.Context{
+				hookCtx := hooks.Context{
 					Path:     wt.Path,
 					Branch:   wt.Branch,
 					Repo:     wt.RepoName,
@@ -266,14 +267,14 @@ func runPrune(cmd *PruneCmd, cfg *config.Config, workDir string) error {
 					Trigger:  string(hooks.CommandPrune),
 					Env:      env,
 				}
-				hooks.RunForEach(hookMatches, ctx, wt.MainRepo)
+				hooks.RunForEach(hookMatches, hookCtx, wt.MainRepo)
 			}
 
 			// Prune stale references
 			processedRepos := make(map[string]bool)
 			for _, wt := range removed {
 				if !processedRepos[wt.MainRepo] {
-					git.PruneWorktrees(wt.MainRepo)
+					git.PruneWorktrees(ctx, wt.MainRepo)
 					processedRepos[wt.MainRepo] = true
 				}
 			}
@@ -308,10 +309,10 @@ func runPrune(cmd *PruneCmd, cfg *config.Config, workDir string) error {
 }
 
 // runPruneTargets handles removal of multiple targeted worktrees by ID
-func runPruneTargets(cmd *PruneCmd, cfg *config.Config, scanPath string) error {
+func runPruneTargets(ctx context.Context, cmd *PruneCmd, cfg *config.Config, scanPath string) error {
 	var errs []error
 	for _, id := range cmd.ID {
-		if err := runPruneTargetByID(id, cmd, cfg, scanPath); err != nil {
+		if err := runPruneTargetByID(ctx, id, cmd, cfg, scanPath); err != nil {
 			errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
 		}
 	}
@@ -322,7 +323,7 @@ func runPruneTargets(cmd *PruneCmd, cfg *config.Config, scanPath string) error {
 }
 
 // runPruneTargetByID handles removal of a single targeted worktree by ID
-func runPruneTargetByID(id int, cmd *PruneCmd, cfg *config.Config, scanPath string) error {
+func runPruneTargetByID(ctx context.Context, id int, cmd *PruneCmd, cfg *config.Config, scanPath string) error {
 	// Resolve target by ID
 	target, err := resolve.ByID(id, scanPath)
 	if err != nil {
@@ -330,7 +331,7 @@ func runPruneTargetByID(id int, cmd *PruneCmd, cfg *config.Config, scanPath stri
 	}
 
 	// Get worktree info
-	wt, err := git.GetWorktreeInfo(target.Path)
+	wt, err := git.GetWorktreeInfo(ctx, target.Path)
 	if err != nil {
 		return fmt.Errorf("failed to get worktree info: %w", err)
 	}
@@ -363,12 +364,12 @@ func runPruneTargetByID(id int, cmd *PruneCmd, cfg *config.Config, scanPath stri
 	}
 
 	// Remove worktree
-	if err := git.RemoveWorktree(*wt, cmd.Force); err != nil {
+	if err := git.RemoveWorktree(ctx, *wt, cmd.Force); err != nil {
 		return fmt.Errorf("failed to remove worktree: %w", err)
 	}
 
 	// Run hooks
-	ctx := hooks.Context{
+	hookCtx := hooks.Context{
 		Path:     wt.Path,
 		Branch:   wt.Branch,
 		Repo:     wt.RepoName,
@@ -377,10 +378,10 @@ func runPruneTargetByID(id int, cmd *PruneCmd, cfg *config.Config, scanPath stri
 		Trigger:  string(hooks.CommandPrune),
 		Env:      env,
 	}
-	hooks.RunForEach(hookMatches, ctx, wt.MainRepo)
+	hooks.RunForEach(hookMatches, hookCtx, wt.MainRepo)
 
 	// Prune stale references
-	git.PruneWorktrees(wt.MainRepo)
+	git.PruneWorktrees(ctx, wt.MainRepo)
 
 	fmt.Printf("Removed worktree: %s (%s)\n", target.Branch, target.Path)
 	return nil
@@ -411,14 +412,14 @@ func formatNotRemovableReason(wt *git.Worktree, includeCleanSet bool) string {
 }
 
 // refreshPRStatus fetches PR status for all worktrees in parallel and updates the cache
-func refreshPRStatus(worktrees []git.Worktree, wtCache *cache.Cache, cfg *config.Config, sp *ui.Spinner) {
+func refreshPRStatus(ctx context.Context, worktrees []git.Worktree, wtCache *cache.Cache, cfg *config.Config, sp *ui.Spinner) {
 	// Filter to worktrees with upstream branches
 	var toFetch []git.Worktree
 	for _, wt := range worktrees {
 		if wt.OriginURL == "" {
 			continue
 		}
-		if git.GetUpstreamBranch(wt.MainRepo, wt.Branch) == "" {
+		if git.GetUpstreamBranch(ctx, wt.MainRepo, wt.Branch) == "" {
 			continue
 		}
 		toFetch = append(toFetch, wt)
@@ -448,7 +449,7 @@ func refreshPRStatus(worktrees []git.Worktree, wtCache *cache.Cache, cfg *config
 			f := forge.Detect(wt.OriginURL, cfg.Hosts)
 
 			// Check if forge CLI is available
-			if err := f.Check(); err != nil {
+			if err := f.Check(ctx); err != nil {
 				countMutex.Lock()
 				failedCount++
 				countMutex.Unlock()
@@ -456,12 +457,12 @@ func refreshPRStatus(worktrees []git.Worktree, wtCache *cache.Cache, cfg *config
 			}
 
 			// Use upstream branch name for PR lookup (may differ from local)
-			upstreamBranch := git.GetUpstreamBranch(wt.MainRepo, wt.Branch)
+			upstreamBranch := git.GetUpstreamBranch(ctx, wt.MainRepo, wt.Branch)
 			if upstreamBranch == "" {
 				return
 			}
 
-			pr, err := f.GetPRForBranch(wt.OriginURL, upstreamBranch)
+			pr, err := f.GetPRForBranch(ctx, wt.OriginURL, upstreamBranch)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: PR fetch failed for %s: %v\n", wt.Branch, err)
 				countMutex.Lock()
