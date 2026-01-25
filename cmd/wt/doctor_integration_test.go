@@ -384,6 +384,109 @@ func TestDoctor_BrokenGitLink(t *testing.T) {
 	verifyWorktreeWorks(t, worktreePath)
 }
 
+func TestDoctor_WorktreeMoved(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := resolvePath(t, t.TempDir())
+
+	// Create repo with worktree
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
+	setupWorktree(t, repoPath, worktreePath, "feature")
+
+	// Populate cache
+	populateCache(t, worktreeDir)
+
+	// Move worktree to a subdirectory (simulating worktree moved, repo stays)
+	newWorktreeDir := filepath.Join(worktreeDir, "moved")
+	if err := os.MkdirAll(newWorktreeDir, 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+	newWorktreePath := filepath.Join(newWorktreeDir, "myrepo-feature")
+	if err := os.Rename(worktreePath, newWorktreePath); err != nil {
+		t.Fatalf("failed to move worktree: %v", err)
+	}
+
+	// Note: git status will fail now because repo's gitdir points to old location
+
+	cfg := &config.Config{
+		WorktreeDir:    newWorktreeDir, // Point to new worktree location
+		RepoDir:        repoDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Run doctor without fix - should detect broken link
+	err := doctor.Run(cfg, false)
+	if err != nil {
+		t.Fatalf("doctor failed: %v", err)
+	}
+
+	// Run doctor with fix - should repair the link
+	err = doctor.Run(cfg, true)
+	if err != nil {
+		t.Fatalf("doctor --fix failed: %v", err)
+	}
+
+	// Verify worktree is now functional
+	verifyWorktreeWorks(t, newWorktreePath)
+}
+
+func TestDoctor_BothMoved(t *testing.T) {
+	t.Parallel()
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := resolvePath(t, t.TempDir())
+
+	// Create repo with worktree
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
+	setupWorktree(t, repoPath, worktreePath, "feature")
+
+	// Populate cache
+	populateCache(t, worktreeDir)
+
+	// Move both repo and worktree to new locations
+	newRepoDir := filepath.Join(repoDir, "moved")
+	if err := os.MkdirAll(newRepoDir, 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+	newRepoPath := filepath.Join(newRepoDir, "myrepo")
+	if err := os.Rename(repoPath, newRepoPath); err != nil {
+		t.Fatalf("failed to move repo: %v", err)
+	}
+
+	newWorktreeDir := filepath.Join(worktreeDir, "moved")
+	if err := os.MkdirAll(newWorktreeDir, 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+	newWorktreePath := filepath.Join(newWorktreeDir, "myrepo-feature")
+	if err := os.Rename(worktreePath, newWorktreePath); err != nil {
+		t.Fatalf("failed to move worktree: %v", err)
+	}
+
+	// Note: both directions of git link are now broken
+
+	cfg := &config.Config{
+		WorktreeDir:    newWorktreeDir, // Point to new worktree location
+		RepoDir:        newRepoDir,     // Point to new repo location
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Run doctor without fix - should detect broken links
+	err := doctor.Run(cfg, false)
+	if err != nil {
+		t.Fatalf("doctor failed: %v", err)
+	}
+
+	// Run doctor with fix - should repair both links
+	err = doctor.Run(cfg, true)
+	if err != nil {
+		t.Fatalf("doctor --fix failed: %v", err)
+	}
+
+	// Verify worktree is now functional
+	verifyWorktreeWorks(t, newWorktreePath)
+}
+
 func TestDoctor_MultipleRepos(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
