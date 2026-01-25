@@ -96,6 +96,8 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 - `--json` - output as JSON
 - `--hook` / `--no-hook` - control hook execution (for add, pr checkout, prune)
 
+**Never modify git internal files directly** - Always use git CLI commands via `exec.Command`. Never read/write `.git/` directory contents, `.git` files in worktrees, or git refs directly. Use `git worktree repair` for fixing broken links, `git worktree prune` for cleanup.
+
 **Forge Feature Parity** - Any feature that involves forge operations (PRs, cloning, etc.) MUST support both GitHub and GitLab. Always:
 - Add methods to the `Forge` interface first
 - Implement in both `github.go` and `gitlab.go`

@@ -224,7 +224,7 @@ func runMv(cmd *MvCmd, cfg *config.Config, workDir string) error {
 			if _, err := os.Stat(wti.Path); os.IsNotExist(err) {
 				continue
 			}
-			if err := git.UpdateWorktreeGitFile(wti.Path, newPath); err != nil {
+			if err := git.RepairWorktree(newPath, wti.Path); err != nil {
 				fmt.Printf("⚠ Warning: failed to update worktree %s: %v\n", filepath.Base(wti.Path), err)
 			}
 		}
