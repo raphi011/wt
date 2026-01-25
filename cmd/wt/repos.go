@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss/table"
 
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/output"
 )
 
 // RepoInfo contains information about a repository
@@ -26,7 +27,9 @@ type RepoInfo struct {
 }
 
 func (c *ReposCmd) runRepos(ctx context.Context) error {
+	out := output.FromContext(ctx).Writer()
 	cfg := c.Config
+
 	if err := git.CheckGit(); err != nil {
 		return err
 	}
@@ -49,7 +52,7 @@ func (c *ReposCmd) runRepos(ctx context.Context) error {
 	}
 
 	// Gather info for each repo
-	var repos []RepoInfo
+	repos := []RepoInfo{}
 	for _, repoPath := range repoPaths {
 		// Get labels
 		labels, _ := git.GetLabels(ctx, repoPath)
@@ -102,23 +105,23 @@ func (c *ReposCmd) runRepos(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(data))
+		fmt.Fprintln(out, string(data))
 		return nil
 	}
 
 	if len(repos) == 0 {
 		if c.Label != "" {
-			fmt.Printf("No repositories found with label %q\n", c.Label)
+			fmt.Fprintf(out, "No repositories found with label %q\n", c.Label)
 		} else {
-			fmt.Printf("No repositories found in %s\n", absRepoDir)
+			fmt.Fprintf(out, "No repositories found in %s\n", absRepoDir)
 		}
 		return nil
 	}
 
-	fmt.Printf("Repositories in %s (%d)\n\n", absRepoDir, len(repos))
+	fmt.Fprintf(out, "Repositories in %s (%d)\n\n", absRepoDir, len(repos))
 
 	// Build table
-	fmt.Print(formatReposTable(repos))
+	fmt.Fprint(out, formatReposTable(repos))
 
 	return nil
 }
