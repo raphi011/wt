@@ -55,7 +55,7 @@ func (c *ListCmd) runList(ctx context.Context) error {
 	if c.Refresh {
 		sp := ui.NewSpinner("Fetching PR status...")
 		sp.Start()
-		refreshPRStatus(ctx, allWorktrees, wtCache, cfg, sp)
+		refreshPRStatus(ctx, allWorktrees, wtCache, cfg.Hosts, sp)
 		sp.Stop()
 	}
 

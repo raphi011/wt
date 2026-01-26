@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 	"github.com/raphi011/wt/internal/cache"
-	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/output"
@@ -85,7 +84,7 @@ func (c *ShowCmd) runShow(ctx context.Context) error {
 		if c.Refresh {
 			sp := ui.NewSpinner("Fetching PR status...")
 			sp.Start()
-			prInfo = fetchPRForBranch(ctx, originURL, info.MainRepo, info.Branch, folderName, wtCache, c.Config)
+			prInfo = fetchPRForBranch(ctx, originURL, info.MainRepo, info.Branch, folderName, wtCache, c.Config.Hosts)
 			sp.Stop()
 			// Save updated cache
 			if err := cache.Save(worktreeDir, wtCache); err != nil {
@@ -214,7 +213,7 @@ func gatherShowInfo(ctx context.Context, target *resolve.Target, prInfo *forge.P
 	return info
 }
 
-func fetchPRForBranch(ctx context.Context, originURL, mainRepo, branch, folderName string, wtCache *cache.Cache, cfg *config.Config) *forge.PRInfo {
+func fetchPRForBranch(ctx context.Context, originURL, mainRepo, branch, folderName string, wtCache *cache.Cache, hosts map[string]string) *forge.PRInfo {
 	// Check if branch has upstream
 	upstreamBranch := git.GetUpstreamBranch(ctx, mainRepo, branch)
 	if upstreamBranch == "" {
@@ -222,7 +221,7 @@ func fetchPRForBranch(ctx context.Context, originURL, mainRepo, branch, folderNa
 	}
 
 	// Detect forge
-	f := forge.Detect(originURL, cfg.Hosts)
+	f := forge.Detect(originURL, hosts)
 	if err := f.Check(ctx); err != nil {
 		return nil
 	}

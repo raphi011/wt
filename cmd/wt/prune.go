@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/raphi011/wt/internal/cache"
-	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
@@ -159,7 +158,7 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 		}
 
 		sp.UpdateMessage("Fetching PR status...")
-		refreshPRStatus(ctx, worktrees, wtCache, cfg, sp)
+		refreshPRStatus(ctx, worktrees, wtCache, cfg.Hosts, sp)
 	}
 
 	// Update merge status for worktrees based on cached PR state
@@ -421,7 +420,7 @@ func formatNotRemovableReason(wt *git.Worktree, includeCleanSet bool) string {
 }
 
 // refreshPRStatus fetches PR status for all worktrees in parallel and updates the cache
-func refreshPRStatus(ctx context.Context, worktrees []git.Worktree, wtCache *cache.Cache, cfg *config.Config, sp *ui.Spinner) {
+func refreshPRStatus(ctx context.Context, worktrees []git.Worktree, wtCache *cache.Cache, hosts map[string]string, sp *ui.Spinner) {
 	// Filter to worktrees with upstream branches
 	var toFetch []git.Worktree
 	for _, wt := range worktrees {
@@ -455,7 +454,7 @@ func refreshPRStatus(ctx context.Context, worktrees []git.Worktree, wtCache *cac
 			defer func() { <-semaphore }() // Release
 
 			// Detect forge for this repo
-			f := forge.Detect(wt.OriginURL, cfg.Hosts)
+			f := forge.Detect(wt.OriginURL, hosts)
 
 			// Check if forge CLI is available
 			if err := f.Check(ctx); err != nil {
