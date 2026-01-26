@@ -813,7 +813,7 @@ type VersionFlag bool
 // CLI is the root command.
 type CLI struct {
 	// Core commands (ungrouped - shown first)
-	Checkout CheckoutCmd `cmd:"" aliases:"co" help:"Checkout worktree for branch"`
+	Checkout CheckoutCmd `cmd:"" aliases:"co" help:"Create worktree for branch"`
 	List     ListCmd     `cmd:"" aliases:"ls" help:"List worktrees"`
 	Show  ShowCmd  `cmd:"" aliases:"s" help:"Show worktree details"`
 	Prune PruneCmd `cmd:"" aliases:"p" help:"Prune merged worktrees"`
