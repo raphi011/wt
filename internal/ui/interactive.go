@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -251,75 +250,4 @@ func Select(prompt string, options []string) (SelectResult, error) {
 		Value: options[m.selected],
 		Index: m.selected,
 	}, nil
-}
-
-// --- Interactive Checkout ---
-
-// CheckoutOptions holds the options gathered from interactive mode.
-type CheckoutOptions struct {
-	Branch    string
-	NewBranch bool
-	Fetch     bool
-	Cancelled bool
-}
-
-// CheckoutInteractive runs the interactive checkout flow.
-// It asks the user whether to create a new branch or checkout existing,
-// then gathers the branch name accordingly.
-// targetRepos optionally lists the repositories being targeted (for display).
-func CheckoutInteractive(existingBranches []string, targetRepos []string) (CheckoutOptions, error) {
-	// Show target repos if specified
-	if len(targetRepos) > 0 {
-		repoList := strings.Join(targetRepos, ", ")
-		fmt.Printf("Target repositories: %s\n\n", repoList)
-	}
-
-	// Ask if creating new branch
-	result, err := Confirm("Create a new branch?")
-	if err != nil {
-		return CheckoutOptions{}, err
-	}
-	if result.Cancelled {
-		return CheckoutOptions{Cancelled: true}, nil
-	}
-
-	opts := CheckoutOptions{NewBranch: result.Confirmed}
-
-	if opts.NewBranch {
-		// Ask for new branch name
-		input, err := TextInput("Enter branch name:", "feature/my-feature")
-		if err != nil {
-			return CheckoutOptions{}, err
-		}
-		if input.Cancelled || strings.TrimSpace(input.Value) == "" {
-			return CheckoutOptions{Cancelled: true}, nil
-		}
-		opts.Branch = strings.TrimSpace(input.Value)
-
-		// Ask if should fetch first
-		fetchResult, err := Confirm("Fetch from origin first?")
-		if err != nil {
-			return CheckoutOptions{}, err
-		}
-		if fetchResult.Cancelled {
-			return CheckoutOptions{Cancelled: true}, nil
-		}
-		opts.Fetch = fetchResult.Confirmed
-	} else {
-		// Select from existing branches
-		if len(existingBranches) == 0 {
-			return CheckoutOptions{}, fmt.Errorf("no existing branches found")
-		}
-
-		selection, err := Select("Select a branch:", existingBranches)
-		if err != nil {
-			return CheckoutOptions{}, err
-		}
-		if selection.Cancelled {
-			return CheckoutOptions{Cancelled: true}, nil
-		}
-		opts.Branch = selection.Value
-	}
-
-	return opts, nil
 }

@@ -123,6 +123,19 @@ func resolveBaseRef(ctx context.Context, repoPath, baseBranch string, fetch bool
 	return baseBranch, nil
 }
 
+// fetchBranchesWithWorktreeInfo returns all branches and marks which are in worktrees
+func fetchBranchesWithWorktreeInfo(ctx context.Context, repoPath string) ui.BranchFetchResult {
+	branches, err := git.ListRemoteBranches(ctx, repoPath)
+	if err != nil {
+		branches, _ = git.ListLocalBranches(ctx, repoPath)
+	}
+	worktreeBranches := git.GetWorktreeBranches(ctx, repoPath)
+	return ui.BranchFetchResult{
+		Branches:         branches,
+		WorktreeBranches: worktreeBranches,
+	}
+}
+
 func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
 	cfg := c.Config
 	workDir := c.WorkDir
@@ -130,27 +143,68 @@ func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
 	// Handle interactive mode
 	if c.Interactive {
 		insideRepo := git.IsInsideRepoPath(ctx, workDir)
-		if !insideRepo && len(c.Repository) == 0 && len(c.Label) == 0 {
-			return fmt.Errorf("interactive mode requires being inside a git repo or specifying -r/-l")
+
+		// Get repo scan directory
+		repoDir := cfg.RepoScanDir()
+		if repoDir == "" {
+			repoDir = cfg.WorktreeDir
+		}
+		if repoDir == "" && insideRepo {
+			repoDir = workDir
+		}
+		if repoDir == "" {
+			return fmt.Errorf("directory required for interactive mode (set WT_WORKTREE_DIR or worktree_dir in config)")
 		}
 
-		// Determine which repo to get branches from
-		var branchSourcePath string
-		var targetRepoNames []string
+		// Build wizard params - always load all repos for selection
+		params := ui.CheckoutWizardParams{}
 
+		// Load all available repos
+		allRepos, err := git.FindAllRepos(repoDir)
+		if err != nil {
+			return fmt.Errorf("failed to find repositories: %w", err)
+		}
+		if len(allRepos) == 0 && !insideRepo {
+			return fmt.Errorf("no repositories found in %s", repoDir)
+		}
+
+		for _, repoPath := range allRepos {
+			params.AvailableRepos = append(params.AvailableRepos, repoPath)
+			params.RepoNames = append(params.RepoNames, git.GetRepoDisplayName(repoPath))
+		}
+
+		// If inside a repo, add it to the list if not already there and pre-select it
+		if insideRepo {
+			// Get the main repo path for the current directory
+			currentRepoPath, _ := git.GetMainRepoPath(workDir)
+			if currentRepoPath == "" {
+				currentRepoPath = workDir
+			}
+
+			// Find or add current repo to the list
+			currentIdx := -1
+			for i, repoPath := range params.AvailableRepos {
+				if repoPath == currentRepoPath {
+					currentIdx = i
+					break
+				}
+			}
+			if currentIdx == -1 {
+				// Current repo not in list, add it
+				currentIdx = len(params.AvailableRepos)
+				params.AvailableRepos = append(params.AvailableRepos, currentRepoPath)
+				params.RepoNames = append(params.RepoNames, git.GetRepoDisplayName(currentRepoPath))
+			}
+			params.PreSelectedRepos = []int{currentIdx}
+
+			// Get branches from current repo (with worktree info)
+			branchResult := fetchBranchesWithWorktreeInfo(ctx, currentRepoPath)
+			params.Branches = branchResult.Branches
+			params.WorktreeBranches = branchResult.WorktreeBranches
+		}
+
+		// Handle -r or -l flags: pre-select those repos
 		if len(c.Repository) > 0 || len(c.Label) > 0 {
-			// When -r or -l is specified, resolve repos and get branches from first one
-			repoDir := cfg.RepoScanDir()
-			if repoDir == "" {
-				repoDir = cfg.WorktreeDir
-			}
-			if repoDir == "" && insideRepo {
-				repoDir = workDir
-			}
-			if repoDir == "" {
-				return fmt.Errorf("directory required when using -r or -l (set WT_WORKTREE_DIR or worktree_dir in config)")
-			}
-
 			repoPaths, errs := collectRepoPaths(ctx, c.Repository, c.Label, repoDir)
 			if len(errs) > 0 {
 				return fmt.Errorf("failed to resolve repositories: %v", errs[0])
@@ -159,29 +213,32 @@ func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
 				return fmt.Errorf("no matching repositories found")
 			}
 
-			// Get branch list from first repo, collect names for display
+			// Find indices of specified repos and pre-select them
+			params.PreSelectedRepos = nil
 			for repoPath := range repoPaths {
-				if branchSourcePath == "" {
-					branchSourcePath = repoPath
+				for i, availRepo := range params.AvailableRepos {
+					if availRepo == repoPath {
+						params.PreSelectedRepos = append(params.PreSelectedRepos, i)
+						break
+					}
 				}
-				targetRepoNames = append(targetRepoNames, git.GetRepoDisplayName(repoPath))
 			}
-		} else if insideRepo {
-			branchSourcePath = workDir
-		}
 
-		// Get existing branches for selection
-		var branches []string
-		if branchSourcePath != "" {
-			var err error
-			branches, err = git.ListRemoteBranches(ctx, branchSourcePath)
-			if err != nil {
-				// Fall back to local branches if remote fails
-				branches, _ = git.ListLocalBranches(ctx, branchSourcePath)
+			// Get branches from first pre-selected repo (with worktree info)
+			if len(params.PreSelectedRepos) > 0 {
+				firstRepo := params.AvailableRepos[params.PreSelectedRepos[0]]
+				branchResult := fetchBranchesWithWorktreeInfo(ctx, firstRepo)
+				params.Branches = branchResult.Branches
+				params.WorktreeBranches = branchResult.WorktreeBranches
 			}
 		}
 
-		opts, err := ui.CheckoutInteractive(branches, targetRepoNames)
+		// Provide callback to fetch branches when repo selection changes
+		params.FetchBranches = func(repoPath string) ui.BranchFetchResult {
+			return fetchBranchesWithWorktreeInfo(ctx, repoPath)
+		}
+
+		opts, err := ui.CheckoutInteractive(params)
 		if err != nil {
 			return fmt.Errorf("interactive mode error: %w", err)
 		}
@@ -193,6 +250,16 @@ func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
 		c.Branch = opts.Branch
 		c.NewBranch = opts.NewBranch
 		c.Fetch = opts.Fetch
+
+		// If repos were selected via wizard, set them as target repos
+		if len(opts.SelectedRepos) > 0 {
+			// Convert paths to repo names for the -r flag
+			var repoNames []string
+			for _, repoPath := range opts.SelectedRepos {
+				repoNames = append(repoNames, git.GetRepoDisplayName(repoPath))
+			}
+			c.Repository = repoNames
+		}
 	}
 
 	// Validate worktree format
