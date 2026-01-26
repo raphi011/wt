@@ -99,6 +99,24 @@ func ByRepoName(ctx context.Context, repoName, repoDir string) (*Target, error) 
 	return &Target{Branch: branch, MainRepo: repoPath, Path: repoPath}, nil
 }
 
+// ByIDOrRepoOrPath resolves target with 3 modes:
+// 1. id != 0: by worktree ID (uses worktreeDir)
+// 2. repository != "": by repository name (uses repoDir, falls back to worktreeDir)
+// 3. both empty: from current path (worktree or main repo)
+func ByIDOrRepoOrPath(ctx context.Context, id int, repository, worktreeDir, repoDir, workDir string) (*Target, error) {
+	if id != 0 {
+		return ByID(id, worktreeDir)
+	}
+	if repository != "" {
+		scanDir := repoDir
+		if scanDir == "" {
+			scanDir = worktreeDir
+		}
+		return ByRepoName(ctx, repository, scanDir)
+	}
+	return FromWorktreeOrRepoPath(ctx, workDir)
+}
+
 // ByID resolves a worktree target by its numeric ID only.
 // Returns error if ID not found, worktree was removed, or path no longer exists.
 func ByID(id int, worktreeDir string) (*Target, error) {
