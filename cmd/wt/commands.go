@@ -14,8 +14,8 @@ type Deps struct {
 	WorkDir string         `kong:"-"`
 }
 
-// AddCmd adds a worktree for an existing or new branch.
-type AddCmd struct {
+// CheckoutCmd creates a worktree for an existing or new branch.
+type CheckoutCmd struct {
 	Deps
 	Branch     string   `arg:"" optional:"" placeholder:"BRANCH" help:"branch name"`
 	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) to create worktree in (repeatable, comma-separated)"`
@@ -25,11 +25,11 @@ type AddCmd struct {
 	Fetch      bool     `short:"f" name:"fetch" help:"fetch base branch from origin before creating"`
 	Note       string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
 	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
-	NoHook     bool     `name:"no-hook" help:"skip post-add hook" xor:"hook-ctrl"`
+	NoHook     bool     `name:"no-hook" help:"skip post-checkout hook" xor:"hook-ctrl"`
 	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
 
-func (c *AddCmd) Help() string {
+func (c *CheckoutCmd) Help() string {
 	return `Use -b to create a new branch, or omit for an existing branch.
 Use -r to target repos by name, -l to target repos by label.
 
@@ -40,18 +40,18 @@ Use -f/--fetch to fetch the base branch before creating (ensures up-to-date).
 Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
-  wt add feature-branch              # Existing branch in current repo
-  wt add -b feature-branch           # Create new branch from origin/main
-  wt add -b feature-branch -f        # Fetch main first, then create branch
-  wt add -b feature-branch --base develop  # Create from origin/develop
-  wt add feature-branch --no-hook    # Skip post-add hook
-  wt add -b feature -r repo1 -r repo2      # By repo name
-  wt add -b feature -l backend             # By label
-  wt add -b feature -l backend -r extra    # Mixed`
+  wt checkout feature-branch              # Existing branch in current repo
+  wt checkout -b feature-branch           # Create new branch from origin/main
+  wt checkout -b feature-branch -f        # Fetch main first, then create branch
+  wt checkout -b feature-branch --base develop  # Create from origin/develop
+  wt checkout feature-branch --no-hook    # Skip post-checkout hook
+  wt checkout -b feature -r repo1 -r repo2      # By repo name
+  wt checkout -b feature -l backend             # By label
+  wt checkout -b feature -l backend -r extra    # Mixed`
 }
 
-func (c *AddCmd) Run(ctx context.Context) error {
-	return c.runAdd(ctx)
+func (c *CheckoutCmd) Run(ctx context.Context) error {
+	return c.runCheckout(ctx)
 }
 
 // PruneCmd removes merged and clean worktrees.
@@ -328,7 +328,7 @@ type LabelAddCmd struct {
 
 func (c *LabelAddCmd) Help() string {
 	return `Add a label to the current repository (or specify repos with -r).
-Labels are stored in git config (wt.labels) and can be used with 'wt add -l'.
+Labels are stored in git config (wt.labels) and can be used with 'wt checkout -l'.
 
 Target directory is set via WT_REPO_DIR env var or repo_dir/worktree_dir config.
 
@@ -417,7 +417,7 @@ type LabelCmd struct {
 }
 
 func (c *LabelCmd) Help() string {
-	return `Labels are stored in git config (wt.labels) and can target repos with 'wt add -l'.
+	return `Labels are stored in git config (wt.labels) and can target repos with 'wt checkout -l'.
 
 Examples:
   wt label add backend           # Add label to current repo
@@ -428,8 +428,8 @@ Examples:
   wt label list -g               # List all labels across repos in directory
   wt label clear                 # Clear all labels from current repo
 
-Use with wt add:
-  wt add -b feature -l backend   # Create worktree in all repos with 'backend' label`
+Use with wt checkout:
+  wt checkout -b feature -l backend   # Create worktree in all repos with 'backend' label`
 }
 
 // CompletionCmd generates shell completion scripts.
@@ -813,8 +813,8 @@ type VersionFlag bool
 // CLI is the root command.
 type CLI struct {
 	// Core commands (ungrouped - shown first)
-	Add   AddCmd   `cmd:"" aliases:"a" help:"Add worktree for branch"`
-	List  ListCmd  `cmd:"" aliases:"ls" help:"List worktrees"`
+	Checkout CheckoutCmd `cmd:"" aliases:"co" help:"Checkout worktree for branch"`
+	List     ListCmd     `cmd:"" aliases:"ls" help:"List worktrees"`
 	Show  ShowCmd  `cmd:"" aliases:"s" help:"Show worktree details"`
 	Prune PruneCmd `cmd:"" aliases:"p" help:"Prune merged worktrees"`
 	Repos ReposCmd `cmd:"" aliases:"r" help:"List repositories"`

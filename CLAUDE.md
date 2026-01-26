@@ -82,7 +82,7 @@ internal/ui/             - Terminal UI components
 - **ID or repo/label**: `wt exec`, `wt hook` - require `-i <id>`, or `-r <repo>`/`-l <label>` (exec/hook support multiple); these flags are mutually exclusive
 - **ID or repo or label**: `wt cd` - require `-i <id>`, `-r <repo>`, or `-l <label>` (mutually exclusive)
 - **Optional ID**: `wt note`, `wt pr create`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current branch; outside requires `-i` (prune supports multiple)
-- **Special case**: `wt add` - inside repo uses branch name; outside repo requires `-r <repo>` or `-l <label>` to specify target repos
+- **Special case**: `wt checkout` - inside repo uses branch name; outside repo requires `-r <repo>` or `-l <label>` to specify target repos
 
 Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt hook`, `wt pr create`, `wt pr merge`, `wt prune`
 
@@ -90,15 +90,15 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 
 **Reuse flags consistently** - When adding flags that serve the same purpose across commands, use identical names/shortcuts. Standard flags:
 - `-i, --id` - worktree ID for targeting
-- `-r, --repository` - repository name for targeting (wt add, list, exec, cd, hook)
-- `-l, --label` - target repos by label (wt add, list, exec, hook)
+- `-r, --repository` - repository name for targeting (wt checkout, list, exec, cd, hook)
+- `-l, --label` - target repos by label (wt checkout, list, exec, hook)
 - `-n, --dry-run` - preview without making changes
 - `-f, --force` - force operation (override safety checks)
 - `-c, --include-clean` - include clean worktrees (0 commits, no changes)
 - `-g, --global` - operate on all repos (not just current)
 - `-a, --arg` - set hook variable KEY=VALUE (repeatable)
 - `--json` - output as JSON
-- `--hook` / `--no-hook` - control hook execution (for add, pr checkout, prune)
+- `--hook` / `--no-hook` - control hook execution (for checkout, pr checkout, prune)
 
 **Never modify git internal files directly** - Always use git CLI commands via `exec.Command`. Never read/write `.git/` directory contents, `.git` files in worktrees, or git refs directly. Use `git worktree repair` for fixing broken links, `git worktree prune` for cleanup.
 
@@ -121,7 +121,7 @@ type Deps struct {
     WorkDir string         `kong:"-"`
 }
 
-type AddCmd struct {
+type CheckoutCmd struct {
     Deps  // embedded
     Branch string `arg:""`
 }
@@ -133,7 +133,7 @@ type AddCmd struct {
 
 **Convention**: Always name the logger variable `l`:
 ```go
-func (c *AddCmd) runAdd(ctx context.Context) error {
+func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
     l := log.FromContext(ctx)
     out := output.FromContext(ctx)
     l.Debug("creating worktree")
@@ -153,10 +153,10 @@ Integration tests are in `cmd/wt/*_integration_test.go` with build tag `//go:bui
 
 **Dependency Injection in Tests** - Tests inject dependencies using the `Deps` struct and create a context with `testContext(t)` or `testContextWithOutput(t)`:
 ```go
-func runAddCommand(t *testing.T, workDir string, cfg *config.Config, cmd *AddCmd) error {
+func runCheckoutCommand(t *testing.T, workDir string, cfg *config.Config, cmd *CheckoutCmd) error {
     cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
     ctx := testContext(t)
-    return cmd.runAdd(ctx)
+    return cmd.runCheckout(ctx)
 }
 ```
 

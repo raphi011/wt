@@ -122,7 +122,7 @@ func resolveBaseRef(ctx context.Context, repoPath, baseBranch string, fetch bool
 	return baseBranch, nil
 }
 
-func (c *AddCmd) runAdd(ctx context.Context) error {
+func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
 	cfg := c.Config
 	workDir := c.WorkDir
 
@@ -135,7 +135,7 @@ func (c *AddCmd) runAdd(ctx context.Context) error {
 
 	// If -r or -l specified, use multi-repo mode
 	if len(c.Repository) > 0 || len(c.Label) > 0 {
-		return c.runAddMultiRepo(ctx, insideRepo)
+		return c.runCheckoutMultiRepo(ctx, insideRepo)
 	}
 
 	// No -r or -l specified
@@ -143,15 +143,15 @@ func (c *AddCmd) runAdd(ctx context.Context) error {
 		if c.Branch == "" {
 			return fmt.Errorf("branch name required inside git repo")
 		}
-		return c.runAddInRepo(ctx)
+		return c.runCheckoutInRepo(ctx)
 	}
 
 	// Outside repo without -r or -l
 	return fmt.Errorf("--repository (-r) or --label (-l) required when outside git repo")
 }
 
-// runAddInRepo handles wt add when inside a git repository (single repo mode)
-func (c *AddCmd) runAddInRepo(ctx context.Context) error {
+// runCheckoutInRepo handles wt checkout when inside a git repository (single repo mode)
+func (c *CheckoutCmd) runCheckoutInRepo(ctx context.Context) error {
 	l := log.FromContext(ctx)
 	cfg := c.Config
 	workDir := c.WorkDir
@@ -187,7 +187,7 @@ func (c *AddCmd) runAddInRepo(ctx context.Context) error {
 	}
 
 	// Run post-add hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, c.Hook, c.NoHook, hooks.CommandAdd)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, c.Hook, c.NoHook, hooks.CommandCheckout)
 	if err != nil {
 		return err
 	}
@@ -203,15 +203,15 @@ func (c *AddCmd) runAddInRepo(ctx context.Context) error {
 		Repo:     result.RepoName,
 		Folder:   result.Folder,
 		MainRepo: result.MainRepo,
-		Trigger:  string(hooks.CommandAdd),
+		Trigger:  string(hooks.CommandCheckout),
 		Env:      env,
 	}
 
 	return hooks.RunAll(hookMatches, hookCtx)
 }
 
-// runAddMultiRepo handles wt add with -r or -l flags for multiple repositories
-func (c *AddCmd) runAddMultiRepo(ctx context.Context, insideRepo bool) error {
+// runCheckoutMultiRepo handles wt checkout with -r or -l flags for multiple repositories
+func (c *CheckoutCmd) runCheckoutMultiRepo(ctx context.Context, insideRepo bool) error {
 	cfg := c.Config
 	if c.Branch == "" {
 		return fmt.Errorf("branch name required with --repository or --label")
@@ -293,7 +293,7 @@ func (c *AddCmd) runAddMultiRepo(ctx context.Context, insideRepo bool) error {
 	}
 
 	// Run hooks for each successful creation
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, c.Hook, c.NoHook, hooks.CommandAdd)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, c.Hook, c.NoHook, hooks.CommandCheckout)
 	if err != nil {
 		return err
 	}
@@ -310,7 +310,7 @@ func (c *AddCmd) runAddMultiRepo(ctx context.Context, insideRepo bool) error {
 			Repo:     r.RepoName,
 			Folder:   r.Folder,
 			MainRepo: r.MainRepo,
-			Trigger:  string(hooks.CommandAdd),
+			Trigger:  string(hooks.CommandCheckout),
 			Env:      env,
 		}
 		hooks.RunForEach(hookMatches, hookCtx, r.Path)
@@ -323,7 +323,7 @@ func (c *AddCmd) runAddMultiRepo(ctx context.Context, insideRepo bool) error {
 }
 
 // createWorktreeInCurrentRepo creates a worktree in the current git repository
-func (c *AddCmd) createWorktreeInCurrentRepo(ctx context.Context, targetDir string) (*successResult, error) {
+func (c *CheckoutCmd) createWorktreeInCurrentRepo(ctx context.Context, targetDir string) (*successResult, error) {
 	l := log.FromContext(ctx)
 	cfg := c.Config
 	workDir := c.WorkDir
@@ -353,7 +353,7 @@ func (c *AddCmd) createWorktreeInCurrentRepo(ctx context.Context, targetDir stri
 }
 
 // createWorktreeForRepo creates a worktree for a specified repository
-func (c *AddCmd) createWorktreeForRepo(ctx context.Context, repoPath string, targetDir string) (*successResult, error) {
+func (c *CheckoutCmd) createWorktreeForRepo(ctx context.Context, repoPath string, targetDir string) (*successResult, error) {
 	l := log.FromContext(ctx)
 	cfg := c.Config
 	repoName := git.GetRepoDisplayName(repoPath)

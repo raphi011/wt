@@ -25,9 +25,9 @@
 //	[hooks.vscode]
 //	command = "code {path}"
 //	description = "Open VS Code"
-//	on = ["add"]  # auto-run for add command
+//	on = ["checkout"]  # auto-run for checkout command
 //
-// Hooks with "on" run automatically for matching commands (add, pr, prune, merge).
+// Hooks with "on" run automatically for matching commands (checkout, pr, prune, merge).
 // Hooks without "on" only run via explicit --hook=name flag.
 //
 // # Forge Configuration

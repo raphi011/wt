@@ -11,7 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/config"
 )
 
-func TestAdd_ExistingBranchInsideRepo(t *testing.T) {
+func TestCheckout_ExistingBranchInsideRepo(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
 	sourceDir := t.TempDir()
@@ -26,12 +26,12 @@ func TestAdd_ExistingBranchInsideRepo(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch: "feature-branch",
 	}
 
-	if err := runAddCommand(t, repoPath, cfg, cmd); err != nil {
-		t.Fatalf("wt add failed: %v", err)
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout failed: %v", err)
 	}
 
 	// Verify worktree created
@@ -44,7 +44,7 @@ func TestAdd_ExistingBranchInsideRepo(t *testing.T) {
 	verifyWorktreeWorks(t, expectedPath)
 }
 
-func TestAdd_NewBranchInsideRepo(t *testing.T) {
+func TestCheckout_NewBranchInsideRepo(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
 	sourceDir := t.TempDir()
@@ -59,13 +59,13 @@ func TestAdd_NewBranchInsideRepo(t *testing.T) {
 		BaseRef:        "local", // Use local ref to avoid needing origin
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch:    "new-feature",
 		NewBranch: true,
 	}
 
-	if err := runAddCommand(t, repoPath, cfg, cmd); err != nil {
-		t.Fatalf("wt add -b failed: %v", err)
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -b failed: %v", err)
 	}
 
 	// Verify worktree created
@@ -79,7 +79,7 @@ func TestAdd_NewBranchInsideRepo(t *testing.T) {
 	verifyBranchExists(t, repoPath, "new-feature")
 }
 
-func TestAdd_NewBranchFromCustomBase(t *testing.T) {
+func TestCheckout_NewBranchFromCustomBase(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
 	sourceDir := t.TempDir()
@@ -98,14 +98,14 @@ func TestAdd_NewBranchFromCustomBase(t *testing.T) {
 		BaseRef:        "local",
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch:    "feature-from-develop",
 		NewBranch: true,
 		Base:      "develop",
 	}
 
-	if err := runAddCommand(t, repoPath, cfg, cmd); err != nil {
-		t.Fatalf("wt add -b --base develop failed: %v", err)
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -b --base develop failed: %v", err)
 	}
 
 	// Verify worktree created
@@ -121,7 +121,7 @@ func TestAdd_NewBranchFromCustomBase(t *testing.T) {
 	}
 }
 
-func TestAdd_WithNote(t *testing.T) {
+func TestCheckout_WithNote(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
 	sourceDir := t.TempDir()
@@ -136,14 +136,14 @@ func TestAdd_WithNote(t *testing.T) {
 		BaseRef:        "local",
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch:    "feature-with-note",
 		NewBranch: true,
 		Note:      "Working on JIRA-123",
 	}
 
-	if err := runAddCommand(t, repoPath, cfg, cmd); err != nil {
-		t.Fatalf("wt add --note failed: %v", err)
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout --note failed: %v", err)
 	}
 
 	// Verify note was set (using git config branch.<branch>.description)
@@ -153,7 +153,7 @@ func TestAdd_WithNote(t *testing.T) {
 	}
 }
 
-func TestAdd_WorktreeAlreadyExists(t *testing.T) {
+func TestCheckout_WorktreeAlreadyExists(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
 	sourceDir := t.TempDir()
@@ -169,20 +169,20 @@ func TestAdd_WorktreeAlreadyExists(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch: "feature",
 	}
 
 	// Should not error, just report already exists
-	if err := runAddCommand(t, repoPath, cfg, cmd); err != nil {
-		t.Fatalf("wt add should succeed when worktree already exists: %v", err)
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout should succeed when worktree already exists: %v", err)
 	}
 
 	// Verify worktree still works
 	verifyWorktreeWorks(t, worktreePath)
 }
 
-func TestAdd_MultiRepoByName(t *testing.T) {
+func TestCheckout_MultiRepoByName(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
 	repoDir := t.TempDir()
@@ -202,14 +202,14 @@ func TestAdd_MultiRepoByName(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch:     "shared-feature",
 		Repository: []string{"repo-a", "repo-b"},
 	}
 
 	// Run from outside any repo
-	if err := runAddCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt add -r repo-a -r repo-b failed: %v", err)
+	if err := runCheckoutCommand(t, worktreeDir, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -r repo-a -r repo-b failed: %v", err)
 	}
 
 	// Verify both worktrees created
@@ -224,7 +224,7 @@ func TestAdd_MultiRepoByName(t *testing.T) {
 	}
 }
 
-func TestAdd_MultiRepoByLabel(t *testing.T) {
+func TestCheckout_MultiRepoByLabel(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
 	repoDir := t.TempDir()
@@ -252,14 +252,14 @@ func TestAdd_MultiRepoByLabel(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch: "ui-feature",
 		Label:  []string{"frontend"},
 	}
 
 	// Run from outside any repo
-	if err := runAddCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt add -l frontend failed: %v", err)
+	if err := runCheckoutCommand(t, worktreeDir, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -l frontend failed: %v", err)
 	}
 
 	// Verify frontend repos got worktrees
@@ -280,7 +280,7 @@ func TestAdd_MultiRepoByLabel(t *testing.T) {
 	}
 }
 
-func TestAdd_ErrorMissingBranchInsideRepo(t *testing.T) {
+func TestCheckout_ErrorMissingBranchInsideRepo(t *testing.T) {
 	t.Parallel()
 	// Setup
 	sourceDir := t.TempDir()
@@ -290,11 +290,11 @@ func TestAdd_ErrorMissingBranchInsideRepo(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch: "", // No branch specified
 	}
 
-	err := runAddCommand(t, repoPath, cfg, cmd)
+	err := runCheckoutCommand(t, repoPath, cfg, cmd)
 	if err == nil {
 		t.Fatal("expected error when branch name not provided")
 	}
@@ -303,7 +303,7 @@ func TestAdd_ErrorMissingBranchInsideRepo(t *testing.T) {
 	}
 }
 
-func TestAdd_ErrorOutsideRepoWithoutRepoFlag(t *testing.T) {
+func TestCheckout_ErrorOutsideRepoWithoutRepoFlag(t *testing.T) {
 	t.Parallel()
 	// Setup
 	tempDir := t.TempDir()
@@ -313,12 +313,12 @@ func TestAdd_ErrorOutsideRepoWithoutRepoFlag(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch: "some-branch",
 	}
 
 	// Run from temp dir (not a git repo)
-	err := runAddCommand(t, tempDir, cfg, cmd)
+	err := runCheckoutCommand(t, tempDir, cfg, cmd)
 	if err == nil {
 		t.Fatal("expected error when outside repo without -r flag")
 	}
@@ -327,7 +327,7 @@ func TestAdd_ErrorOutsideRepoWithoutRepoFlag(t *testing.T) {
 	}
 }
 
-func TestAdd_ErrorRepoNotFound(t *testing.T) {
+func TestCheckout_ErrorRepoNotFound(t *testing.T) {
 	t.Parallel()
 	// Setup
 	repoDir := t.TempDir()
@@ -339,12 +339,12 @@ func TestAdd_ErrorRepoNotFound(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch:     "some-branch",
 		Repository: []string{"nonexistent-repo"},
 	}
 
-	err := runAddCommand(t, worktreeDir, cfg, cmd)
+	err := runCheckoutCommand(t, worktreeDir, cfg, cmd)
 	if err == nil {
 		t.Fatal("expected error when repo not found")
 	}
@@ -353,7 +353,7 @@ func TestAdd_ErrorRepoNotFound(t *testing.T) {
 	}
 }
 
-func TestAdd_ErrorLabelNotFound(t *testing.T) {
+func TestCheckout_ErrorLabelNotFound(t *testing.T) {
 	t.Parallel()
 	// Setup
 	repoDir := t.TempDir()
@@ -368,12 +368,12 @@ func TestAdd_ErrorLabelNotFound(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch: "some-branch",
 		Label:  []string{"nonexistent-label"},
 	}
 
-	err := runAddCommand(t, worktreeDir, cfg, cmd)
+	err := runCheckoutCommand(t, worktreeDir, cfg, cmd)
 	if err == nil {
 		t.Fatal("expected error when label not found")
 	}
@@ -382,7 +382,7 @@ func TestAdd_ErrorLabelNotFound(t *testing.T) {
 	}
 }
 
-func TestAdd_CustomWorktreeFormat(t *testing.T) {
+func TestCheckout_CustomWorktreeFormat(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
 	sourceDir := t.TempDir()
@@ -397,12 +397,12 @@ func TestAdd_CustomWorktreeFormat(t *testing.T) {
 		WorktreeFormat: "{branch}", // Just branch name, no repo prefix
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch: "feature",
 	}
 
-	if err := runAddCommand(t, repoPath, cfg, cmd); err != nil {
-		t.Fatalf("wt add with custom format failed: %v", err)
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout with custom format failed: %v", err)
 	}
 
 	// Verify worktree created with custom format name
@@ -418,7 +418,7 @@ func TestAdd_CustomWorktreeFormat(t *testing.T) {
 	}
 }
 
-func TestAdd_WorktreeDirDefaultsToCurrent(t *testing.T) {
+func TestCheckout_WorktreeDirDefaultsToCurrent(t *testing.T) {
 	t.Parallel()
 	// Setup
 	sourceDir := t.TempDir()
@@ -430,12 +430,12 @@ func TestAdd_WorktreeDirDefaultsToCurrent(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch: "feature",
 	}
 
-	if err := runAddCommand(t, repoPath, cfg, cmd); err != nil {
-		t.Fatalf("wt add with default dir failed: %v", err)
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout with default dir failed: %v", err)
 	}
 
 	// When WorktreeDir is empty, it defaults to "." (current directory)
@@ -446,7 +446,7 @@ func TestAdd_WorktreeDirDefaultsToCurrent(t *testing.T) {
 	}
 }
 
-func TestAdd_InsideRepoWithRepoFlag(t *testing.T) {
+func TestCheckout_InsideRepoWithRepoFlag(t *testing.T) {
 	t.Parallel()
 	// When inside repo with -r flag, should create worktree in both current repo and specified repo
 
@@ -468,14 +468,14 @@ func TestAdd_InsideRepoWithRepoFlag(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch:     "shared-branch",
 		Repository: []string{"repo-b"},
 	}
 
 	// Run from inside repo-a
-	if err := runAddCommand(t, repoA, cfg, cmd); err != nil {
-		t.Fatalf("wt add -r repo-b (from inside repo-a) failed: %v", err)
+	if err := runCheckoutCommand(t, repoA, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -r repo-b (from inside repo-a) failed: %v", err)
 	}
 
 	// Verify worktree created for repo-a (current repo)
@@ -491,7 +491,7 @@ func TestAdd_InsideRepoWithRepoFlag(t *testing.T) {
 	}
 }
 
-func TestAdd_NewBranchMultiRepo(t *testing.T) {
+func TestCheckout_NewBranchMultiRepo(t *testing.T) {
 	t.Parallel()
 	// Test creating new branches in multiple repos
 
@@ -510,15 +510,15 @@ func TestAdd_NewBranchMultiRepo(t *testing.T) {
 		BaseRef:        "local",
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch:     "new-shared-feature",
 		NewBranch:  true,
 		Repository: []string{"repo-a", "repo-b"},
 	}
 
 	// Run from outside any repo
-	if err := runAddCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt add -b -r repo-a -r repo-b failed: %v", err)
+	if err := runCheckoutCommand(t, worktreeDir, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -b -r repo-a -r repo-b failed: %v", err)
 	}
 
 	// Verify branches were created in both repos
@@ -537,7 +537,7 @@ func TestAdd_NewBranchMultiRepo(t *testing.T) {
 	}
 }
 
-func TestAdd_BranchWithSlashes(t *testing.T) {
+func TestCheckout_BranchWithSlashes(t *testing.T) {
 	t.Parallel()
 	// Test branch names with slashes (feature/name format)
 
@@ -554,13 +554,13 @@ func TestAdd_BranchWithSlashes(t *testing.T) {
 		BaseRef:        "local",
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch:    "feature/my-feature",
 		NewBranch: true,
 	}
 
-	if err := runAddCommand(t, repoPath, cfg, cmd); err != nil {
-		t.Fatalf("wt add -b feature/my-feature failed: %v", err)
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -b feature/my-feature failed: %v", err)
 	}
 
 	// Verify worktree created (slashes should be replaced with dashes in directory name)
@@ -573,7 +573,7 @@ func TestAdd_BranchWithSlashes(t *testing.T) {
 	verifyBranchExists(t, repoPath, "feature/my-feature")
 }
 
-func TestAdd_ErrorBranchDoesNotExist(t *testing.T) {
+func TestCheckout_ErrorBranchDoesNotExist(t *testing.T) {
 	t.Parallel()
 	// Setup
 	sourceDir := t.TempDir()
@@ -585,17 +585,17 @@ func TestAdd_ErrorBranchDoesNotExist(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch: "nonexistent-branch", // Branch doesn't exist
 	}
 
-	err := runAddCommand(t, repoPath, cfg, cmd)
+	err := runCheckoutCommand(t, repoPath, cfg, cmd)
 	if err == nil {
 		t.Fatal("expected error when branch doesn't exist")
 	}
 }
 
-func TestAdd_ErrorBranchAlreadyCheckedOut(t *testing.T) {
+func TestCheckout_ErrorBranchAlreadyCheckedOut(t *testing.T) {
 	t.Parallel()
 	// Setup
 	sourceDir := t.TempDir()
@@ -613,18 +613,18 @@ func TestAdd_ErrorBranchAlreadyCheckedOut(t *testing.T) {
 	}
 
 	// Try to create another worktree for the same branch with different name
-	// This should succeed because wt add handles "already exists" gracefully
-	cmd := &AddCmd{
+	// This should succeed because wt checkout handles "already exists" gracefully
+	cmd := &CheckoutCmd{
 		Branch: "feature",
 	}
 
 	// Should not error - returns "already exists"
-	if err := runAddCommand(t, repoPath, cfg, cmd); err != nil {
-		t.Fatalf("wt add should handle already checked out branch: %v", err)
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout should handle already checked out branch: %v", err)
 	}
 }
 
-func TestAdd_CombineRepoAndLabel(t *testing.T) {
+func TestCheckout_CombineRepoAndLabel(t *testing.T) {
 	t.Parallel()
 	// Test using both -r and -l together
 
@@ -652,14 +652,14 @@ func TestAdd_CombineRepoAndLabel(t *testing.T) {
 	}
 
 	// Use both -r repo-a and -l frontend (repo-b)
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch:     "shared",
 		Repository: []string{"repo-a"},
 		Label:      []string{"frontend"},
 	}
 
-	if err := runAddCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt add -r repo-a -l frontend failed: %v", err)
+	if err := runCheckoutCommand(t, worktreeDir, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -r repo-a -l frontend failed: %v", err)
 	}
 
 	// Verify repo-a worktree created (from -r)
@@ -681,7 +681,7 @@ func TestAdd_CombineRepoAndLabel(t *testing.T) {
 	}
 }
 
-func TestAdd_MultipleLabels(t *testing.T) {
+func TestCheckout_MultipleLabels(t *testing.T) {
 	t.Parallel()
 	// Test using multiple -l flags
 
@@ -710,13 +710,13 @@ func TestAdd_MultipleLabels(t *testing.T) {
 	}
 
 	// Use multiple labels: frontend and backend (not infra)
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch: "shared",
 		Label:  []string{"frontend", "backend"},
 	}
 
-	if err := runAddCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt add -l frontend -l backend failed: %v", err)
+	if err := runCheckoutCommand(t, worktreeDir, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -l frontend -l backend failed: %v", err)
 	}
 
 	// Verify frontend and backend repos got worktrees
@@ -737,7 +737,7 @@ func TestAdd_MultipleLabels(t *testing.T) {
 	}
 }
 
-func TestAdd_InsideRepoWithLabelOnly(t *testing.T) {
+func TestCheckout_InsideRepoWithLabelOnly(t *testing.T) {
 	t.Parallel()
 	// When inside repo with -l only (no -r), should NOT auto-include current repo
 
@@ -760,14 +760,14 @@ func TestAdd_InsideRepoWithLabelOnly(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch: "feature",
 		Label:  []string{"frontend"},
 	}
 
 	// Run from inside repo-a (which has no label)
-	if err := runAddCommand(t, repoA, cfg, cmd); err != nil {
-		t.Fatalf("wt add -l frontend (from inside repo-a) failed: %v", err)
+	if err := runCheckoutCommand(t, repoA, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -l frontend (from inside repo-a) failed: %v", err)
 	}
 
 	// Verify repo-a worktree NOT created (not in frontend label, -l only doesn't auto-include)
@@ -783,7 +783,7 @@ func TestAdd_InsideRepoWithLabelOnly(t *testing.T) {
 	}
 }
 
-func TestAdd_NoHookFlag(t *testing.T) {
+func TestCheckout_NoHookFlag(t *testing.T) {
 	t.Parallel()
 	// Test --no-hook flag skips hooks
 
@@ -798,15 +798,15 @@ func TestAdd_NoHookFlag(t *testing.T) {
 		BaseRef:        "local",
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch:    "feature",
 		NewBranch: true,
 		NoHook:    true,
 	}
 
 	// Should succeed without running hooks
-	if err := runAddCommand(t, repoPath, cfg, cmd); err != nil {
-		t.Fatalf("wt add --no-hook failed: %v", err)
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout --no-hook failed: %v", err)
 	}
 
 	// Verify worktree created
@@ -816,7 +816,7 @@ func TestAdd_NoHookFlag(t *testing.T) {
 	}
 }
 
-func TestAdd_PartialFailureMultiRepo(t *testing.T) {
+func TestCheckout_PartialFailureMultiRepo(t *testing.T) {
 	t.Parallel()
 	// Test that partial failures are reported but don't stop other repos
 
@@ -836,13 +836,13 @@ func TestAdd_PartialFailureMultiRepo(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	cmd := &AddCmd{
+	cmd := &CheckoutCmd{
 		Branch:     "only-in-a",
 		Repository: []string{"repo-a", "repo-b"},
 	}
 
 	// Should return error (partial failure)
-	err := runAddCommand(t, worktreeDir, cfg, cmd)
+	err := runCheckoutCommand(t, worktreeDir, cfg, cmd)
 	if err == nil {
 		t.Fatal("expected error for partial failure")
 	}
@@ -854,10 +854,10 @@ func TestAdd_PartialFailureMultiRepo(t *testing.T) {
 	}
 }
 
-// runAddCommand runs wt add with the given config and command in the specified directory.
-func runAddCommand(t *testing.T, workDir string, cfg *config.Config, cmd *AddCmd) error {
+// runCheckoutCommand runs wt checkout with the given config and command in the specified directory.
+func runCheckoutCommand(t *testing.T, workDir string, cfg *config.Config, cmd *CheckoutCmd) error {
 	t.Helper()
 	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
 	ctx := testContext(t)
-	return cmd.runAdd(ctx)
+	return cmd.runCheckout(ctx)
 }

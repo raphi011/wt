@@ -110,7 +110,7 @@ func injectDeps(cli *CLI, cfg *config.Config, workDir string) {
 	deps := Deps{Config: cfg, WorkDir: workDir}
 
 	// Core commands
-	cli.Add.Deps = deps
+	cli.Checkout.Deps = deps
 	cli.List.Deps = deps
 	cli.Show.Deps = deps
 	cli.Prune.Deps = deps

@@ -17,11 +17,11 @@ import (
 type CommandType string
 
 const (
-	CommandAdd   CommandType = "add"
-	CommandPR    CommandType = "pr"
-	CommandPrune CommandType = "prune"
-	CommandMerge CommandType = "merge"
-	CommandCd    CommandType = "cd"
+	CommandCheckout CommandType = "checkout"
+	CommandPR       CommandType = "pr"
+	CommandPrune    CommandType = "prune"
+	CommandMerge    CommandType = "merge"
+	CommandCd       CommandType = "cd"
 )
 
 // Context holds the values for placeholder substitution
