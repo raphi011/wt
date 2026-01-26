@@ -110,6 +110,8 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 
 **Branch Workflow** - All changes must be made in a feature branch and merged through a PR. Never commit directly to main.
 
+**Pre-v1.0 Breaking Changes** - Until v1.0, backwards incompatible changes to CLI commands, flags, config format, and cache files are allowed without migration code. Users are expected to update their config manually (see README disclaimer).
+
 ### Dependency Injection Pattern
 
 **Deps struct** - Stable configuration embedded in command structs:
