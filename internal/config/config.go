@@ -21,22 +21,23 @@ type HooksConfig struct {
 	Hooks map[string]Hook `toml:"-"` // parsed from [hooks.NAME] sections
 }
 
-// CloneRule maps a pattern to a forge
-type CloneRule struct {
+// ForgeRule maps a pattern to forge settings
+type ForgeRule struct {
 	Pattern string `toml:"pattern"` // glob pattern like "n26/*" or "company/*"
-	Forge   string `toml:"forge"`   // "github" or "gitlab"
+	Type    string `toml:"type"`    // "github" or "gitlab"
+	User    string `toml:"user"`    // optional: gh/glab username for auth
+}
+
+// ForgeConfig holds forge-related configuration
+type ForgeConfig struct {
+	Default    string      `toml:"default"`     // default forge type
+	DefaultOrg string      `toml:"default_org"` // default org for clone
+	Rules      []ForgeRule `toml:"rules"`
 }
 
 // MergeConfig holds merge-related configuration
 type MergeConfig struct {
 	Strategy string `toml:"strategy"` // "squash", "rebase", or "merge"
-}
-
-// CloneConfig holds clone-related configuration
-type CloneConfig struct {
-	Forge string      `toml:"forge"` // default forge: "github" or "gitlab"
-	Org   string      `toml:"org"`   // default organization when not specified
-	Rules []CloneRule `toml:"rules"` // pattern-based rules
 }
 
 // Config holds the wt configuration
@@ -47,7 +48,7 @@ type Config struct {
 	BaseRef        string            `toml:"base_ref"`     // "local" or "remote" (default: "remote")
 	DefaultSort    string            `toml:"default_sort"` // "id", "repo", "branch", "commit" (default: "id")
 	Hooks          HooksConfig       `toml:"-"`            // custom parsing needed
-	Clone          CloneConfig       `toml:"clone"`
+	Forge          ForgeConfig       `toml:"forge"`
 	Merge          MergeConfig       `toml:"merge"`
 	Hosts          map[string]string `toml:"hosts"` // domain -> forge type mapping
 }
@@ -79,8 +80,8 @@ func Default() Config {
 		WorktreeDir:    "",
 		RepoDir:        "",
 		WorktreeFormat: DefaultWorktreeFormat,
-		Clone: CloneConfig{
-			Forge: "github", // backwards compatible default
+		Forge: ForgeConfig{
+			Default: "github",
 		},
 	}
 }
@@ -137,7 +138,7 @@ type rawConfig struct {
 	BaseRef        string                 `toml:"base_ref"`
 	DefaultSort    string                 `toml:"default_sort"`
 	Hooks          map[string]interface{} `toml:"hooks"`
-	Clone          CloneConfig            `toml:"clone"`
+	Forge          ForgeConfig            `toml:"forge"`
 	Merge          MergeConfig            `toml:"merge"`
 	Hosts          map[string]string      `toml:"hosts"`
 }
@@ -179,7 +180,7 @@ func Load() (Config, error) {
 		BaseRef:        raw.BaseRef,
 		DefaultSort:    raw.DefaultSort,
 		Hooks:          parseHooksConfig(raw.Hooks),
-		Clone:          raw.Clone,
+		Forge:          raw.Forge,
 		Merge:          raw.Merge,
 		Hosts:          raw.Hosts,
 	}
@@ -212,9 +213,16 @@ func Load() (Config, error) {
 		cfg.RepoDir = expanded
 	}
 
-	// Validate clone.forge (only "github", "gitlab", or empty allowed)
-	if cfg.Clone.Forge != "" && cfg.Clone.Forge != "github" && cfg.Clone.Forge != "gitlab" {
-		return Default(), fmt.Errorf("invalid clone.forge %q: must be \"github\" or \"gitlab\"", cfg.Clone.Forge)
+	// Validate forge.default (only "github", "gitlab", or empty allowed)
+	if cfg.Forge.Default != "" && cfg.Forge.Default != "github" && cfg.Forge.Default != "gitlab" {
+		return Default(), fmt.Errorf("invalid forge.default %q: must be \"github\" or \"gitlab\"", cfg.Forge.Default)
+	}
+
+	// Validate forge.rules
+	for i, rule := range cfg.Forge.Rules {
+		if rule.Type != "" && rule.Type != "github" && rule.Type != "gitlab" {
+			return Default(), fmt.Errorf("invalid forge.rules[%d].type %q: must be \"github\" or \"gitlab\"", i, rule.Type)
+		}
 	}
 
 	// Validate hosts (only "github" or "gitlab" allowed)
@@ -243,8 +251,8 @@ func Load() (Config, error) {
 	if cfg.WorktreeFormat == "" {
 		cfg.WorktreeFormat = DefaultWorktreeFormat
 	}
-	if cfg.Clone.Forge == "" {
-		cfg.Clone.Forge = "github"
+	if cfg.Forge.Default == "" {
+		cfg.Forge.Default = "github"
 	}
 
 	// Apply env var overrides (after loading config file)
@@ -319,15 +327,26 @@ func parseHooksConfig(raw map[string]interface{}) HooksConfig {
 	return hc
 }
 
-// GetForgeForRepo returns the forge name for a given repo spec (e.g., "org/repo")
-// Matches against clone rules in order, returns default if no match
-func (c *CloneConfig) GetForgeForRepo(repoSpec string) string {
+// GetForgeTypeForRepo returns the forge type for a given repo spec (e.g., "org/repo")
+// Matches against rules in order, returns default if no match
+func (c *ForgeConfig) GetForgeTypeForRepo(repoSpec string) string {
 	for _, rule := range c.Rules {
-		if matchPattern(rule.Pattern, repoSpec) {
-			return rule.Forge
+		if matchPattern(rule.Pattern, repoSpec) && rule.Type != "" {
+			return rule.Type
 		}
 	}
-	return c.Forge
+	return c.Default
+}
+
+// GetUserForRepo returns the gh/glab username for a repo spec
+// Matches against rules in order, returns empty string if no match (use active account)
+func (c *ForgeConfig) GetUserForRepo(repoSpec string) string {
+	for _, rule := range c.Rules {
+		if matchPattern(rule.Pattern, repoSpec) {
+			return rule.User
+		}
+	}
+	return ""
 }
 
 // matchPattern checks if repoSpec matches the pattern
@@ -431,22 +450,31 @@ worktree_format = "{repo}-{branch}"
 # command = "kitty @ launch --cwd={path} -- claude {prompt:-help me}"
 # Run with: wt hook claude --arg prompt="implement feature X"
 
-# Clone settings - configure forge and default org for cloning repos
-# Used by "wt pr checkout <number> org/repo" when cloning a new repository
+# Forge settings - configure forge type, default org, and multi-account auth
+# Used for PR operations and "wt pr checkout <number> org/repo" when cloning
 #
-# [clone]
-# forge = "github"    # default forge when no rule matches (github or gitlab)
-# org = "my-org"      # default org when repo specified without org/ prefix
+# [forge]
+# default = "github"     # default forge type (github or gitlab)
+# default_org = "my-org" # default org when repo specified without org/ prefix
 #
-# [[clone.rules]]
-# pattern = "n26/*"     # glob pattern (* matches anything)
-# forge = "github"
+# [[forge.rules]]
+# pattern = "n26/*"           # glob pattern (* matches anything)
+# type = "github"             # forge type for matching repos
+# user = "raphaelgrubern26"   # gh/glab user for authentication (optional)
 #
-# [[clone.rules]]
+# [[forge.rules]]
+# pattern = "raphi011/*"
+# type = "github"
+# user = "raphi011"           # different gh account for personal repos
+#
+# [[forge.rules]]
 # pattern = "company/*"
-# forge = "gitlab"
+# type = "gitlab"
+# # user omitted - uses default active glab account
 #
 # Rules are matched in order; first match wins.
+# The "user" field enables multi-account support for gh CLI.
+# Use "gh auth status" to see available accounts.
 # Supported forges: "github" (gh CLI), "gitlab" (glab CLI)
 
 # Merge settings for "wt pr merge"

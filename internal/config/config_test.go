@@ -162,3 +162,63 @@ func TestParseHooksConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestForgeConfigGetForgeTypeForRepo(t *testing.T) {
+	cfg := ForgeConfig{
+		Default: "github",
+		Rules: []ForgeRule{
+			{Pattern: "n26/*", Type: "github"},
+			{Pattern: "company/*", Type: "gitlab"},
+			{Pattern: "personal/*", Type: ""}, // empty type, should fall through
+		},
+	}
+
+	tests := []struct {
+		repoSpec string
+		want     string
+	}{
+		{"n26/repo", "github"},
+		{"company/repo", "gitlab"},
+		{"personal/repo", "github"}, // empty type in rule, falls back to default
+		{"other/repo", "github"},    // no match, uses default
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.repoSpec, func(t *testing.T) {
+			got := cfg.GetForgeTypeForRepo(tt.repoSpec)
+			if got != tt.want {
+				t.Errorf("GetForgeTypeForRepo(%q) = %q, want %q", tt.repoSpec, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestForgeConfigGetUserForRepo(t *testing.T) {
+	cfg := ForgeConfig{
+		Default: "github",
+		Rules: []ForgeRule{
+			{Pattern: "n26/*", Type: "github", User: "work-user"},
+			{Pattern: "personal/*", Type: "github", User: "personal-user"},
+			{Pattern: "company/*", Type: "gitlab"}, // no user
+		},
+	}
+
+	tests := []struct {
+		repoSpec string
+		want     string
+	}{
+		{"n26/repo", "work-user"},
+		{"personal/repo", "personal-user"},
+		{"company/repo", ""},     // no user in rule
+		{"other/repo", ""},       // no match, returns empty
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.repoSpec, func(t *testing.T) {
+			got := cfg.GetUserForRepo(tt.repoSpec)
+			if got != tt.want {
+				t.Errorf("GetUserForRepo(%q) = %q, want %q", tt.repoSpec, got, tt.want)
+			}
+		})
+	}
+}
