@@ -840,5 +840,7 @@ func TestMv_NestedDirtyWorktreeMoved(t *testing.T) {
 // runMvCommand runs wt mv with the given config and command in the specified directory.
 func runMvCommand(t *testing.T, workDir string, cfg *config.Config, cmd *MvCmd) error {
 	t.Helper()
-	return runMv(cmd, cfg, workDir)
+	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+	ctx := testContext(t)
+	return cmd.runMv(ctx)
 }

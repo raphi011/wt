@@ -11,7 +11,9 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func (c *HookCmd) runHookRun(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *HookCmd) runHookRun(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
 	// Validate all hooks exist upfront
 	var missing []string
 	for _, name := range c.Hooks {

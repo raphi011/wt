@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -576,19 +575,22 @@ func TestNoteClear_ErrorInvalidID(t *testing.T) {
 
 func runNoteSetCommand(t *testing.T, workDir string, cfg *config.Config, cmd *NoteSetCmd) error {
 	t.Helper()
-	var buf bytes.Buffer
-	return runNoteSet(cmd, cfg, workDir, &buf)
+	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+	ctx, _ := testContextWithOutput(t)
+	return cmd.runNoteSet(ctx)
 }
 
 func runNoteGetCommand(t *testing.T, workDir string, cfg *config.Config, cmd *NoteGetCmd) (string, error) {
 	t.Helper()
-	var buf bytes.Buffer
-	err := runNoteGet(cmd, cfg, workDir, &buf)
-	return buf.String(), err
+	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+	ctx, out := testContextWithOutput(t)
+	err := cmd.runNoteGet(ctx)
+	return out.String(), err
 }
 
 func runNoteClearCommand(t *testing.T, workDir string, cfg *config.Config, cmd *NoteClearCmd) error {
 	t.Helper()
-	var buf bytes.Buffer
-	return runNoteClear(cmd, cfg, workDir, &buf)
+	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+	ctx := testContext(t)
+	return cmd.runNoteClear(ctx)
 }

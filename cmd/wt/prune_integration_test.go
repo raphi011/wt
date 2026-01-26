@@ -580,7 +580,9 @@ func TestPrune_ForceRemovesDirty(t *testing.T) {
 // runPruneCommand runs wt prune with the given config and command in the specified directory.
 func runPruneCommand(t *testing.T, workDir string, cfg *config.Config, cmd *PruneCmd) error {
 	t.Helper()
-	return runPrune(cmd, cfg, workDir)
+	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+	ctx := testContext(t)
+	return cmd.runPrune(ctx)
 }
 
 // verifyWorktreeRemoved verifies that a worktree directory no longer exists.

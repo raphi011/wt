@@ -66,7 +66,9 @@ func resolveLabelRepos(ctx context.Context, repos []string, cfg *config.Config, 
 	return repoPaths, nil
 }
 
-func (c *LabelAddCmd) runLabelAdd(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *LabelAddCmd) runLabelAdd(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
 	repoPaths, err := resolveLabelRepos(ctx, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
@@ -85,7 +87,9 @@ func (c *LabelAddCmd) runLabelAdd(ctx context.Context, cfg *config.Config, workD
 	return errors.Join(errs...)
 }
 
-func (c *LabelRemoveCmd) runLabelRemove(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *LabelRemoveCmd) runLabelRemove(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
 	repoPaths, err := resolveLabelRepos(ctx, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
@@ -104,7 +108,9 @@ func (c *LabelRemoveCmd) runLabelRemove(ctx context.Context, cfg *config.Config,
 	return errors.Join(errs...)
 }
 
-func (c *LabelListCmd) runLabelList(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *LabelListCmd) runLabelList(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
 	// If --global flag, list labels from all repos in directory
 	if c.Global {
 		return c.runLabelListGlobal(ctx, cfg)
@@ -178,7 +184,9 @@ func (c *LabelListCmd) runLabelListGlobal(ctx context.Context, cfg *config.Confi
 	return nil
 }
 
-func (c *LabelClearCmd) runLabelClear(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *LabelClearCmd) runLabelClear(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
 	repoPaths, err := resolveLabelRepos(ctx, c.Repository, cfg, workDir)
 	if err != nil {
 		return err

@@ -3,6 +3,8 @@
 package main
 
 import (
+	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +13,29 @@ import (
 
 	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/log"
+	"github.com/raphi011/wt/internal/output"
 )
+
+// testContext creates a context with log and output set to discard.
+// Use testContextWithOutput to capture output.
+func testContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx := context.Background()
+	ctx = log.WithLogger(ctx, log.New(io.Discard, false))
+	ctx = output.WithPrinter(ctx, io.Discard)
+	return ctx
+}
+
+// testContextWithOutput creates a context and returns the output writer for assertions.
+func testContextWithOutput(t *testing.T) (context.Context, *strings.Builder) {
+	t.Helper()
+	var out strings.Builder
+	ctx := context.Background()
+	ctx = log.WithLogger(ctx, log.New(io.Discard, false))
+	ctx = output.WithPrinter(ctx, &out)
+	return ctx, &out
+}
 
 // resolvePath resolves symlinks in a path.
 // This is needed on macOS where /var is a symlink to /private/var.
@@ -324,7 +348,8 @@ func populateCache(t *testing.T, worktreeDir string) {
 	defer unlock()
 
 	// List worktrees
-	worktrees, err := git.ListWorktrees(worktreeDir, false)
+	ctx := context.Background()
+	worktrees, err := git.ListWorktrees(ctx, worktreeDir, false)
 	if err != nil {
 		t.Fatalf("failed to list worktrees: %v", err)
 	}

@@ -30,7 +30,7 @@ make clean
 ### Package Structure
 
 ```
-cmd/wt/main.go           - CLI entry point with go-arg subcommands
+cmd/wt/main.go           - CLI entry point with kong subcommands
 internal/git/            - Git operations via exec.Command
   ├── worktree.go        - Create/list/remove worktrees
   └── repo.go            - Branch info, merge status, diff stats
@@ -41,6 +41,10 @@ internal/forge/          - Git hosting service abstraction (GitHub/GitLab)
   └── gitlab.go          - GitLab implementation (glab CLI)
 internal/resolve/        - Target resolution for commands
   └── resolve.go         - ByID resolver (numeric ID lookup)
+internal/log/            - Context-aware logging (stderr)
+  └── log.go             - Logger with verbose mode
+internal/output/         - Context-aware output (stdout)
+  └── output.go          - Printer for primary data output
 internal/ui/             - Terminal UI components
   ├── table.go           - Lipgloss table formatting with colors
   └── spinner.go         - Bubbletea spinner
@@ -104,13 +108,53 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 - Handle platform-specific limitations explicitly (e.g., GitLab doesn't support rebase merge via CLI)
 - Never call `gh` or `glab` directly outside `internal/forge/`
 
+### Dependency Injection Pattern
+
+**Deps struct** - Stable configuration embedded in command structs:
+```go
+type Deps struct {
+    Config  *config.Config `kong:"-"`
+    WorkDir string         `kong:"-"`
+}
+
+type AddCmd struct {
+    Deps  // embedded
+    Branch string `arg:""`
+}
+```
+
+**context.Context** - Request-scoped values passed to functions:
+- `log.FromContext(ctx)` → Logger (writes to stderr)
+- `output.FromContext(ctx)` → Printer (writes to stdout)
+
+**Convention**: Always name the logger variable `l`:
+```go
+func (c *AddCmd) runAdd(ctx context.Context) error {
+    l := log.FromContext(ctx)
+    out := output.FromContext(ctx)
+    l.Debug("creating worktree")
+    out.Println(result)
+}
+```
+
+**stdout vs stderr**:
+- stdout: Primary output (data, tables, paths, JSON)
+- stderr: Diagnostics (logs, progress, errors)
+
+This allows piping: `cd $(wt cd -i 1)` works because logs go to stderr.
+
 ### Integration Tests
 
 Integration tests are in `cmd/wt/*_integration_test.go` with build tag `//go:build integration`.
 
-**Working Directory Injection** - Commands accept `workDir` parameter instead of using `os.Getwd()`. This enables parallel test execution without `os.Chdir()` race conditions. Test helpers pass `workDir` directly to command functions.
-
-**Stdout Injection** - Commands that produce captured output (`list`, `cd`, `note`) accept an `io.Writer` parameter instead of writing to `os.Stdout`. This enables parallel test execution - tests pass a `bytes.Buffer` to capture output. The `Context` struct has a `Stdout` field that main.go sets to `os.Stdout`.
+**Dependency Injection in Tests** - Tests inject dependencies using the `Deps` struct and create a context with `testContext(t)` or `testContextWithOutput(t)`:
+```go
+func runAddCommand(t *testing.T, workDir string, cfg *config.Config, cmd *AddCmd) error {
+    cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+    ctx := testContext(t)
+    return cmd.runAdd(ctx)
+}
+```
 
 **macOS Symlink Resolution** - On macOS, `t.TempDir()` returns paths like `/var/folders/...` but git commands may return `/private/var/folders/...` (the resolved symlink). Always use `resolvePath(t, t.TempDir())` helper to resolve symlinks before path comparisons. This helper is defined in `integration_test_helpers.go`.
 

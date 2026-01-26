@@ -857,5 +857,7 @@ func TestAdd_PartialFailureMultiRepo(t *testing.T) {
 // runAddCommand runs wt add with the given config and command in the specified directory.
 func runAddCommand(t *testing.T, workDir string, cfg *config.Config, cmd *AddCmd) error {
 	t.Helper()
-	return runAdd(cmd, cfg, workDir)
+	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+	ctx := testContext(t)
+	return cmd.runAdd(ctx)
 }

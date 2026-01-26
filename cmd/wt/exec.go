@@ -12,7 +12,8 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func (c *ExecCmd) runExec(ctx context.Context, cfg *config.Config, _ string) error {
+func (c *ExecCmd) runExec(ctx context.Context) error {
+	cfg := c.Config
 	// Strip leading "--" if present (kong passthrough includes it)
 	command := c.Command
 	if len(command) > 0 && command[0] == "--" {

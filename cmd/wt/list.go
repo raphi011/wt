@@ -5,18 +5,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"slices"
 
 	"github.com/raphi011/wt/internal/cache"
-	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/ui"
 )
 
-func (c *ListCmd) runList(ctx context.Context, cfg *config.Config, workDir string, out io.Writer) error {
+func (c *ListCmd) runList(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
+	out := output.FromContext(ctx).Writer()
 	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)

@@ -20,7 +20,9 @@ import (
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
 	// Validate mutual exclusion: positional org/repo and -r flag can't both be used
 	if c.Repo != "" && c.Repository != "" {
 		return fmt.Errorf("cannot use both positional org/repo argument and -r/--repository flag\nUse 'wt pr checkout %d %s' (clone mode) OR 'wt pr checkout %d -r %s' (local mode)", c.Number, c.Repo, c.Number, c.Repository)
@@ -190,7 +192,9 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context, cfg *config.Config, w
 	return hooks.RunAll(hookMatches, hookCtx)
 }
 
-func (c *PrMergeCmd) runPrMerge(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *PrMergeCmd) runPrMerge(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
 	target, err := resolvePrTarget(ctx, c.ID, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
@@ -304,7 +308,9 @@ func (c *PrMergeCmd) runPrMerge(ctx context.Context, cfg *config.Config, workDir
 	return nil
 }
 
-func (c *PrCreateCmd) runPrCreate(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *PrCreateCmd) runPrCreate(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
 	target, err := resolvePrTarget(ctx, c.ID, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
@@ -394,7 +400,9 @@ func (c *PrCreateCmd) runPrCreate(ctx context.Context, cfg *config.Config, workD
 	return nil
 }
 
-func (c *PrViewCmd) runPrView(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *PrViewCmd) runPrView(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
 	target, err := resolvePrTarget(ctx, c.ID, c.Repository, cfg, workDir)
 	if err != nil {
 		return err

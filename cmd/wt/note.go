@@ -3,15 +3,18 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"path/filepath"
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func (c *NoteSetCmd) runNoteSet(ctx context.Context, cfg *config.Config, workDir string, out io.Writer) error {
+func (c *NoteSetCmd) runNoteSet(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
+	out := output.FromContext(ctx).Writer()
 	target, err := resolveNoteTarget(ctx, c.ID, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
@@ -25,7 +28,10 @@ func (c *NoteSetCmd) runNoteSet(ctx context.Context, cfg *config.Config, workDir
 	return nil
 }
 
-func (c *NoteGetCmd) runNoteGet(ctx context.Context, cfg *config.Config, workDir string, out io.Writer) error {
+func (c *NoteGetCmd) runNoteGet(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
+	out := output.FromContext(ctx).Writer()
 	target, err := resolveNoteTarget(ctx, c.ID, c.Repository, cfg, workDir)
 	if err != nil {
 		return err
@@ -41,7 +47,10 @@ func (c *NoteGetCmd) runNoteGet(ctx context.Context, cfg *config.Config, workDir
 	return nil
 }
 
-func (c *NoteClearCmd) runNoteClear(ctx context.Context, cfg *config.Config, workDir string, out io.Writer) error {
+func (c *NoteClearCmd) runNoteClear(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
+	out := output.FromContext(ctx).Writer()
 	target, err := resolveNoteTarget(ctx, c.ID, c.Repository, cfg, workDir)
 	if err != nil {
 		return err

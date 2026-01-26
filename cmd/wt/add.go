@@ -119,7 +119,10 @@ func resolveBaseRef(ctx context.Context, repoPath, baseBranch string, fetch bool
 	return baseBranch, nil
 }
 
-func (c *AddCmd) runAdd(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *AddCmd) runAdd(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
+
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
 		return fmt.Errorf("invalid worktree_format in config: %w", err)

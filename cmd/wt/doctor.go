@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 
-	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/doctor"
 )
 
-func (c *DoctorCmd) runDoctor(ctx context.Context, cfg *config.Config) error {
+func (c *DoctorCmd) runDoctor(ctx context.Context) error {
+	cfg := c.Config
 	if c.Reset {
 		return doctor.Reset(ctx, cfg)
 	}

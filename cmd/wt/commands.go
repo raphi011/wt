@@ -2,33 +2,21 @@ package main
 
 import (
 	"context"
-	"io"
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
-	"github.com/raphi011/wt/internal/log"
 )
 
-// Context is passed to all command Run() methods.
-type Context struct {
-	Config  *config.Config
-	WorkDir string          // Injected working directory (for testability)
-	Stdout  io.Writer       // Injected stdout (for testability)
-	Ctx     context.Context // Context for cancellation and logging
-}
-
-// Logger returns the logger from the context.
-func (c *Context) Logger() *log.Logger {
-	return log.FromContext(c.Ctx)
-}
-
-// BeforeApply runs before any command and verifies git is available.
-func (c *Context) BeforeApply() error {
-	return git.CheckGit()
+// Deps holds stable configuration injected into each command.
+// Embedded in command structs for direct access (c.Config, c.WorkDir).
+type Deps struct {
+	Config  *config.Config `kong:"-"`
+	WorkDir string         `kong:"-"`
 }
 
 // AddCmd adds a worktree for an existing or new branch.
 type AddCmd struct {
+	Deps
 	Branch     string   `arg:"" optional:"" placeholder:"BRANCH" help:"branch name"`
 	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) to create worktree in (repeatable, comma-separated)"`
 	Label      []string `short:"l" name:"label" sep:"," help:"target repos by label (repeatable, comma-separated)"`
@@ -62,12 +50,13 @@ Examples:
   wt add -b feature -l backend -r extra    # Mixed`
 }
 
-func (c *AddCmd) Run(ctx *Context) error {
-	return c.runAdd(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *AddCmd) Run(ctx context.Context) error {
+	return c.runAdd(ctx)
 }
 
 // PruneCmd removes merged and clean worktrees.
 type PruneCmd struct {
+	Deps
 	ID           []int    `short:"i" name:"id" help:"worktree(s) to remove (by ID, repeatable)"`
 	DryRun       bool     `short:"n" name:"dry-run" negatable:"" help:"preview without removing"`
 	Force        bool     `short:"f" name:"force" help:"force remove targeted worktree (-i) even if not merged or dirty"`
@@ -111,12 +100,13 @@ Examples:
   wt prune --reset-cache        # Clear PR cache and reset IDs from 1`
 }
 
-func (c *PruneCmd) Run(ctx *Context) error {
-	return c.runPrune(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *PruneCmd) Run(ctx context.Context) error {
+	return c.runPrune(ctx)
 }
 
 // ListCmd lists worktrees in a directory.
 type ListCmd struct {
+	Deps
 	JSON       bool     `name:"json" help:"output as JSON"`
 	Global     bool     `short:"g" name:"global" help:"show all worktrees (not just current repo)"`
 	Sort       string   `short:"s" name:"sort" default:"" enum:",id,repo,branch,commit" help:"sort by: id, repo, branch, commit (default from config or 'id')"`
@@ -143,12 +133,13 @@ Examples:
   wt list --sort=commit        # Sort by most recent commit`
 }
 
-func (c *ListCmd) Run(ctx *Context) error {
-	return c.runList(ctx.Ctx, ctx.Config, ctx.WorkDir, ctx.Stdout)
+func (c *ListCmd) Run(ctx context.Context) error {
+	return c.runList(ctx)
 }
 
 // ShowCmd shows detailed status for a single worktree.
 type ShowCmd struct {
+	Deps
 	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
 	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
 	Refresh    bool   `short:"R" name:"refresh" help:"refresh PR status from API"`
@@ -169,12 +160,13 @@ Examples:
   wt show --json       # Output as JSON`
 }
 
-func (c *ShowCmd) Run(ctx *Context) error {
-	return c.runShow(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *ShowCmd) Run(ctx context.Context) error {
+	return c.runShow(ctx)
 }
 
 // ExecCmd runs a command in one or more worktrees by ID, or in repos by name/label.
 type ExecCmd struct {
+	Deps
 	ID         []int    `short:"i" name:"id" xor:"target" help:"worktree ID(s) (repeatable)"`
 	Repository []string `short:"r" name:"repository" xor:"target" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
 	Label      []string `short:"l" name:"label" xor:"target" sep:"," help:"target repos by label (repeatable, comma-separated)"`
@@ -196,12 +188,13 @@ Examples:
   wt exec -l backend -- make           # By label`
 }
 
-func (c *ExecCmd) Run(ctx *Context) error {
-	return c.runExec(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *ExecCmd) Run(ctx context.Context) error {
+	return c.runExec(ctx)
 }
 
 // CdCmd prints the path of a worktree or repo for shell scripting.
 type CdCmd struct {
+	Deps
 	ID         int      `short:"i" name:"id" xor:"target" help:"worktree ID"`
 	Repository string   `short:"r" name:"repository" xor:"target" help:"repository name"`
 	Label      string   `short:"l" name:"label" xor:"target" help:"repository label (must match exactly one repo)"`
@@ -226,12 +219,13 @@ Examples:
   cd $(wt cd -l backend)   # By label (must match exactly one repo)`
 }
 
-func (c *CdCmd) Run(ctx *Context) error {
-	return c.runCd(ctx.Ctx, ctx.Config, ctx.WorkDir, ctx.Stdout)
+func (c *CdCmd) Run(ctx context.Context) error {
+	return c.runCd(ctx)
 }
 
 // NoteSetCmd sets a note on a branch.
 type NoteSetCmd struct {
+	Deps
 	Text       string `arg:"" required:"" placeholder:"TEXT" help:"note text"`
 	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
 	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
@@ -252,12 +246,13 @@ Examples:
   wt note set "Working on login" -r myrepo # By repository name`
 }
 
-func (c *NoteSetCmd) Run(ctx *Context) error {
-	return c.runNoteSet(ctx.Ctx, ctx.Config, ctx.WorkDir, ctx.Stdout)
+func (c *NoteSetCmd) Run(ctx context.Context) error {
+	return c.runNoteSet(ctx)
 }
 
 // NoteGetCmd gets a note from a branch.
 type NoteGetCmd struct {
+	Deps
 	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
 	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
 }
@@ -276,12 +271,13 @@ Examples:
   wt note get -r myrepo # By repository name`
 }
 
-func (c *NoteGetCmd) Run(ctx *Context) error {
-	return c.runNoteGet(ctx.Ctx, ctx.Config, ctx.WorkDir, ctx.Stdout)
+func (c *NoteGetCmd) Run(ctx context.Context) error {
+	return c.runNoteGet(ctx)
 }
 
 // NoteClearCmd clears a note from a branch.
 type NoteClearCmd struct {
+	Deps
 	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
 	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
 }
@@ -300,8 +296,8 @@ Examples:
   wt note clear -r myrepo # By repository name`
 }
 
-func (c *NoteClearCmd) Run(ctx *Context) error {
-	return c.runNoteClear(ctx.Ctx, ctx.Config, ctx.WorkDir, ctx.Stdout)
+func (c *NoteClearCmd) Run(ctx context.Context) error {
+	return c.runNoteClear(ctx)
 }
 
 // NoteCmd manages branch notes. Get is default subcommand.
@@ -325,6 +321,7 @@ Examples:
 
 // LabelAddCmd adds a label to a repository.
 type LabelAddCmd struct {
+	Deps
 	Label      string   `arg:"" required:"" placeholder:"LABEL" help:"label to add"`
 	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
 }
@@ -341,12 +338,13 @@ Examples:
   wt label add backend -r api,web  # Add label to multiple repos`
 }
 
-func (c *LabelAddCmd) Run(ctx *Context) error {
-	return c.runLabelAdd(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *LabelAddCmd) Run(ctx context.Context) error {
+	return c.runLabelAdd(ctx)
 }
 
 // LabelRemoveCmd removes a label from a repository.
 type LabelRemoveCmd struct {
+	Deps
 	Label      string   `arg:"" required:"" placeholder:"LABEL" help:"label to remove"`
 	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
 }
@@ -362,12 +360,13 @@ Examples:
   wt label remove backend -r api,web  # Remove from multiple repos`
 }
 
-func (c *LabelRemoveCmd) Run(ctx *Context) error {
-	return c.runLabelRemove(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *LabelRemoveCmd) Run(ctx context.Context) error {
+	return c.runLabelRemove(ctx)
 }
 
 // LabelListCmd lists labels for a repository.
 type LabelListCmd struct {
+	Deps
 	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
 	Global     bool     `short:"g" name:"global" help:"list all labels from repos in directory"`
 }
@@ -384,12 +383,13 @@ Examples:
   wt label list -g           # All labels from repos in directory`
 }
 
-func (c *LabelListCmd) Run(ctx *Context) error {
-	return c.runLabelList(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *LabelListCmd) Run(ctx context.Context) error {
+	return c.runLabelList(ctx)
 }
 
 // LabelClearCmd clears all labels from a repository.
 type LabelClearCmd struct {
+	Deps
 	Repository []string `short:"r" name:"repository" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
 }
 
@@ -404,8 +404,8 @@ Examples:
   wt label clear -r api,web  # Clear labels from multiple repos`
 }
 
-func (c *LabelClearCmd) Run(ctx *Context) error {
-	return c.runLabelClear(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *LabelClearCmd) Run(ctx context.Context) error {
+	return c.runLabelClear(ctx)
 }
 
 // LabelCmd manages repository labels.
@@ -434,6 +434,7 @@ Use with wt add:
 
 // CompletionCmd generates shell completion scripts.
 type CompletionCmd struct {
+	Deps
 	Shell string `arg:"" required:"" placeholder:"SHELL" help:"shell type (fish, bash, zsh)" enum:"fish,bash,zsh"`
 }
 
@@ -446,12 +447,13 @@ Examples:
   wt completion zsh > ~/.zfunc/_wt  # then add ~/.zfunc to fpath`
 }
 
-func (c *CompletionCmd) Run(ctx *Context) error {
+func (c *CompletionCmd) Run(ctx context.Context) error {
 	return c.runCompletion()
 }
 
 // ConfigInitCmd creates the default config file.
 type ConfigInitCmd struct {
+	Deps
 	WorktreeDir string `arg:"" help:"base directory for worktrees (absolute path or ~/...)"`
 	Force       bool   `short:"f" name:"force" negatable:"" help:"overwrite existing config file"`
 	Stdout      bool   `short:"s" name:"stdout" help:"print config to stdout instead of writing to file"`
@@ -465,12 +467,13 @@ Examples:
   wt config init ~/Git -s            # Print config to stdout`
 }
 
-func (c *ConfigInitCmd) Run(ctx *Context) error {
+func (c *ConfigInitCmd) Run(ctx context.Context) error {
 	return c.runConfigInit()
 }
 
 // ConfigShowCmd shows the effective configuration.
 type ConfigShowCmd struct {
+	Deps
 	JSON bool `name:"json" help:"output as JSON"`
 }
 
@@ -481,12 +484,13 @@ Examples:
   wt config show --json    # Output as JSON`
 }
 
-func (c *ConfigShowCmd) Run(ctx *Context) error {
-	return c.runConfigShow(ctx.Config)
+func (c *ConfigShowCmd) Run(ctx context.Context) error {
+	return c.runConfigShow()
 }
 
 // ConfigHooksCmd lists available hooks.
 type ConfigHooksCmd struct {
+	Deps
 	JSON bool `name:"json" help:"output as JSON"`
 }
 
@@ -497,8 +501,8 @@ Examples:
   wt config hooks --json   # Output as JSON`
 }
 
-func (c *ConfigHooksCmd) Run(ctx *Context) error {
-	return c.runConfigHooks(ctx.Config)
+func (c *ConfigHooksCmd) Run(ctx context.Context) error {
+	return c.runConfigHooks()
 }
 
 // ConfigCmd manages wt configuration.
@@ -519,6 +523,7 @@ Examples:
 
 // HookCmd runs one or more hooks by name for a worktree or repos.
 type HookCmd struct {
+	Deps
 	Hooks      []string `arg:"" required:"" placeholder:"HOOK" help:"hook name(s) to run"`
 	ID         []int    `short:"i" name:"id" xor:"target" help:"worktree ID(s) (optional in worktree, repeatable)"`
 	Repository []string `short:"r" name:"repository" xor:"target" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
@@ -544,12 +549,13 @@ Examples:
   wt hook kitty -n           # Dry-run: print command without executing`
 }
 
-func (c *HookCmd) Run(ctx *Context) error {
-	return c.runHookRun(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *HookCmd) Run(ctx context.Context) error {
+	return c.runHookRun(ctx)
 }
 
 // MvCmd moves worktrees to a different directory with optional renaming.
 type MvCmd struct {
+	Deps
 	Repository []string `short:"r" name:"repository" sep:"," help:"filter by repository name(s) (repeatable, comma-separated)"`
 	Format     string   `name:"format" placeholder:"FORMAT" help:"worktree naming format"`
 	DryRun     bool     `short:"n" name:"dry-run" negatable:"" help:"show what would be moved"`
@@ -577,12 +583,13 @@ Examples:
   wt mv -f                           # Force move locked worktrees`
 }
 
-func (c *MvCmd) Run(ctx *Context) error {
-	return c.runMv(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *MvCmd) Run(ctx context.Context) error {
+	return c.runMv(ctx)
 }
 
 // PrCheckoutCmd creates a worktree for a PR, cloning the repo if needed.
 type PrCheckoutCmd struct {
+	Deps
 	Number     int      `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
 	Repo       string   `arg:"" optional:"" placeholder:"ORG/REPO" help:"clone repo (org/repo format)"`
 	Repository string   `short:"r" name:"repository" help:"local repo name"`
@@ -611,12 +618,13 @@ Examples:
   wt pr checkout 123 --no-hook          # Skip post-create hook`
 }
 
-func (c *PrCheckoutCmd) Run(ctx *Context) error {
-	return c.runPrCheckout(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *PrCheckoutCmd) Run(ctx context.Context) error {
+	return c.runPrCheckout(ctx)
 }
 
 // PrMergeCmd merges the PR for the current branch.
 type PrMergeCmd struct {
+	Deps
 	ID         int      `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
 	Repository string   `short:"r" name:"repository" xor:"target" help:"repository name"`
 	Strategy   string   `short:"s" name:"strategy" env:"WT_MERGE_STRATEGY" placeholder:"STRATEGY" help:"merge strategy: squash, rebase, or merge"`
@@ -628,6 +636,7 @@ type PrMergeCmd struct {
 
 // PrCreateCmd creates a PR for a worktree.
 type PrCreateCmd struct {
+	Deps
 	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
 	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
 	Title      string `short:"t" name:"title" required:"" placeholder:"TITLE" help:"PR title"`
@@ -658,8 +667,8 @@ Examples:
   wt pr create --title "Add feature" -r myrepo          # By repository name`
 }
 
-func (c *PrCreateCmd) Run(ctx *Context) error {
-	return c.runPrCreate(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *PrCreateCmd) Run(ctx context.Context) error {
+	return c.runPrCreate(ctx)
 }
 
 func (c *PrMergeCmd) Help() string {
@@ -680,12 +689,13 @@ Examples:
   wt pr merge -s rebase          # Use rebase merge strategy`
 }
 
-func (c *PrMergeCmd) Run(ctx *Context) error {
-	return c.runPrMerge(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *PrMergeCmd) Run(ctx context.Context) error {
+	return c.runPrMerge(ctx)
 }
 
 // PrViewCmd shows PR details or opens in browser.
 type PrViewCmd struct {
+	Deps
 	ID         int    `short:"i" name:"id" xor:"target" help:"worktree ID (optional in worktree/repo)"`
 	Repository string `short:"r" name:"repository" xor:"target" help:"repository name"`
 	Web        bool   `short:"w" name:"web" help:"open PR in browser"`
@@ -707,8 +717,8 @@ Examples:
   wt pr view -i 1 -w      # Open PR in browser by ID`
 }
 
-func (c *PrViewCmd) Run(ctx *Context) error {
-	return c.runPrView(ctx.Ctx, ctx.Config, ctx.WorkDir)
+func (c *PrViewCmd) Run(ctx context.Context) error {
+	return c.runPrView(ctx)
 }
 
 // PrCmd works with PRs.
@@ -732,6 +742,7 @@ func (c *PrCmd) Help() string {
 
 // ReposCmd lists repositories in a directory.
 type ReposCmd struct {
+	Deps
 	Label string `short:"l" name:"label" placeholder:"LABEL" help:"filter by label"`
 	Sort  string `short:"s" name:"sort" default:"name" enum:"name,branch,worktrees,label" help:"sort by: name (default), branch, worktrees, label"`
 	JSON  bool   `name:"json" help:"output as JSON"`
@@ -752,12 +763,13 @@ Examples:
   wt repos --json              # Output as JSON`
 }
 
-func (c *ReposCmd) Run(ctx *Context) error {
-	return c.runRepos(ctx.Ctx, ctx.Config)
+func (c *ReposCmd) Run(ctx context.Context) error {
+	return c.runRepos(ctx)
 }
 
 // DoctorCmd diagnoses and repairs cache issues.
 type DoctorCmd struct {
+	Deps
 	Fix   bool `name:"fix" help:"auto-fix recoverable issues"`
 	Reset bool `name:"reset" help:"rebuild cache from scratch (loses IDs)"`
 }
@@ -791,8 +803,8 @@ Examples:
   wt doctor --reset      # Rebuild cache from scratch`
 }
 
-func (c *DoctorCmd) Run(ctx *Context) error {
-	return c.runDoctor(ctx.Ctx, ctx.Config)
+func (c *DoctorCmd) Run(ctx context.Context) error {
+	return c.runDoctor(ctx)
 }
 
 // VersionFlag is used to show version info.
@@ -825,4 +837,9 @@ type CLI struct {
 
 	Verbose bool        `short:"v" name:"verbose" help:"Show external commands being executed"`
 	Version VersionFlag `name:"version" help:"Show version"`
+}
+
+// BeforeApply runs before any command and verifies git is available.
+func (c *CLI) BeforeApply() error {
+	return git.CheckGit()
 }
