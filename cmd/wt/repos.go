@@ -31,19 +31,19 @@ func (c *ReposCmd) runRepos(ctx context.Context) error {
 		return err
 	}
 
-	// Determine scan directory from config
-	scanDir := cfg.RepoScanDir()
-	if scanDir == "" {
-		scanDir = "."
+	// Determine repo directory from config
+	repoDir := cfg.RepoScanDir()
+	if repoDir == "" {
+		repoDir = "."
 	}
 
-	absScanDir, err := filepath.Abs(scanDir)
+	absRepoDir, err := filepath.Abs(repoDir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve path: %w", err)
 	}
 
 	// Find all repositories
-	repoPaths, err := git.FindAllRepos(absScanDir)
+	repoPaths, err := git.FindAllRepos(absRepoDir)
 	if err != nil {
 		return fmt.Errorf("failed to scan repos: %w", err)
 	}
@@ -110,12 +110,12 @@ func (c *ReposCmd) runRepos(ctx context.Context) error {
 		if c.Label != "" {
 			fmt.Printf("No repositories found with label %q\n", c.Label)
 		} else {
-			fmt.Printf("No repositories found in %s\n", absScanDir)
+			fmt.Printf("No repositories found in %s\n", absRepoDir)
 		}
 		return nil
 	}
 
-	fmt.Printf("Repositories in %s (%d)\n\n", absScanDir, len(repos))
+	fmt.Printf("Repositories in %s (%d)\n\n", absRepoDir, len(repos))
 
 	// Build table
 	fmt.Print(formatReposTable(repos))

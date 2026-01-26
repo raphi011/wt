@@ -62,12 +62,12 @@ func runExecForIDs(ids []int, command []string, worktreeDir string) error {
 }
 
 func runExecForRepos(ctx context.Context, repos []string, labels []string, command []string, dir string, cfg *config.Config) error {
-	scanDir, err := resolveRepoScanDir(dir, cfg)
+	repoDir, err := resolveRepoDir(dir, cfg)
 	if err != nil {
 		return err
 	}
 
-	repoPaths, errs := collectRepoPaths(ctx, repos, labels, scanDir, cfg)
+	repoPaths, errs := collectRepoPaths(ctx, repos, labels, repoDir, cfg)
 
 	// Execute command in each repo
 	for repoPath := range repoPaths {

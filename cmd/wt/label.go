@@ -17,12 +17,12 @@ import (
 // If repos is empty and outside a repo, returns error.
 // If repos is provided, resolves each by name via git.FindRepoByName.
 func resolveLabelRepos(ctx context.Context, repos []string, cfg *config.Config, workDir string) ([]string, error) {
-	// Determine scan directory for repo lookup
-	scanDir := cfg.RepoScanDir()
-	if scanDir == "" {
-		scanDir = "."
+	// Determine repo directory for lookup
+	repoDir := cfg.RepoScanDir()
+	if repoDir == "" {
+		repoDir = "."
 	}
-	scanDir, err := filepath.Abs(scanDir)
+	repoDir, err := filepath.Abs(repoDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve path: %w", err)
 	}
@@ -50,7 +50,7 @@ func resolveLabelRepos(ctx context.Context, repos []string, cfg *config.Config, 
 	var repoPaths []string
 
 	for _, repoName := range repos {
-		repoPath, err := git.FindRepoByName(scanDir, repoName)
+		repoPath, err := git.FindRepoByName(repoDir, repoName)
 		if err != nil {
 			// Skip repos that can't be found - errors will be handled per-operation
 			fmt.Fprintf(os.Stderr, "warning: %s: %v\n", repoName, err)
@@ -147,12 +147,12 @@ func (c *LabelListCmd) runLabelList(ctx context.Context) error {
 func (c *LabelListCmd) runLabelListGlobal(ctx context.Context) error {
 	cfg := c.Config
 	// Use repo_dir from config if available, fallback to cwd
-	scanDir := cfg.RepoScanDir()
-	if scanDir == "" {
-		scanDir = "."
+	repoDir := cfg.RepoScanDir()
+	if repoDir == "" {
+		repoDir = "."
 	}
 
-	absDir, err := filepath.Abs(scanDir)
+	absDir, err := filepath.Abs(repoDir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve path: %w", err)
 	}

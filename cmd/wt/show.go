@@ -124,11 +124,11 @@ func resolveShowTarget(ctx context.Context, id int, repository string, cfg *conf
 
 	// Resolve by repo name if provided
 	if repository != "" {
-		repoScanDir := cfg.RepoScanDir()
-		if repoScanDir == "" {
-			repoScanDir = dir
+		repoDir := cfg.RepoScanDir()
+		if repoDir == "" {
+			repoDir = dir
 		}
-		return resolve.ByRepoName(ctx, repository, repoScanDir)
+		return resolve.ByRepoName(ctx, repository, repoDir)
 	}
 
 	// Default: use working directory

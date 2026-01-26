@@ -8,7 +8,7 @@
 //
 // Use [ByID] to resolve a worktree target:
 //
-//	target, err := resolve.ByID(5, scanDir)
+//	target, err := resolve.ByID(5, worktreeDir)
 //	if err != nil {
 //	    // ID not found, worktree removed, or path doesn't exist
 //	}

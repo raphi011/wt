@@ -228,10 +228,10 @@ func (c *AddCmd) runAddMultiRepo(ctx context.Context, insideRepo bool) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	// Repo scan dir (from config, fallback to wtDir)
-	repoScanDir := cfg.RepoScanDir()
-	if repoScanDir == "" {
-		repoScanDir = wtDir
+	// Repo dir (from config, fallback to wtDir)
+	repoDir := cfg.RepoScanDir()
+	if repoDir == "" {
+		repoDir = wtDir
 	}
 
 	var results []successResult
@@ -253,7 +253,7 @@ func (c *AddCmd) runAddMultiRepo(ctx context.Context, insideRepo bool) error {
 
 	// Process -r flags (repository names)
 	for _, repoName := range c.Repository {
-		repoPath, err := git.FindRepoByName(repoScanDir, repoName)
+		repoPath, err := git.FindRepoByName(repoDir, repoName)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
 			continue
@@ -263,7 +263,7 @@ func (c *AddCmd) runAddMultiRepo(ctx context.Context, insideRepo bool) error {
 
 	// Process -l flags (labels)
 	for _, label := range c.Label {
-		paths, err := git.FindReposByLabel(ctx, repoScanDir, label)
+		paths, err := git.FindReposByLabel(ctx, repoDir, label)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("label %q: %w", label, err))
 			continue
