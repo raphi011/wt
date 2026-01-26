@@ -113,7 +113,7 @@ func (c *LabelListCmd) runLabelList(ctx context.Context) error {
 	workDir := c.WorkDir
 	// If --global flag, list labels from all repos in directory
 	if c.Global {
-		return c.runLabelListGlobal(ctx, cfg)
+		return c.runLabelListGlobal(ctx)
 	}
 
 	repoPaths, err := resolveLabelRepos(ctx, c.Repository, cfg, workDir)
@@ -144,7 +144,8 @@ func (c *LabelListCmd) runLabelList(ctx context.Context) error {
 	return nil
 }
 
-func (c *LabelListCmd) runLabelListGlobal(ctx context.Context, cfg *config.Config) error {
+func (c *LabelListCmd) runLabelListGlobal(ctx context.Context) error {
+	cfg := c.Config
 	// Use repo_dir from config if available, fallback to cwd
 	scanDir := cfg.RepoScanDir()
 	if scanDir == "" {
