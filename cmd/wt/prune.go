@@ -50,7 +50,7 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 		return fmt.Errorf("--verbose cannot be used with -i/--id")
 	}
 
-	scanPath, err := cfg.GetAbsWorktreeDir()
+	worktreeDir, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
@@ -60,13 +60,13 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 		if c.ResetCache {
 			return fmt.Errorf("--reset-cache cannot be used with --id")
 		}
-		return c.runPruneTargets(ctx, scanPath)
+		return c.runPruneTargets(ctx, worktreeDir)
 	}
 
 	if c.DryRun {
-		fmt.Printf("Pruning worktrees in %s (dry run)\n", scanPath)
+		fmt.Printf("Pruning worktrees in %s (dry run)\n", worktreeDir)
 	} else {
-		fmt.Printf("Pruning worktrees in %s\n", scanPath)
+		fmt.Printf("Pruning worktrees in %s\n", worktreeDir)
 	}
 
 	// Start spinner
@@ -74,7 +74,7 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 	sp.Start()
 
 	// List all worktrees (include dirty check for prune decisions)
-	allWorktrees, err := git.ListWorktrees(ctx, scanPath, true)
+	allWorktrees, err := git.ListWorktrees(ctx, worktreeDir, true)
 	if err != nil {
 		sp.Stop()
 		return err
@@ -110,7 +110,7 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 	}
 
 	// Load cache with lock
-	wtCache, unlock, err := cache.LoadWithLock(scanPath)
+	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
 	if err != nil {
 		return err
 	}
@@ -301,7 +301,7 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 	}
 
 	// Save updated cache (with RemovedAt timestamps)
-	if err := cache.Save(scanPath, wtCache); err != nil {
+	if err := cache.Save(worktreeDir, wtCache); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
 	}
 
@@ -312,10 +312,10 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 }
 
 // runPruneTargets handles removal of multiple targeted worktrees by ID
-func (c *PruneCmd) runPruneTargets(ctx context.Context, scanPath string) error {
+func (c *PruneCmd) runPruneTargets(ctx context.Context, worktreeDir string) error {
 	var errs []error
 	for _, id := range c.ID {
-		if err := c.runPruneTargetByID(ctx, id, scanPath); err != nil {
+		if err := c.runPruneTargetByID(ctx, id, worktreeDir); err != nil {
 			errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
 		}
 	}
@@ -326,10 +326,10 @@ func (c *PruneCmd) runPruneTargets(ctx context.Context, scanPath string) error {
 }
 
 // runPruneTargetByID handles removal of a single targeted worktree by ID
-func (c *PruneCmd) runPruneTargetByID(ctx context.Context, id int, scanPath string) error {
+func (c *PruneCmd) runPruneTargetByID(ctx context.Context, id int, worktreeDir string) error {
 	cfg := c.Config
 	// Resolve target by ID
-	target, err := resolve.ByID(id, scanPath)
+	target, err := resolve.ByID(id, worktreeDir)
 	if err != nil {
 		return err
 	}

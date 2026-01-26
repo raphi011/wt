@@ -437,11 +437,11 @@ func (c *PrViewCmd) runPrView(ctx context.Context) error {
 // 3. neither: use workDir (worktree or main repo)
 func resolvePrTarget(ctx context.Context, id int, repository string, cfg *config.Config, workDir string) (*resolve.Target, error) {
 	if id != 0 {
-		scanPath, err := cfg.GetAbsWorktreeDir()
+		worktreeDir, err := cfg.GetAbsWorktreeDir()
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve absolute path: %w", err)
 		}
-		return resolve.ByID(id, scanPath)
+		return resolve.ByID(id, worktreeDir)
 	}
 
 	if repository != "" {

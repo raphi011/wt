@@ -23,7 +23,7 @@ func countActiveEntries(wtCache *cache.Cache) int {
 }
 
 // checkCacheIssues finds problems in the cache.
-func checkCacheIssues(wtCache *cache.Cache, scanPath string) []Issue {
+func checkCacheIssues(wtCache *cache.Cache, worktreeDir string) []Issue {
 	var issues []Issue
 
 	for key, entry := range wtCache.Worktrees {
@@ -45,7 +45,7 @@ func checkCacheIssues(wtCache *cache.Cache, scanPath string) []Issue {
 		}
 
 		// Check 2: Wrong path (folder exists elsewhere in worktree_dir)
-		expectedPath := filepath.Join(scanPath, key)
+		expectedPath := filepath.Join(worktreeDir, key)
 		if entry.Path != "" && entry.Path != expectedPath {
 			if _, err := os.Stat(expectedPath); err == nil {
 				issues = append(issues, Issue{
@@ -93,7 +93,7 @@ func checkCacheIssues(wtCache *cache.Cache, scanPath string) []Issue {
 }
 
 // checkGitLinkIssues checks for broken git worktree links.
-func checkGitLinkIssues(ctx context.Context, wtCache *cache.Cache, scanPath string, cfg *config.Config) []Issue {
+func checkGitLinkIssues(ctx context.Context, wtCache *cache.Cache, worktreeDir string, cfg *config.Config) []Issue {
 	var issues []Issue
 
 	// Track repos we've checked for prunable worktrees
@@ -104,8 +104,8 @@ func checkGitLinkIssues(ctx context.Context, wtCache *cache.Cache, scanPath stri
 	if cfg.RepoDir != "" {
 		searchDirs = append(searchDirs, cfg.RepoDir)
 	}
-	if scanPath != cfg.RepoDir {
-		searchDirs = append(searchDirs, scanPath)
+	if worktreeDir != cfg.RepoDir {
+		searchDirs = append(searchDirs, worktreeDir)
 	}
 
 	for key, entry := range wtCache.Worktrees {
@@ -224,7 +224,7 @@ func checkGitLinkIssues(ctx context.Context, wtCache *cache.Cache, scanPath stri
 }
 
 // checkOrphanIssues finds untracked worktrees and ghost entries.
-func checkOrphanIssues(ctx context.Context, wtCache *cache.Cache, scanPath string, cfg *config.Config) []Issue {
+func checkOrphanIssues(ctx context.Context, wtCache *cache.Cache, worktreeDir string, cfg *config.Config) []Issue {
 	var issues []Issue
 
 	// Build set of known worktree paths from cache
@@ -236,7 +236,7 @@ func checkOrphanIssues(ctx context.Context, wtCache *cache.Cache, scanPath strin
 	}
 
 	// Scan directory for worktrees not in cache
-	entries, err := os.ReadDir(scanPath)
+	entries, err := os.ReadDir(worktreeDir)
 	if err != nil {
 		return issues
 	}
@@ -246,8 +246,8 @@ func checkOrphanIssues(ctx context.Context, wtCache *cache.Cache, scanPath strin
 	if cfg.RepoDir != "" {
 		searchDirs = append(searchDirs, cfg.RepoDir)
 	}
-	if scanPath != cfg.RepoDir {
-		searchDirs = append(searchDirs, scanPath)
+	if worktreeDir != cfg.RepoDir {
+		searchDirs = append(searchDirs, worktreeDir)
 	}
 
 	for _, entry := range entries {
@@ -255,7 +255,7 @@ func checkOrphanIssues(ctx context.Context, wtCache *cache.Cache, scanPath strin
 			continue
 		}
 
-		path := filepath.Join(scanPath, entry.Name())
+		path := filepath.Join(worktreeDir, entry.Name())
 
 		// Check if it's a worktree (has .git file, not directory)
 		if !git.IsWorktree(path) {

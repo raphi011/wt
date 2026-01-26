@@ -25,27 +25,27 @@ func (c *CdCmd) runCd(ctx context.Context) error {
 		return fmt.Errorf("specify target: -i <id>, -r <repo>, or -l <label>")
 	}
 
-	scanPath, err := cfg.GetAbsWorktreeDir()
+	worktreeDir, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
 	// Mode: by label (no hooks for label mode)
 	if hasLabel {
-		return runCdForLabel(ctx, c.Label, scanPath, cfg, out)
+		return runCdForLabel(ctx, c.Label, worktreeDir, cfg, out)
 	}
 
 	// Mode: by repo name (no hooks for repo mode)
 	if hasRepo {
-		return runCdForRepo(c.Repository, scanPath, cfg, out)
+		return runCdForRepo(c.Repository, worktreeDir, cfg, out)
 	}
 
 	// Mode: by ID (worktree)
-	return c.runCdForID(cfg, scanPath, out)
+	return c.runCdForID(cfg, worktreeDir, out)
 }
 
-func (c *CdCmd) runCdForID(cfg *config.Config, scanPath string, out io.Writer) error {
-	target, err := resolve.ByID(c.ID, scanPath)
+func (c *CdCmd) runCdForID(cfg *config.Config, worktreeDir string, out io.Writer) error {
+	target, err := resolve.ByID(c.ID, worktreeDir)
 	if err != nil {
 		return err
 	}

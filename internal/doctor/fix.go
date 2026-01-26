@@ -10,7 +10,7 @@ import (
 )
 
 // fixAllIssues applies fixes for all detected issues.
-func fixAllIssues(ctx context.Context, wtCache *cache.Cache, issues []Issue, scanPath string) error {
+func fixAllIssues(ctx context.Context, wtCache *cache.Cache, issues []Issue, worktreeDir string) error {
 	var fixed int
 	var failed int
 
@@ -22,7 +22,7 @@ func fixAllIssues(ctx context.Context, wtCache *cache.Cache, issues []Issue, sca
 			fixed++
 
 		case "update_path":
-			expectedPath := filepath.Join(scanPath, issue.Key)
+			expectedPath := filepath.Join(worktreeDir, issue.Key)
 			if entry, ok := wtCache.Worktrees[issue.Key]; ok {
 				entry.Path = expectedPath
 				fmt.Printf("  ✓ Updated path for %q\n", issue.Key)
@@ -96,7 +96,7 @@ func fixAllIssues(ctx context.Context, wtCache *cache.Cache, issues []Issue, sca
 
 		case "add_to_cache":
 			// Add untracked worktree to cache
-			path := filepath.Join(scanPath, issue.Key)
+			path := filepath.Join(worktreeDir, issue.Key)
 			wtInfo, err := git.GetWorktreeInfo(ctx, path)
 			if err != nil {
 				fmt.Printf("  ✗ Failed to get info for %q: %v\n", issue.Key, err)
@@ -116,7 +116,7 @@ func fixAllIssues(ctx context.Context, wtCache *cache.Cache, issues []Issue, sca
 
 		case "repair_and_add":
 			// Repair worktree link and add to cache
-			path := filepath.Join(scanPath, issue.Key)
+			path := filepath.Join(worktreeDir, issue.Key)
 			if issue.RepoPath == "" {
 				fmt.Printf("  ✗ Cannot repair %q: missing repo path\n", issue.Key)
 				failed++
@@ -150,14 +150,14 @@ func fixAllIssues(ctx context.Context, wtCache *cache.Cache, issues []Issue, sca
 
 		case "remove_orphan_dir":
 			// Report unfixable orphan - don't delete automatically
-			path := filepath.Join(scanPath, issue.Key)
+			path := filepath.Join(worktreeDir, issue.Key)
 			fmt.Printf("  ⚠ Cannot fix %q: repo not found. Delete manually: rm -rf %s\n", issue.Key, path)
 			failed++
 		}
 	}
 
 	// Save updated cache
-	if err := cache.Save(scanPath, wtCache); err != nil {
+	if err := cache.Save(worktreeDir, wtCache); err != nil {
 		return fmt.Errorf("failed to save cache: %w", err)
 	}
 
@@ -170,11 +170,11 @@ func fixAllIssues(ctx context.Context, wtCache *cache.Cache, issues []Issue, sca
 }
 
 // rebuildCache rebuilds the cache from scratch.
-func rebuildCache(ctx context.Context, scanPath string) error {
+func rebuildCache(ctx context.Context, worktreeDir string) error {
 	fmt.Println("Rebuilding cache from scratch...")
 
 	// Scan for worktrees
-	worktrees, err := git.ListWorktrees(ctx, scanPath, false)
+	worktrees, err := git.ListWorktrees(ctx, worktreeDir, false)
 	if err != nil {
 		return fmt.Errorf("failed to scan worktrees: %w", err)
 	}
@@ -197,7 +197,7 @@ func rebuildCache(ctx context.Context, scanPath string) error {
 	}
 
 	// Save
-	if err := cache.Save(scanPath, wtCache); err != nil {
+	if err := cache.Save(worktreeDir, wtCache); err != nil {
 		return fmt.Errorf("failed to save cache: %w", err)
 	}
 
