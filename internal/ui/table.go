@@ -119,7 +119,7 @@ func FormatListTable(ctx context.Context, worktrees []git.Worktree, pathToID map
 			prCol = "?"
 		} else if pr.Number > 0 {
 			// PR exists - show details
-			f := forge.DetectFromRepo(ctx, wt.MainRepo, nil)
+			f := forge.DetectFromRepo(ctx, wt.MainRepo, nil, nil)
 			state := f.FormatState(pr.State)
 			if pr.IsDraft && pr.State == "OPEN" {
 				state = "draft"

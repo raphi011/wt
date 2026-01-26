@@ -10,11 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/raphi011/wt/internal/cmd"
+	"github.com/raphi011/wt/internal/config"
 )
 
 // GitHub implements Forge for GitHub repositories using the gh CLI.
-type GitHub struct{}
+type GitHub struct {
+	ForgeConfig *config.ForgeConfig
+}
 
 // Name returns "github"
 func (g *GitHub) Name() string {
@@ -28,8 +30,9 @@ func (g *GitHub) Check(ctx context.Context) error {
 		return fmt.Errorf("gh not found: please install GitHub CLI (https://cli.github.com)")
 	}
 
-	if err := cmd.RunContext(ctx, "", "gh", "auth", "status"); err != nil {
-		errMsg := err.Error()
+	c := exec.CommandContext(ctx, "gh", "auth", "status")
+	if out, err := c.CombinedOutput(); err != nil {
+		errMsg := string(out)
 		if strings.Contains(errMsg, "not logged") || strings.Contains(errMsg, "no accounts") {
 			return fmt.Errorf("gh not authenticated: please run 'gh auth login'")
 		}
@@ -41,8 +44,9 @@ func (g *GitHub) Check(ctx context.Context) error {
 
 // GetPRForBranch fetches PR info for a branch using gh CLI
 func (g *GitHub) GetPRForBranch(ctx context.Context, repoURL, branch string) (*PRInfo, error) {
-	output, err := cmd.OutputContext(ctx, "", "gh", "pr", "list",
-		"-R", repoURL,
+	repoPath := extractRepoPath(repoURL)
+	output, err := g.outputWithUser(ctx, repoPath, "pr", "list",
+		"-R", repoPath,
 		"--head", branch,
 		"--state", "all",
 		"--json", "number,state,isDraft,url,author,comments,reviewDecision",
@@ -91,9 +95,10 @@ func (g *GitHub) GetPRForBranch(ctx context.Context, repoURL, branch string) (*P
 
 // GetPRBranch fetches the head branch name for a PR number using gh CLI
 func (g *GitHub) GetPRBranch(ctx context.Context, repoURL string, number int) (string, error) {
-	output, err := cmd.OutputContext(ctx, "", "gh", "pr", "view",
+	repoPath := extractRepoPath(repoURL)
+	output, err := g.outputWithUser(ctx, repoPath, "pr", "view",
 		fmt.Sprintf("%d", number),
-		"-R", repoURL,
+		"-R", repoPath,
 		"--json", "headRefName,isCrossRepository")
 	if err != nil {
 		return "", fmt.Errorf("gh command failed: %v", err)
@@ -130,7 +135,7 @@ func (g *GitHub) CloneRepo(ctx context.Context, repoSpec, destPath string) (stri
 	}
 	clonePath := filepath.Join(destPath, repoName)
 
-	if err := cmd.RunContext(ctx, "", "gh", "repo", "clone", repoSpec, clonePath); err != nil {
+	if err := g.runWithUser(ctx, repoSpec, "repo", "clone", repoSpec, clonePath); err != nil {
 		return "", fmt.Errorf("gh repo clone failed: %v", err)
 	}
 
@@ -139,8 +144,9 @@ func (g *GitHub) CloneRepo(ctx context.Context, repoSpec, destPath string) (stri
 
 // CreatePR creates a new PR using gh CLI
 func (g *GitHub) CreatePR(ctx context.Context, repoURL string, params CreatePRParams) (*CreatePRResult, error) {
+	repoPath := extractRepoPath(repoURL)
 	args := []string{"pr", "create",
-		"-R", repoURL,
+		"-R", repoPath,
 		"--title", params.Title,
 		"--body", params.Body,
 	}
@@ -155,7 +161,7 @@ func (g *GitHub) CreatePR(ctx context.Context, repoURL string, params CreatePRPa
 		args = append(args, "--draft")
 	}
 
-	output, err := cmd.OutputContext(ctx, "", "gh", args...)
+	output, err := g.outputWithUser(ctx, repoPath, args...)
 	if err != nil {
 		return nil, fmt.Errorf("gh pr create failed: %v", err)
 	}
@@ -181,6 +187,8 @@ func (g *GitHub) CreatePR(ctx context.Context, repoURL string, params CreatePRPa
 
 // MergePR merges a PR by number with the given strategy
 func (g *GitHub) MergePR(ctx context.Context, repoURL string, number int, strategy string) error {
+	repoPath := extractRepoPath(repoURL)
+
 	// Map strategy to gh flag
 	strategyFlag := "--squash" // default
 	switch strategy {
@@ -190,8 +198,8 @@ func (g *GitHub) MergePR(ctx context.Context, repoURL string, number int, strate
 		strategyFlag = "--merge"
 	}
 
-	if err := cmd.RunContext(ctx, "", "gh", "pr", "merge", fmt.Sprintf("%d", number),
-		"-R", repoURL,
+	if err := g.runWithUser(ctx, repoPath, "pr", "merge", fmt.Sprintf("%d", number),
+		"-R", repoPath,
 		strategyFlag,
 		"--delete-branch"); err != nil {
 		return fmt.Errorf("merge failed: %v", err)
@@ -201,13 +209,24 @@ func (g *GitHub) MergePR(ctx context.Context, repoURL string, number int, strate
 
 // ViewPR shows PR details or opens in browser
 func (g *GitHub) ViewPR(ctx context.Context, repoURL string, number int, web bool) error {
-	args := []string{"pr", "view", fmt.Sprintf("%d", number), "-R", repoURL}
+	repoPath := extractRepoPath(repoURL)
+	args := []string{"pr", "view", fmt.Sprintf("%d", number), "-R", repoPath}
 	if web {
 		args = append(args, "--web")
 	}
 	c := exec.CommandContext(ctx, "gh", args...)
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
+
+	user := g.getUserForRepo(repoPath)
+	if user != "" {
+		token, err := g.getToken(ctx, user)
+		if err != nil {
+			return err
+		}
+		c.Env = append(os.Environ(), "GH_TOKEN="+token)
+	}
+
 	return c.Run()
 }
 
@@ -225,4 +244,61 @@ func (g *GitHub) FormatState(state string) string {
 	default:
 		return ""
 	}
+}
+
+// getUserForRepo returns the gh username for a repo path based on forge rules
+func (g *GitHub) getUserForRepo(repoPath string) string {
+	if g.ForgeConfig == nil {
+		return ""
+	}
+	return g.ForgeConfig.GetUserForRepo(repoPath)
+}
+
+// getToken retrieves the auth token for a specific gh user
+func (g *GitHub) getToken(ctx context.Context, user string) (string, error) {
+	out, err := exec.CommandContext(ctx, "gh", "auth", "token", "--user", user).Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get token for user %s: %w", user, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// runWithUser runs a gh command with the appropriate user token
+func (g *GitHub) runWithUser(ctx context.Context, repoPath string, args ...string) error {
+	user := g.getUserForRepo(repoPath)
+	c := exec.CommandContext(ctx, "gh", args...)
+	c.Stderr = os.Stderr
+
+	if user != "" {
+		token, err := g.getToken(ctx, user)
+		if err != nil {
+			return err
+		}
+		c.Env = append(os.Environ(), "GH_TOKEN="+token)
+	}
+
+	return c.Run()
+}
+
+// outputWithUser runs a gh command with the appropriate user token and returns output
+func (g *GitHub) outputWithUser(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
+	user := g.getUserForRepo(repoPath)
+	c := exec.CommandContext(ctx, "gh", args...)
+
+	if user != "" {
+		token, err := g.getToken(ctx, user)
+		if err != nil {
+			return nil, err
+		}
+		c.Env = append(os.Environ(), "GH_TOKEN="+token)
+	}
+
+	out, err := c.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("%w: %s", err, string(exitErr.Stderr))
+		}
+		return nil, err
+	}
+	return out, nil
 }

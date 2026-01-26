@@ -77,7 +77,7 @@ This checklist ensures all functionality works correctly and documentation is co
 - [ ] **GitLab support** - works with `glab` CLI
 - [ ] **Local repo flag** - `-r/--repository` finds repo by name
 - [ ] **Clone mode** - positional `org/repo` clones and creates worktree
-- [ ] **Org default** - respects `[clone] org` config in clone mode
+- [ ] **Org default** - respects `[forge] default_org` config in clone mode
 - [ ] **Forge flag** - `--forge {github|gitlab}` overrides detection in clone mode
 - [ ] **Clone rules** - respects pattern-based forge routing in clone mode
 - [ ] **Note flag** - `--note` sets branch note
@@ -200,16 +200,17 @@ This checklist ensures all functionality works correctly and documentation is co
 
 - [ ] **default_path** - used when `-d` not specified
 - [ ] **worktree_format** - controls folder naming with placeholders
-- [ ] **clone.forge** - default forge for `pr checkout` clone mode
-- [ ] **clone.org** - default org for repo names
-- [ ] **clone.rules** - pattern-based forge routing works
+- [ ] **forge.default** - default forge for `pr checkout` clone mode
+- [ ] **forge.default_org** - default org for repo names
+- [ ] **forge.rules** - pattern-based forge routing works
+- [ ] **forge.rules[].user** - multi-account auth with gh CLI
 - [ ] **merge.strategy** - default merge strategy
 - [ ] **hosts** - custom domain to forge mapping
 
 ### 5.3 Config Validation
 
 - [ ] **default_path** - rejects relative paths (`.`, `..`)
-- [ ] **clone.forge** - only accepts github/gitlab/empty
+- [ ] **forge.default** - only accepts github/gitlab/empty
 - [ ] **merge.strategy** - only accepts squash/rebase/merge/empty
 - [ ] **hosts values** - only accepts github/gitlab
 

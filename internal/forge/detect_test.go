@@ -153,7 +153,7 @@ func TestDetect(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Detect(tt.url, tt.hostMap)
+			got := Detect(tt.url, tt.hostMap, nil)
 			gotType := getForgeType(got)
 			if gotType != tt.wantType {
 				t.Errorf("Detect(%q, %v) = %s, want %s", tt.url, tt.hostMap, gotType, tt.wantType)
@@ -170,5 +170,78 @@ func getForgeType(f Forge) string {
 		return "*forge.GitLab"
 	default:
 		return "unknown"
+	}
+}
+
+func TestExtractRepoPath(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{
+			name: "SSH standard",
+			url:  "git@github.com:user/repo.git",
+			want: "user/repo",
+		},
+		{
+			name: "SSH with alias",
+			url:  "git@github.com-personal:user/repo.git",
+			want: "user/repo",
+		},
+		{
+			name: "SSH with alias and org",
+			url:  "git@github.com-work:myorg/myrepo.git",
+			want: "myorg/myrepo",
+		},
+		{
+			name: "HTTPS github",
+			url:  "https://github.com/user/repo.git",
+			want: "user/repo",
+		},
+		{
+			name: "HTTPS gitlab",
+			url:  "https://gitlab.com/user/repo.git",
+			want: "user/repo",
+		},
+		{
+			name: "GitLab subgroups SSH",
+			url:  "git@gitlab.com:group/subgroup/repo.git",
+			want: "group/subgroup/repo",
+		},
+		{
+			name: "GitLab subgroups HTTPS",
+			url:  "https://gitlab.com/group/subgroup/repo.git",
+			want: "group/subgroup/repo",
+		},
+		{
+			name: "SSH protocol URL",
+			url:  "ssh://git@github.com/user/repo.git",
+			want: "user/repo",
+		},
+		{
+			name: "SSH protocol URL with port",
+			url:  "ssh://git@gitlab.internal.corp:2222/org/repo.git",
+			want: "org/repo",
+		},
+		{
+			name: "without .git suffix",
+			url:  "git@github.com:user/repo",
+			want: "user/repo",
+		},
+		{
+			name: "HTTPS without .git suffix",
+			url:  "https://github.com/user/repo",
+			want: "user/repo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractRepoPath(tt.url)
+			if got != tt.want {
+				t.Errorf("extractRepoPath(%q) = %q, want %q", tt.url, got, tt.want)
+			}
+		})
 	}
 }

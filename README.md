@@ -336,18 +336,23 @@ description = "Open Claude with prompt"
 
 **Placeholders:** `{path}`, `{branch}`, `{repo}`, `{folder}`, `{main-repo}`, `{trigger}`, `{key}`, `{key:-default}`
 
-### Clone Rules
+### Forge Settings
 
-Configure forge detection for `wt pr checkout` when cloning new repos:
+Configure forge detection and multi-account auth for PR operations:
 
 ```toml
-[clone]
-forge = "github"      # Default forge
-org = "my-company"    # Default org (allows: wt pr checkout 123 repo)
+[forge]
+default = "github"      # Default forge
+default_org = "my-company"  # Default org (allows: wt pr checkout 123 repo)
 
-[[clone.rules]]
+[[forge.rules]]
 pattern = "company/*"
-forge = "gitlab"
+type = "gitlab"
+
+[[forge.rules]]
+pattern = "work-org/*"
+type = "github"
+user = "work-account"  # Use specific gh account for matching repos
 ```
 
 ### Merge Settings

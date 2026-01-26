@@ -10,11 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/raphi011/wt/internal/cmd"
+	"github.com/raphi011/wt/internal/config"
 )
 
 // GitLab implements Forge for GitLab repositories using the glab CLI.
-type GitLab struct{}
+// Note: glab doesn't support --user flag like gh, so user field in config is ignored
+type GitLab struct {
+	ForgeConfig *config.ForgeConfig
+}
 
 // Name returns "gitlab"
 func (g *GitLab) Name() string {
@@ -28,8 +31,9 @@ func (g *GitLab) Check(ctx context.Context) error {
 		return fmt.Errorf("glab not found: please install GitLab CLI (https://gitlab.com/gitlab-org/cli)")
 	}
 
-	if err := cmd.RunContext(ctx, "", "glab", "auth", "status"); err != nil {
-		errMsg := err.Error()
+	c := exec.CommandContext(ctx, "glab", "auth", "status")
+	if out, err := c.CombinedOutput(); err != nil {
+		errMsg := string(out)
 		if strings.Contains(errMsg, "not logged") || strings.Contains(errMsg, "no token") {
 			return fmt.Errorf("glab not authenticated: please run 'glab auth login'")
 		}
@@ -39,11 +43,31 @@ func (g *GitLab) Check(ctx context.Context) error {
 	return nil
 }
 
+// runGlab runs a glab command and returns error
+func (g *GitLab) runGlab(ctx context.Context, args ...string) error {
+	c := exec.CommandContext(ctx, "glab", args...)
+	c.Stderr = os.Stderr
+	return c.Run()
+}
+
+// outputGlab runs a glab command and returns output
+func (g *GitLab) outputGlab(ctx context.Context, args ...string) ([]byte, error) {
+	c := exec.CommandContext(ctx, "glab", args...)
+	out, err := c.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("%w: %s", err, string(exitErr.Stderr))
+		}
+		return nil, err
+	}
+	return out, nil
+}
+
 // GetPRForBranch fetches PR info for a branch using glab CLI
 func (g *GitLab) GetPRForBranch(ctx context.Context, repoURL, branch string) (*PRInfo, error) {
-	projectPath := extractGitLabProject(repoURL)
+	projectPath := extractRepoPath(repoURL)
 
-	output, err := cmd.OutputContext(ctx, "", "glab", "mr", "list",
+	output, err := g.outputGlab(ctx, "mr", "list",
 		"-R", projectPath,
 		"--source-branch", branch,
 		"--state", "all",
@@ -94,9 +118,9 @@ func (g *GitLab) GetPRForBranch(ctx context.Context, repoURL, branch string) (*P
 
 // GetPRBranch fetches the source branch name for a PR number using glab CLI
 func (g *GitLab) GetPRBranch(ctx context.Context, repoURL string, number int) (string, error) {
-	projectPath := extractGitLabProject(repoURL)
+	projectPath := extractRepoPath(repoURL)
 
-	output, err := cmd.OutputContext(ctx, "", "glab", "mr", "view",
+	output, err := g.outputGlab(ctx, "mr", "view",
 		fmt.Sprintf("%d", number),
 		"-R", projectPath,
 		"-F", "json")
@@ -149,7 +173,7 @@ func (g *GitLab) CloneRepo(ctx context.Context, repoSpec, destPath string) (stri
 	}
 	clonePath := filepath.Join(destPath, repoName)
 
-	if err := cmd.RunContext(ctx, "", "glab", "repo", "clone", repoSpec, clonePath); err != nil {
+	if err := g.runGlab(ctx, "repo", "clone", repoSpec, clonePath); err != nil {
 		return "", fmt.Errorf("glab repo clone failed: %v", err)
 	}
 
@@ -158,7 +182,7 @@ func (g *GitLab) CloneRepo(ctx context.Context, repoSpec, destPath string) (stri
 
 // CreatePR creates a new MR using glab CLI
 func (g *GitLab) CreatePR(ctx context.Context, repoURL string, params CreatePRParams) (*CreatePRResult, error) {
-	projectPath := extractGitLabProject(repoURL)
+	projectPath := extractRepoPath(repoURL)
 
 	args := []string{"mr", "create",
 		"-R", projectPath,
@@ -177,7 +201,7 @@ func (g *GitLab) CreatePR(ctx context.Context, repoURL string, params CreatePRPa
 		args = append(args, "--draft")
 	}
 
-	output, err := cmd.OutputContext(ctx, "", "glab", args...)
+	output, err := g.outputGlab(ctx, args...)
 	if err != nil {
 		return nil, fmt.Errorf("glab mr create failed: %v", err)
 	}
@@ -222,7 +246,7 @@ func (g *GitLab) MergePR(ctx context.Context, repoURL string, number int, strate
 		return fmt.Errorf("rebase merge strategy is not supported on GitLab (use squash or merge)")
 	}
 
-	projectPath := extractGitLabProject(repoURL)
+	projectPath := extractRepoPath(repoURL)
 
 	args := []string{"mr", "merge", fmt.Sprintf("%d", number),
 		"-R", projectPath,
@@ -233,7 +257,7 @@ func (g *GitLab) MergePR(ctx context.Context, repoURL string, number int, strate
 	}
 	// "merge" uses default behavior (no extra flag)
 
-	if err := cmd.RunContext(ctx, "", "glab", args...); err != nil {
+	if err := g.runGlab(ctx, args...); err != nil {
 		return fmt.Errorf("merge failed: %v", err)
 	}
 	return nil
@@ -241,7 +265,7 @@ func (g *GitLab) MergePR(ctx context.Context, repoURL string, number int, strate
 
 // ViewPR shows MR details or opens in browser
 func (g *GitLab) ViewPR(ctx context.Context, repoURL string, number int, web bool) error {
-	projectPath := extractGitLabProject(repoURL)
+	projectPath := extractRepoPath(repoURL)
 	args := []string{"mr", "view", fmt.Sprintf("%d", number), "-R", projectPath}
 	if web {
 		args = append(args, "--web")
@@ -282,31 +306,3 @@ func normalizeGitLabState(state string) string {
 	}
 }
 
-// extractGitLabProject extracts the project path from a GitLab URL
-// e.g., "git@gitlab.com:group/project.git" -> "group/project"
-// e.g., "https://gitlab.com/group/subgroup/project.git" -> "group/subgroup/project"
-func extractGitLabProject(url string) string {
-	url = strings.TrimSuffix(url, ".git")
-
-	// SSH format: git@gitlab.com:group/project
-	if strings.HasPrefix(url, "git@") {
-		parts := strings.SplitN(url, ":", 2)
-		if len(parts) == 2 {
-			return parts[1]
-		}
-	}
-
-	// HTTPS format: https://gitlab.com/group/project
-	if strings.Contains(url, "://") {
-		parts := strings.SplitN(url, "://", 2)
-		if len(parts) == 2 {
-			// Remove host, keep path
-			pathParts := strings.SplitN(parts[1], "/", 2)
-			if len(pathParts) == 2 {
-				return pathParts[1]
-			}
-		}
-	}
-
-	return url
-}

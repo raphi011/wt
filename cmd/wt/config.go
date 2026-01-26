@@ -36,14 +36,15 @@ func (c *ConfigShowCmd) runConfigShow(ctx context.Context) error {
 
 	if c.JSON {
 		// Build JSON output structure
-		type cloneRuleJSON struct {
+		type forgeRuleJSON struct {
 			Pattern string `json:"pattern"`
-			Forge   string `json:"forge"`
+			Type    string `json:"type"`
+			User    string `json:"user,omitempty"`
 		}
-		type cloneJSON struct {
-			Forge string          `json:"forge"`
-			Org   string          `json:"org,omitempty"`
-			Rules []cloneRuleJSON `json:"rules,omitempty"`
+		type forgeJSON struct {
+			Default    string          `json:"default"`
+			DefaultOrg string          `json:"default_org,omitempty"`
+			Rules      []forgeRuleJSON `json:"rules,omitempty"`
 		}
 		type mergeJSON struct {
 			Strategy string `json:"strategy"`
@@ -54,16 +55,17 @@ func (c *ConfigShowCmd) runConfigShow(ctx context.Context) error {
 			WorktreeFormat string            `json:"worktree_format"`
 			BaseRef        string            `json:"base_ref"`
 			DefaultSort    string            `json:"default_sort"`
-			Clone          cloneJSON         `json:"clone"`
+			Forge          forgeJSON         `json:"forge"`
 			Merge          mergeJSON         `json:"merge"`
 			Hosts          map[string]string `json:"hosts,omitempty"`
 		}
 
-		var rules []cloneRuleJSON
-		for _, r := range cfg.Clone.Rules {
-			rules = append(rules, cloneRuleJSON{
+		var rules []forgeRuleJSON
+		for _, r := range cfg.Forge.Rules {
+			rules = append(rules, forgeRuleJSON{
 				Pattern: r.Pattern,
-				Forge:   r.Forge,
+				Type:    r.Type,
+				User:    r.User,
 			})
 		}
 
@@ -86,10 +88,10 @@ func (c *ConfigShowCmd) runConfigShow(ctx context.Context) error {
 			WorktreeFormat: cfg.WorktreeFormat,
 			BaseRef:        baseRef,
 			DefaultSort:    defaultSort,
-			Clone: cloneJSON{
-				Forge: cfg.Clone.Forge,
-				Org:   cfg.Clone.Org,
-				Rules: rules,
+			Forge: forgeJSON{
+				Default:    cfg.Forge.Default,
+				DefaultOrg: cfg.Forge.DefaultOrg,
+				Rules:      rules,
 			},
 			Merge: mergeJSON{
 				Strategy: mergeStrategy,
@@ -129,20 +131,25 @@ func (c *ConfigShowCmd) runConfigShow(ctx context.Context) error {
 	out.Printf("\n# Default sort order for 'wt list': id, repo, branch, commit\n")
 	out.Printf("default_sort = %q\n", defaultSort)
 
-	// Clone section
-	out.Printf("\n# Clone settings for 'wt clone' and 'wt pr checkout'\n")
-	out.Printf("[clone]\n")
+	// Forge section
+	out.Printf("\n# Forge settings for PR operations and cloning\n")
+	out.Printf("[forge]\n")
 	out.Printf("# Default forge: \"github\" or \"gitlab\"\n")
-	out.Printf("forge = %q\n", cfg.Clone.Forge)
-	if cfg.Clone.Org != "" {
+	out.Printf("default = %q\n", cfg.Forge.Default)
+	if cfg.Forge.DefaultOrg != "" {
 		out.Printf("# Default org when repo specified without org/ prefix\n")
-		out.Printf("org = %q\n", cfg.Clone.Org)
+		out.Printf("default_org = %q\n", cfg.Forge.DefaultOrg)
 	}
-	for _, rule := range cfg.Clone.Rules {
+	for _, rule := range cfg.Forge.Rules {
 		out.Printf("\n# Pattern-based forge rule\n")
-		out.Printf("[[clone.rules]]\n")
+		out.Printf("[[forge.rules]]\n")
 		out.Printf("pattern = %q\n", rule.Pattern)
-		out.Printf("forge = %q\n", rule.Forge)
+		if rule.Type != "" {
+			out.Printf("type = %q\n", rule.Type)
+		}
+		if rule.User != "" {
+			out.Printf("user = %q\n", rule.User)
+		}
 	}
 
 	// Merge section

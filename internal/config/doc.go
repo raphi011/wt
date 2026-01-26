@@ -32,13 +32,13 @@
 //
 // # Forge Configuration
 //
-// The [clone] section configures default forge and pattern-based rules:
+// The [forge] section configures default forge and pattern-based rules:
 //
-//	[clone]
-//	forge = "github"
-//	[[clone.rules]]
+//	[forge]
+//	default = "github"
+//	[[forge.rules]]
 //	pattern = "company/*"
-//	forge = "gitlab"
+//	type = "gitlab"
 //
 // The [hosts] section maps custom domains to forge types for self-hosted instances.
 //

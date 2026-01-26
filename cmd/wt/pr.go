@@ -56,13 +56,13 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 			return fmt.Errorf("clone mode requires org/repo format (e.g., 'org/repo'), got %q\nTo use a local repo by name, use: wt pr checkout %d -r %s", c.Repo, c.Number, c.Repo)
 		}
 
-		// Parse org/repo - use clone.org if org not specified
+		// Parse org/repo - use forge.default_org if org not specified
 		org, name := git.ParseRepoArg(c.Repo)
 		if org == "" {
-			if cfg.Clone.Org == "" {
-				return fmt.Errorf("repository must be in org/repo format, or configure [clone] org in config")
+			if cfg.Forge.DefaultOrg == "" {
+				return fmt.Errorf("repository must be in org/repo format, or configure [forge] default_org in config")
 			}
-			org = cfg.Clone.Org
+			org = cfg.Forge.DefaultOrg
 		}
 		repoSpec := org + "/" + name
 
@@ -71,13 +71,13 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 			return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr checkout %d -r %s' instead", name, existingPath, c.Number, name)
 		}
 
-		// Determine forge: c.Forge > cfg.Clone rules > cfg.Clone.Forge
+		// Determine forge: c.Forge > cfg.Forge rules > cfg.Forge.Default
 		forgeName := c.Forge
 		if forgeName == "" {
-			forgeName = cfg.Clone.GetForgeForRepo(repoSpec)
+			forgeName = cfg.Forge.GetForgeTypeForRepo(repoSpec)
 		}
 
-		f = forge.ByName(forgeName)
+		f = forge.ByNameWithConfig(forgeName, &cfg.Forge)
 		if err := f.Check(ctx); err != nil {
 			return err
 		}
@@ -114,7 +114,7 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 			return fmt.Errorf("failed to get origin URL: %w", err)
 		}
 
-		f = forge.Detect(originURL, cfg.Hosts)
+		f = forge.Detect(originURL, cfg.Hosts, &cfg.Forge)
 		if err := f.Check(ctx); err != nil {
 			return err
 		}
@@ -210,7 +210,7 @@ func (c *PrMergeCmd) runPrMerge(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get origin URL: %w", err)
 	}
-	f := forge.Detect(originURL, cfg.Hosts)
+	f := forge.Detect(originURL, cfg.Hosts, &cfg.Forge)
 	if err := f.Check(ctx); err != nil {
 		return err
 	}
@@ -324,7 +324,7 @@ func (c *PrCreateCmd) runPrCreate(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get origin URL: %w", err)
 	}
-	f := forge.Detect(originURL, cfg.Hosts)
+	f := forge.Detect(originURL, cfg.Hosts, &cfg.Forge)
 	if err := f.Check(ctx); err != nil {
 		return err
 	}
@@ -410,7 +410,7 @@ func (c *PrViewCmd) runPrView(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get origin URL: %w", err)
 	}
-	f := forge.Detect(originURL, cfg.Hosts)
+	f := forge.Detect(originURL, cfg.Hosts, &cfg.Forge)
 	if err := f.Check(ctx); err != nil {
 		return err
 	}
