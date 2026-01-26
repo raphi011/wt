@@ -39,10 +39,10 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 		return err
 	}
 
-	// Repo scan dir (from config, fallback to dir)
-	repoScanDir := cfg.RepoScanDir()
-	if repoScanDir == "" {
-		repoScanDir = dir
+	// Repo dir (from config, fallback to dir)
+	repoDir := cfg.RepoScanDir()
+	if repoDir == "" {
+		repoDir = dir
 	}
 
 	var repoPath string
@@ -66,7 +66,7 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 		repoSpec := org + "/" + name
 
 		// Check if repo already exists locally
-		if existingPath, err := git.FindRepoByName(repoScanDir, name); err == nil {
+		if existingPath, err := git.FindRepoByName(repoDir, name); err == nil {
 			return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr checkout %d -r %s' instead", name, existingPath, c.Number, name)
 		}
 
@@ -81,9 +81,9 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 			return err
 		}
 
-		// Clone the repo to repoScanDir (repo_dir if set, else worktree_dir)
-		fmt.Printf("Cloning %s to %s (using %s)...\n", repoSpec, repoScanDir, forgeName)
-		repoPath, err = f.CloneRepo(ctx, repoSpec, repoScanDir)
+		// Clone the repo to repoDir (repo_dir if set, else worktree_dir)
+		fmt.Printf("Cloning %s to %s (using %s)...\n", repoSpec, repoDir, forgeName)
+		repoPath, err = f.CloneRepo(ctx, repoSpec, repoDir)
 		if err != nil {
 			return fmt.Errorf("failed to clone repo: %w", err)
 		}
@@ -92,13 +92,13 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 		// Local mode: -r flag or current directory
 		if c.Repository != "" {
 			// -r flag: find repo locally by name
-			foundPath, err := git.FindRepoByName(repoScanDir, c.Repository)
+			foundPath, err := git.FindRepoByName(repoDir, c.Repository)
 			if err != nil {
-				similar := git.FindSimilarRepos(repoScanDir, c.Repository)
+				similar := git.FindSimilarRepos(repoDir, c.Repository)
 				if len(similar) > 0 {
-					return fmt.Errorf("repository %q not found in %s\nDid you mean: %s", c.Repository, repoScanDir, strings.Join(similar, ", "))
+					return fmt.Errorf("repository %q not found in %s\nDid you mean: %s", c.Repository, repoDir, strings.Join(similar, ", "))
 				}
-				return fmt.Errorf("repository %q not found in %s", c.Repository, repoScanDir)
+				return fmt.Errorf("repository %q not found in %s", c.Repository, repoDir)
 			}
 			repoPath = foundPath
 			fmt.Printf("Using repo at %s\n", repoPath)
@@ -363,13 +363,13 @@ func (c *PrCreateCmd) runPrCreate(ctx context.Context) error {
 	fmt.Printf("✓ PR #%d created: %s\n", result.Number, result.URL)
 
 	// Update cache with PR info
-	scanDir := cfg.WorktreeDir
-	if scanDir == "" {
-		scanDir = filepath.Dir(target.Path)
+	worktreeDir := cfg.WorktreeDir
+	if worktreeDir == "" {
+		worktreeDir = filepath.Dir(target.Path)
 	}
-	scanDir, _ = filepath.Abs(scanDir)
+	worktreeDir, _ = filepath.Abs(worktreeDir)
 
-	wtCache, err := cache.Load(scanDir)
+	wtCache, err := cache.Load(worktreeDir)
 	if err == nil {
 		state := "OPEN"
 		if c.Draft {
@@ -385,7 +385,7 @@ func (c *PrCreateCmd) runPrCreate(ctx context.Context) error {
 		}
 		folderName := filepath.Base(target.Path)
 		wtCache.SetPRForBranch(folderName, prInfo)
-		if err := cache.Save(scanDir, wtCache); err != nil {
+		if err := cache.Save(worktreeDir, wtCache); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to update cache: %v\n", err)
 		}
 	}
@@ -445,15 +445,15 @@ func resolvePrTarget(ctx context.Context, id int, repository string, cfg *config
 	}
 
 	if repository != "" {
-		repoScanDir := cfg.RepoScanDir()
-		if repoScanDir == "" {
+		repoDir := cfg.RepoScanDir()
+		if repoDir == "" {
 			var err error
-			repoScanDir, err = cfg.GetAbsWorktreeDir()
+			repoDir, err = cfg.GetAbsWorktreeDir()
 			if err != nil {
 				return nil, fmt.Errorf("failed to resolve absolute path: %w", err)
 			}
 		}
-		return resolve.ByRepoName(ctx, repository, repoScanDir)
+		return resolve.ByRepoName(ctx, repository, repoDir)
 	}
 
 	return resolve.FromWorktreeOrRepoPath(ctx, workDir)

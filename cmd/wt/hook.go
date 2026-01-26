@@ -87,12 +87,12 @@ func runHookForID(id int, hookNames []string, worktreeDir string, cfg *config.Co
 }
 
 func runHookForRepos(ctx context.Context, repos []string, labels []string, hookNames []string, dir string, cfg *config.Config, env map[string]string, dryRun bool) error {
-	scanDir, err := resolveRepoScanDir(dir, cfg)
+	repoDir, err := resolveRepoDir(dir, cfg)
 	if err != nil {
 		return err
 	}
 
-	repoPaths, errs := collectRepoPaths(ctx, repos, labels, scanDir, cfg)
+	repoPaths, errs := collectRepoPaths(ctx, repos, labels, repoDir, cfg)
 
 	// Run hooks for each repo
 	for repoPath := range repoPaths {

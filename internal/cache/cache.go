@@ -67,8 +67,8 @@ func LockPath(dir string) string {
 }
 
 // Load loads the unified cache from disk
-func Load(scanDir string) (*Cache, error) {
-	cachePath := CachePath(scanDir)
+func Load(worktreeDir string) (*Cache, error) {
+	cachePath := CachePath(worktreeDir)
 
 	data, err := os.ReadFile(cachePath)
 	if err != nil {
@@ -102,8 +102,8 @@ func Load(scanDir string) (*Cache, error) {
 }
 
 // Save saves the unified cache to disk atomically
-func Save(scanDir string, cache *Cache) error {
-	cachePath := CachePath(scanDir)
+func Save(worktreeDir string, cache *Cache) error {
+	cachePath := CachePath(worktreeDir)
 	tempPath := cachePath + ".tmp"
 
 	data, err := json.MarshalIndent(cache, "", "  ")

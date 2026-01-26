@@ -101,8 +101,8 @@ func HasLabel(ctx context.Context, repoPath, label string) (bool, error) {
 
 // FindReposByLabel scans a directory for repos with the given label
 // Returns paths to matching repositories
-func FindReposByLabel(ctx context.Context, scanDir, label string) ([]string, error) {
-	repos, err := FindAllRepos(scanDir)
+func FindReposByLabel(ctx context.Context, repoDir, label string) ([]string, error) {
+	repos, err := FindAllRepos(repoDir)
 	if err != nil {
 		return nil, err
 	}

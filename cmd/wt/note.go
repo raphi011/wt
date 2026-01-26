@@ -78,15 +78,15 @@ func resolveNoteTarget(ctx context.Context, id int, repository string, cfg *conf
 	}
 
 	if repository != "" {
-		repoScanDir := cfg.RepoScanDir()
-		if repoScanDir == "" {
+		repoDir := cfg.RepoScanDir()
+		if repoDir == "" {
 			var err error
-			repoScanDir, err = cfg.GetAbsWorktreeDir()
+			repoDir, err = cfg.GetAbsWorktreeDir()
 			if err != nil {
 				return nil, fmt.Errorf("failed to resolve absolute path: %w", err)
 			}
 		}
-		return resolve.ByRepoName(ctx, repository, repoScanDir)
+		return resolve.ByRepoName(ctx, repository, repoDir)
 	}
 
 	return resolve.FromWorktreeOrRepoPath(ctx, workDir)

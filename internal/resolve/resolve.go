@@ -85,8 +85,8 @@ func FromWorktreeOrRepoPath(ctx context.Context, path string) (*Target, error) {
 
 // ByRepoName resolves a target by repository name.
 // Returns target with current branch of that repo.
-func ByRepoName(ctx context.Context, repoName, repoScanDir string) (*Target, error) {
-	repoPath, err := git.FindRepoByName(repoScanDir, repoName)
+func ByRepoName(ctx context.Context, repoName, repoDir string) (*Target, error) {
+	repoPath, err := git.FindRepoByName(repoDir, repoName)
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +101,8 @@ func ByRepoName(ctx context.Context, repoName, repoScanDir string) (*Target, err
 
 // ByID resolves a worktree target by its numeric ID only.
 // Returns error if ID not found, worktree was removed, or path no longer exists.
-func ByID(id int, scanDir string) (*Target, error) {
-	wtCache, err := cache.Load(scanDir)
+func ByID(id int, worktreeDir string) (*Target, error) {
+	wtCache, err := cache.Load(worktreeDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load cache: %w", err)
 	}

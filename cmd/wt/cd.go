@@ -81,12 +81,12 @@ func (c *CdCmd) runCdForID(cfg *config.Config, worktreeDir string, out io.Writer
 }
 
 func runCdForRepo(repoName string, dir string, cfg *config.Config, out io.Writer) error {
-	scanDir, err := resolveRepoScanDir(dir, cfg)
+	repoDir, err := resolveRepoDir(dir, cfg)
 	if err != nil {
 		return err
 	}
 
-	repoPath, err := git.FindRepoByName(scanDir, repoName)
+	repoPath, err := git.FindRepoByName(repoDir, repoName)
 	if err != nil {
 		return err
 	}
@@ -100,12 +100,12 @@ func runCdForRepo(repoName string, dir string, cfg *config.Config, out io.Writer
 }
 
 func runCdForLabel(ctx context.Context, label string, dir string, cfg *config.Config, out io.Writer) error {
-	scanDir, err := resolveRepoScanDir(dir, cfg)
+	repoDir, err := resolveRepoDir(dir, cfg)
 	if err != nil {
 		return err
 	}
 
-	repos, err := git.FindReposByLabel(ctx, scanDir, label)
+	repos, err := git.FindReposByLabel(ctx, repoDir, label)
 	if err != nil {
 		return err
 	}
