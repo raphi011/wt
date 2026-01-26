@@ -195,7 +195,16 @@ func (c *ListCmd) runList(ctx context.Context) error {
 		fmt.Fprintf(out, "Listing worktrees in %s (%d, sorted by %s)\n\n", worktreeDir, len(worktrees), sortDesc)
 	}
 
-	// Update merge status for worktrees based on cached PR state
+	updateMergeStatusFromCache(worktrees, wtCache)
+
+	// Display table
+	fmt.Fprint(out, ui.FormatListTable(ctx, worktrees, pathToID, wtCache))
+
+	return nil
+}
+
+// updateMergeStatusFromCache updates worktree merge status based on cached PR state
+func updateMergeStatusFromCache(worktrees []git.Worktree, wtCache *cache.Cache) {
 	for i := range worktrees {
 		folderName := filepath.Base(worktrees[i].Path)
 		pr := wtCache.GetPRForBranch(folderName)
@@ -203,14 +212,6 @@ func (c *ListCmd) runList(ctx context.Context) error {
 			worktrees[i].IsMerged = true
 		}
 	}
-
-	// Sort worktrees
-	sortWorktrees(worktrees, pathToID, sortBy)
-
-	// Display table
-	fmt.Fprint(out, ui.FormatListTable(ctx, worktrees, pathToID, wtCache))
-
-	return nil
 }
 
 func sortWorktrees(wts []git.Worktree, pathToID map[string]int, sortBy string) {

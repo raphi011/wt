@@ -163,7 +163,7 @@ func gatherShowInfo(ctx context.Context, target *resolve.Target, prInfo *forge.P
 
 	// Get origin URL and extract repo name from it
 	info.OriginURL, _ = git.GetOriginURL(ctx, target.MainRepo)
-	info.RepoName = extractRepoName(info.OriginURL)
+	info.RepoName = git.ExtractRepoNameFromURL(info.OriginURL)
 	if info.RepoName == "" {
 		// Fallback to local folder name
 		info.RepoName = filepath.Base(target.MainRepo)
@@ -528,33 +528,4 @@ func formatTimeAgo(t time.Time) string {
 	}
 }
 
-// extractRepoName extracts the repository name from a git remote URL
-// Supports SSH (git@github.com:org/repo.git) and HTTPS (https://github.com/org/repo.git)
-func extractRepoName(url string) string {
-	if url == "" {
-		return ""
-	}
-
-	// Remove .git suffix
-	url = strings.TrimSuffix(url, ".git")
-
-	// Handle SSH format: git@github.com:org/repo
-	if strings.Contains(url, ":") && strings.Contains(url, "@") {
-		parts := strings.Split(url, ":")
-		if len(parts) == 2 {
-			pathParts := strings.Split(parts[1], "/")
-			if len(pathParts) > 0 {
-				return pathParts[len(pathParts)-1]
-			}
-		}
-	}
-
-	// Handle HTTPS format: https://github.com/org/repo
-	parts := strings.Split(url, "/")
-	if len(parts) > 0 {
-		return parts[len(parts)-1]
-	}
-
-	return ""
-}
 

@@ -205,13 +205,8 @@ func (c *PrMergeCmd) runPrMerge(ctx context.Context) error {
 	// Check if we're operating from main repo (not a worktree)
 	isMainRepo := target.Path == target.MainRepo
 
-	// Get origin URL and detect forge
-	originURL, err := git.GetOriginURL(ctx, target.MainRepo)
+	f, originURL, err := forge.DetectAndCheck(ctx, target.MainRepo, cfg.Hosts, &cfg.Forge)
 	if err != nil {
-		return fmt.Errorf("failed to get origin URL: %w", err)
-	}
-	f := forge.Detect(originURL, cfg.Hosts, &cfg.Forge)
-	if err := f.Check(ctx); err != nil {
 		return err
 	}
 
@@ -319,13 +314,8 @@ func (c *PrCreateCmd) runPrCreate(ctx context.Context) error {
 		return err
 	}
 
-	// Get origin URL and detect forge
-	originURL, err := git.GetOriginURL(ctx, target.MainRepo)
+	f, originURL, err := forge.DetectAndCheck(ctx, target.MainRepo, cfg.Hosts, &cfg.Forge)
 	if err != nil {
-		return fmt.Errorf("failed to get origin URL: %w", err)
-	}
-	f := forge.Detect(originURL, cfg.Hosts, &cfg.Forge)
-	if err := f.Check(ctx); err != nil {
 		return err
 	}
 
@@ -405,13 +395,8 @@ func (c *PrViewCmd) runPrView(ctx context.Context) error {
 		return err
 	}
 
-	// Get origin URL and detect forge
-	originURL, err := git.GetOriginURL(ctx, target.MainRepo)
+	f, originURL, err := forge.DetectAndCheck(ctx, target.MainRepo, cfg.Hosts, &cfg.Forge)
 	if err != nil {
-		return fmt.Errorf("failed to get origin URL: %w", err)
-	}
-	f := forge.Detect(originURL, cfg.Hosts, &cfg.Forge)
-	if err := f.Check(ctx); err != nil {
 		return err
 	}
 

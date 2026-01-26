@@ -253,33 +253,8 @@ func (c *CheckoutCmd) runCheckoutMultiRepo(ctx context.Context, insideRepo bool)
 	}
 
 	// Collect repo paths: from -r (by name) and -l (by label)
-	repoPaths := make(map[string]bool) // dedupe by path
-
-	// Process -r flags (repository names)
-	for _, repoName := range c.Repository {
-		repoPath, err := git.FindRepoByName(repoDir, repoName)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
-			continue
-		}
-		repoPaths[repoPath] = true
-	}
-
-	// Process -l flags (labels)
-	for _, label := range c.Label {
-		paths, err := git.FindReposByLabel(ctx, repoDir, label)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("label %q: %w", label, err))
-			continue
-		}
-		if len(paths) == 0 {
-			errs = append(errs, fmt.Errorf("label %q: no repos found with this label", label))
-			continue
-		}
-		for _, p := range paths {
-			repoPaths[p] = true
-		}
-	}
+	repoPaths, collectErrs := collectRepoPaths(ctx, c.Repository, c.Label, repoDir)
+	errs = append(errs, collectErrs...)
 
 	// Process each unique repository
 	for repoPath := range repoPaths {

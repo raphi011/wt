@@ -40,6 +40,20 @@ func DetectFromRepo(ctx context.Context, repoPath string, hostMap map[string]str
 	return Detect(url, hostMap, forgeConfig)
 }
 
+// DetectAndCheck detects the forge for a repo and verifies the CLI is available.
+// Returns the forge, origin URL, and any error encountered.
+func DetectAndCheck(ctx context.Context, repoPath string, hostMap map[string]string, forgeConfig *config.ForgeConfig) (Forge, string, error) {
+	originURL, err := git.GetOriginURL(ctx, repoPath)
+	if err != nil {
+		return nil, "", err
+	}
+	f := Detect(originURL, hostMap, forgeConfig)
+	if err := f.Check(ctx); err != nil {
+		return nil, "", err
+	}
+	return f, originURL, nil
+}
+
 // extractHost parses the hostname from a git remote URL.
 // Handles SSH format (git@host:path) and HTTPS format (https://host/path).
 func extractHost(remoteURL string) string {
@@ -110,12 +124,6 @@ func isGitLab(url string) bool {
 	}
 
 	return false
-}
-
-// isGitHub checks if a URL points to GitHub
-func isGitHub(url string) bool {
-	url = strings.ToLower(url)
-	return strings.Contains(url, "github.com")
 }
 
 // extractRepoPath extracts owner/repo from a git URL.
