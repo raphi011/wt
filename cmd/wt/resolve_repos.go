@@ -5,25 +5,18 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 )
 
 // collectRepoPaths collects unique repository paths from -r and -l flags.
 // Returns a map of repo paths (for deduplication) and any errors encountered.
-func collectRepoPaths(ctx context.Context, repos []string, labels []string, repoDir string, cfg *config.Config) (map[string]bool, []error) {
+func collectRepoPaths(ctx context.Context, repos []string, labels []string, repoDir string) (map[string]bool, []error) {
 	var errs []error
 	repoPaths := make(map[string]bool)
 
-	// Determine repo directory
-	effectiveRepoDir := cfg.RepoScanDir()
-	if effectiveRepoDir == "" {
-		effectiveRepoDir = repoDir
-	}
-
 	// Process -r flags (repository names)
 	for _, repoName := range repos {
-		repoPath, err := git.FindRepoByName(effectiveRepoDir, repoName)
+		repoPath, err := git.FindRepoByName(repoDir, repoName)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
 			continue
@@ -33,7 +26,7 @@ func collectRepoPaths(ctx context.Context, repos []string, labels []string, repo
 
 	// Process -l flags (labels)
 	for _, label := range labels {
-		paths, err := git.FindReposByLabel(ctx, effectiveRepoDir, label)
+		paths, err := git.FindReposByLabel(ctx, repoDir, label)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("label %q: %w", label, err))
 			continue
@@ -51,10 +44,10 @@ func collectRepoPaths(ctx context.Context, repos []string, labels []string, repo
 }
 
 // resolveRepoDir resolves the directory to scan for repositories.
-// Uses cfg.RepoScanDir() if set, otherwise falls back to the provided dir.
+// Uses repoScanDir if set, otherwise falls back to the provided dir.
 // Returns an error if no directory can be determined.
-func resolveRepoDir(dir string, cfg *config.Config) (string, error) {
-	repoDir := cfg.RepoScanDir()
+func resolveRepoDir(dir, repoScanDir string) (string, error) {
+	repoDir := repoScanDir
 	if repoDir == "" {
 		repoDir = dir
 	}

@@ -108,6 +108,8 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 - Handle platform-specific limitations explicitly (e.g., GitLab doesn't support rebase merge via CLI)
 - Never call `gh` or `glab` directly outside `internal/forge/`
 
+**Branch Workflow** - All changes must be made in a feature branch and merged through a PR. Never commit directly to main.
+
 ### Dependency Injection Pattern
 
 **Deps struct** - Stable configuration embedded in command structs:

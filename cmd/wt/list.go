@@ -75,7 +75,11 @@ func (c *ListCmd) runList(ctx context.Context) error {
 
 	if hasRepoOrLabelFilter {
 		// Filter by -r and/or -l flags (overrides current repo filter)
-		repoPaths, errs := collectRepoPaths(ctx, c.Repository, c.Label, worktreeDir, cfg)
+		repoDir, err := resolveRepoDir(worktreeDir, cfg.RepoScanDir())
+		if err != nil {
+			return err
+		}
+		repoPaths, errs := collectRepoPaths(ctx, c.Repository, c.Label, repoDir)
 		for _, e := range errs {
 			fmt.Fprintf(os.Stderr, "Warning: %v\n", e)
 		}
