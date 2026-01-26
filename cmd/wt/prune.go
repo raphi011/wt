@@ -162,14 +162,7 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 		refreshPRStatus(ctx, worktrees, wtCache, cfg.Hosts, &cfg.Forge, sp)
 	}
 
-	// Update merge status for worktrees based on cached PR state
-	for i := range worktrees {
-		folderName := filepath.Base(worktrees[i].Path)
-		pr := wtCache.GetPRForBranch(folderName)
-		if pr != nil && pr.Fetched && pr.State == "MERGED" {
-			worktrees[i].IsMerged = true
-		}
-	}
+	updateMergeStatusFromCache(worktrees, wtCache)
 
 	// Stop spinner and clear line
 	sp.Stop()
