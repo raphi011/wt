@@ -10,13 +10,13 @@ import (
 
 // Run performs diagnostic checks on the worktree cache and optionally fixes issues.
 func Run(ctx context.Context, cfg *config.Config, fix bool) error {
-	scanPath, err := cfg.GetAbsWorktreeDir()
+	worktreeDir, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
 	// Load cache with lock
-	wtCache, unlock, err := cache.LoadWithLock(scanPath)
+	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
 	if err != nil {
 		return err
 	}
@@ -27,7 +27,7 @@ func Run(ctx context.Context, cfg *config.Config, fix bool) error {
 
 	// Category 1: Cache integrity checks
 	fmt.Println("Checking cache integrity...")
-	cacheIssues := checkCacheIssues(wtCache, scanPath)
+	cacheIssues := checkCacheIssues(wtCache, worktreeDir)
 	for i := range cacheIssues {
 		cacheIssues[i].Category = CategoryCache
 	}
@@ -37,7 +37,7 @@ func Run(ctx context.Context, cfg *config.Config, fix bool) error {
 
 	// Category 2: Git link checks
 	fmt.Println("Checking git links...")
-	gitIssues := checkGitLinkIssues(ctx, wtCache, scanPath, cfg)
+	gitIssues := checkGitLinkIssues(ctx, wtCache, worktreeDir, cfg)
 	for i := range gitIssues {
 		gitIssues[i].Category = CategoryGit
 	}
@@ -56,7 +56,7 @@ func Run(ctx context.Context, cfg *config.Config, fix bool) error {
 
 	// Category 3: Orphan checks
 	fmt.Println("Checking for orphans...")
-	orphanIssues := checkOrphanIssues(ctx, wtCache, scanPath, cfg)
+	orphanIssues := checkOrphanIssues(ctx, wtCache, worktreeDir, cfg)
 	for i := range orphanIssues {
 		orphanIssues[i].Category = CategoryOrphan
 	}
@@ -84,7 +84,7 @@ func Run(ctx context.Context, cfg *config.Config, fix bool) error {
 	printIssuesByCategory(allIssues)
 
 	if fix {
-		return fixAllIssues(ctx, wtCache, allIssues, scanPath)
+		return fixAllIssues(ctx, wtCache, allIssues, worktreeDir)
 	}
 
 	fmt.Println("\nRun 'wt doctor --fix' to repair.")
@@ -93,18 +93,18 @@ func Run(ctx context.Context, cfg *config.Config, fix bool) error {
 
 // Reset rebuilds the cache from scratch, discarding all existing entries.
 func Reset(ctx context.Context, cfg *config.Config) error {
-	scanPath, err := cfg.GetAbsWorktreeDir()
+	worktreeDir, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	lock := cache.NewFileLock(cache.LockPath(scanPath))
+	lock := cache.NewFileLock(cache.LockPath(worktreeDir))
 	if err := lock.Lock(); err != nil {
 		return fmt.Errorf("failed to acquire lock: %w", err)
 	}
 	defer lock.Unlock()
 
-	return rebuildCache(ctx, scanPath)
+	return rebuildCache(ctx, worktreeDir)
 }
 
 // printSummary prints a categorized summary.

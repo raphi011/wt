@@ -60,19 +60,19 @@ type PRInfo struct {
 func (c *ShowCmd) runShow(ctx context.Context) error {
 	cfg := c.Config
 	workDir := c.WorkDir
-	scanPath, err := cfg.GetAbsWorktreeDir()
+	worktreeDir, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
 	// Resolve target worktree
-	info, err := resolveShowTarget(ctx, c.ID, c.Repository, cfg, scanPath, workDir)
+	info, err := resolveShowTarget(ctx, c.ID, c.Repository, cfg, worktreeDir, workDir)
 	if err != nil {
 		return err
 	}
 
 	// Load cache with lock
-	wtCache, unlock, err := cache.LoadWithLock(scanPath)
+	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func (c *ShowCmd) runShow(ctx context.Context) error {
 			prInfo = fetchPRForBranch(ctx, originURL, info.MainRepo, info.Branch, folderName, wtCache, cfg)
 			sp.Stop()
 			// Save updated cache
-			if err := cache.Save(scanPath, wtCache); err != nil {
+			if err := cache.Save(worktreeDir, wtCache); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
 			}
 		} else if pr := wtCache.GetPRForBranch(folderName); pr != nil && pr.Fetched {
@@ -111,15 +111,15 @@ func (c *ShowCmd) runShow(ctx context.Context) error {
 func resolveShowTarget(ctx context.Context, id int, repository string, cfg *config.Config, dir string, workDir string) (*resolve.Target, error) {
 	// Resolve by ID if provided
 	if id != 0 {
-		scanPath := dir
-		if scanPath == "" {
-			scanPath = "."
+		worktreeDir := dir
+		if worktreeDir == "" {
+			worktreeDir = "."
 		}
-		scanPath, err := filepath.Abs(scanPath)
+		worktreeDir, err := filepath.Abs(worktreeDir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve absolute path: %w", err)
 		}
-		return resolve.ByID(id, scanPath)
+		return resolve.ByID(id, worktreeDir)
 	}
 
 	// Resolve by repo name if provided
@@ -156,12 +156,12 @@ func resolveShowTarget(ctx context.Context, id int, repository string, cfg *conf
 	}
 
 	// Get ID from cache if available
-	scanPath := dir
-	if scanPath == "" {
-		scanPath = "."
+	worktreeDir := dir
+	if worktreeDir == "" {
+		worktreeDir = "."
 	}
-	scanPath, _ = filepath.Abs(scanPath)
-	wtCache, _ := cache.Load(scanPath)
+	worktreeDir, _ = filepath.Abs(worktreeDir)
+	wtCache, _ := cache.Load(worktreeDir)
 	wtID := 0
 	if wtCache != nil {
 		key := cache.MakeWorktreeKey(workDir)

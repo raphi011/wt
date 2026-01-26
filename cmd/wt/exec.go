@@ -33,25 +33,25 @@ func (c *ExecCmd) runExec(ctx context.Context) error {
 		return fmt.Errorf("specify target: -i <id>, -r <repo>, or -l <label>")
 	}
 
-	scanPath, err := cfg.GetAbsWorktreeDir()
+	worktreeDir, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
 	// Mode: by ID (worktrees)
 	if hasID {
-		return runExecForIDs(c.ID, command, scanPath)
+		return runExecForIDs(c.ID, command, worktreeDir)
 	}
 
 	// Mode: by repo/label
-	return runExecForRepos(ctx, c.Repository, c.Label, command, scanPath, cfg)
+	return runExecForRepos(ctx, c.Repository, c.Label, command, worktreeDir, cfg)
 }
 
-func runExecForIDs(ids []int, command []string, scanPath string) error {
+func runExecForIDs(ids []int, command []string, worktreeDir string) error {
 
 	var errs []error
 	for _, id := range ids {
-		if err := runExecForID(id, command, scanPath); err != nil {
+		if err := runExecForID(id, command, worktreeDir); err != nil {
 			errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
 		}
 	}
@@ -92,9 +92,9 @@ func runCommandInDir(command []string, dir string) error {
 	return c.Run()
 }
 
-func runExecForID(id int, command []string, scanPath string) error {
+func runExecForID(id int, command []string, worktreeDir string) error {
 	// Resolve target by ID
-	target, err := resolve.ByID(id, scanPath)
+	target, err := resolve.ByID(id, worktreeDir)
 	if err != nil {
 		return err
 	}

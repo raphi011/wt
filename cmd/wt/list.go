@@ -19,20 +19,20 @@ func (c *ListCmd) runList(ctx context.Context) error {
 	cfg := c.Config
 	workDir := c.WorkDir
 	out := output.FromContext(ctx).Writer()
-	scanPath, err := cfg.GetAbsWorktreeDir()
+	worktreeDir, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
 	// Load cache with lock
-	wtCache, unlock, err := cache.LoadWithLock(scanPath)
+	wtCache, unlock, err := cache.LoadWithLock(worktreeDir)
 	if err != nil {
 		return err
 	}
 	defer unlock()
 
 	// List worktrees (no dirty check needed for list)
-	allWorktrees, err := git.ListWorktrees(ctx, scanPath, false)
+	allWorktrees, err := git.ListWorktrees(ctx, worktreeDir, false)
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func (c *ListCmd) runList(ctx context.Context) error {
 
 	if hasRepoOrLabelFilter {
 		// Filter by -r and/or -l flags (overrides current repo filter)
-		repoPaths, errs := collectRepoPaths(ctx, c.Repository, c.Label, scanPath, cfg)
+		repoPaths, errs := collectRepoPaths(ctx, c.Repository, c.Label, worktreeDir, cfg)
 		for _, e := range errs {
 			fmt.Fprintf(os.Stderr, "Warning: %v\n", e)
 		}
@@ -103,7 +103,7 @@ func (c *ListCmd) runList(ctx context.Context) error {
 	}
 
 	// Save updated cache
-	if err := cache.Save(scanPath, wtCache); err != nil {
+	if err := cache.Save(worktreeDir, wtCache); err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
 	}
 
@@ -188,7 +188,7 @@ func (c *ListCmd) runList(ctx context.Context) error {
 	if currentRepo != "" && len(allWorktrees) != len(worktrees) {
 		fmt.Fprintf(out, "Listing worktrees for %s (%d of %d, sorted by %s). Use --global to show all\n\n", worktrees[0].RepoName, len(worktrees), len(allWorktrees), sortDesc)
 	} else {
-		fmt.Fprintf(out, "Listing worktrees in %s (%d, sorted by %s)\n\n", scanPath, len(worktrees), sortDesc)
+		fmt.Fprintf(out, "Listing worktrees in %s (%d, sorted by %s)\n\n", worktreeDir, len(worktrees), sortDesc)
 	}
 
 	// Update merge status for worktrees based on cached PR state

@@ -53,7 +53,7 @@ func (c *HookCmd) runHookRun(ctx context.Context) error {
 		return runHooksForContext(c.Hooks, cfg, hookCtx)
 	}
 
-	scanPath, err := cfg.GetAbsWorktreeDir()
+	worktreeDir, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
@@ -62,7 +62,7 @@ func (c *HookCmd) runHookRun(ctx context.Context) error {
 	if hasID {
 		var errs []error
 		for _, id := range c.ID {
-			if err := runHookForID(id, c.Hooks, scanPath, cfg, env, c.DryRun); err != nil {
+			if err := runHookForID(id, c.Hooks, worktreeDir, cfg, env, c.DryRun); err != nil {
 				errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
 			}
 		}
@@ -73,11 +73,11 @@ func (c *HookCmd) runHookRun(ctx context.Context) error {
 	}
 
 	// Mode: by repo/label
-	return runHookForRepos(ctx, c.Repository, c.Label, c.Hooks, scanPath, cfg, env, c.DryRun)
+	return runHookForRepos(ctx, c.Repository, c.Label, c.Hooks, worktreeDir, cfg, env, c.DryRun)
 }
 
-func runHookForID(id int, hookNames []string, scanPath string, cfg *config.Config, env map[string]string, dryRun bool) error {
-	ctx, err := resolveHookTargetByID(id, scanPath)
+func runHookForID(id int, hookNames []string, worktreeDir string, cfg *config.Config, env map[string]string, dryRun bool) error {
+	ctx, err := resolveHookTargetByID(id, worktreeDir)
 	if err != nil {
 		return err
 	}
@@ -141,8 +141,8 @@ func resolveHookTargetCurrentPath(ctx context.Context, workDir string) (hooks.Co
 }
 
 // resolveHookTargetByID resolves the worktree context by ID.
-func resolveHookTargetByID(id int, scanPath string) (hooks.Context, error) {
-	target, err := resolve.ByID(id, scanPath)
+func resolveHookTargetByID(id int, worktreeDir string) (hooks.Context, error) {
+	target, err := resolve.ByID(id, worktreeDir)
 	if err != nil {
 		return hooks.Context{}, err
 	}
