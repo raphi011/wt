@@ -9,14 +9,14 @@ import (
 
 // MultiSelectStep allows selecting multiple options from a filterable list.
 type MultiSelectStep struct {
-	id       string
-	title    string
-	prompt   string
-	options  []Option
-	filtered []int // indices into options
-	cursor   int   // position in filtered list
-	selected map[int]bool
-	filter   string
+	id        string
+	title     string
+	prompt    string
+	options   []Option
+	filtered  []int // indices into options
+	cursor    int   // position in filtered list
+	selected  map[int]bool
+	filter    string
 	minSelect int // minimum required selections (0 = no min)
 	maxSelect int // maximum allowed selections (0 = no max)
 }
@@ -158,8 +158,9 @@ func (s *MultiSelectStep) Help() string {
 func (s *MultiSelectStep) Value() StepValue {
 	var labels []string
 	var values []interface{}
-	for idx := range s.selected {
-		if idx >= 0 && idx < len(s.options) {
+	// Iterate in original option order for consistent display
+	for idx := 0; idx < len(s.options); idx++ {
+		if s.selected[idx] {
 			labels = append(labels, s.options[idx].Label)
 			values = append(values, s.options[idx].Value)
 		}
@@ -209,11 +210,13 @@ func (s *MultiSelectStep) SetSelected(indices []int) {
 	}
 }
 
-// GetSelectedIndices returns the selected option indices.
+// GetSelectedIndices returns the selected option indices in original order.
 func (s *MultiSelectStep) GetSelectedIndices() []int {
 	var indices []int
-	for idx := range s.selected {
-		indices = append(indices, idx)
+	for idx := 0; idx < len(s.options); idx++ {
+		if s.selected[idx] {
+			indices = append(indices, idx)
+		}
 	}
 	return indices
 }
