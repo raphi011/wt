@@ -132,7 +132,7 @@ func (c *AddCmd) runAdd(ctx context.Context) error {
 
 	// If -r or -l specified, use multi-repo mode
 	if len(c.Repository) > 0 || len(c.Label) > 0 {
-		return c.runAddMultiRepo(ctx, cfg, insideRepo, workDir)
+		return c.runAddMultiRepo(ctx, insideRepo)
 	}
 
 	// No -r or -l specified
@@ -140,7 +140,7 @@ func (c *AddCmd) runAdd(ctx context.Context) error {
 		if c.Branch == "" {
 			return fmt.Errorf("branch name required inside git repo")
 		}
-		return c.runAddInRepo(ctx, cfg, workDir)
+		return c.runAddInRepo(ctx)
 	}
 
 	// Outside repo without -r or -l
@@ -148,7 +148,9 @@ func (c *AddCmd) runAdd(ctx context.Context) error {
 }
 
 // runAddInRepo handles wt add when inside a git repository (single repo mode)
-func (c *AddCmd) runAddInRepo(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *AddCmd) runAddInRepo(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
 	targetDir, absPath, err := resolveWorktreeTargetDir(cfg, workDir)
 	if err != nil {
 		return err
@@ -205,7 +207,8 @@ func (c *AddCmd) runAddInRepo(ctx context.Context, cfg *config.Config, workDir s
 }
 
 // runAddMultiRepo handles wt add with -r or -l flags for multiple repositories
-func (c *AddCmd) runAddMultiRepo(ctx context.Context, cfg *config.Config, insideRepo bool, workDir string) error {
+func (c *AddCmd) runAddMultiRepo(ctx context.Context, insideRepo bool) error {
+	cfg := c.Config
 	if c.Branch == "" {
 		return fmt.Errorf("branch name required with --repository or --label")
 	}
@@ -237,7 +240,7 @@ func (c *AddCmd) runAddMultiRepo(ctx context.Context, cfg *config.Config, inside
 	// If inside repo with -r flag, include current repo first (original behavior)
 	// With -l only, we don't auto-include current repo (only labeled repos)
 	if insideRepo && len(c.Repository) > 0 {
-		result, err := c.createWorktreeInCurrentRepo(ctx, cfg, wtDir, workDir)
+		result, err := c.createWorktreeInCurrentRepo(ctx, wtDir)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("(current repo): %w", err))
 		} else {
@@ -276,7 +279,7 @@ func (c *AddCmd) runAddMultiRepo(ctx context.Context, cfg *config.Config, inside
 
 	// Process each unique repository
 	for repoPath := range repoPaths {
-		result, err := c.createWorktreeForRepo(ctx, repoPath, cfg, wtDir)
+		result, err := c.createWorktreeForRepo(ctx, repoPath, wtDir)
 		repoName := git.GetRepoDisplayName(repoPath)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
@@ -316,7 +319,9 @@ func (c *AddCmd) runAddMultiRepo(ctx context.Context, cfg *config.Config, inside
 }
 
 // createWorktreeInCurrentRepo creates a worktree in the current git repository
-func (c *AddCmd) createWorktreeInCurrentRepo(ctx context.Context, cfg *config.Config, targetDir string, workDir string) (*successResult, error) {
+func (c *AddCmd) createWorktreeInCurrentRepo(ctx context.Context, targetDir string) (*successResult, error) {
+	cfg := c.Config
+	workDir := c.WorkDir
 	// Resolve base ref if creating new branch
 	var baseRef string
 	if c.NewBranch {
@@ -343,7 +348,8 @@ func (c *AddCmd) createWorktreeInCurrentRepo(ctx context.Context, cfg *config.Co
 }
 
 // createWorktreeForRepo creates a worktree for a specified repository
-func (c *AddCmd) createWorktreeForRepo(ctx context.Context, repoPath string, cfg *config.Config, targetDir string) (*successResult, error) {
+func (c *AddCmd) createWorktreeForRepo(ctx context.Context, repoPath string, targetDir string) (*successResult, error) {
+	cfg := c.Config
 	repoName := git.GetRepoDisplayName(repoPath)
 
 	// Resolve base ref if creating new branch
