@@ -448,7 +448,7 @@ func TestCheckout_WorktreeDirDefaultsToCurrent(t *testing.T) {
 
 func TestCheckout_InsideRepoWithRepoFlag(t *testing.T) {
 	t.Parallel()
-	// When inside repo with -r flag, should create worktree in both current repo and specified repo
+	// When inside repo with -r flag, should create ONLY in specified repo (not current repo)
 
 	// Setup temp directories
 	repoDir := t.TempDir()
@@ -478,13 +478,13 @@ func TestCheckout_InsideRepoWithRepoFlag(t *testing.T) {
 		t.Fatalf("wt checkout -r repo-b (from inside repo-a) failed: %v", err)
 	}
 
-	// Verify worktree created for repo-a (current repo)
+	// Verify worktree NOT created for repo-a (current repo should not be auto-included)
 	wtA := filepath.Join(worktreeDir, "repo-a-shared-branch")
-	if _, err := os.Stat(wtA); os.IsNotExist(err) {
-		t.Errorf("worktree for current repo (repo-a) not created at %s", wtA)
+	if _, err := os.Stat(wtA); err == nil {
+		t.Errorf("worktree for current repo (repo-a) should NOT be created when -r specifies other repos, but found at %s", wtA)
 	}
 
-	// Verify worktree created for repo-b
+	// Verify worktree created for repo-b (the specified repo)
 	wtB := filepath.Join(worktreeDir, "repo-b-shared-branch")
 	if _, err := os.Stat(wtB); os.IsNotExist(err) {
 		t.Errorf("worktree for repo-b not created at %s", wtB)

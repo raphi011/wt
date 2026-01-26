@@ -27,7 +27,7 @@
 //
 // Commands that use ID resolution follow this pattern:
 //
-//   - Required ID: wt exec -i 5, wt cd -i 3
+//   - Required ID: wt exec -n 5, wt cd -n 3
 //   - Optional ID: wt note (defaults to current worktree), wt pr create
 //
 // The -i/--id flag is used consistently across commands for worktree targeting.

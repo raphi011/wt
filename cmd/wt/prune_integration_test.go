@@ -223,7 +223,7 @@ func TestPrune_ByID(t *testing.T) {
 	}
 
 	if err := runPruneCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt prune -i 1 failed: %v", err)
+		t.Fatalf("wt prune -n 1 failed: %v", err)
 	}
 
 	// Verify worktree was removed
@@ -267,7 +267,7 @@ func TestPrune_ByID_Force(t *testing.T) {
 		Force: true,
 	}
 	if err := runPruneCommand(t, worktreeDir, cfg, cmdForce); err != nil {
-		t.Fatalf("wt prune -i 1 -f failed: %v", err)
+		t.Fatalf("wt prune -n 1 -f failed: %v", err)
 	}
 
 	verifyWorktreeRemoved(t, worktreePath)
@@ -304,7 +304,7 @@ func TestPrune_MultipleIDs(t *testing.T) {
 	}
 
 	if err := runPruneCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt prune -i 1 -i 2 failed: %v", err)
+		t.Fatalf("wt prune -n 1 -n 2 failed: %v", err)
 	}
 
 	// Verify both worktrees were removed
@@ -407,10 +407,10 @@ func TestPrune_ErrorForceWithoutID(t *testing.T) {
 
 	err := runPruneCommand(t, worktreeDir, cfg, cmd)
 	if err == nil {
-		t.Fatal("expected error when using -f without -i")
+		t.Fatal("expected error when using -f without -n")
 	}
-	if !strings.Contains(err.Error(), "-f/--force requires -i/--id") {
-		t.Errorf("expected '-f/--force requires -i/--id' error, got: %v", err)
+	if !strings.Contains(err.Error(), "-f/--force requires -n/--number") {
+		t.Errorf("expected '-f/--force requires -n/--number' error, got: %v", err)
 	}
 }
 
@@ -439,10 +439,10 @@ func TestPrune_ErrorVerboseWithID(t *testing.T) {
 
 	err := runPruneCommand(t, worktreeDir, cfg, cmd)
 	if err == nil {
-		t.Fatal("expected error when using --verbose with -i")
+		t.Fatal("expected error when using --verbose with -n")
 	}
-	if !strings.Contains(err.Error(), "--verbose cannot be used with -i/--id") {
-		t.Errorf("expected '--verbose cannot be used with -i/--id' error, got: %v", err)
+	if !strings.Contains(err.Error(), "--verbose cannot be used with -n/--number") {
+		t.Errorf("expected '--verbose cannot be used with -n/--number' error, got: %v", err)
 	}
 }
 
@@ -499,10 +499,10 @@ func TestPrune_ErrorResetCacheWithID(t *testing.T) {
 
 	err := runPruneCommand(t, worktreeDir, cfg, cmd)
 	if err == nil {
-		t.Fatal("expected error when using --reset-cache with -i")
+		t.Fatal("expected error when using --reset-cache with -n")
 	}
-	if !strings.Contains(err.Error(), "--reset-cache cannot be used with --id") {
-		t.Errorf("expected '--reset-cache cannot be used with --id' error, got: %v", err)
+	if !strings.Contains(err.Error(), "--reset-cache cannot be used with --number") {
+		t.Errorf("expected '--reset-cache cannot be used with --number' error, got: %v", err)
 	}
 }
 
@@ -536,7 +536,7 @@ func TestPrune_ByID_DryRun(t *testing.T) {
 	}
 
 	if err := runPruneCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt prune -i 1 -n failed: %v", err)
+		t.Fatalf("wt prune -n 1 -n failed: %v", err)
 	}
 
 	// Verify worktree still exists (dry run)
@@ -570,7 +570,7 @@ func TestPrune_ForceRemovesDirty(t *testing.T) {
 	}
 
 	if err := runPruneCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt prune -i 1 -f failed: %v", err)
+		t.Fatalf("wt prune -n 1 -f failed: %v", err)
 	}
 
 	// Verify worktree was removed despite being dirty

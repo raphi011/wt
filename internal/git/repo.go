@@ -382,6 +382,22 @@ func ListWorktreesFromRepo(ctx context.Context, repoPath string) ([]WorktreeInfo
 	return worktrees, nil
 }
 
+// GetWorktreeBranches returns a set of branch names that are currently checked out in worktrees.
+// Useful for filtering out branches that can't be checked out again.
+func GetWorktreeBranches(ctx context.Context, repoPath string) map[string]bool {
+	branches := make(map[string]bool)
+	worktrees, err := ListWorktreesFromRepo(ctx, repoPath)
+	if err != nil {
+		return branches
+	}
+	for _, wt := range worktrees {
+		if wt.Branch != "" && wt.Branch != "(detached)" {
+			branches[wt.Branch] = true
+		}
+	}
+	return branches
+}
+
 // GetMergedBranches returns a set of branches that are merged into the default branch.
 // Uses a single git call: `git branch --merged origin/<default>`
 func GetMergedBranches(ctx context.Context, repoPath string) map[string]bool {
@@ -576,6 +592,48 @@ func GetRepoNameFromWorktree(worktreePath string) string {
 		}
 		dir = parent
 	}
+}
+
+// ListLocalBranches returns all local branch names for a repository.
+func ListLocalBranches(ctx context.Context, repoPath string) ([]string, error) {
+	output, err := outputGit(ctx, repoPath, "branch", "--format=%(refname:short)")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list branches: %v", err)
+	}
+
+	var branches []string
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			branches = append(branches, line)
+		}
+	}
+	return branches, nil
+}
+
+// ListRemoteBranches returns all remote branch names (without origin/ prefix) for a repository.
+func ListRemoteBranches(ctx context.Context, repoPath string) ([]string, error) {
+	output, err := outputGit(ctx, repoPath, "branch", "-r", "--format=%(refname:short)")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list remote branches: %v", err)
+	}
+
+	var branches []string
+	seen := make(map[string]bool)
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Remove origin/ prefix and skip HEAD
+		if strings.HasPrefix(line, "origin/") {
+			branch := strings.TrimPrefix(line, "origin/")
+			if branch != "HEAD" && !seen[branch] {
+				branches = append(branches, branch)
+				seen[branch] = true
+			}
+		}
+	}
+	return branches, nil
 }
 
 // GetBranchCreatedTime returns when the branch was created (first commit on branch)
