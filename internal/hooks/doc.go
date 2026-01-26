@@ -1,7 +1,7 @@
 // Package hooks provides post-operation hook execution with placeholder substitution.
 //
 // Hooks are shell commands defined in config that run after wt operations like
-// add, pr checkout, prune, or merge. They enable workflow automation such as
+// checkout, pr checkout, prune, or merge. They enable workflow automation such as
 // opening editors, installing dependencies, or sending notifications.
 //
 // # Hook Selection
@@ -15,7 +15,7 @@
 //
 //	[hooks.vscode]
 //	command = "code {path}"
-//	on = ["add", "pr"]  # auto-run for add and pr commands
+//	on = ["checkout", "pr"]  # auto-run for checkout and pr commands
 //
 //	[hooks.cleanup]
 //	command = "echo 'Done with {branch}'"
@@ -30,7 +30,7 @@
 //   - {repo}: Repository name from git origin
 //   - {folder}: Main repo folder name
 //   - {main-repo}: Main repo path
-//   - {trigger}: Command that triggered the hook (add, pr, prune, merge)
+//   - {trigger}: Command that triggered the hook (checkout, pr, prune, merge)
 //
 // Custom variables via --arg key=value:
 //
@@ -40,7 +40,7 @@
 // # Execution Context
 //
 // Hooks run with the working directory set to:
-//   - Worktree path for add/pr hooks
+//   - Worktree path for checkout/pr hooks
 //   - Main repo path for prune hooks (worktree is deleted)
 //
 // Hook failures are logged but don't stop batch operations (RunForEach).

@@ -279,7 +279,7 @@ func createWorktreeInternal(ctx context.Context, basePath, branch, worktreeFmt, 
 		return nil, err
 	}
 	if exists {
-		return nil, fmt.Errorf("branch %q already exists (use 'wt add' without -b to checkout existing branch)", branch)
+		return nil, fmt.Errorf("branch %q already exists (use 'wt checkout' without -b to checkout existing branch)", branch)
 	}
 
 	// Get repo name from origin URL
@@ -491,7 +491,7 @@ func openWorktreeInternal(ctx context.Context, basePath, branch, worktreeFmt str
 		return nil, err
 	}
 	if !exists {
-		return nil, fmt.Errorf("branch %q does not exist (use 'wt add -b' to create a new branch)", branch)
+		return nil, fmt.Errorf("branch %q does not exist (use 'wt checkout -b' to create a new branch)", branch)
 	}
 
 	// Check if branch is already checked out in another worktree

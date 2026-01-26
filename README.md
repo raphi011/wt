@@ -62,16 +62,16 @@ You're ready to go! See Scenarios below for common workflows.
 
 ```bash
 # Create worktree with new branch (from origin/main)
-wt add -b feature-login
+wt checkout -b feature-login
 
 # Create from a different base branch
-wt add -b feature-login --base develop
+wt checkout -b feature-login --base develop
 
 # Fetch latest before creating (ensures up-to-date base)
-wt add -b feature-login -f
+wt checkout -b feature-login -f
 
 # Add a note to remember what you're working on
-wt add -b feature-login --note "Implementing OAuth flow"
+wt checkout -b feature-login --note "Implementing OAuth flow"
 ```
 
 With hooks configured, your editor opens automatically:
@@ -80,7 +80,7 @@ With hooks configured, your editor opens automatically:
 # ~/.config/wt/config.toml
 [hooks.vscode]
 command = "code {path}"
-on = ["add"]
+on = ["checkout"]
 ```
 
 ### Reviewing a Pull Request
@@ -176,10 +176,10 @@ cd ~/Git/auth-service && wt label add backend
 cd ~/Git/web-app && wt label add frontend
 
 # Create same branch across all backend repos
-wt add -b feature-auth -l backend
+wt checkout -b feature-auth -l backend
 
 # Or target specific repos by name
-wt add -b feature-auth -r backend-api -r auth-service
+wt checkout -b feature-auth -r backend-api -r auth-service
 
 # Run command across repos
 wt exec -l backend -- git status
@@ -315,12 +315,12 @@ default_sort = "id"
 [hooks.vscode]
 command = "code {path}"
 description = "Open VS Code"
-on = ["add", "pr"]  # Auto-run for these commands
+on = ["checkout", "pr"]  # Auto-run for these commands
 
 [hooks.kitty]
 command = "kitty @ launch --type=tab --cwd={path}"
 description = "Open new kitty tab"
-on = ["add"]
+on = ["checkout"]
 
 [hooks.cleanup]
 command = "echo 'Removed {branch}'"
@@ -332,7 +332,7 @@ description = "Open Claude with prompt"
 # No "on" = only runs via: wt hook claude --arg prompt="..."
 ```
 
-**Hook triggers:** `add`, `pr`, `prune`, `merge`, `all`
+**Hook triggers:** `checkout`, `pr`, `prune`, `merge`, `all`
 
 **Placeholders:** `{path}`, `{branch}`, `{repo}`, `{folder}`, `{main-repo}`, `{trigger}`, `{key}`, `{key:-default}`
 
@@ -394,11 +394,11 @@ wt completion zsh > ~/.zfunc/_wt
 
 ## Command Reference
 
-Common commands have short aliases (shown in `wt --help`): `a`, `ls`, `s`, `p`, `r`, `x`.
+Common commands have short aliases (shown in `wt --help`): `co`, `ls`, `s`, `p`, `r`, `x`.
 
 | Command | Description |
 |---------|-------------|
-| `wt add` | Add worktree for branch |
+| `wt checkout` | Checkout worktree for branch |
 | `wt list` | List worktrees |
 | `wt show` | Show worktree details |
 | `wt prune` | Remove merged worktrees |

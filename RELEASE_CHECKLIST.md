@@ -22,10 +22,10 @@ This checklist ensures all functionality works correctly and documentation is co
 
 ## 1. Core Commands
 
-### 1.1 `wt add`
+### 1.1 `wt checkout`
 
-- [ ] **Basic add** - `wt add <branch>` creates worktree for existing branch
-- [ ] **New branch** - `wt add -b <branch>` creates new branch and worktree
+- [ ] **Basic checkout** - `wt checkout <branch>` creates worktree for existing branch
+- [ ] **New branch** - `wt checkout -b <branch>` creates new branch and worktree
 - [ ] **Directory flag** - `-d/--dir` overrides default path
 - [ ] **Multi-repo by name** - `-r <repo> [-r <repo>...]` targets multiple repos
 - [ ] **Multi-repo by label** - `-l <label> [-l <label>...]` targets repos with label
@@ -333,7 +333,7 @@ Each section below provides context for the checklist items above.
 
 ### Section 1: Core Commands
 
-**wt add** creates worktrees for branches. Key behaviors:
+**wt checkout** creates worktrees for branches. Key behaviors:
 - Inside repo: uses current repo's origin
 - Outside repo with `-r`: targets named repos in default_path
 - Outside repo with `-l`: targets repos with matching labels
@@ -365,7 +365,7 @@ Forge detection: auto from remote URL, can override with `--forge` or config rul
 
 **wt note** stores annotations on branches via git config.
 
-**wt label** tags repos for multi-repo targeting with `wt add -l`.
+**wt label** tags repos for multi-repo targeting with `wt checkout -l`.
 
 **wt hook** manually triggers configured hooks.
 
@@ -392,11 +392,11 @@ Key validation rules:
 
 Hooks run shell commands with placeholder substitution.
 
-Automatic triggers: hooks with `on = ["add"]` run automatically.
+Automatic triggers: hooks with `on = ["checkout"]` run automatically.
 Manual triggers: hooks without `on` only run via `--hook=name`.
 
 Working directory varies by trigger:
-- add/pr/merge: worktree path
+- checkout/pr/merge: worktree path
 - prune: main repo (worktree already deleted)
 
 ### Section 7: Shell Completions

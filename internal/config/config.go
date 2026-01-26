@@ -371,7 +371,7 @@ const defaultConfigAfterWorktreeDir = `
 # Example: "{folder}_{branch}" creates "my-repo_feature-branch"
 worktree_format = "{repo}-{branch}"
 
-# Base ref mode for new branches (wt add -b)
+# Base ref mode for new branches (wt checkout -b)
 # Controls which ref to use when creating new branches:
 #   "remote" - use origin/<branch> (default, ensures up-to-date base)
 #   "local"  - use local <branch> (faster, but may be stale)
@@ -394,7 +394,7 @@ worktree_format = "{repo}-{branch}"
 # [hooks.kitty]
 # command = "kitty @ launch --type=tab --cwd={path}"
 # description = "Open new kitty tab"
-# on = ["add"]  # auto-run for add command
+# on = ["checkout"]  # auto-run for checkout command
 #
 # [hooks.pr-setup]
 # command = "cd {path} && npm install && code {path}"
@@ -411,7 +411,7 @@ worktree_format = "{repo}-{branch}"
 # description = "Open VS Code"
 # # no "on" - only runs via --hook=vscode
 #
-# Available "on" values: "add", "pr", "prune", "merge", "all"
+# Available "on" values: "checkout", "pr", "prune", "merge", "all"
 #
 # Hooks run with working directory set to the worktree path.
 # For "prune" hooks, working directory is the main repo (worktree is deleted).
@@ -422,7 +422,7 @@ worktree_format = "{repo}-{branch}"
 #   {repo}      - repo name from git origin
 #   {folder}    - main repo folder name
 #   {main-repo} - main repo path
-#   {trigger}   - command that triggered the hook (add, pr, prune, merge)
+#   {trigger}   - command that triggered the hook (checkout, pr, prune, merge)
 #   {key}       - custom variable passed via --arg key=value
 #   {key:-def}  - custom variable with default value if not provided
 #
