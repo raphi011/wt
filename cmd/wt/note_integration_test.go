@@ -34,7 +34,7 @@ func TestNoteSet_ByID(t *testing.T) {
 	}
 
 	if err := runNoteSetCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt note set -i 1 failed: %v", err)
+		t.Fatalf("wt note set -n 1 failed: %v", err)
 	}
 
 	note := getBranchNote(t, repoPath, "feature")
@@ -200,7 +200,7 @@ func TestNoteGet_ByID(t *testing.T) {
 
 	output, err := runNoteGetCommand(t, worktreeDir, cfg, cmd)
 	if err != nil {
-		t.Fatalf("wt note get -i 1 failed: %v", err)
+		t.Fatalf("wt note get -n 1 failed: %v", err)
 	}
 
 	if strings.TrimSpace(output) != "Note for get test" {
@@ -301,7 +301,7 @@ func TestNoteGet_NoNoteExists(t *testing.T) {
 
 func TestNoteGet_DefaultSubcommand(t *testing.T) {
 	t.Parallel()
-	// Test that `wt note -i 1` works (get is default subcommand)
+	// Test that `wt note -n 1` works (get is default subcommand)
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := t.TempDir()
 
@@ -319,14 +319,14 @@ func TestNoteGet_DefaultSubcommand(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	// Using NoteGetCmd directly simulates `wt note -i 1` behavior
+	// Using NoteGetCmd directly simulates `wt note -n 1` behavior
 	cmd := &NoteGetCmd{
 		ID: 1,
 	}
 
 	output, err := runNoteGetCommand(t, worktreeDir, cfg, cmd)
 	if err != nil {
-		t.Fatalf("wt note -i 1 (default get) failed: %v", err)
+		t.Fatalf("wt note -n 1 (default get) failed: %v", err)
 	}
 
 	if strings.TrimSpace(output) != "Default subcommand test" {
@@ -360,7 +360,7 @@ func TestNoteClear_ByID(t *testing.T) {
 	}
 
 	if err := runNoteClearCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt note clear -i 1 failed: %v", err)
+		t.Fatalf("wt note clear -n 1 failed: %v", err)
 	}
 
 	note := getBranchNote(t, repoPath, "feature")

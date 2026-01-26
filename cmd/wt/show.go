@@ -131,7 +131,7 @@ func (c *ShowCmd) resolveShowTarget(ctx context.Context, worktreeDir string) (*r
 	if err != nil {
 		// Wrap error with more specific message when not inside worktree/repo
 		if c.ID == 0 && c.Repository == "" && !git.IsWorktree(workDir) && !git.IsInsideRepoPath(ctx, workDir) {
-			return nil, fmt.Errorf("--id or --repository required when not inside a worktree/repo (run 'wt list' to see IDs)")
+			return nil, fmt.Errorf("--number or --repository required when not inside a worktree/repo (run 'wt list' to see numbers)")
 		}
 		return nil, err
 	}
@@ -446,7 +446,7 @@ func outputShowText(ctx context.Context, info *ShowInfo, _ *forge.PRInfo) error 
 
 	// Helper to print data row
 	printRow := func(row []string) {
-		keyStyle := lipgloss.NewStyle().Bold(true).Width(maxKeyWidth + 2).Padding(0, 1)
+		keyStyle := lipgloss.NewStyle().Bold(true).Width(maxKeyWidth+2).Padding(0, 1)
 		valStyle := lipgloss.NewStyle().Padding(0, 1)
 
 		key := keyStyle.Render(row[0])
@@ -527,5 +527,3 @@ func formatTimeAgo(t time.Time) string {
 		return fmt.Sprintf("%d months ago", months)
 	}
 }
-
-

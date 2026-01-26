@@ -36,7 +36,7 @@ func TestExec_ByWorktreeID(t *testing.T) {
 	}
 
 	if err := runExecCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt exec -i 1 -- touch exec-marker.txt failed: %v", err)
+		t.Fatalf("wt exec -n 1 -- touch exec-marker.txt failed: %v", err)
 	}
 
 	// Verify marker file was created in worktree
@@ -75,7 +75,7 @@ func TestExec_MultipleIDs(t *testing.T) {
 	}
 
 	if err := runExecCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt exec -i 1 -i 2 -- touch multi-exec-marker.txt failed: %v", err)
+		t.Fatalf("wt exec -n 1 -n 2 -- touch multi-exec-marker.txt failed: %v", err)
 	}
 
 	// Verify marker file was created in both worktrees

@@ -114,10 +114,10 @@ This checklist ensures all functionality works correctly and documentation is co
 
 ### 3.2 `wt cd`
 
-- [ ] **Print path** - `wt cd -i <id>` prints worktree path
+- [ ] **Print path** - `wt cd -n <id>` prints worktree path
 - [ ] **Project flag** - `-p/--project` prints main repo path instead
 - [ ] **Requires ID** - fails appropriately when `-i` not provided
-- [ ] **Shell integration** - output usable in `$(wt cd -i X)` syntax
+- [ ] **Shell integration** - output usable in `$(wt cd -n X)` syntax
 
 ### 3.3 `wt mv`
 
@@ -360,7 +360,7 @@ Forge detection: auto from remote URL, can override with `--forge` or config rul
 
 **wt exec** runs shell commands in worktree(s). Useful for bulk operations.
 
-**wt cd** prints path for shell scripting: `cd $(wt cd -i 3)`
+**wt cd** prints path for shell scripting: `cd $(wt cd -n 3)`
 
 **wt mv** relocates worktrees and repairs git worktree paths.
 

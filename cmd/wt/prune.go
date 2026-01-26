@@ -46,12 +46,12 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 
 	// Validate -f requires -i
 	if c.Force && len(c.ID) == 0 {
-		return fmt.Errorf("-f/--force requires -i/--id to target specific worktree(s)")
+		return fmt.Errorf("-f/--force requires -n/--number to target specific worktree(s)")
 	}
 
 	// Validate --verbose cannot be used with -i
 	if c.Verbose && len(c.ID) > 0 {
-		return fmt.Errorf("--verbose cannot be used with -i/--id")
+		return fmt.Errorf("--verbose cannot be used with -n/--number")
 	}
 
 	worktreeDir, err := cfg.GetAbsWorktreeDir()
@@ -62,7 +62,7 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 	// If IDs are specified, handle targeted worktree removal
 	if len(c.ID) > 0 {
 		if c.ResetCache {
-			return fmt.Errorf("--reset-cache cannot be used with --id")
+			return fmt.Errorf("--reset-cache cannot be used with --number")
 		}
 		return c.runPruneTargets(ctx, worktreeDir)
 	}

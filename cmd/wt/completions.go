@@ -102,7 +102,7 @@ _wt_completions() {
             ;;
         prune|p)
             case "$prev" in
-                -n|--id)
+                -n|--number)
                     # Complete worktree IDs only
                     local ids=$(wt list 2>/dev/null | awk '{print $1}')
                     COMPREPLY=($(compgen -W "$ids" -- "$cur"))
@@ -112,7 +112,7 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-n --id -d --dry-run -f --force -c --include-clean -g --global -v --verbose -R --refresh --reset-cache --hook --no-hook -a --arg" -- "$cur"))
+            COMPREPLY=($(compgen -W "-n --number -d --dry-run -f --force -c --include-clean -g --global -v --verbose -R --refresh --reset-cache --hook --no-hook -a --arg" -- "$cur"))
             ;;
         list|ls)
             case "$prev" in
@@ -200,7 +200,7 @@ _wt_completions() {
             ;;
         show|s)
             case "$prev" in
-                -n|--id)
+                -n|--number)
                     # Complete worktree IDs only
                     local ids=$(wt list 2>/dev/null | awk '{print $1}')
                     COMPREPLY=($(compgen -W "$ids" -- "$cur"))
@@ -227,11 +227,11 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-n --id -r --repository -R --refresh --json" -- "$cur"))
+            COMPREPLY=($(compgen -W "-n --number -r --repository -R --refresh --json" -- "$cur"))
             ;;
         exec|x)
             case "$prev" in
-                -n|--id)
+                -n|--number)
                     # Complete worktree IDs only
                     local ids=$(wt list 2>/dev/null | awk '{print $1}')
                     COMPREPLY=($(compgen -W "$ids" -- "$cur"))
@@ -281,11 +281,11 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-n --id -r --repository -l --label" -- "$cur"))
+            COMPREPLY=($(compgen -W "-n --number -r --repository -l --label" -- "$cur"))
             ;;
         cd)
             case "$prev" in
-                -n|--id)
+                -n|--number)
                     # Complete worktree IDs only
                     local ids=$(wt list 2>/dev/null | awk '{print $1}')
                     COMPREPLY=($(compgen -W "$ids" -- "$cur"))
@@ -338,7 +338,7 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-n --id -r --repository -l --label -p --project --hook --no-hook -a --arg" -- "$cur"))
+            COMPREPLY=($(compgen -W "-n --number -r --repository -l --label -p --project --hook --no-hook -a --arg" -- "$cur"))
             ;;
         mv)
             case "$prev" in
@@ -404,7 +404,7 @@ _wt_completions() {
                 COMPREPLY=($(compgen -W "-r --repository --forge --note --hook --no-hook -a --arg" -- "$cur"))
             elif [[ "${words[2]}" == "create" ]]; then
                 case "$prev" in
-                    -n|--id)
+                    -n|--number)
                         # Complete worktree IDs only
                         local ids=$(wt list 2>/dev/null | awk '{print $1}')
                         COMPREPLY=($(compgen -W "$ids" -- "$cur"))
@@ -434,10 +434,10 @@ _wt_completions() {
                         return
                         ;;
                 esac
-                COMPREPLY=($(compgen -W "-n --id -r --repository -t --title -b --body --body-file --base --draft -w --web" -- "$cur"))
+                COMPREPLY=($(compgen -W "-n --number -r --repository -t --title -b --body --body-file --base --draft -w --web" -- "$cur"))
             elif [[ "${words[2]}" == "merge" ]]; then
                 case "$prev" in
-                    -n|--id)
+                    -n|--number)
                         # Complete worktree IDs only
                         local ids=$(wt list 2>/dev/null | awk '{print $1}')
                         COMPREPLY=($(compgen -W "$ids" -- "$cur"))
@@ -471,10 +471,10 @@ _wt_completions() {
                         return
                         ;;
                 esac
-                COMPREPLY=($(compgen -W "-n --id -r --repository -s --strategy -k --keep --hook --no-hook -a --arg" -- "$cur"))
+                COMPREPLY=($(compgen -W "-n --number -r --repository -s --strategy -k --keep --hook --no-hook -a --arg" -- "$cur"))
             elif [[ "${words[2]}" == "view" ]]; then
                 case "$prev" in
-                    -n|--id)
+                    -n|--number)
                         # Complete worktree IDs only
                         local ids=$(wt list 2>/dev/null | awk '{print $1}')
                         COMPREPLY=($(compgen -W "$ids" -- "$cur"))
@@ -501,13 +501,13 @@ _wt_completions() {
                         return
                         ;;
                 esac
-                COMPREPLY=($(compgen -W "-n --id -r --repository -w --web" -- "$cur"))
+                COMPREPLY=($(compgen -W "-n --number -r --repository -w --web" -- "$cur"))
             fi
             ;;
         note)
             # note get is default, so flags work directly on note
             case "$prev" in
-                -n|--id)
+                -n|--number)
                     # Complete worktree IDs only
                     local ids=$(wt list 2>/dev/null | awk '{print $1}')
                     COMPREPLY=($(compgen -W "$ids" -- "$cur"))
@@ -535,13 +535,13 @@ _wt_completions() {
                     ;;
             esac
             if [[ $cword -eq 2 ]]; then
-                COMPREPLY=($(compgen -W "set get clear -n --id -r --repository" -- "$cur"))
+                COMPREPLY=($(compgen -W "set get clear -n --number -r --repository" -- "$cur"))
             elif [[ "${words[2]}" == "set" ]]; then
-                COMPREPLY=($(compgen -W "-n --id -r --repository" -- "$cur"))
+                COMPREPLY=($(compgen -W "-n --number -r --repository" -- "$cur"))
             elif [[ "${words[2]}" == "get" ]] || [[ "${words[2]}" == "clear" ]]; then
-                COMPREPLY=($(compgen -W "-n --id -r --repository" -- "$cur"))
+                COMPREPLY=($(compgen -W "-n --number -r --repository" -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "-n --id -r --repository" -- "$cur"))
+                COMPREPLY=($(compgen -W "-n --number -r --repository" -- "$cur"))
             fi
             ;;
         label)
@@ -582,7 +582,7 @@ _wt_completions() {
             ;;
         hook)
             case "$prev" in
-                -n|--id)
+                -n|--number)
                     # Complete worktree IDs only
                     local ids=$(wt list 2>/dev/null | awk '{print $1}')
                     COMPREPLY=($(compgen -W "$ids" -- "$cur"))
@@ -634,7 +634,7 @@ _wt_completions() {
             esac
             # Complete hook names for all positional args (supports multiple hooks)
             local hooks=$(wt config hooks 2>/dev/null | awk '{print $1}')
-            COMPREPLY=($(compgen -W "$hooks -n --id -r --repository -l --label -a --arg -d --dry-run" -- "$cur"))
+            COMPREPLY=($(compgen -W "$hooks -n --number -r --repository -l --label -a --arg -d --dry-run" -- "$cur"))
             ;;
         config)
             if [[ $cword -eq 2 ]]; then
@@ -735,8 +735,8 @@ _wt() {
                     ;;
                 prune|p)
                     _arguments \
-                        '-n[worktree ID to remove]:id:__wt_worktree_ids' \
-                        '--id[worktree ID to remove]:id:__wt_worktree_ids' \
+                        '-n[worktree number to remove]:id:__wt_worktree_ids' \
+                        '--number[worktree number to remove]:id:__wt_worktree_ids' \
                         '-d[preview without removing]' \
                         '--dry-run[preview without removing]' \
                         '-d[preview without removing]' \
@@ -781,8 +781,8 @@ _wt() {
                     ;;
                 show|s)
                     _arguments \
-                        '-n[worktree ID]:id:__wt_worktree_ids' \
-                        '--id[worktree ID]:id:__wt_worktree_ids' \
+                        '-n[worktree number]:id:__wt_worktree_ids' \
+                        '--number[worktree number]:id:__wt_worktree_ids' \
                         '-r[repository name]:repository:__wt_repo_names' \
                         '--repository[repository name]:repository:__wt_repo_names' \
                         '-R[refresh PR status from API]' \
@@ -791,8 +791,8 @@ _wt() {
                     ;;
                 exec|x)
                     _arguments \
-                        '*-n[worktree ID]:id:__wt_worktree_ids' \
-                        '*--id[worktree ID]:id:__wt_worktree_ids' \
+                        '*-n[worktree number]:id:__wt_worktree_ids' \
+                        '*--number[worktree number]:id:__wt_worktree_ids' \
                         '*-r[repository name]:repository:__wt_repo_names' \
                         '*--repository[repository name]:repository:__wt_repo_names' \
                         '*-l[target repos by label]:label:__wt_label_names' \
@@ -800,8 +800,8 @@ _wt() {
                     ;;
                 cd)
                     _arguments \
-                        '-n[worktree ID]:id:__wt_worktree_ids' \
-                        '--id[worktree ID]:id:__wt_worktree_ids' \
+                        '-n[worktree number]:id:__wt_worktree_ids' \
+                        '--number[worktree number]:id:__wt_worktree_ids' \
                         '-r[repository name]:repository:__wt_repo_names' \
                         '--repository[repository name]:repository:__wt_repo_names' \
                         '-l[repository label (must match one repo)]:label:__wt_label_names' \
@@ -856,8 +856,8 @@ _wt() {
                                     ;;
                                 create)
                                     _arguments \
-                                        '-n[worktree ID]:id:__wt_worktree_ids' \
-                                        '--id[worktree ID]:id:__wt_worktree_ids' \
+                                        '-n[worktree number]:id:__wt_worktree_ids' \
+                                        '--number[worktree number]:id:__wt_worktree_ids' \
                                         '-r[repository name]:repository:__wt_repo_names' \
                                         '--repository[repository name]:repository:__wt_repo_names' \
                                         '-t[PR title]:title:' \
@@ -872,8 +872,8 @@ _wt() {
                                     ;;
                                 merge)
                                     _arguments \
-                                        '-n[worktree ID]:id:__wt_worktree_ids' \
-                                        '--id[worktree ID]:id:__wt_worktree_ids' \
+                                        '-n[worktree number]:id:__wt_worktree_ids' \
+                                        '--number[worktree number]:id:__wt_worktree_ids' \
                                         '-r[repository name]:repository:__wt_repo_names' \
                                         '--repository[repository name]:repository:__wt_repo_names' \
                                         '-s[merge strategy]:strategy:(squash rebase merge)' \
@@ -887,8 +887,8 @@ _wt() {
                                     ;;
                                 view)
                                     _arguments \
-                                        '-n[worktree ID]:id:__wt_worktree_ids' \
-                                        '--id[worktree ID]:id:__wt_worktree_ids' \
+                                        '-n[worktree number]:id:__wt_worktree_ids' \
+                                        '--number[worktree number]:id:__wt_worktree_ids' \
                                         '-r[repository name]:repository:__wt_repo_names' \
                                         '--repository[repository name]:repository:__wt_repo_names' \
                                         '-w[open PR in browser]' \
@@ -901,8 +901,8 @@ _wt() {
                 note)
                     # note get is default, so flags work directly
                     _arguments -C \
-                        '-n[worktree ID]:id:__wt_worktree_ids' \
-                        '--id[worktree ID]:id:__wt_worktree_ids' \
+                        '-n[worktree number]:id:__wt_worktree_ids' \
+                        '--number[worktree number]:id:__wt_worktree_ids' \
                         '-r[repository name]:repository:__wt_repo_names' \
                         '--repository[repository name]:repository:__wt_repo_names' \
                         '1: :->subcmd' \
@@ -921,15 +921,15 @@ _wt() {
                                 set)
                                     _arguments \
                                         '1:note text:' \
-                                        '-n[worktree ID]:id:__wt_worktree_ids' \
-                                        '--id[worktree ID]:id:__wt_worktree_ids' \
+                                        '-n[worktree number]:id:__wt_worktree_ids' \
+                                        '--number[worktree number]:id:__wt_worktree_ids' \
                                         '-r[repository name]:repository:__wt_repo_names' \
                                         '--repository[repository name]:repository:__wt_repo_names'
                                     ;;
                                 get|clear)
                                     _arguments \
-                                        '-n[worktree ID]:id:__wt_worktree_ids' \
-                                        '--id[worktree ID]:id:__wt_worktree_ids' \
+                                        '-n[worktree number]:id:__wt_worktree_ids' \
+                                        '--number[worktree number]:id:__wt_worktree_ids' \
                                         '-r[repository name]:repository:__wt_repo_names' \
                                         '--repository[repository name]:repository:__wt_repo_names'
                                     ;;
@@ -983,8 +983,8 @@ _wt() {
                 hook)
                     _arguments \
                         '1:hook name:__wt_hook_names' \
-                        '*-n[worktree ID]:id:__wt_worktree_ids' \
-                        '*--id[worktree ID]:id:__wt_worktree_ids' \
+                        '*-n[worktree number]:id:__wt_worktree_ids' \
+                        '*--number[worktree number]:id:__wt_worktree_ids' \
                         '*-r[repository name]:repository:__wt_repo_names' \
                         '*--repository[repository name]:repository:__wt_repo_names' \
                         '*-l[target repos by label]:label:__wt_label_names' \
@@ -1161,8 +1161,8 @@ complete -c wt -n "__fish_seen_subcommand_from checkout co" -l hook -d "Run name
 complete -c wt -n "__fish_seen_subcommand_from checkout co" -l no-hook -d "Skip post-checkout hook"
 complete -c wt -n "__fish_seen_subcommand_from checkout co" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 
-# prune: --id flag, then other flags
-complete -c wt -n "__fish_seen_subcommand_from prune p" -s n -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID to remove"
+# prune: --number flag, then other flags
+complete -c wt -n "__fish_seen_subcommand_from prune p" -s n -l number -r -a "(__wt_worktree_ids)" -d "Worktree number to remove"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -s d -l dry-run -d "Preview without removing"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -s f -l force -d "Force remove even if not merged/dirty"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -s c -l include-clean -d "Also remove clean worktrees"
@@ -1187,19 +1187,19 @@ complete -c wt -n "__fish_seen_subcommand_from repos r" -s l -l label -r -a "(__
 complete -c wt -n "__fish_seen_subcommand_from repos r" -s s -l sort -r -a "name branch worktrees label" -d "Sort by field"
 complete -c wt -n "__fish_seen_subcommand_from repos r" -l json -d "Output as JSON"
 
-# show: --id or --repository flag (optional), then other flags
-complete -c wt -n "__fish_seen_subcommand_from show s" -s n -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+# show: --number or --repository flag (optional), then other flags
+complete -c wt -n "__fish_seen_subcommand_from show s" -s n -l number -r -a "(__wt_worktree_ids)" -d "Worktree number"
 complete -c wt -n "__fish_seen_subcommand_from show s" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name"
 complete -c wt -n "__fish_seen_subcommand_from show s" -s R -l refresh -d "Refresh PR status from API"
 complete -c wt -n "__fish_seen_subcommand_from show s" -l json -d "Output as JSON"
 
-# exec: --id, -r, -l flags, then -- command
-complete -c wt -n "__fish_seen_subcommand_from exec x" -s n -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+# exec: --number, -r, -l flags, then -- command
+complete -c wt -n "__fish_seen_subcommand_from exec x" -s n -l number -r -a "(__wt_worktree_ids)" -d "Worktree number"
 complete -c wt -n "__fish_seen_subcommand_from exec x" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from exec x" -s l -l label -r -a "(__wt_list_labels)" -d "Target repos by label (repeatable)"
 
-# cd: --id, -r, or -l flag, then flags
-complete -c wt -n "__fish_seen_subcommand_from cd" -s n -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+# cd: --number, -r, or -l flag, then flags
+complete -c wt -n "__fish_seen_subcommand_from cd" -s n -l number -r -a "(__wt_worktree_ids)" -d "Worktree number"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s l -l label -r -a "(__wt_list_labels)" -d "Repository label (must match one repo)"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s p -l project -d "Print main repository path"
@@ -1217,11 +1217,11 @@ complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move 
 complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "set" -d "Set a note on a branch"
 complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "get" -d "Get the note for a branch"
 complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "clear" -d "Clear the note from a branch"
-# note: --id and --repository flags work directly (get is default)
-complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -s n -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+# note: --number and --repository flags work directly (get is default)
+complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -s n -l number -r -a "(__wt_worktree_ids)" -d "Worktree number"
 complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name"
-# note set/get/clear: --id and --repository flags (optional)
-complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s n -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+# note set/get/clear: --number and --repository flags (optional)
+complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s n -l number -r -a "(__wt_worktree_ids)" -d "Worktree number"
 complete -c wt -n "__fish_seen_subcommand_from note; and __fish_seen_subcommand_from set get clear" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name"
 
 # label: subcommands (list is default, so flags work directly on label)
@@ -1238,9 +1238,9 @@ complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand
 complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list ls" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from label; and __fish_seen_subcommand_from list ls" -s g -l global -d "List all labels across repos"
 
-# hook: multiple hook names supported, then --id/-r/-l (optional), then flags
+# hook: multiple hook names supported, then --number/-r/-l (optional), then flags
 complete -c wt -n "__fish_seen_subcommand_from hook" -a "(__wt_hook_names)" -d "Hook name"
-complete -c wt -n "__fish_seen_subcommand_from hook" -s n -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+complete -c wt -n "__fish_seen_subcommand_from hook" -s n -l number -r -a "(__wt_worktree_ids)" -d "Worktree number"
 complete -c wt -n "__fish_seen_subcommand_from hook" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from hook" -s l -l label -r -a "(__wt_list_labels)" -d "Target repos by label (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from hook" -s a -l arg -r -d "Set hook variable KEY=VALUE"
@@ -1259,8 +1259,8 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_fr
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -l no-hook -d "Skip post-add hook"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -s a -l arg -r -d "Set hook variable KEY=VALUE"
-# pr create: --id or --repository flag (optional), then flags
-complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -s n -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+# pr create: --number or --repository flag (optional), then flags
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -s n -l number -r -a "(__wt_worktree_ids)" -d "Worktree number"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -s t -l title -r -d "PR title"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -s b -l body -r -d "PR body (use - to read from stdin)"
@@ -1268,16 +1268,16 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_fr
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -l base -r -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Base branch"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -l draft -d "Create as draft PR"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from create" -s w -l web -d "Open in browser after creation"
-# pr merge: --id or --repository flag (optional), then flags
-complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s n -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+# pr merge: --number or --repository flag (optional), then flags
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s n -l number -r -a "(__wt_worktree_ids)" -d "Worktree number"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s s -l strategy -r -a "squash rebase merge" -d "Merge strategy"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s k -l keep -d "Keep worktree and branch after merge"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -l no-hook -d "Skip post-merge hook"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from merge" -s a -l arg -r -d "Set hook variable KEY=VALUE"
-# pr view: --id or --repository flag (optional), --web flag
-complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from view" -s n -l id -r -a "(__wt_worktree_ids)" -d "Worktree ID"
+# pr view: --number or --repository flag (optional), --web flag
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from view" -s n -l number -r -a "(__wt_worktree_ids)" -d "Worktree number"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from view" -s r -l repository -r -a "(__wt_list_repos)" -d "Repository name"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from view" -s w -l web -d "Open PR in browser"
 

@@ -46,7 +46,7 @@ This creates `~/.config/wt/config.toml` with your worktree directory.
 If you have repos and worktrees scattered around, consolidate them:
 
 ```bash
-wt mv -n          # Preview what would be moved
+wt mv -d          # Preview what would be moved
 wt mv             # Move to configured directories
 ```
 
@@ -105,7 +105,7 @@ View PR details or open in browser:
 ```bash
 wt pr view               # Show PR details
 wt pr view -w            # Open PR in browser
-wt pr view -i 3          # By worktree ID
+wt pr view -n 3          # By worktree number
 ```
 
 After review, merge and clean up in one command:
@@ -134,8 +134,8 @@ wt pr create --title "WIP: Refactor auth" --draft
 # Create and open in browser
 wt pr create --title "Ready for review" -w
 
-# By worktree ID (when outside worktree)
-wt pr create --title "Add feature" -i 3
+# By worktree number (when outside worktree)
+wt pr create --title "Add feature" -n 3
 ```
 
 ### Cleaning Up
@@ -145,7 +145,7 @@ wt pr create --title "Add feature" -i 3
 wt list
 
 # Show detailed status for a specific worktree
-wt show -i 3
+wt show -n 3
 
 # Remove merged worktrees (uses cached PR status)
 wt prune
@@ -154,19 +154,19 @@ wt prune
 wt prune -R
 
 # Preview what would be removed
-wt prune -n
+wt prune -d
 
 # Verbose dry-run: see what's skipped and why
-wt prune -n -v
+wt prune -d -v
 
 # Also remove worktrees with 0 commits (stale checkouts)
 wt prune -c
 
-# Remove specific worktree by ID
-wt prune -i 3
+# Remove specific worktree by number
+wt prune -n 3
 
 # Force remove even if not merged or dirty
-wt prune -i 3 -f
+wt prune -n 3 -f
 ```
 
 ### Working Across Multiple Repos
@@ -197,18 +197,18 @@ wt repos -l backend
 ### Quick Navigation
 
 ```bash
-# Jump to worktree by ID
-cd $(wt cd -i 3)
+# Jump to worktree by number
+cd $(wt cd -n 3)
 
 # Jump to repo by name
 cd $(wt cd -r backend-api)
 
 # Jump to main repo (not worktree)
-cd $(wt cd -i 3 -p)
+cd $(wt cd -n 3 -p)
 
 # Run command in worktree without switching
-wt exec -i 3 -- git status
-wt exec -i 3 -- code .
+wt exec -n 3 -- git status
+wt exec -n 3 -- code .
 ```
 
 ### Running Hooks Manually
@@ -218,7 +218,7 @@ wt exec -i 3 -- code .
 wt hook vscode
 
 # Run on specific worktree
-wt hook vscode -i 3
+wt hook vscode -n 3
 
 # Run multiple hooks
 wt hook vscode kitty
@@ -230,7 +230,7 @@ wt hook build -l backend
 wt hook claude --arg prompt="implement feature X"
 
 # Preview command without executing
-wt hook vscode -n
+wt hook vscode -d
 ```
 
 ### Branch Notes
@@ -245,8 +245,8 @@ wt note get
 # Clear note
 wt note clear
 
-# Set note by worktree ID
-wt note set "Ready for review" -i 3
+# Set note by worktree number
+wt note set "Ready for review" -n 3
 ```
 
 ### Moving Worktrees / Migrating to wt
@@ -255,7 +255,7 @@ Already have worktrees scattered around? Use `wt mv` to consolidate them:
 
 ```bash
 # Preview what would be moved (destination from config)
-wt mv -n
+wt mv -d
 
 # Move all worktrees to configured worktree_dir
 wt mv

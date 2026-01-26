@@ -78,7 +78,7 @@ internal/ui/             - Terminal UI components
 
 ### Development Guidelines
 
-**Target Resolution Pattern** - Commands that operate on worktrees use `--id` (`-n`) flag with `internal/resolve.ByID()`:
+**Target Resolution Pattern** - Commands that operate on worktrees use `--number` (`-n`) flag with `internal/resolve.ByID()`:
 
 - **ID or repo/label**: `wt exec`, `wt hook` - require `-n <id>`, or `-r <repo>`/`-l <label>` (exec/hook support multiple); these flags are mutually exclusive
 - **ID or repo or label**: `wt cd` - require `-n <id>`, `-r <repo>`, or `-l <label>` (mutually exclusive)
@@ -90,7 +90,7 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 **Keep completions/config in sync** - When CLI commands, flags, or subcommands change, always update the shell completion scripts (fish, bash, zsh in `cmd/wt/main.go`) and any config generation commands to match.
 
 **Reuse flags consistently** - When adding flags that serve the same purpose across commands, use identical names/shortcuts. Standard flags:
-- `-n, --id` - worktree ID/number for targeting
+- `-n, --number` - worktree number for targeting
 - `-i, --interactive` - interactive mode (wt checkout)
 - `-r, --repository` - repository name for targeting (wt checkout, list, exec, cd, hook)
 - `-l, --label` - target repos by label (wt checkout, list, exec, hook)

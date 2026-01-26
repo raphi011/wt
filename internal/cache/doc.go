@@ -3,7 +3,7 @@
 // The cache is stored in .wt-cache.json in the worktree directory and provides:
 //
 //   - Stable worktree IDs: Each worktree gets a unique numeric ID that persists
-//     across sessions, enabling commands like "wt exec -i 5" to work reliably.
+//     across sessions, enabling commands like "wt exec -n 5" to work reliably.
 //
 //   - PR info caching: Stores fetched PR metadata (state, author, comments, etc.)
 //     to avoid repeated API calls. Cache entries expire after 24 hours.

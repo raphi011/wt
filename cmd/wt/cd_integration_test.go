@@ -35,7 +35,7 @@ func TestCd_ByWorktreeID(t *testing.T) {
 
 	output, err := runCdCommand(t, worktreeDir, cfg, cmd)
 	if err != nil {
-		t.Fatalf("wt cd -i 1 failed: %v", err)
+		t.Fatalf("wt cd -n 1 failed: %v", err)
 	}
 
 	if strings.TrimSpace(output) != worktreePath {
@@ -69,7 +69,7 @@ func TestCd_ByWorktreeIDWithProjectFlag(t *testing.T) {
 
 	output, err := runCdCommand(t, worktreeDir, cfg, cmd)
 	if err != nil {
-		t.Fatalf("wt cd -p -i 1 failed: %v", err)
+		t.Fatalf("wt cd -p -n 1 failed: %v", err)
 	}
 
 	// Should return main repo path, not worktree path
@@ -176,7 +176,7 @@ func TestCd_MultipleWorktrees(t *testing.T) {
 		cmd := &CdCmd{ID: id}
 		output, err := runCdCommand(t, worktreeDir, cfg, cmd)
 		if err != nil {
-			t.Fatalf("wt cd -i %d failed: %v", id, err)
+			t.Fatalf("wt cd -n %d failed: %v", id, err)
 		}
 
 		if strings.TrimSpace(output) != expectedPath {
@@ -347,7 +347,7 @@ func TestCd_NoHookFlag(t *testing.T) {
 
 	output, err := runCdCommand(t, worktreeDir, cfg, cmd)
 	if err != nil {
-		t.Fatalf("wt cd --no-hook -i 1 failed: %v", err)
+		t.Fatalf("wt cd --no-hook -n 1 failed: %v", err)
 	}
 
 	if strings.TrimSpace(output) != worktreePath {
@@ -383,13 +383,13 @@ func TestCd_MultipleReposSameWorktreeDir(t *testing.T) {
 	cmd1 := &CdCmd{ID: 1}
 	output1, err := runCdCommand(t, worktreeDir, cfg, cmd1)
 	if err != nil {
-		t.Fatalf("wt cd -i 1 failed: %v", err)
+		t.Fatalf("wt cd -n 1 failed: %v", err)
 	}
 
 	cmd2 := &CdCmd{ID: 2}
 	output2, err := runCdCommand(t, worktreeDir, cfg, cmd2)
 	if err != nil {
-		t.Fatalf("wt cd -i 2 failed: %v", err)
+		t.Fatalf("wt cd -n 2 failed: %v", err)
 	}
 
 	// Both paths should be valid and different
@@ -482,7 +482,7 @@ func TestCd_BranchWithSlashesInName(t *testing.T) {
 
 	output, err := runCdCommand(t, worktreeDir, cfg, cmd)
 	if err != nil {
-		t.Fatalf("wt cd -i 1 failed: %v", err)
+		t.Fatalf("wt cd -n 1 failed: %v", err)
 	}
 
 	if strings.TrimSpace(output) != worktreePath {
