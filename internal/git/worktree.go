@@ -27,6 +27,21 @@ type Worktree struct {
 	Note           string    `json:"note,omitempty"`
 }
 
+// Status returns a human-readable status string for the worktree.
+// Priority: dirty > merged/prunable > commits ahead > clean
+func (w *Worktree) Status() string {
+	if w.IsDirty {
+		return "dirty"
+	}
+	if w.IsMerged {
+		return "prunable"
+	}
+	if w.CommitCount > 0 {
+		return fmt.Sprintf("%d ahead", w.CommitCount)
+	}
+	return "clean"
+}
+
 // GetWorktreeInfo returns info for a single worktree at the given path
 func GetWorktreeInfo(ctx context.Context, path string) (*Worktree, error) {
 	gitFile := filepath.Join(path, ".git")

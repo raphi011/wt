@@ -39,6 +39,21 @@ type ShowInfo struct {
 	PR            *PRInfo    `json:"pr,omitempty"`
 }
 
+// Status returns a human-readable status string for the worktree.
+// Priority: dirty > merged > commits ahead > clean
+func (s *ShowInfo) Status() string {
+	if s.IsDirty {
+		return "dirty (uncommitted changes)"
+	}
+	if s.IsMerged {
+		return "merged"
+	}
+	if s.CommitsAhead > 0 {
+		return fmt.Sprintf("%d ahead", s.CommitsAhead)
+	}
+	return "clean"
+}
+
 // DiffStats for JSON output
 type DiffStats struct {
 	Additions int `json:"additions"`
@@ -311,14 +326,15 @@ func outputShowText(ctx context.Context, info *ShowInfo, _ *forge.PRInfo) error 
 	}
 
 	// Status
-	statusStr := dimStyle.Render("clean")
-	if info.IsDirty {
-		statusStr = yellowStyle.Render("dirty (uncommitted changes)")
+	status := info.Status()
+	statusStyle := dimStyle
+	switch {
+	case info.IsDirty:
+		statusStyle = yellowStyle
+	case info.IsMerged:
+		statusStyle = greenStyle
 	}
-	if info.IsMerged {
-		statusStr = greenStyle.Render("merged")
-	}
-	rows = append(rows, []string{"Status", statusStr})
+	rows = append(rows, []string{"Status", statusStyle.Render(status)})
 
 	// Track PR section start index
 	prStartIndex := -1

@@ -170,7 +170,7 @@ type ExecCmd struct {
 	ID         []int    `short:"i" name:"id" xor:"target" help:"worktree ID(s) (repeatable)"`
 	Repository []string `short:"r" name:"repository" xor:"target" sep:"," help:"repository name(s) (repeatable, comma-separated)"`
 	Label      []string `short:"l" name:"label" xor:"target" sep:"," help:"target repos by label (repeatable, comma-separated)"`
-	Command    []string `arg:"" optional:"" passthrough:"" placeholder:"COMMAND" help:"command to run (after --)"`
+	Command    []string `arg:"" optional:"" passthrough:"all" placeholder:"COMMAND" help:"command to run (after --)"`
 }
 
 func (c *ExecCmd) Help() string {

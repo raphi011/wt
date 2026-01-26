@@ -83,7 +83,8 @@ func main() {
 	// Inject dependencies into all commands
 	injectDeps(&cli, &cfg, workDir)
 
-	err = ctx.Run(bgCtx)
+	ctx.BindTo(bgCtx, (*context.Context)(nil))
+	err = ctx.Run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr)
