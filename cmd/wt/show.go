@@ -15,6 +15,7 @@ import (
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/resolve"
 	"github.com/raphi011/wt/internal/ui"
 )
@@ -58,15 +59,13 @@ type PRInfo struct {
 }
 
 func (c *ShowCmd) runShow(ctx context.Context) error {
-	cfg := c.Config
-	workDir := c.WorkDir
-	worktreeDir, err := cfg.GetAbsWorktreeDir()
+	worktreeDir, err := c.Config.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
 	// Resolve target worktree
-	info, err := resolveShowTarget(ctx, c.ID, c.Repository, cfg, worktreeDir, workDir)
+	info, err := c.resolveShowTarget(ctx, worktreeDir)
 	if err != nil {
 		return err
 	}
@@ -86,7 +85,7 @@ func (c *ShowCmd) runShow(ctx context.Context) error {
 		if c.Refresh {
 			sp := ui.NewSpinner("Fetching PR status...")
 			sp.Start()
-			prInfo = fetchPRForBranch(ctx, originURL, info.MainRepo, info.Branch, folderName, wtCache, cfg)
+			prInfo = fetchPRForBranch(ctx, originURL, info.MainRepo, info.Branch, folderName, wtCache, c.Config)
 			sp.Stop()
 			// Save updated cache
 			if err := cache.Save(worktreeDir, wtCache); err != nil {
@@ -101,19 +100,22 @@ func (c *ShowCmd) runShow(ctx context.Context) error {
 	showInfo := gatherShowInfo(ctx, info, prInfo)
 
 	if c.JSON {
-		return outputShowJSON(showInfo)
+		return outputShowJSON(ctx, showInfo)
 	}
 
-	return outputShowText(showInfo, prInfo)
+	return outputShowText(ctx, showInfo, prInfo)
 }
 
 // resolveShowTarget resolves the worktree target for show command
-func resolveShowTarget(ctx context.Context, id int, repository string, cfg *config.Config, worktreeDir string, workDir string) (*resolve.Target, error) {
+func (c *ShowCmd) resolveShowTarget(ctx context.Context, worktreeDir string) (*resolve.Target, error) {
+	cfg := c.Config
+	workDir := c.WorkDir
+
 	// Use ByIDOrRepoOrPath for basic resolution
-	target, err := resolve.ByIDOrRepoOrPath(ctx, id, repository, worktreeDir, cfg.RepoScanDir(), workDir)
+	target, err := resolve.ByIDOrRepoOrPath(ctx, c.ID, c.Repository, worktreeDir, cfg.RepoScanDir(), workDir)
 	if err != nil {
 		// Wrap error with more specific message when not inside worktree/repo
-		if id == 0 && repository == "" && !git.IsWorktree(workDir) && !git.IsInsideRepoPath(ctx, workDir) {
+		if c.ID == 0 && c.Repository == "" && !git.IsWorktree(workDir) && !git.IsInsideRepoPath(ctx, workDir) {
 			return nil, fmt.Errorf("--id or --repository required when not inside a worktree/repo (run 'wt list' to see IDs)")
 		}
 		return nil, err
@@ -237,16 +239,19 @@ func fetchPRForBranch(ctx context.Context, originURL, mainRepo, branch, folderNa
 	return pr
 }
 
-func outputShowJSON(info *ShowInfo) error {
+func outputShowJSON(ctx context.Context, info *ShowInfo) error {
+	out := output.FromContext(ctx)
 	data, err := json.MarshalIndent(info, "", "  ")
 	if err != nil {
 		return err
 	}
-	fmt.Println(string(data))
+	out.Println(string(data))
 	return nil
 }
 
-func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
+func outputShowText(ctx context.Context, info *ShowInfo, _ *forge.PRInfo) error {
+	out := output.FromContext(ctx)
+
 	// Styles
 	greenStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	redStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
@@ -420,7 +425,7 @@ func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 			lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("255")).Render(
 				strings.Repeat(" ", leftPad)+label+strings.Repeat(" ", rightPad)) +
 			dimStyle.Render("│")
-		fmt.Println(headerLine)
+		out.Println(headerLine)
 	}
 
 	// Helper to print data row
@@ -439,11 +444,11 @@ func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 			val += strings.Repeat(" ", remainingWidth)
 		}
 
-		fmt.Println(dimStyle.Render("│") + key + val + dimStyle.Render("│"))
+		out.Println(dimStyle.Render("│") + key + val + dimStyle.Render("│"))
 	}
 
 	// Print top border
-	fmt.Println(dimStyle.Render("┌" + strings.Repeat("─", contentWidth) + "┐"))
+	out.Println(dimStyle.Render("┌" + strings.Repeat("─", contentWidth) + "┐"))
 
 	// Print Worktree header
 	printHeader(worktreeHeader)
@@ -462,7 +467,7 @@ func outputShowText(info *ShowInfo, _ *forge.PRInfo) error {
 	}
 
 	// Print bottom border
-	fmt.Println(dimStyle.Render("└" + strings.Repeat("─", contentWidth) + "┘"))
+	out.Println(dimStyle.Render("└" + strings.Repeat("─", contentWidth) + "┘"))
 
 	return nil
 }

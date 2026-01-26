@@ -2,32 +2,38 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/output"
 )
 
-func (c *ConfigInitCmd) runConfigInit() error {
+func (c *ConfigInitCmd) runConfigInit(ctx context.Context) error {
+	out := output.FromContext(ctx)
+
 	// Validate worktree dir (must be absolute or start with ~)
 	if err := config.ValidatePath(c.WorktreeDir, "worktree_dir"); err != nil {
 		return err
 	}
 	if c.Stdout {
-		fmt.Print(config.DefaultConfigWithDir(c.WorktreeDir))
+		out.Print(config.DefaultConfigWithDir(c.WorktreeDir))
 		return nil
 	}
 	path, err := config.Init(c.WorktreeDir, c.Force)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Created config file: %s\n", path)
+	out.Printf("Created config file: %s\n", path)
 	return nil
 }
 
-func (c *ConfigShowCmd) runConfigShow() error {
+func (c *ConfigShowCmd) runConfigShow(ctx context.Context) error {
+	out := output.FromContext(ctx)
 	cfg := c.Config
+
 	if c.JSON {
 		// Build JSON output structure
 		type cloneRuleJSON struct {
@@ -95,48 +101,48 @@ func (c *ConfigShowCmd) runConfigShow() error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(data))
+		out.Println(string(data))
 		return nil
 	}
 
 	// Text output
-	fmt.Printf("# Worktree folder naming format (placeholders: {repo}, {branch}, {folder})\n")
-	fmt.Printf("worktree_format = %q\n", cfg.WorktreeFormat)
+	out.Printf("# Worktree folder naming format (placeholders: {repo}, {branch}, {folder})\n")
+	out.Printf("worktree_format = %q\n", cfg.WorktreeFormat)
 	if cfg.WorktreeDir != "" {
-		fmt.Printf("\n# Base directory for new worktrees\n")
-		fmt.Printf("worktree_dir = %q\n", cfg.WorktreeDir)
+		out.Printf("\n# Base directory for new worktrees\n")
+		out.Printf("worktree_dir = %q\n", cfg.WorktreeDir)
 	}
 	if cfg.RepoDir != "" {
-		fmt.Printf("\n# Directory to scan for repos (-r/-l flags)\n")
-		fmt.Printf("repo_dir = %q\n", cfg.RepoDir)
+		out.Printf("\n# Directory to scan for repos (-r/-l flags)\n")
+		out.Printf("repo_dir = %q\n", cfg.RepoDir)
 	}
 	baseRef := cfg.BaseRef
 	if baseRef == "" {
 		baseRef = "remote"
 	}
-	fmt.Printf("\n# Base ref for new branches: \"remote\" (origin/<branch>) or \"local\"\n")
-	fmt.Printf("base_ref = %q\n", baseRef)
+	out.Printf("\n# Base ref for new branches: \"remote\" (origin/<branch>) or \"local\"\n")
+	out.Printf("base_ref = %q\n", baseRef)
 	defaultSort := cfg.DefaultSort
 	if defaultSort == "" {
 		defaultSort = "id"
 	}
-	fmt.Printf("\n# Default sort order for 'wt list': id, repo, branch, commit\n")
-	fmt.Printf("default_sort = %q\n", defaultSort)
+	out.Printf("\n# Default sort order for 'wt list': id, repo, branch, commit\n")
+	out.Printf("default_sort = %q\n", defaultSort)
 
 	// Clone section
-	fmt.Printf("\n# Clone settings for 'wt clone' and 'wt pr checkout'\n")
-	fmt.Printf("[clone]\n")
-	fmt.Printf("# Default forge: \"github\" or \"gitlab\"\n")
-	fmt.Printf("forge = %q\n", cfg.Clone.Forge)
+	out.Printf("\n# Clone settings for 'wt clone' and 'wt pr checkout'\n")
+	out.Printf("[clone]\n")
+	out.Printf("# Default forge: \"github\" or \"gitlab\"\n")
+	out.Printf("forge = %q\n", cfg.Clone.Forge)
 	if cfg.Clone.Org != "" {
-		fmt.Printf("# Default org when repo specified without org/ prefix\n")
-		fmt.Printf("org = %q\n", cfg.Clone.Org)
+		out.Printf("# Default org when repo specified without org/ prefix\n")
+		out.Printf("org = %q\n", cfg.Clone.Org)
 	}
 	for _, rule := range cfg.Clone.Rules {
-		fmt.Printf("\n# Pattern-based forge rule\n")
-		fmt.Printf("[[clone.rules]]\n")
-		fmt.Printf("pattern = %q\n", rule.Pattern)
-		fmt.Printf("forge = %q\n", rule.Forge)
+		out.Printf("\n# Pattern-based forge rule\n")
+		out.Printf("[[clone.rules]]\n")
+		out.Printf("pattern = %q\n", rule.Pattern)
+		out.Printf("forge = %q\n", rule.Forge)
 	}
 
 	// Merge section
@@ -144,24 +150,25 @@ func (c *ConfigShowCmd) runConfigShow() error {
 	if mergeStrategy == "" {
 		mergeStrategy = "squash"
 	}
-	fmt.Printf("\n# Merge settings for 'wt pr merge'\n")
-	fmt.Printf("[merge]\n")
-	fmt.Printf("# Merge strategy: squash, rebase, or merge\n")
-	fmt.Printf("strategy = %q\n", mergeStrategy)
+	out.Printf("\n# Merge settings for 'wt pr merge'\n")
+	out.Printf("[merge]\n")
+	out.Printf("# Merge strategy: squash, rebase, or merge\n")
+	out.Printf("strategy = %q\n", mergeStrategy)
 
 	// Hosts section
 	if len(cfg.Hosts) > 0 {
-		fmt.Printf("\n# Custom host mappings for self-hosted GitHub/GitLab\n")
-		fmt.Printf("[hosts]\n")
+		out.Printf("\n# Custom host mappings for self-hosted GitHub/GitLab\n")
+		out.Printf("[hosts]\n")
 		for host, forgeType := range cfg.Hosts {
-			fmt.Printf("%q = %q\n", host, forgeType)
+			out.Printf("%q = %q\n", host, forgeType)
 		}
 	}
 
 	return nil
 }
 
-func (c *ConfigHooksCmd) runConfigHooks() error {
+func (c *ConfigHooksCmd) runConfigHooks(ctx context.Context) error {
+	out := output.FromContext(ctx)
 	cfg := c.Config
 	hooksConfig := cfg.Hooks
 
@@ -192,18 +199,18 @@ func (c *ConfigHooksCmd) runConfigHooks() error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(data))
+		out.Println(string(data))
 		return nil
 	}
 
 	// Text output
 	if len(hooksConfig.Hooks) == 0 {
-		fmt.Println("No hooks configured.")
-		fmt.Println("Add hooks to ~/.config/wt/config.toml (see: wt config init)")
+		out.Println("No hooks configured.")
+		out.Println("Add hooks to ~/.config/wt/config.toml (see: wt config init)")
 		return nil
 	}
 
-	fmt.Println("Hooks:")
+	out.Println("Hooks:")
 
 	// Sort hook names for consistent output
 	var names []string
@@ -219,10 +226,10 @@ func (c *ConfigHooksCmd) runConfigHooks() error {
 			suffix = fmt.Sprintf(" (on: %v)", hook.On)
 		}
 		if hook.Description != "" {
-			fmt.Printf("  %-10s %s%s\n", name, hook.Description, suffix)
-			fmt.Printf("             %s\n", hook.Command)
+			out.Printf("  %-10s %s%s\n", name, hook.Description, suffix)
+			out.Printf("             %s\n", hook.Command)
 		} else {
-			fmt.Printf("  %-10s %s%s\n", name, hook.Command, suffix)
+			out.Printf("  %-10s %s%s\n", name, hook.Command, suffix)
 		}
 	}
 

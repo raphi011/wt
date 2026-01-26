@@ -8,21 +8,22 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/log"
+	"github.com/raphi011/wt/internal/output"
 )
 
 // resolveLabelRepos resolves repository paths for label operations.
 // If repos is empty and inside a repo, uses current repo.
 // If repos is empty and outside a repo, returns error.
 // If repos is provided, resolves each by name via git.FindRepoByName.
-func resolveLabelRepos(ctx context.Context, repos []string, cfg *config.Config, workDir string) ([]string, error) {
+func resolveLabelRepos(ctx context.Context, repos []string, repoDir, workDir string) ([]string, error) {
 	// Determine repo directory for lookup
-	repoDir := cfg.RepoScanDir()
 	if repoDir == "" {
 		repoDir = "."
 	}
-	repoDir, err := filepath.Abs(repoDir)
+	var err error
+	repoDir, err = filepath.Abs(repoDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve path: %w", err)
 	}
@@ -67,9 +68,8 @@ func resolveLabelRepos(ctx context.Context, repos []string, cfg *config.Config, 
 }
 
 func (c *LabelAddCmd) runLabelAdd(ctx context.Context) error {
-	cfg := c.Config
-	workDir := c.WorkDir
-	repoPaths, err := resolveLabelRepos(ctx, c.Repository, cfg, workDir)
+	l := log.FromContext(ctx)
+	repoPaths, err := resolveLabelRepos(ctx, c.Repository, c.Config.RepoScanDir(), c.WorkDir)
 	if err != nil {
 		return err
 	}
@@ -81,16 +81,15 @@ func (c *LabelAddCmd) runLabelAdd(ctx context.Context) error {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
 			continue
 		}
-		fmt.Printf("Label %q added to %s\n", c.Label, repoName)
+		l.Printf("Label %q added to %s\n", c.Label, repoName)
 	}
 
 	return errors.Join(errs...)
 }
 
 func (c *LabelRemoveCmd) runLabelRemove(ctx context.Context) error {
-	cfg := c.Config
-	workDir := c.WorkDir
-	repoPaths, err := resolveLabelRepos(ctx, c.Repository, cfg, workDir)
+	l := log.FromContext(ctx)
+	repoPaths, err := resolveLabelRepos(ctx, c.Repository, c.Config.RepoScanDir(), c.WorkDir)
 	if err != nil {
 		return err
 	}
@@ -102,21 +101,21 @@ func (c *LabelRemoveCmd) runLabelRemove(ctx context.Context) error {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
 			continue
 		}
-		fmt.Printf("Label %q removed from %s\n", c.Label, repoName)
+		l.Printf("Label %q removed from %s\n", c.Label, repoName)
 	}
 
 	return errors.Join(errs...)
 }
 
 func (c *LabelListCmd) runLabelList(ctx context.Context) error {
-	cfg := c.Config
-	workDir := c.WorkDir
+	out := output.FromContext(ctx)
+
 	// If --global flag, list labels from all repos in directory
 	if c.Global {
 		return c.runLabelListGlobal(ctx)
 	}
 
-	repoPaths, err := resolveLabelRepos(ctx, c.Repository, cfg, workDir)
+	repoPaths, err := resolveLabelRepos(ctx, c.Repository, c.Config.RepoScanDir(), c.WorkDir)
 	if err != nil {
 		return err
 	}
@@ -136,16 +135,18 @@ func (c *LabelListCmd) runLabelList(ctx context.Context) error {
 
 		if showRepoName {
 			repoName := git.GetRepoDisplayName(repoPath)
-			fmt.Printf("%s: %s\n", repoName, strings.Join(labels, ", "))
+			out.Printf("%s: %s\n", repoName, strings.Join(labels, ", "))
 		} else {
-			fmt.Println(strings.Join(labels, "\n"))
+			out.Println(strings.Join(labels, "\n"))
 		}
 	}
 	return nil
 }
 
 func (c *LabelListCmd) runLabelListGlobal(ctx context.Context) error {
+	out := output.FromContext(ctx)
 	cfg := c.Config
+
 	// Use repo_dir from config if available, fallback to cwd
 	repoDir := cfg.RepoScanDir()
 	if repoDir == "" {
@@ -180,15 +181,14 @@ func (c *LabelListCmd) runLabelListGlobal(ctx context.Context) error {
 	}
 
 	for label, repos := range labelRepos {
-		fmt.Printf("%s: %s\n", label, strings.Join(repos, ", "))
+		out.Printf("%s: %s\n", label, strings.Join(repos, ", "))
 	}
 	return nil
 }
 
 func (c *LabelClearCmd) runLabelClear(ctx context.Context) error {
-	cfg := c.Config
-	workDir := c.WorkDir
-	repoPaths, err := resolveLabelRepos(ctx, c.Repository, cfg, workDir)
+	l := log.FromContext(ctx)
+	repoPaths, err := resolveLabelRepos(ctx, c.Repository, c.Config.RepoScanDir(), c.WorkDir)
 	if err != nil {
 		return err
 	}
@@ -200,7 +200,7 @@ func (c *LabelClearCmd) runLabelClear(ctx context.Context) error {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
 			continue
 		}
-		fmt.Printf("Labels cleared from %s\n", repoName)
+		l.Printf("Labels cleared from %s\n", repoName)
 	}
 
 	return errors.Join(errs...)

@@ -14,6 +14,8 @@ import (
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
+	"github.com/raphi011/wt/internal/log"
+	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/resolve"
 	"github.com/raphi011/wt/internal/ui"
 )
@@ -37,6 +39,8 @@ const (
 )
 
 func (c *PruneCmd) runPrune(ctx context.Context) error {
+	l := log.FromContext(ctx)
+	out := output.FromContext(ctx)
 	cfg := c.Config
 	workDir := c.WorkDir
 
@@ -64,9 +68,9 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 	}
 
 	if c.DryRun {
-		fmt.Printf("Pruning worktrees in %s (dry run)\n", worktreeDir)
+		l.Printf("Pruning worktrees in %s (dry run)\n", worktreeDir)
 	} else {
-		fmt.Printf("Pruning worktrees in %s\n", worktreeDir)
+		l.Printf("Pruning worktrees in %s\n", worktreeDir)
 	}
 
 	// Start spinner
@@ -82,7 +86,7 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 
 	if len(allWorktrees) == 0 {
 		sp.Stop()
-		fmt.Println("No worktrees found")
+		out.Println("No worktrees found")
 		return nil
 	}
 
@@ -104,8 +108,8 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 
 	if len(worktrees) == 0 {
 		sp.Stop()
-		fmt.Printf("No worktrees found for current repository\n")
-		fmt.Printf("Use --global to prune all %d worktrees\n", len(allWorktrees))
+		out.Printf("No worktrees found for current repository\n")
+		out.Printf("Use --global to prune all %d worktrees\n", len(allWorktrees))
 		return nil
 	}
 
@@ -119,7 +123,7 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 	// Reset cache if requested (before sync so worktrees get fresh IDs)
 	if c.ResetCache {
 		wtCache.Reset()
-		fmt.Println("Cache reset: PR info cleared, IDs will be reassigned from 1")
+		l.Println("Cache reset: PR info cleared, IDs will be reassigned from 1")
 	}
 
 	// Convert ALL worktrees to WorktreeInfo for cache sync (to preserve IDs)
@@ -297,7 +301,7 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 		if c.Verbose {
 			displayWorktrees = append(displayWorktrees, toSkip...)
 		}
-		fmt.Print(ui.FormatPruneTable(displayWorktrees, pathToID, stringReasonMap, toRemoveMap))
+		out.Print(ui.FormatPruneTable(displayWorktrees, pathToID, stringReasonMap, toRemoveMap))
 	}
 
 	// Save updated cache (with RemovedAt timestamps)
@@ -306,7 +310,7 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 	}
 
 	// Print summary with actual counts
-	fmt.Print(ui.FormatSummary(len(removed), len(toSkip)+len(failed), c.DryRun))
+	out.Print(ui.FormatSummary(len(removed), len(toSkip)+len(failed), c.DryRun))
 
 	return nil
 }
@@ -327,6 +331,7 @@ func (c *PruneCmd) runPruneTargets(ctx context.Context, worktreeDir string) erro
 
 // runPruneTargetByID handles removal of a single targeted worktree by ID
 func (c *PruneCmd) runPruneTargetByID(ctx context.Context, id int, worktreeDir string) error {
+	l := log.FromContext(ctx)
 	cfg := c.Config
 	// Resolve target by ID
 	target, err := resolve.ByID(id, worktreeDir)
@@ -352,7 +357,7 @@ func (c *PruneCmd) runPruneTargetByID(ctx context.Context, id int, worktreeDir s
 
 	// Dry run output
 	if c.DryRun {
-		fmt.Printf("Would remove worktree: %s (%s)\n", target.Branch, target.Path)
+		l.Printf("Would remove worktree: %s (%s)\n", target.Branch, target.Path)
 		return nil
 	}
 
@@ -387,7 +392,7 @@ func (c *PruneCmd) runPruneTargetByID(ctx context.Context, id int, worktreeDir s
 	// Prune stale references
 	git.PruneWorktrees(ctx, wt.MainRepo)
 
-	fmt.Printf("Removed worktree: %s (%s)\n", target.Branch, target.Path)
+	l.Printf("Removed worktree: %s (%s)\n", target.Branch, target.Path)
 	return nil
 }
 

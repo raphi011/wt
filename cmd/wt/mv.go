@@ -8,9 +8,13 @@ import (
 
 	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/log"
+	"github.com/raphi011/wt/internal/output"
 )
 
 func (c *MvCmd) runMv(ctx context.Context) error {
+	l := log.FromContext(ctx)
+	out := output.FromContext(ctx)
 	cfg := c.Config
 	workDir := c.WorkDir
 	// Validate worktree format
@@ -65,7 +69,7 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 	}
 
 	if len(worktrees) == 0 {
-		fmt.Println("No worktrees found in current directory")
+		out.Println("No worktrees found in current directory")
 		// Continue to process repos even if no worktrees found
 	}
 
@@ -132,7 +136,7 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 			// Build full Worktree struct for nested worktree
 			wtInfo, err := git.GetWorktreeInfo(ctx, wti.Path)
 			if err != nil {
-				fmt.Printf("⚠ Warning: failed to get info for nested worktree %s: %v\n", wti.Path, err)
+				l.Printf("⚠ Warning: failed to get info for nested worktree %s: %v\n", wti.Path, err)
 				continue
 			}
 			nestedWorktrees = append(nestedWorktrees, *wtInfo)
@@ -158,34 +162,34 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 
 			// Check if target path already exists
 			if _, err := os.Stat(newPath); err == nil {
-				fmt.Printf("⚠ Skipping nested %s: target path already exists: %s\n", filepath.Base(wt.Path), newPath)
+				l.Printf("⚠ Skipping nested %s: target path already exists: %s\n", filepath.Base(wt.Path), newPath)
 				nestedSkipped++
 				continue
 			}
 
 			if c.DryRun {
-				fmt.Printf("Would move nested: %s → %s\n", wt.Path, newPath)
+				l.Printf("Would move nested: %s → %s\n", wt.Path, newPath)
 				nestedMoved++
 				continue
 			}
 
 			// Move the nested worktree out of the repo
 			if err := git.MoveWorktree(ctx, wt, newPath, c.Force); err != nil {
-				fmt.Printf("✗ Failed to move nested %s: %v\n", filepath.Base(wt.Path), err)
+				l.Printf("✗ Failed to move nested %s: %v\n", filepath.Base(wt.Path), err)
 				nestedFailed++
 				continue
 			}
 
-			fmt.Printf("✓ Moved nested: %s → %s\n", wt.Path, newPath)
+			l.Printf("✓ Moved nested: %s → %s\n", wt.Path, newPath)
 			nestedMoved++
 		}
 
 		// Print nested worktree summary
-		fmt.Println()
+		l.Println()
 		if c.DryRun {
-			fmt.Printf("Nested worktrees: %d would be moved, %d skipped\n", nestedMoved, nestedSkipped)
+			l.Printf("Nested worktrees: %d would be moved, %d skipped\n", nestedMoved, nestedSkipped)
 		} else {
-			fmt.Printf("Nested worktrees: %d moved, %d skipped, %d failed\n", nestedMoved, nestedSkipped, nestedFailed)
+			l.Printf("Nested worktrees: %d moved, %d skipped, %d failed\n", nestedMoved, nestedSkipped, nestedFailed)
 		}
 	}
 
@@ -202,20 +206,20 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 
 			// Skip if already at destination
 			if repoPath == newPath {
-				fmt.Printf("→ Skipping repo %s: already at destination\n", repoName)
+				l.Printf("→ Skipping repo %s: already at destination\n", repoName)
 				repoSkipped++
 				continue
 			}
 
 			// Check if target exists
 			if _, err := os.Stat(newPath); err == nil {
-				fmt.Printf("⚠ Skipping repo %s: target already exists\n", repoName)
+				l.Printf("⚠ Skipping repo %s: target already exists\n", repoName)
 				repoSkipped++
 				continue
 			}
 
 			if c.DryRun {
-				fmt.Printf("Would move repo: %s → %s\n", repoPath, newPath)
+				l.Printf("Would move repo: %s → %s\n", repoPath, newPath)
 				repoMoves[repoPath] = newPath
 				repoMoved++
 				continue
@@ -223,27 +227,27 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 
 			// Move the repo
 			if err := os.Rename(repoPath, newPath); err != nil {
-				fmt.Printf("✗ Failed to move repo %s: %v\n", repoName, err)
+				l.Printf("✗ Failed to move repo %s: %v\n", repoName, err)
 				repoFailed++
 				continue
 			}
 
 			// Repair all worktree references to point to new repo location
 			if err := git.RepairWorktreesFromRepo(ctx, newPath); err != nil {
-				fmt.Printf("⚠ Warning: failed to repair worktrees for %s: %v\n", repoName, err)
+				l.Printf("⚠ Warning: failed to repair worktrees for %s: %v\n", repoName, err)
 			}
 
 			repoMoves[repoPath] = newPath
-			fmt.Printf("✓ Moved repo: %s → %s\n", repoPath, newPath)
+			l.Printf("✓ Moved repo: %s → %s\n", repoPath, newPath)
 			repoMoved++
 		}
 
 		// Print repo summary
-		fmt.Println()
+		l.Println()
 		if c.DryRun {
-			fmt.Printf("Repos: %d would be moved, %d skipped\n", repoMoved, repoSkipped)
+			l.Printf("Repos: %d would be moved, %d skipped\n", repoMoved, repoSkipped)
 		} else {
-			fmt.Printf("Repos: %d moved, %d skipped, %d failed\n", repoMoved, repoSkipped, repoFailed)
+			l.Printf("Repos: %d moved, %d skipped, %d failed\n", repoMoved, repoSkipped, repoFailed)
 		}
 	}
 
@@ -273,42 +277,42 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 
 		// Check if already at destination with same name
 		if wt.Path == newPath {
-			fmt.Printf("→ Skipping %s: already at destination\n", filepath.Base(wt.Path))
+			l.Printf("→ Skipping %s: already at destination\n", filepath.Base(wt.Path))
 			skipped++
 			continue
 		}
 
 		// Check if target path already exists
 		if _, err := os.Stat(newPath); err == nil {
-			fmt.Printf("⚠ Skipping %s: target path already exists: %s\n", filepath.Base(wt.Path), newPath)
+			l.Printf("⚠ Skipping %s: target path already exists: %s\n", filepath.Base(wt.Path), newPath)
 			skipped++
 			continue
 		}
 
 		if c.DryRun {
-			fmt.Printf("Would move: %s → %s\n", wt.Path, newPath)
+			l.Printf("Would move: %s → %s\n", wt.Path, newPath)
 			moved++
 			continue
 		}
 
 		// Move the worktree (MainRepo already points to new repo location if repo was moved)
 		if err := git.MoveWorktree(ctx, wt, newPath, c.Force); err != nil {
-			fmt.Printf("✗ Failed to move %s: %v\n", filepath.Base(wt.Path), err)
+			l.Printf("✗ Failed to move %s: %v\n", filepath.Base(wt.Path), err)
 			failed++
 			continue
 		}
 
-		fmt.Printf("✓ Moved: %s → %s\n", wt.Path, newPath)
+		l.Printf("✓ Moved: %s → %s\n", wt.Path, newPath)
 		moved++
 	}
 
 	// Print worktree summary (only if there were worktrees to consider)
 	if len(worktrees) > 0 {
-		fmt.Println()
+		l.Println()
 		if c.DryRun {
-			fmt.Printf("Worktrees: %d would be moved, %d skipped\n", moved, skipped)
+			l.Printf("Worktrees: %d would be moved, %d skipped\n", moved, skipped)
 		} else {
-			fmt.Printf("Worktrees: %d moved, %d skipped, %d failed\n", moved, skipped, failed)
+			l.Printf("Worktrees: %d moved, %d skipped, %d failed\n", moved, skipped, failed)
 		}
 	}
 
