@@ -563,7 +563,9 @@ func TestExec_StripLeadingDashes(t *testing.T) {
 // runExecCommand runs wt exec with the given config and command in the specified directory.
 func runExecCommand(t *testing.T, workDir string, cfg *config.Config, cmd *ExecCmd) error {
 	t.Helper()
-	return runExec(cmd, cfg, workDir)
+	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+	ctx := testContext(t)
+	return cmd.runExec(ctx)
 }
 
 // Note: populateCache is defined in integration_test_helpers.go

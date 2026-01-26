@@ -57,7 +57,9 @@ type PRInfo struct {
 	CommentCount int    `json:"comment_count,omitempty"`
 }
 
-func (c *ShowCmd) runShow(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *ShowCmd) runShow(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
 	scanPath, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)

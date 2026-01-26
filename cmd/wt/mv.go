@@ -6,12 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 )
 
-func (c *MvCmd) runMv(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *MvCmd) runMv(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
 	// Validate worktree format
 	if err := format.ValidateFormat(c.Format); err != nil {
 		return fmt.Errorf("invalid format: %w", err)

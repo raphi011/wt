@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/lipgloss/table"
 
-	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 )
 
@@ -26,7 +25,8 @@ type RepoInfo struct {
 	WorktreeCount int      `json:"worktree_count"`
 }
 
-func (c *ReposCmd) runRepos(ctx context.Context, cfg *config.Config) error {
+func (c *ReposCmd) runRepos(ctx context.Context) error {
+	cfg := c.Config
 	if err := git.CheckGit(); err != nil {
 		return err
 	}

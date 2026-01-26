@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -1067,9 +1066,10 @@ func TestList_JSONOutputMultiple(t *testing.T) {
 // Returns the stdout output.
 func runListCommand(t *testing.T, workDir string, cfg *config.Config, cmd *ListCmd) (string, error) {
 	t.Helper()
-	var buf bytes.Buffer
-	err := runList(cmd, cfg, workDir, &buf)
-	return buf.String(), err
+	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+	ctx, out := testContextWithOutput(t)
+	err := cmd.runList(ctx)
+	return out.String(), err
 }
 
 // makeCommitInWorktreeWithDate creates a commit with a specific date.

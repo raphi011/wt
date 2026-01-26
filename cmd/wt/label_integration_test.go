@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -526,29 +527,37 @@ func TestLabelList_InsideWorktree(t *testing.T) {
 
 func runLabelAddCommand(t *testing.T, workDir string, cfg *config.Config, cmd *LabelAddCmd) error {
 	t.Helper()
-	return runLabelAdd(cmd, cfg, workDir)
+	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+	ctx := testContext(t)
+	return cmd.runLabelAdd(ctx)
 }
 
 func runLabelRemoveCommand(t *testing.T, workDir string, cfg *config.Config, cmd *LabelRemoveCmd) error {
 	t.Helper()
-	return runLabelRemove(cmd, cfg, workDir)
+	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+	ctx := testContext(t)
+	return cmd.runLabelRemove(ctx)
 }
 
 func runLabelListCommand(t *testing.T, workDir string, cfg *config.Config, cmd *LabelListCmd) error {
 	t.Helper()
-	return runLabelList(cmd, cfg, workDir)
+	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+	ctx := testContext(t)
+	return cmd.runLabelList(ctx)
 }
 
 func runLabelClearCommand(t *testing.T, workDir string, cfg *config.Config, cmd *LabelClearCmd) error {
 	t.Helper()
-	return runLabelClear(cmd, cfg, workDir)
+	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+	ctx := testContext(t)
+	return cmd.runLabelClear(ctx)
 }
 
 // getRepoLabels gets all labels from a repo using git config
 func getRepoLabels(t *testing.T, repoPath string) []string {
 	t.Helper()
 
-	labels, err := git.GetLabels(repoPath)
+	labels, err := git.GetLabels(context.Background(), repoPath)
 	if err != nil {
 		t.Fatalf("failed to get labels: %v", err)
 	}

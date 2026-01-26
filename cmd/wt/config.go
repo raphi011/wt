@@ -26,7 +26,8 @@ func (c *ConfigInitCmd) runConfigInit() error {
 	return nil
 }
 
-func (c *ConfigShowCmd) runConfigShow(cfg *config.Config) error {
+func (c *ConfigShowCmd) runConfigShow() error {
+	cfg := c.Config
 	if c.JSON {
 		// Build JSON output structure
 		type cloneRuleJSON struct {
@@ -160,7 +161,8 @@ func (c *ConfigShowCmd) runConfigShow(cfg *config.Config) error {
 	return nil
 }
 
-func (c *ConfigHooksCmd) runConfigHooks(cfg *config.Config) error {
+func (c *ConfigHooksCmd) runConfigHooks() error {
+	cfg := c.Config
 	hooksConfig := cfg.Hooks
 
 	if c.JSON {

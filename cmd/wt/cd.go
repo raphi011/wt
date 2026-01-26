@@ -9,10 +9,13 @@ import (
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
+	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/resolve"
 )
 
-func (c *CdCmd) runCd(ctx context.Context, cfg *config.Config, _ string, out io.Writer) error {
+func (c *CdCmd) runCd(ctx context.Context) error {
+	cfg := c.Config
+	out := output.FromContext(ctx).Writer()
 	// Determine targeting mode
 	hasID := c.ID != 0
 	hasRepo := c.Repository != ""

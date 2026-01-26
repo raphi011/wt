@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,7 +34,7 @@ func TestDoctor_NoIssues(t *testing.T) {
 	}
 
 	// Run doctor - should find no issues
-	err := doctor.Run(cfg, false)
+	err := doctor.Run(context.Background(), cfg, false)
 	if err != nil {
 		t.Fatalf("doctor failed: %v", err)
 	}
@@ -64,13 +65,13 @@ func TestDoctor_StaleEntry(t *testing.T) {
 	}
 
 	// Run doctor without fix - should detect stale entry
-	err := doctor.Run(cfg, false)
+	err := doctor.Run(context.Background(), cfg, false)
 	if err != nil {
 		t.Fatalf("doctor failed: %v", err)
 	}
 
 	// Run doctor with fix - should mark entry as removed
-	err = doctor.Run(cfg, true)
+	err = doctor.Run(context.Background(), cfg, true)
 	if err != nil {
 		t.Fatalf("doctor --fix failed: %v", err)
 	}
@@ -132,7 +133,7 @@ func TestDoctor_DuplicateIDs(t *testing.T) {
 	}
 
 	// Run doctor with fix - should reassign duplicate ID
-	err := doctor.Run(cfg, true)
+	err := doctor.Run(context.Background(), cfg, true)
 	if err != nil {
 		t.Fatalf("doctor --fix failed: %v", err)
 	}
@@ -188,7 +189,7 @@ func TestDoctor_MissingMetadata(t *testing.T) {
 	}
 
 	// Run doctor with fix - should update metadata
-	err := doctor.Run(cfg, true)
+	err := doctor.Run(context.Background(), cfg, true)
 	if err != nil {
 		t.Fatalf("doctor --fix failed: %v", err)
 	}
@@ -235,7 +236,7 @@ func TestDoctor_OrphanWorktree(t *testing.T) {
 	}
 
 	// Run doctor with fix - should add orphan to cache
-	err := doctor.Run(cfg, true)
+	err := doctor.Run(context.Background(), cfg, true)
 	if err != nil {
 		t.Fatalf("doctor --fix failed: %v", err)
 	}
@@ -283,7 +284,7 @@ func TestDoctor_Reset(t *testing.T) {
 	}
 
 	// Set a note on one of the branches (stored in git config)
-	if err := git.SetBranchNote(repoPath, "feature1", "old note"); err != nil {
+	if err := git.SetBranchNote(context.Background(), repoPath, "feature1", "old note"); err != nil {
 		t.Fatalf("failed to set branch note: %v", err)
 	}
 	if err := cache.Save(worktreeDir, wtCache); err != nil {
@@ -297,7 +298,7 @@ func TestDoctor_Reset(t *testing.T) {
 	}
 
 	// Run reset
-	err := doctor.Reset(cfg)
+	err := doctor.Reset(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("doctor --reset failed: %v", err)
 	}
@@ -369,13 +370,13 @@ func TestDoctor_BrokenGitLink(t *testing.T) {
 	}
 
 	// Run doctor without fix - should detect broken link
-	err := doctor.Run(cfg, false)
+	err := doctor.Run(context.Background(), cfg, false)
 	if err != nil {
 		t.Fatalf("doctor failed: %v", err)
 	}
 
 	// Run doctor with fix - should repair the link
-	err = doctor.Run(cfg, true)
+	err = doctor.Run(context.Background(), cfg, true)
 	if err != nil {
 		t.Fatalf("doctor --fix failed: %v", err)
 	}
@@ -416,13 +417,13 @@ func TestDoctor_WorktreeMoved(t *testing.T) {
 	}
 
 	// Run doctor without fix - should detect broken link
-	err := doctor.Run(cfg, false)
+	err := doctor.Run(context.Background(), cfg, false)
 	if err != nil {
 		t.Fatalf("doctor failed: %v", err)
 	}
 
 	// Run doctor with fix - should repair the link
-	err = doctor.Run(cfg, true)
+	err = doctor.Run(context.Background(), cfg, true)
 	if err != nil {
 		t.Fatalf("doctor --fix failed: %v", err)
 	}
@@ -472,13 +473,13 @@ func TestDoctor_BothMoved(t *testing.T) {
 	}
 
 	// Run doctor without fix - should detect broken links
-	err := doctor.Run(cfg, false)
+	err := doctor.Run(context.Background(), cfg, false)
 	if err != nil {
 		t.Fatalf("doctor failed: %v", err)
 	}
 
 	// Run doctor with fix - should repair both links
-	err = doctor.Run(cfg, true)
+	err = doctor.Run(context.Background(), cfg, true)
 	if err != nil {
 		t.Fatalf("doctor --fix failed: %v", err)
 	}
@@ -511,7 +512,7 @@ func TestDoctor_MultipleRepos(t *testing.T) {
 	}
 
 	// Run doctor - should find no issues
-	err := doctor.Run(cfg, false)
+	err := doctor.Run(context.Background(), cfg, false)
 	if err != nil {
 		t.Fatalf("doctor failed: %v", err)
 	}
@@ -549,7 +550,7 @@ func TestDoctor_PathMismatch(t *testing.T) {
 	}
 
 	// Run doctor with fix - should update path
-	err := doctor.Run(cfg, true)
+	err := doctor.Run(context.Background(), cfg, true)
 	if err != nil {
 		t.Fatalf("doctor --fix failed: %v", err)
 	}
@@ -586,7 +587,7 @@ func TestDoctor_EmptyWorktreeDir(t *testing.T) {
 	}
 
 	// Run doctor - should succeed with no issues
-	err := doctor.Run(cfg, false)
+	err := doctor.Run(context.Background(), cfg, false)
 	if err != nil {
 		t.Fatalf("doctor failed on empty dir: %v", err)
 	}

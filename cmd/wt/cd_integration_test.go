@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -556,9 +555,10 @@ func TestCd_LabelUsesWorktreeDirIfNoRepoDir(t *testing.T) {
 // Returns the printed output (path).
 func runCdCommand(t *testing.T, workDir string, cfg *config.Config, cmd *CdCmd) (string, error) {
 	t.Helper()
-	var buf bytes.Buffer
-	err := runCd(cmd, cfg, workDir, &buf)
-	return buf.String(), err
+	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
+	ctx, out := testContextWithOutput(t)
+	err := cmd.runCd(ctx)
+	return out.String(), err
 }
 
 // Note: populateCache is defined in integration_test_helpers.go

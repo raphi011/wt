@@ -36,7 +36,10 @@ const (
 	skipHasCommits pruneReason = "Has commits"
 )
 
-func (c *PruneCmd) runPrune(ctx context.Context, cfg *config.Config, workDir string) error {
+func (c *PruneCmd) runPrune(ctx context.Context) error {
+	cfg := c.Config
+	workDir := c.WorkDir
+
 	// Validate -f requires -i
 	if c.Force && len(c.ID) == 0 {
 		return fmt.Errorf("-f/--force requires -i/--id to target specific worktree(s)")
