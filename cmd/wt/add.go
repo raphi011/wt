@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
+	"github.com/raphi011/wt/internal/log"
 )
 
 // successResult holds the result of a successful worktree creation
@@ -39,6 +39,7 @@ type createWorktreeParams struct {
 // Uses repoPath if specified, otherwise uses workDir as the repo path.
 // Operates using CreateWorktreeFrom/OpenWorktreeFrom for path-based operations.
 func createWorktree(ctx context.Context, p createWorktreeParams) (*successResult, error) {
+	l := log.FromContext(ctx)
 	var result *git.CreateWorktreeResult
 	var err error
 	var repoName, folder, mainRepo string
@@ -72,9 +73,9 @@ func createWorktree(ctx context.Context, p createWorktreeParams) (*successResult
 
 	// Print result
 	if result.AlreadyExists {
-		fmt.Printf("→ Worktree already exists at: %s\n", result.Path)
+		l.Printf("→ Worktree already exists at: %s\n", result.Path)
 	} else {
-		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
+		l.Printf("✓ Worktree created at: %s\n", result.Path)
 	}
 
 	// Set note if provided
@@ -98,6 +99,8 @@ func createWorktree(ctx context.Context, p createWorktreeParams) (*successResult
 // If fetch is true, fetches the base branch from origin first.
 // Returns the full ref (e.g., "origin/main" or "main") based on config.
 func resolveBaseRef(ctx context.Context, repoPath, baseBranch string, fetch bool, baseRefConfig string) (string, error) {
+	l := log.FromContext(ctx)
+
 	// Determine base branch (default: auto-detected main/master)
 	if baseBranch == "" {
 		baseBranch = git.GetDefaultBranch(ctx, repoPath)
@@ -105,7 +108,7 @@ func resolveBaseRef(ctx context.Context, repoPath, baseBranch string, fetch bool
 
 	// Fetch if requested
 	if fetch {
-		fmt.Printf("Fetching origin/%s...\n", baseBranch)
+		l.Printf("Fetching origin/%s...\n", baseBranch)
 		if err := git.FetchBranch(ctx, repoPath, baseBranch); err != nil {
 			return "", err
 		}
@@ -149,9 +152,10 @@ func (c *AddCmd) runAdd(ctx context.Context) error {
 
 // runAddInRepo handles wt add when inside a git repository (single repo mode)
 func (c *AddCmd) runAddInRepo(ctx context.Context) error {
+	l := log.FromContext(ctx)
 	cfg := c.Config
 	workDir := c.WorkDir
-	targetDir, absPath, err := resolveWorktreeTargetDir(cfg, workDir)
+	targetDir, absPath, err := resolveWorktreeTargetDir(cfg.WorktreeDir, workDir)
 	if err != nil {
 		return err
 	}
@@ -163,9 +167,9 @@ func (c *AddCmd) runAddInRepo(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Creating worktree for new branch %s in %s\n", c.Branch, absPath)
+		l.Printf("Creating worktree for new branch %s in %s\n", c.Branch, absPath)
 	} else {
-		fmt.Printf("Adding worktree for branch %s in %s\n", c.Branch, absPath)
+		l.Printf("Adding worktree for branch %s in %s\n", c.Branch, absPath)
 	}
 
 	result, err := createWorktree(ctx, createWorktreeParams{
@@ -320,6 +324,7 @@ func (c *AddCmd) runAddMultiRepo(ctx context.Context, insideRepo bool) error {
 
 // createWorktreeInCurrentRepo creates a worktree in the current git repository
 func (c *AddCmd) createWorktreeInCurrentRepo(ctx context.Context, targetDir string) (*successResult, error) {
+	l := log.FromContext(ctx)
 	cfg := c.Config
 	workDir := c.WorkDir
 	// Resolve base ref if creating new branch
@@ -330,9 +335,9 @@ func (c *AddCmd) createWorktreeInCurrentRepo(ctx context.Context, targetDir stri
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("Creating worktree for new branch %s (current repo) in %s\n", c.Branch, targetDir)
+		l.Printf("Creating worktree for new branch %s (current repo) in %s\n", c.Branch, targetDir)
 	} else {
-		fmt.Printf("Adding worktree for branch %s (current repo) in %s\n", c.Branch, targetDir)
+		l.Printf("Adding worktree for branch %s (current repo) in %s\n", c.Branch, targetDir)
 	}
 
 	return createWorktree(ctx, createWorktreeParams{
@@ -349,6 +354,7 @@ func (c *AddCmd) createWorktreeInCurrentRepo(ctx context.Context, targetDir stri
 
 // createWorktreeForRepo creates a worktree for a specified repository
 func (c *AddCmd) createWorktreeForRepo(ctx context.Context, repoPath string, targetDir string) (*successResult, error) {
+	l := log.FromContext(ctx)
 	cfg := c.Config
 	repoName := git.GetRepoDisplayName(repoPath)
 
@@ -360,9 +366,9 @@ func (c *AddCmd) createWorktreeForRepo(ctx context.Context, repoPath string, tar
 		if err != nil {
 			return nil, err
 		}
-		fmt.Printf("Creating worktree for new branch %s in %s (%s)\n", c.Branch, targetDir, repoName)
+		l.Printf("Creating worktree for new branch %s in %s (%s)\n", c.Branch, targetDir, repoName)
 	} else {
-		fmt.Printf("Adding worktree for branch %s in %s (%s)\n", c.Branch, targetDir, repoName)
+		l.Printf("Adding worktree for branch %s in %s (%s)\n", c.Branch, targetDir, repoName)
 	}
 
 	return createWorktree(ctx, createWorktreeParams{
@@ -377,9 +383,9 @@ func (c *AddCmd) createWorktreeForRepo(ctx context.Context, repoPath string, tar
 }
 
 // resolveWorktreeTargetDir returns both the target dir and its absolute path.
-// If cfg.WorktreeDir is empty, uses workDir as the target.
-func resolveWorktreeTargetDir(cfg *config.Config, workDir string) (targetDir string, absPath string, err error) {
-	targetDir = cfg.WorktreeDir
+// If worktreeDir is empty, uses workDir as the target.
+func resolveWorktreeTargetDir(worktreeDir, workDir string) (targetDir string, absPath string, err error) {
+	targetDir = worktreeDir
 	if targetDir == "" {
 		targetDir = workDir
 	}

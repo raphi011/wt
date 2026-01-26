@@ -468,7 +468,7 @@ Examples:
 }
 
 func (c *ConfigInitCmd) Run(ctx context.Context) error {
-	return c.runConfigInit()
+	return c.runConfigInit(ctx)
 }
 
 // ConfigShowCmd shows the effective configuration.
@@ -485,7 +485,7 @@ Examples:
 }
 
 func (c *ConfigShowCmd) Run(ctx context.Context) error {
-	return c.runConfigShow()
+	return c.runConfigShow(ctx)
 }
 
 // ConfigHooksCmd lists available hooks.
@@ -502,7 +502,7 @@ Examples:
 }
 
 func (c *ConfigHooksCmd) Run(ctx context.Context) error {
-	return c.runConfigHooks()
+	return c.runConfigHooks(ctx)
 }
 
 // ConfigCmd manages wt configuration.

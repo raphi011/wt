@@ -16,10 +16,12 @@ import (
 	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
+	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/resolve"
 )
 
 func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
+	l := log.FromContext(ctx)
 	cfg := c.Config
 	workDir := c.WorkDir
 	// Validate mutual exclusion: positional org/repo and -r flag can't both be used
@@ -33,7 +35,7 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 	}
 
 	// Worktree target dir from config
-	dir, absPath, err := resolveWorktreeTargetDir(cfg, workDir)
+	dir, absPath, err := resolveWorktreeTargetDir(cfg.WorktreeDir, workDir)
 	if err != nil {
 		return err
 	}
@@ -81,12 +83,12 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 		}
 
 		// Clone the repo to repoDir (repo_dir if set, else worktree_dir)
-		fmt.Printf("Cloning %s to %s (using %s)...\n", repoSpec, repoDir, forgeName)
+		l.Printf("Cloning %s to %s (using %s)...\n", repoSpec, repoDir, forgeName)
 		repoPath, err = f.CloneRepo(ctx, repoSpec, repoDir)
 		if err != nil {
 			return fmt.Errorf("failed to clone repo: %w", err)
 		}
-		fmt.Printf("✓ Cloned to %s\n", repoPath)
+		l.Printf("✓ Cloned to %s\n", repoPath)
 	} else {
 		// Local mode: -r flag or current directory
 		if c.Repository != "" {
@@ -100,7 +102,7 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 				return fmt.Errorf("repository %q not found in %s", c.Repository, repoDir)
 			}
 			repoPath = foundPath
-			fmt.Printf("Using repo at %s\n", repoPath)
+			l.Printf("Using repo at %s\n", repoPath)
 		} else {
 			// No args: use current directory
 			repoPath = "."
@@ -133,14 +135,14 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 
 	if branch == "" {
 		// Cache miss - fetch from network
-		fmt.Printf("Fetching PR #%d...\n", c.Number)
+		l.Printf("Fetching PR #%d...\n", c.Number)
 		branch, err = f.GetPRBranch(ctx, originURL, c.Number)
 		if err != nil {
 			return fmt.Errorf("failed to get PR branch: %w", err)
 		}
 	}
 
-	fmt.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
+	l.Printf("Creating worktree for branch %s in %s\n", branch, absPath)
 
 	result, err := git.CreateWorktreeFrom(ctx, repoPath, dir, branch, cfg.WorktreeFormat, "")
 	if err != nil {
@@ -148,9 +150,9 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 	}
 
 	if result.AlreadyExists {
-		fmt.Printf("→ Worktree already exists at: %s\n", result.Path)
+		l.Printf("→ Worktree already exists at: %s\n", result.Path)
 	} else {
-		fmt.Printf("✓ Worktree created at: %s\n", result.Path)
+		l.Printf("✓ Worktree created at: %s\n", result.Path)
 	}
 
 	// Set note if provided
@@ -192,6 +194,7 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 }
 
 func (c *PrMergeCmd) runPrMerge(ctx context.Context) error {
+	l := log.FromContext(ctx)
 	cfg := c.Config
 	worktreeDir, _ := cfg.GetAbsWorktreeDir()
 	target, err := resolve.ByIDOrRepoOrPath(ctx, c.ID, c.Repository, worktreeDir, cfg.RepoScanDir(), c.WorkDir)
@@ -213,7 +216,7 @@ func (c *PrMergeCmd) runPrMerge(ctx context.Context) error {
 	}
 
 	// Get PR for current branch
-	fmt.Printf("Checking PR status for branch %s...\n", target.Branch)
+	l.Printf("Checking PR status for branch %s...\n", target.Branch)
 	pr, err := f.GetPRForBranch(ctx, originURL, target.Branch)
 	if err != nil {
 		return fmt.Errorf("failed to get PR info: %w", err)
@@ -243,11 +246,11 @@ func (c *PrMergeCmd) runPrMerge(ctx context.Context) error {
 	}
 
 	// Merge the PR
-	fmt.Printf("Merging PR #%d (%s)...\n", pr.Number, strategy)
+	l.Printf("Merging PR #%d (%s)...\n", pr.Number, strategy)
 	if err := f.MergePR(ctx, originURL, pr.Number, strategy); err != nil {
 		return err
 	}
-	fmt.Printf("✓ PR #%d merged\n", pr.Number)
+	l.Printf("✓ PR #%d merged\n", pr.Number)
 
 	// Cleanup (unless --keep)
 	if !c.Keep {
@@ -260,20 +263,20 @@ func (c *PrMergeCmd) runPrMerge(ctx context.Context) error {
 				MainRepo: target.MainRepo,
 			}
 
-			fmt.Printf("Removing worktree...\n")
+			l.Printf("Removing worktree...\n")
 			if err := git.RemoveWorktree(ctx, wt, true); err != nil {
 				return fmt.Errorf("failed to remove worktree: %w", err)
 			}
 			git.PruneWorktrees(ctx, target.MainRepo)
 		}
 
-		fmt.Printf("Deleting local branch %s...\n", target.Branch)
+		l.Printf("Deleting local branch %s...\n", target.Branch)
 		if err := git.DeleteLocalBranch(ctx, target.MainRepo, target.Branch, true); err != nil {
 			// Don't fail - branch might already be gone or worktree removal handled it
 			fmt.Fprintf(os.Stderr, "Warning: failed to delete local branch: %v\n", err)
 		}
 
-		fmt.Printf("✓ Cleanup complete\n")
+		l.Printf("✓ Cleanup complete\n")
 	}
 
 	// Run hooks
@@ -308,6 +311,7 @@ func (c *PrMergeCmd) runPrMerge(ctx context.Context) error {
 }
 
 func (c *PrCreateCmd) runPrCreate(ctx context.Context) error {
+	l := log.FromContext(ctx)
 	cfg := c.Config
 	worktreeDir, _ := cfg.GetAbsWorktreeDir()
 	target, err := resolve.ByIDOrRepoOrPath(ctx, c.ID, c.Repository, worktreeDir, cfg.RepoScanDir(), c.WorkDir)
@@ -353,13 +357,13 @@ func (c *PrCreateCmd) runPrCreate(ctx context.Context) error {
 	}
 
 	// Create the PR
-	fmt.Printf("Creating PR for branch %s...\n", target.Branch)
+	l.Printf("Creating PR for branch %s...\n", target.Branch)
 	result, err := f.CreatePR(ctx, originURL, params)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("✓ PR #%d created: %s\n", result.Number, result.URL)
+	l.Printf("✓ PR #%d created: %s\n", result.Number, result.URL)
 
 	// Update cache with PR info
 	wtCache, err := cache.Load(worktreeDir)
