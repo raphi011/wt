@@ -4,6 +4,10 @@
 
 Git worktree manager with GitHub/GitLab integration.
 
+> ⚠️ **Pre-1.0 Notice**: Commands and configuration are not yet stable and may change before v1.0. If something breaks:
+> - Delete `wt-cache.*` files in your worktree directory
+> - Compare your config with `wt config init -s` and update to match newer config format
+
 ## Why wt
 
 Git worktrees let you work on multiple branches simultaneously without stashing or switching—great for juggling a feature branch and a hotfix, or running multiple AI agent sessions in parallel.
