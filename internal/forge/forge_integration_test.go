@@ -3,6 +3,7 @@
 package forge
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -30,7 +31,7 @@ func TestMain(m *testing.M) {
 	}
 
 	gh := &GitHub{}
-	testClonePath, err = gh.CloneRepo(testRepo, tmpDir)
+	testClonePath, err = gh.CloneRepo(context.Background(), testRepo, tmpDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to clone test repo: %v\n", err)
 		os.RemoveAll(tmpDir)
@@ -74,7 +75,7 @@ func TestGitHub_Check(t *testing.T) {
 	t.Parallel()
 
 	gh := &GitHub{}
-	err := gh.Check()
+	err := gh.Check(context.Background())
 	if err != nil {
 		t.Errorf("Check() error = %v, want nil", err)
 	}
@@ -87,7 +88,7 @@ func TestGitHub_GetPRForBranch_Main(t *testing.T) {
 	gh := &GitHub{}
 	repoURL := "https://github.com/" + testRepo
 
-	pr, err := gh.GetPRForBranch(repoURL, "main")
+	pr, err := gh.GetPRForBranch(context.Background(), repoURL, "main")
 	if err != nil {
 		t.Fatalf("GetPRForBranch() error = %v", err)
 	}
@@ -105,7 +106,7 @@ func TestGitHub_GetPRForBranch_NonExistent(t *testing.T) {
 	gh := &GitHub{}
 	repoURL := "https://github.com/" + testRepo
 
-	pr, err := gh.GetPRForBranch(repoURL, "nonexistent-branch-"+fmt.Sprintf("%d", time.Now().UnixNano()))
+	pr, err := gh.GetPRForBranch(context.Background(), repoURL, "nonexistent-branch-"+fmt.Sprintf("%d", time.Now().UnixNano()))
 	if err != nil {
 		t.Fatalf("GetPRForBranch() error = %v", err)
 	}
@@ -124,7 +125,7 @@ func TestGitHub_CloneRepo(t *testing.T) {
 	gh := &GitHub{}
 	tmpDir := t.TempDir()
 
-	clonePath, err := gh.CloneRepo(testRepo, tmpDir)
+	clonePath, err := gh.CloneRepo(context.Background(), testRepo, tmpDir)
 	if err != nil {
 		t.Fatalf("CloneRepo() error = %v", err)
 	}
@@ -142,18 +143,19 @@ func TestGitHub_CloneRepo_InvalidSpec(t *testing.T) {
 
 	gh := &GitHub{}
 	tmpDir := t.TempDir()
+	ctx := context.Background()
 
-	_, err := gh.CloneRepo("invalid-spec-no-slash", tmpDir)
+	_, err := gh.CloneRepo(ctx, "invalid-spec-no-slash", tmpDir)
 	if err == nil {
 		t.Error("CloneRepo() with invalid spec should return error")
 	}
 
-	_, err = gh.CloneRepo("/repo", tmpDir)
+	_, err = gh.CloneRepo(ctx, "/repo", tmpDir)
 	if err == nil {
 		t.Error("CloneRepo() with empty org should return error")
 	}
 
-	_, err = gh.CloneRepo("org/", tmpDir)
+	_, err = gh.CloneRepo(ctx, "org/", tmpDir)
 	if err == nil {
 		t.Error("CloneRepo() with empty repo should return error")
 	}
@@ -165,6 +167,7 @@ func TestGitHub_CloneRepo_InvalidSpec(t *testing.T) {
 func TestGitHub_PRWorkflow(t *testing.T) {
 	skipIfNoGitHub(t)
 
+	ctx := context.Background()
 	gh := &GitHub{}
 	repoURL := "https://github.com/" + testRepo
 
@@ -230,7 +233,7 @@ func TestGitHub_PRWorkflow(t *testing.T) {
 		defer os.Chdir(origDir)
 
 		// Create PR (not draft so it can be merged)
-		result, err := gh.CreatePR(repoURL, CreatePRParams{
+		result, err := gh.CreatePR(ctx, repoURL, CreatePRParams{
 			Title: "Test PR - " + testBranch,
 			Body:  "Automated integration test PR. Will be merged automatically.",
 		})
@@ -254,7 +257,7 @@ func TestGitHub_PRWorkflow(t *testing.T) {
 		}
 
 		// View PR without opening browser
-		err := gh.ViewPR(repoURL, prNumber, false)
+		err := gh.ViewPR(ctx, repoURL, prNumber, false)
 		if err != nil {
 			t.Errorf("ViewPR() error = %v", err)
 		}
@@ -265,7 +268,7 @@ func TestGitHub_PRWorkflow(t *testing.T) {
 			t.Skip("No PR created")
 		}
 
-		branch, err := gh.GetPRBranch(repoURL, prNumber)
+		branch, err := gh.GetPRBranch(ctx, repoURL, prNumber)
 		if err != nil {
 			t.Fatalf("GetPRBranch() error = %v", err)
 		}
@@ -280,7 +283,7 @@ func TestGitHub_PRWorkflow(t *testing.T) {
 		}
 
 		// Merge the PR with squash strategy
-		err := gh.MergePR(repoURL, prNumber, "squash")
+		err := gh.MergePR(ctx, repoURL, prNumber, "squash")
 		if err != nil {
 			t.Errorf("MergePR() error = %v", err)
 		}
