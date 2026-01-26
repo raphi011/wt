@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/raphi011/wt/internal/cache"
-	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
@@ -194,8 +193,8 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 
 func (c *PrMergeCmd) runPrMerge(ctx context.Context) error {
 	cfg := c.Config
-	workDir := c.WorkDir
-	target, err := resolvePrTarget(ctx, c.ID, c.Repository, cfg, workDir)
+	worktreeDir, _ := cfg.GetAbsWorktreeDir()
+	target, err := resolve.ByIDOrRepoOrPath(ctx, c.ID, c.Repository, worktreeDir, cfg.RepoScanDir(), c.WorkDir)
 	if err != nil {
 		return err
 	}
@@ -310,8 +309,8 @@ func (c *PrMergeCmd) runPrMerge(ctx context.Context) error {
 
 func (c *PrCreateCmd) runPrCreate(ctx context.Context) error {
 	cfg := c.Config
-	workDir := c.WorkDir
-	target, err := resolvePrTarget(ctx, c.ID, c.Repository, cfg, workDir)
+	worktreeDir, _ := cfg.GetAbsWorktreeDir()
+	target, err := resolve.ByIDOrRepoOrPath(ctx, c.ID, c.Repository, worktreeDir, cfg.RepoScanDir(), c.WorkDir)
 	if err != nil {
 		return err
 	}
@@ -363,12 +362,6 @@ func (c *PrCreateCmd) runPrCreate(ctx context.Context) error {
 	fmt.Printf("✓ PR #%d created: %s\n", result.Number, result.URL)
 
 	// Update cache with PR info
-	worktreeDir := cfg.WorktreeDir
-	if worktreeDir == "" {
-		worktreeDir = filepath.Dir(target.Path)
-	}
-	worktreeDir, _ = filepath.Abs(worktreeDir)
-
 	wtCache, err := cache.Load(worktreeDir)
 	if err == nil {
 		state := "OPEN"
@@ -402,8 +395,8 @@ func (c *PrCreateCmd) runPrCreate(ctx context.Context) error {
 
 func (c *PrViewCmd) runPrView(ctx context.Context) error {
 	cfg := c.Config
-	workDir := c.WorkDir
-	target, err := resolvePrTarget(ctx, c.ID, c.Repository, cfg, workDir)
+	worktreeDir, _ := cfg.GetAbsWorktreeDir()
+	target, err := resolve.ByIDOrRepoOrPath(ctx, c.ID, c.Repository, worktreeDir, cfg.RepoScanDir(), c.WorkDir)
 	if err != nil {
 		return err
 	}
@@ -429,34 +422,6 @@ func (c *PrViewCmd) runPrView(ctx context.Context) error {
 
 	// View the PR
 	return f.ViewPR(ctx, originURL, pr.Number, c.Web)
-}
-
-// resolvePrTarget resolves target for pr commands with 3 modes:
-// 1. --id: by worktree ID
-// 2. -r: by repository name
-// 3. neither: use workDir (worktree or main repo)
-func resolvePrTarget(ctx context.Context, id int, repository string, cfg *config.Config, workDir string) (*resolve.Target, error) {
-	if id != 0 {
-		worktreeDir, err := cfg.GetAbsWorktreeDir()
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve absolute path: %w", err)
-		}
-		return resolve.ByID(id, worktreeDir)
-	}
-
-	if repository != "" {
-		repoDir := cfg.RepoScanDir()
-		if repoDir == "" {
-			var err error
-			repoDir, err = cfg.GetAbsWorktreeDir()
-			if err != nil {
-				return nil, fmt.Errorf("failed to resolve absolute path: %w", err)
-			}
-		}
-		return resolve.ByRepoName(ctx, repository, repoDir)
-	}
-
-	return resolve.FromWorktreeOrRepoPath(ctx, workDir)
 }
 
 // openBrowser opens the specified URL in the default browser

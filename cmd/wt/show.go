@@ -108,69 +108,29 @@ func (c *ShowCmd) runShow(ctx context.Context) error {
 }
 
 // resolveShowTarget resolves the worktree target for show command
-func resolveShowTarget(ctx context.Context, id int, repository string, cfg *config.Config, dir string, workDir string) (*resolve.Target, error) {
-	// Resolve by ID if provided
-	if id != 0 {
-		worktreeDir := dir
-		if worktreeDir == "" {
-			worktreeDir = "."
-		}
-		worktreeDir, err := filepath.Abs(worktreeDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve absolute path: %w", err)
-		}
-		return resolve.ByID(id, worktreeDir)
-	}
-
-	// Resolve by repo name if provided
-	if repository != "" {
-		repoDir := cfg.RepoScanDir()
-		if repoDir == "" {
-			repoDir = dir
-		}
-		return resolve.ByRepoName(ctx, repository, repoDir)
-	}
-
-	// Default: use working directory
-	inWorktree := git.IsWorktree(workDir)
-	inGitRepo := git.IsInsideRepoPath(ctx, workDir)
-
-	if !inWorktree && !inGitRepo {
-		return nil, fmt.Errorf("--id or --repository required when not inside a worktree/repo (run 'wt list' to see IDs)")
-	}
-
-	branch, err := git.GetCurrentBranch(ctx, workDir)
+func resolveShowTarget(ctx context.Context, id int, repository string, cfg *config.Config, worktreeDir string, workDir string) (*resolve.Target, error) {
+	// Use ByIDOrRepoOrPath for basic resolution
+	target, err := resolve.ByIDOrRepoOrPath(ctx, id, repository, worktreeDir, cfg.RepoScanDir(), workDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current branch: %w", err)
-	}
-
-	var mainRepo string
-	if inWorktree {
-		mainRepo, err = git.GetMainRepoPath(workDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get main repo path: %w", err)
+		// Wrap error with more specific message when not inside worktree/repo
+		if id == 0 && repository == "" && !git.IsWorktree(workDir) && !git.IsInsideRepoPath(ctx, workDir) {
+			return nil, fmt.Errorf("--id or --repository required when not inside a worktree/repo (run 'wt list' to see IDs)")
 		}
-	} else {
-		// Inside main repo, use workDir as main repo
-		mainRepo = workDir
+		return nil, err
 	}
 
-	// Get ID from cache if available
-	worktreeDir := dir
-	if worktreeDir == "" {
-		worktreeDir = "."
-	}
-	worktreeDir, _ = filepath.Abs(worktreeDir)
-	wtCache, _ := cache.Load(worktreeDir)
-	wtID := 0
-	if wtCache != nil {
-		key := cache.MakeWorktreeKey(workDir)
-		if entry, ok := wtCache.Worktrees[key]; ok {
-			wtID = entry.ID
+	// For show command, try to get ID from cache if not already set
+	if target.ID == 0 && worktreeDir != "" {
+		wtCache, _ := cache.Load(worktreeDir)
+		if wtCache != nil {
+			key := cache.MakeWorktreeKey(target.Path)
+			if entry, ok := wtCache.Worktrees[key]; ok {
+				target.ID = entry.ID
+			}
 		}
 	}
 
-	return &resolve.Target{ID: wtID, Branch: branch, MainRepo: mainRepo, Path: workDir}, nil
+	return target, nil
 }
 
 func gatherShowInfo(ctx context.Context, target *resolve.Target, prInfo *forge.PRInfo) *ShowInfo {

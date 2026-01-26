@@ -3,10 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 
-	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/output"
@@ -14,8 +12,6 @@ import (
 )
 
 func (c *CdCmd) runCd(ctx context.Context) error {
-	cfg := c.Config
-	out := output.FromContext(ctx).Writer()
 	// Determine targeting mode
 	hasID := c.ID != 0
 	hasRepo := c.Repository != ""
@@ -25,26 +21,27 @@ func (c *CdCmd) runCd(ctx context.Context) error {
 		return fmt.Errorf("specify target: -i <id>, -r <repo>, or -l <label>")
 	}
 
+	// Mode: by label (no hooks for label mode)
+	if hasLabel {
+		return c.runCdForLabel(ctx)
+	}
+
+	// Mode: by repo name (no hooks for repo mode)
+	if hasRepo {
+		return c.runCdForRepo(ctx)
+	}
+
+	// Mode: by ID (worktree)
+	return c.runCdForID(ctx)
+}
+
+func (c *CdCmd) runCdForID(ctx context.Context) error {
+	cfg := c.Config
 	worktreeDir, err := cfg.GetAbsWorktreeDir()
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	// Mode: by label (no hooks for label mode)
-	if hasLabel {
-		return runCdForLabel(ctx, c.Label, worktreeDir, cfg, out)
-	}
-
-	// Mode: by repo name (no hooks for repo mode)
-	if hasRepo {
-		return runCdForRepo(c.Repository, worktreeDir, cfg, out)
-	}
-
-	// Mode: by ID (worktree)
-	return c.runCdForID(cfg, worktreeDir, out)
-}
-
-func (c *CdCmd) runCdForID(cfg *config.Config, worktreeDir string, out io.Writer) error {
 	target, err := resolve.ByID(c.ID, worktreeDir)
 	if err != nil {
 		return err
@@ -59,7 +56,7 @@ func (c *CdCmd) runCdForID(cfg *config.Config, worktreeDir string, out io.Writer
 		return fmt.Errorf("path no longer exists: %s", path)
 	}
 
-	fmt.Fprintln(out, path)
+	output.FromContext(ctx).Println(path)
 
 	// Run hooks
 	hookMatches, err := hooks.SelectHooks(cfg.Hooks, c.Hook, c.NoHook, hooks.CommandCd)
@@ -73,20 +70,26 @@ func (c *CdCmd) runCdForID(cfg *config.Config, worktreeDir string, out io.Writer
 			return err
 		}
 
-		ctx := hooks.ContextFromWorktree(target, hooks.CommandCd, env)
-		return hooks.RunAll(hookMatches, ctx)
+		hookCtx := hooks.ContextFromWorktree(target, hooks.CommandCd, env)
+		return hooks.RunAll(hookMatches, hookCtx)
 	}
 
 	return nil
 }
 
-func runCdForRepo(repoName string, dir string, cfg *config.Config, out io.Writer) error {
-	repoDir, err := resolveRepoDir(dir, cfg)
+func (c *CdCmd) runCdForRepo(ctx context.Context) error {
+	cfg := c.Config
+	worktreeDir, err := cfg.GetAbsWorktreeDir()
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	repoDir, err := resolveRepoDir(worktreeDir, cfg)
 	if err != nil {
 		return err
 	}
 
-	repoPath, err := git.FindRepoByName(repoDir, repoName)
+	repoPath, err := git.FindRepoByName(repoDir, c.Repository)
 	if err != nil {
 		return err
 	}
@@ -95,27 +98,33 @@ func runCdForRepo(repoName string, dir string, cfg *config.Config, out io.Writer
 		return fmt.Errorf("path no longer exists: %s", repoPath)
 	}
 
-	fmt.Fprintln(out, repoPath)
+	output.FromContext(ctx).Println(repoPath)
 	return nil
 }
 
-func runCdForLabel(ctx context.Context, label string, dir string, cfg *config.Config, out io.Writer) error {
-	repoDir, err := resolveRepoDir(dir, cfg)
+func (c *CdCmd) runCdForLabel(ctx context.Context) error {
+	cfg := c.Config
+	worktreeDir, err := cfg.GetAbsWorktreeDir()
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	repoDir, err := resolveRepoDir(worktreeDir, cfg)
 	if err != nil {
 		return err
 	}
 
-	repos, err := git.FindReposByLabel(ctx, repoDir, label)
+	repos, err := git.FindReposByLabel(ctx, repoDir, c.Label)
 	if err != nil {
 		return err
 	}
 
 	if len(repos) == 0 {
-		return fmt.Errorf("no repos found with label %q", label)
+		return fmt.Errorf("no repos found with label %q", c.Label)
 	}
 
 	if len(repos) > 1 {
-		return fmt.Errorf("multiple repos match label %q (use -r to specify)", label)
+		return fmt.Errorf("multiple repos match label %q (use -r to specify)", c.Label)
 	}
 
 	repoPath := repos[0]
@@ -123,6 +132,6 @@ func runCdForLabel(ctx context.Context, label string, dir string, cfg *config.Co
 		return fmt.Errorf("path no longer exists: %s", repoPath)
 	}
 
-	fmt.Fprintln(out, repoPath)
+	output.FromContext(ctx).Println(repoPath)
 	return nil
 }
