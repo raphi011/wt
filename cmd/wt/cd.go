@@ -84,7 +84,7 @@ func (c *CdCmd) runCdForRepo(ctx context.Context) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	repoDir, err := resolveRepoDir(worktreeDir, cfg)
+	repoDir, err := resolveRepoDir(worktreeDir, cfg.RepoScanDir())
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func (c *CdCmd) runCdForLabel(ctx context.Context) error {
 		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
-	repoDir, err := resolveRepoDir(worktreeDir, cfg)
+	repoDir, err := resolveRepoDir(worktreeDir, cfg.RepoScanDir())
 	if err != nil {
 		return err
 	}

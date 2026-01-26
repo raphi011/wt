@@ -50,7 +50,7 @@ func (c *HookCmd) runHookRun(ctx context.Context) error {
 		}
 		hookCtx.Env = env
 		hookCtx.DryRun = c.DryRun
-		return runHooksForContext(c.Hooks, cfg, hookCtx)
+		return runHooksForContext(c.Hooks, cfg.Hooks.Hooks, hookCtx)
 	}
 
 	worktreeDir, err := cfg.GetAbsWorktreeDir()
@@ -62,7 +62,7 @@ func (c *HookCmd) runHookRun(ctx context.Context) error {
 	if hasID {
 		var errs []error
 		for _, id := range c.ID {
-			if err := runHookForID(id, c.Hooks, worktreeDir, cfg, env, c.DryRun); err != nil {
+			if err := runHookForID(id, c.Hooks, worktreeDir, cfg.Hooks.Hooks, env, c.DryRun); err != nil {
 				errs = append(errs, fmt.Errorf("ID %d: %w", id, err))
 			}
 		}
@@ -73,35 +73,35 @@ func (c *HookCmd) runHookRun(ctx context.Context) error {
 	}
 
 	// Mode: by repo/label
-	return runHookForRepos(ctx, c.Repository, c.Label, c.Hooks, worktreeDir, cfg, env, c.DryRun)
+	return runHookForRepos(ctx, c.Repository, c.Label, c.Hooks, worktreeDir, cfg.RepoScanDir(), cfg.Hooks.Hooks, env, c.DryRun)
 }
 
-func runHookForID(id int, hookNames []string, worktreeDir string, cfg *config.Config, env map[string]string, dryRun bool) error {
+func runHookForID(id int, hookNames []string, worktreeDir string, hooksMap map[string]config.Hook, env map[string]string, dryRun bool) error {
 	ctx, err := resolveHookTargetByID(id, worktreeDir)
 	if err != nil {
 		return err
 	}
 	ctx.Env = env
 	ctx.DryRun = dryRun
-	return runHooksForContext(hookNames, cfg, ctx)
+	return runHooksForContext(hookNames, hooksMap, ctx)
 }
 
-func runHookForRepos(ctx context.Context, repos []string, labels []string, hookNames []string, dir string, cfg *config.Config, env map[string]string, dryRun bool) error {
-	repoDir, err := resolveRepoDir(dir, cfg)
+func runHookForRepos(ctx context.Context, repos []string, labels []string, hookNames []string, dir, repoScanDir string, hooksMap map[string]config.Hook, env map[string]string, dryRun bool) error {
+	repoDir, err := resolveRepoDir(dir, repoScanDir)
 	if err != nil {
 		return err
 	}
 
-	repoPaths, errs := collectRepoPaths(ctx, repos, labels, repoDir, cfg)
+	repoPaths, errs := collectRepoPaths(ctx, repos, labels, repoDir)
 
 	// Run hooks for each repo
 	for repoPath := range repoPaths {
 		repoName := git.GetRepoDisplayName(repoPath)
 
-		ctx := hooks.ContextFromRepo(repoPath, "run", env)
-		ctx.DryRun = dryRun
+		hookCtx := hooks.ContextFromRepo(repoPath, "run", env)
+		hookCtx.DryRun = dryRun
 
-		if err := runHooksForContext(hookNames, cfg, ctx); err != nil {
+		if err := runHooksForContext(hookNames, hooksMap, hookCtx); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", repoName, err))
 		}
 	}
@@ -112,9 +112,9 @@ func runHookForRepos(ctx context.Context, repos []string, labels []string, hookN
 	return nil
 }
 
-func runHooksForContext(hookNames []string, cfg *config.Config, ctx hooks.Context) error {
+func runHooksForContext(hookNames []string, hooksMap map[string]config.Hook, ctx hooks.Context) error {
 	for _, name := range hookNames {
-		hook := cfg.Hooks.Hooks[name]
+		hook := hooksMap[name]
 		if err := hooks.RunSingle(name, &hook, ctx); err != nil {
 			return err
 		}

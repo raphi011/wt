@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/resolve"
 )
@@ -44,7 +43,7 @@ func (c *ExecCmd) runExec(ctx context.Context) error {
 	}
 
 	// Mode: by repo/label
-	return runExecForRepos(ctx, c.Repository, c.Label, command, worktreeDir, cfg)
+	return runExecForRepos(ctx, c.Repository, c.Label, command, worktreeDir, cfg.RepoScanDir())
 }
 
 func runExecForIDs(ids []int, command []string, worktreeDir string) error {
@@ -61,13 +60,13 @@ func runExecForIDs(ids []int, command []string, worktreeDir string) error {
 	return nil
 }
 
-func runExecForRepos(ctx context.Context, repos []string, labels []string, command []string, dir string, cfg *config.Config) error {
-	repoDir, err := resolveRepoDir(dir, cfg)
+func runExecForRepos(ctx context.Context, repos []string, labels []string, command []string, dir, repoScanDir string) error {
+	repoDir, err := resolveRepoDir(dir, repoScanDir)
 	if err != nil {
 		return err
 	}
 
-	repoPaths, errs := collectRepoPaths(ctx, repos, labels, repoDir, cfg)
+	repoPaths, errs := collectRepoPaths(ctx, repos, labels, repoDir)
 
 	// Execute command in each repo
 	for repoPath := range repoPaths {
