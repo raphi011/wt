@@ -81,7 +81,6 @@ func FormatListTable(ctx context.Context, worktrees []git.Worktree, pathToID map
 		id         string
 		repo       string
 		branch     string
-		status     string
 		lastCommit string
 		note       string
 		pr         string
@@ -97,18 +96,6 @@ func FormatListTable(ctx context.Context, worktrees []git.Worktree, pathToID map
 
 		// Branch name
 		branch := wt.Branch
-
-		// Format status
-		var status string
-		if wt.IsMerged {
-			status = "prunable"
-		} else if wt.CommitCount == 0 && !wt.IsDirty {
-			status = "clean"
-		} else if wt.CommitCount == 0 && wt.IsDirty {
-			status = "dirty"
-		} else {
-			status = fmt.Sprintf("%d ahead", wt.CommitCount)
-		}
 
 		// Last commit time
 		lastCommit := wt.LastCommit
@@ -162,7 +149,6 @@ func FormatListTable(ctx context.Context, worktrees []git.Worktree, pathToID map
 			id:         id,
 			repo:       repoName,
 			branch:     branch,
-			status:     status,
 			lastCommit: lastCommit,
 			note:       note,
 			pr:         prCol,
@@ -170,12 +156,12 @@ func FormatListTable(ctx context.Context, worktrees []git.Worktree, pathToID map
 	}
 
 	// Build header row
-	headers := []string{"ID", "REPO", "BRANCH", "STATUS", "LAST COMMIT", "NOTE", "PR"}
+	headers := []string{"ID", "REPO", "BRANCH", "LAST COMMIT", "NOTE", "PR"}
 
 	// Build data rows
 	var rows [][]string
 	for _, rd := range rowsData {
-		rows = append(rows, []string{rd.id, rd.repo, rd.branch, rd.status, rd.lastCommit, rd.note, rd.pr})
+		rows = append(rows, []string{rd.id, rd.repo, rd.branch, rd.lastCommit, rd.note, rd.pr})
 	}
 
 	// Create table with lipgloss/table
