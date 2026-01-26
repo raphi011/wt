@@ -382,6 +382,22 @@ func ListWorktreesFromRepo(ctx context.Context, repoPath string) ([]WorktreeInfo
 	return worktrees, nil
 }
 
+// GetWorktreeBranches returns a set of branch names that are currently checked out in worktrees.
+// Useful for filtering out branches that can't be checked out again.
+func GetWorktreeBranches(ctx context.Context, repoPath string) map[string]bool {
+	branches := make(map[string]bool)
+	worktrees, err := ListWorktreesFromRepo(ctx, repoPath)
+	if err != nil {
+		return branches
+	}
+	for _, wt := range worktrees {
+		if wt.Branch != "" && wt.Branch != "(detached)" {
+			branches[wt.Branch] = true
+		}
+	}
+	return branches
+}
+
 // GetMergedBranches returns a set of branches that are merged into the default branch.
 // Uses a single git call: `git branch --merged origin/<default>`
 func GetMergedBranches(ctx context.Context, repoPath string) map[string]bool {
