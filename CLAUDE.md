@@ -47,7 +47,8 @@ internal/output/         - Context-aware output (stdout)
   └── output.go          - Printer for primary data output
 internal/ui/             - Terminal UI components
   ├── table.go           - Lipgloss table formatting with colors
-  └── spinner.go         - Bubbletea spinner
+  ├── spinner.go         - Bubbletea spinner
+  └── interactive.go     - Interactive prompts (confirm, text input, list select)
 ```
 
 ### Key Design Decisions
@@ -77,22 +78,23 @@ internal/ui/             - Terminal UI components
 
 ### Development Guidelines
 
-**Target Resolution Pattern** - Commands that operate on worktrees use `--id` (`-i`) flag with `internal/resolve.ByID()`:
+**Target Resolution Pattern** - Commands that operate on worktrees use `--id` (`-n`) flag with `internal/resolve.ByID()`:
 
-- **ID or repo/label**: `wt exec`, `wt hook` - require `-i <id>`, or `-r <repo>`/`-l <label>` (exec/hook support multiple); these flags are mutually exclusive
-- **ID or repo or label**: `wt cd` - require `-i <id>`, `-r <repo>`, or `-l <label>` (mutually exclusive)
-- **Optional ID**: `wt note`, `wt pr create`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current branch; outside requires `-i` (prune supports multiple)
-- **Special case**: `wt checkout` - inside repo uses branch name; outside repo requires `-r <repo>` or `-l <label>` to specify target repos
+- **ID or repo/label**: `wt exec`, `wt hook` - require `-n <id>`, or `-r <repo>`/`-l <label>` (exec/hook support multiple); these flags are mutually exclusive
+- **ID or repo or label**: `wt cd` - require `-n <id>`, `-r <repo>`, or `-l <label>` (mutually exclusive)
+- **Optional ID**: `wt note`, `wt pr create`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current branch; outside requires `-n` (prune supports multiple)
+- **Special case**: `wt checkout` - inside repo uses branch name; outside repo requires `-r <repo>` or `-l <label>` to specify target repos; use `-i` for interactive mode
 
 Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt hook`, `wt pr create`, `wt pr merge`, `wt prune`
 
 **Keep completions/config in sync** - When CLI commands, flags, or subcommands change, always update the shell completion scripts (fish, bash, zsh in `cmd/wt/main.go`) and any config generation commands to match.
 
 **Reuse flags consistently** - When adding flags that serve the same purpose across commands, use identical names/shortcuts. Standard flags:
-- `-i, --id` - worktree ID for targeting
+- `-n, --id` - worktree ID/number for targeting
+- `-i, --interactive` - interactive mode (wt checkout)
 - `-r, --repository` - repository name for targeting (wt checkout, list, exec, cd, hook)
 - `-l, --label` - target repos by label (wt checkout, list, exec, hook)
-- `-n, --dry-run` - preview without making changes
+- `-d, --dry-run` - preview without making changes
 - `-f, --force` - force operation (override safety checks)
 - `-c, --include-clean` - include clean worktrees (0 commits, no changes)
 - `-g, --global` - operate on all repos (not just current)
@@ -145,7 +147,7 @@ func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
 - stdout: Primary output (data, tables, paths, JSON)
 - stderr: Diagnostics (logs, progress, errors)
 
-This allows piping: `cd $(wt cd -i 1)` works because logs go to stderr.
+This allows piping: `cd $(wt cd -n 1)` works because logs go to stderr.
 
 ### Integration Tests
 

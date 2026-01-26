@@ -578,6 +578,48 @@ func GetRepoNameFromWorktree(worktreePath string) string {
 	}
 }
 
+// ListLocalBranches returns all local branch names for a repository.
+func ListLocalBranches(ctx context.Context, repoPath string) ([]string, error) {
+	output, err := outputGit(ctx, repoPath, "branch", "--format=%(refname:short)")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list branches: %v", err)
+	}
+
+	var branches []string
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			branches = append(branches, line)
+		}
+	}
+	return branches, nil
+}
+
+// ListRemoteBranches returns all remote branch names (without origin/ prefix) for a repository.
+func ListRemoteBranches(ctx context.Context, repoPath string) ([]string, error) {
+	output, err := outputGit(ctx, repoPath, "branch", "-r", "--format=%(refname:short)")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list remote branches: %v", err)
+	}
+
+	var branches []string
+	seen := make(map[string]bool)
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Remove origin/ prefix and skip HEAD
+		if strings.HasPrefix(line, "origin/") {
+			branch := strings.TrimPrefix(line, "origin/")
+			if branch != "HEAD" && !seen[branch] {
+				branches = append(branches, branch)
+				seen[branch] = true
+			}
+		}
+	}
+	return branches, nil
+}
+
 // GetBranchCreatedTime returns when the branch was created (first commit on branch)
 // Falls back to first commit time if reflog is unavailable
 func GetBranchCreatedTime(ctx context.Context, repoPath, branch string) (time.Time, error) {

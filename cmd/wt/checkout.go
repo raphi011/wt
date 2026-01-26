@@ -11,6 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
+	"github.com/raphi011/wt/internal/ui"
 )
 
 // successResult holds the result of a successful worktree creation
@@ -125,6 +126,38 @@ func resolveBaseRef(ctx context.Context, repoPath, baseBranch string, fetch bool
 func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
 	cfg := c.Config
 	workDir := c.WorkDir
+
+	// Handle interactive mode
+	if c.Interactive {
+		insideRepo := git.IsInsideRepoPath(ctx, workDir)
+		if !insideRepo && len(c.Repository) == 0 && len(c.Label) == 0 {
+			return fmt.Errorf("interactive mode requires being inside a git repo or specifying -r/-l")
+		}
+
+		// Get existing branches for selection
+		var branches []string
+		if insideRepo {
+			var err error
+			branches, err = git.ListRemoteBranches(ctx, workDir)
+			if err != nil {
+				// Fall back to local branches if remote fails
+				branches, _ = git.ListLocalBranches(ctx, workDir)
+			}
+		}
+
+		opts, err := ui.CheckoutInteractive(branches)
+		if err != nil {
+			return fmt.Errorf("interactive mode error: %w", err)
+		}
+		if opts.Cancelled {
+			return nil
+		}
+
+		// Apply gathered options
+		c.Branch = opts.Branch
+		c.NewBranch = opts.NewBranch
+		c.Fetch = opts.Fetch
+	}
 
 	// Validate worktree format
 	if err := format.ValidateFormat(cfg.WorktreeFormat); err != nil {
