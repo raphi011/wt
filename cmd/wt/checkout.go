@@ -377,17 +377,6 @@ func (c *CheckoutCmd) runCheckoutMultiRepo(ctx context.Context, insideRepo bool)
 	var results []successResult
 	var errs []error
 
-	// If inside repo with -r flag, include current repo first (original behavior)
-	// With -l only, we don't auto-include current repo (only labeled repos)
-	if insideRepo && len(c.Repository) > 0 {
-		result, err := c.createWorktreeInCurrentRepo(ctx, wtDir)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("(current repo): %w", err))
-		} else {
-			results = append(results, *result)
-		}
-	}
-
 	// Collect repo paths: from -r (by name) and -l (by label)
 	repoPaths, collectErrs := collectRepoPaths(ctx, c.Repository, c.Label, repoDir)
 	errs = append(errs, collectErrs...)
