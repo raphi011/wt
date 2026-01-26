@@ -266,7 +266,14 @@ type CheckoutOptions struct {
 // CheckoutInteractive runs the interactive checkout flow.
 // It asks the user whether to create a new branch or checkout existing,
 // then gathers the branch name accordingly.
-func CheckoutInteractive(existingBranches []string) (CheckoutOptions, error) {
+// targetRepos optionally lists the repositories being targeted (for display).
+func CheckoutInteractive(existingBranches []string, targetRepos []string) (CheckoutOptions, error) {
+	// Show target repos if specified
+	if len(targetRepos) > 0 {
+		repoList := strings.Join(targetRepos, ", ")
+		fmt.Printf("Target repositories: %s\n\n", repoList)
+	}
+
 	// Ask if creating new branch
 	result, err := Confirm("Create a new branch?")
 	if err != nil {

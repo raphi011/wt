@@ -134,18 +134,54 @@ func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
 			return fmt.Errorf("interactive mode requires being inside a git repo or specifying -r/-l")
 		}
 
+		// Determine which repo to get branches from
+		var branchSourcePath string
+		var targetRepoNames []string
+
+		if len(c.Repository) > 0 || len(c.Label) > 0 {
+			// When -r or -l is specified, resolve repos and get branches from first one
+			repoDir := cfg.RepoScanDir()
+			if repoDir == "" {
+				repoDir = cfg.WorktreeDir
+			}
+			if repoDir == "" && insideRepo {
+				repoDir = workDir
+			}
+			if repoDir == "" {
+				return fmt.Errorf("directory required when using -r or -l (set WT_WORKTREE_DIR or worktree_dir in config)")
+			}
+
+			repoPaths, errs := collectRepoPaths(ctx, c.Repository, c.Label, repoDir)
+			if len(errs) > 0 {
+				return fmt.Errorf("failed to resolve repositories: %v", errs[0])
+			}
+			if len(repoPaths) == 0 {
+				return fmt.Errorf("no matching repositories found")
+			}
+
+			// Get branch list from first repo, collect names for display
+			for repoPath := range repoPaths {
+				if branchSourcePath == "" {
+					branchSourcePath = repoPath
+				}
+				targetRepoNames = append(targetRepoNames, git.GetRepoDisplayName(repoPath))
+			}
+		} else if insideRepo {
+			branchSourcePath = workDir
+		}
+
 		// Get existing branches for selection
 		var branches []string
-		if insideRepo {
+		if branchSourcePath != "" {
 			var err error
-			branches, err = git.ListRemoteBranches(ctx, workDir)
+			branches, err = git.ListRemoteBranches(ctx, branchSourcePath)
 			if err != nil {
 				// Fall back to local branches if remote fails
-				branches, _ = git.ListLocalBranches(ctx, workDir)
+				branches, _ = git.ListLocalBranches(ctx, branchSourcePath)
 			}
 		}
 
-		opts, err := ui.CheckoutInteractive(branches)
+		opts, err := ui.CheckoutInteractive(branches, targetRepoNames)
 		if err != nil {
 			return fmt.Errorf("interactive mode error: %w", err)
 		}

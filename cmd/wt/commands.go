@@ -33,7 +33,7 @@ type CheckoutCmd struct {
 func (c *CheckoutCmd) Help() string {
 	return `Use -b to create a new branch, or omit for an existing branch.
 Use -r to target repos by name, -l to target repos by label.
-Use -u for interactive mode to be prompted for options.
+Use -i for interactive mode to be prompted for options.
 
 New branches are created from the default branch (main/master) by default.
 Use --base to specify a different base branch.
@@ -50,7 +50,8 @@ Examples:
   wt checkout -b feature -r repo1 -r repo2      # By repo name
   wt checkout -b feature -l backend             # By label
   wt checkout -b feature -l backend -r extra    # Mixed
-  wt checkout -i                          # Interactive mode`
+  wt checkout -i                          # Interactive mode
+  wt checkout -i -r repo1 -r repo2        # Interactive mode for specific repos`
 }
 
 func (c *CheckoutCmd) Run(ctx context.Context) error {
