@@ -123,17 +123,24 @@ func resolveBaseRef(ctx context.Context, repoPath, baseBranch string, fetch bool
 	return baseBranch, nil
 }
 
-// fetchBranchesWithWorktreeInfo returns all branches and marks which are in worktrees
+// fetchBranchesWithWorktreeInfo returns all branches with their worktree status
 func fetchBranchesWithWorktreeInfo(ctx context.Context, repoPath string) ui.BranchFetchResult {
 	branches, err := git.ListRemoteBranches(ctx, repoPath)
 	if err != nil {
 		branches, _ = git.ListLocalBranches(ctx, repoPath)
 	}
 	worktreeBranches := git.GetWorktreeBranches(ctx, repoPath)
-	return ui.BranchFetchResult{
-		Branches:         branches,
-		WorktreeBranches: worktreeBranches,
+
+	result := ui.BranchFetchResult{
+		Branches: make([]ui.BranchInfo, len(branches)),
 	}
+	for i, b := range branches {
+		result.Branches[i] = ui.BranchInfo{
+			Name:       b,
+			InWorktree: worktreeBranches[b],
+		}
+	}
+	return result
 }
 
 func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
@@ -200,7 +207,6 @@ func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
 			// Get branches from current repo (with worktree info)
 			branchResult := fetchBranchesWithWorktreeInfo(ctx, currentRepoPath)
 			params.Branches = branchResult.Branches
-			params.WorktreeBranches = branchResult.WorktreeBranches
 		}
 
 		// Handle -r or -l flags: pre-select those repos
@@ -229,13 +235,31 @@ func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
 				firstRepo := params.AvailableRepos[params.PreSelectedRepos[0]]
 				branchResult := fetchBranchesWithWorktreeInfo(ctx, firstRepo)
 				params.Branches = branchResult.Branches
-				params.WorktreeBranches = branchResult.WorktreeBranches
 			}
 		}
 
 		// Provide callback to fetch branches when repo selection changes
 		params.FetchBranches = func(repoPath string) ui.BranchFetchResult {
 			return fetchBranchesWithWorktreeInfo(ctx, repoPath)
+		}
+
+		// Build available hooks info (skip if --hook or --no-hook was passed)
+		params.HooksFromCLI = len(c.Hook) > 0 || c.NoHook
+		if !params.HooksFromCLI {
+			for name, hook := range cfg.Hooks.Hooks {
+				isDefault := false
+				for _, on := range hook.On {
+					if on == "checkout" || on == "all" {
+						isDefault = true
+						break
+					}
+				}
+				params.AvailableHooks = append(params.AvailableHooks, ui.HookInfo{
+					Name:        name,
+					Description: hook.Description,
+					IsDefault:   isDefault,
+				})
+			}
 		}
 
 		opts, err := ui.CheckoutInteractive(params)
@@ -259,6 +283,15 @@ func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
 				repoNames = append(repoNames, git.GetRepoDisplayName(repoPath))
 			}
 			c.Repository = repoNames
+		}
+
+		// Apply hook selection from wizard (only if not set via CLI)
+		if !params.HooksFromCLI {
+			if opts.NoHook {
+				c.NoHook = true
+			} else {
+				c.Hook = opts.SelectedHooks
+			}
 		}
 	}
 

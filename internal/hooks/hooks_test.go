@@ -129,7 +129,7 @@ func TestSelectHooks(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		hookFlag    string
+		hookFlags   []string
 		noHook      bool
 		cmdType     CommandType
 		expectCount int
@@ -150,10 +150,17 @@ func TestSelectHooks(t *testing.T) {
 		},
 		{
 			name:        "explicit hook runs regardless of on condition",
-			hookFlag:    "vscode",
+			hookFlags:   []string{"vscode"},
 			cmdType:     CommandCheckout,
 			expectCount: 1,
 			expectNames: []string{"vscode"},
+		},
+		{
+			name:        "multiple explicit hooks",
+			hookFlags:   []string{"vscode", "kitty"},
+			cmdType:     CommandCheckout,
+			expectCount: 2,
+			expectNames: []string{"vscode", "kitty"},
 		},
 		{
 			name:        "no-hook skips all",
@@ -163,7 +170,13 @@ func TestSelectHooks(t *testing.T) {
 		},
 		{
 			name:        "unknown hook errors",
-			hookFlag:    "nonexistent",
+			hookFlags:   []string{"nonexistent"},
+			cmdType:     CommandCheckout,
+			expectError: true,
+		},
+		{
+			name:        "one unknown hook in list errors",
+			hookFlags:   []string{"vscode", "nonexistent"},
 			cmdType:     CommandCheckout,
 			expectError: true,
 		},
@@ -171,7 +184,7 @@ func TestSelectHooks(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			matches, err := SelectHooks(hooksConfig, tt.hookFlag, tt.noHook, tt.cmdType)
+			matches, err := SelectHooks(hooksConfig, tt.hookFlags, tt.noHook, tt.cmdType)
 
 			if tt.expectError {
 				if err == nil {
@@ -210,7 +223,7 @@ func TestSelectHooks_NoOnCondition(t *testing.T) {
 	}
 
 	// Without explicit --hook, hooks without "on" don't run
-	matches, err := SelectHooks(hooksConfig, "", false, CommandCheckout)
+	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -219,7 +232,7 @@ func TestSelectHooks_NoOnCondition(t *testing.T) {
 	}
 
 	// With explicit --hook, it runs
-	matches, err = SelectHooks(hooksConfig, "vscode", false, CommandCheckout)
+	matches, err = SelectHooks(hooksConfig, []string{"vscode"}, false, CommandCheckout)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -233,7 +246,7 @@ func TestSelectHooks_EmptyConfig(t *testing.T) {
 		Hooks: map[string]config.Hook{},
 	}
 
-	matches, err := SelectHooks(hooksConfig, "", false, CommandCheckout)
+	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -282,7 +295,7 @@ func TestSelectHooks_OnCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			matches, err := SelectHooks(hooksConfig, "", false, tt.cmdType)
+			matches, err := SelectHooks(hooksConfig, nil, false, tt.cmdType)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
@@ -313,7 +326,7 @@ func TestSelectHooks_OnConditionNoMatch(t *testing.T) {
 	}
 
 	// Hook with on=pr doesn't match "create"
-	matches, err := SelectHooks(hooksConfig, "", false, CommandCheckout)
+	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -337,7 +350,7 @@ func TestSelectHooks_MultipleMatches(t *testing.T) {
 	}
 
 	// Both hooks match "checkout", should return both
-	matches, err := SelectHooks(hooksConfig, "", false, CommandCheckout)
+	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -358,7 +371,7 @@ func TestSelectHooks_OnAll(t *testing.T) {
 
 	// "all" should match all command types
 	for _, cmdType := range []CommandType{CommandCheckout, CommandPR, CommandPrune} {
-		matches, err := SelectHooks(hooksConfig, "", false, cmdType)
+		matches, err := SelectHooks(hooksConfig, nil, false, cmdType)
 		if err != nil {
 			t.Errorf("unexpected error for %s: %v", cmdType, err)
 		}
@@ -384,7 +397,7 @@ func TestSelectHooks_PruneCommand(t *testing.T) {
 	}
 
 	// Prune hook runs for prune command
-	matches, err := SelectHooks(hooksConfig, "", false, CommandPrune)
+	matches, err := SelectHooks(hooksConfig, nil, false, CommandPrune)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -396,7 +409,7 @@ func TestSelectHooks_PruneCommand(t *testing.T) {
 	}
 
 	// Prune hook does NOT run for checkout command
-	matches, err = SelectHooks(hooksConfig, "", false, CommandCheckout)
+	matches, err = SelectHooks(hooksConfig, nil, false, CommandCheckout)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

@@ -24,7 +24,7 @@ type CheckoutCmd struct {
 	Base        string   `name:"base" placeholder:"BRANCH" help:"base branch to create from (default: main/master)"`
 	Fetch       bool     `short:"f" name:"fetch" help:"fetch base branch from origin before creating"`
 	Note        string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook        string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	Hook        []string `name:"hook" help:"run named hook(s) instead of default (repeatable)" xor:"hook-ctrl"`
 	NoHook      bool     `name:"no-hook" help:"skip post-checkout hook" xor:"hook-ctrl"`
 	Env         []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 	Interactive bool     `short:"i" name:"interactive" help:"interactive mode: prompt for branch name and options"`
@@ -69,14 +69,16 @@ type PruneCmd struct {
 	Global       bool     `short:"g" name:"global" help:"prune all worktrees (not just current repo)"`
 	Refresh      bool     `short:"R" name:"refresh" help:"fetch origin and refresh PR status before pruning"`
 	ResetCache   bool     `name:"reset-cache" help:"clear all cached data (PR info, worktree history) and reset IDs from 1"`
-	Hook         string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	Hook         []string `name:"hook" help:"run named hook(s) instead of default (repeatable)" xor:"hook-ctrl"`
 	NoHook       bool     `name:"no-hook" help:"skip post-removal hooks" xor:"hook-ctrl"`
 	Env          []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
+	Interactive  bool     `short:"i" name:"interactive" help:"interactive mode: select worktrees to prune"`
 }
 
 func (c *PruneCmd) Help() string {
 	return `Without --number, removes all worktrees where the branch is merged AND
 working directory is clean. With --number, removes only that specific worktree.
+Use --interactive to select worktrees to prune from a list.
 
 When run inside a git repository, only prunes worktrees for that repo.
 Use --global to prune worktrees from all repos in the directory.
@@ -93,9 +95,11 @@ Examples:
   wt prune -R                   # Fetch origin + PR status, then prune
   wt prune                      # Remove merged worktrees (uses cached PR info)
   wt prune --global             # Prune all repos (not just current)
-  wt prune -n                   # Dry-run: preview without removing
-  wt prune -n --verbose         # Dry-run with skip reasons shown
+  wt prune -d                   # Dry-run: preview without removing
+  wt prune -d --verbose         # Dry-run with skip reasons shown
   wt prune -c                   # Also remove clean (0-commit) worktrees
+  wt prune -i                   # Interactive mode: select worktrees to prune
+  wt prune -i -c                # Interactive with clean worktrees pre-selected
   wt prune -n 1                 # Remove specific worktree by number
   wt prune -n 1 -n 2 -n 3       # Remove multiple worktrees by number
   wt prune -n 1 -f              # Force remove even if not merged/dirty
@@ -203,7 +207,7 @@ type CdCmd struct {
 	Repository string   `short:"r" name:"repository" xor:"target" help:"repository name"`
 	Label      string   `short:"l" name:"label" xor:"target" help:"repository label (must match exactly one repo)"`
 	Project    bool     `short:"p" name:"project" help:"print main repository path instead of worktree path"`
-	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	Hook       []string `name:"hook" help:"run named hook(s) instead of default (repeatable)" xor:"hook-ctrl"`
 	NoHook     bool     `name:"no-hook" help:"skip hooks" xor:"hook-ctrl"`
 	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
@@ -599,7 +603,7 @@ type PrCheckoutCmd struct {
 	Repository string   `short:"r" name:"repository" help:"local repo name"`
 	Forge      string   `name:"forge" env:"WT_FORGE" placeholder:"FORGE" help:"forge for cloning: github or gitlab"`
 	Note       string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	Hook       []string `name:"hook" help:"run named hook(s) instead of default (repeatable)" xor:"hook-ctrl"`
 	NoHook     bool     `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
 	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }
@@ -633,7 +637,7 @@ type PrMergeCmd struct {
 	Repository string   `short:"r" name:"repository" xor:"target" help:"repository name"`
 	Strategy   string   `short:"s" name:"strategy" env:"WT_MERGE_STRATEGY" placeholder:"STRATEGY" help:"merge strategy: squash, rebase, or merge"`
 	Keep       bool     `short:"k" name:"keep" help:"keep worktree and branch after merge"`
-	Hook       string   `name:"hook" help:"run named hook instead of default" xor:"hook-ctrl"`
+	Hook       []string `name:"hook" help:"run named hook(s) instead of default (repeatable)" xor:"hook-ctrl"`
 	NoHook     bool     `name:"no-hook" help:"skip post-merge hook" xor:"hook-ctrl"`
 	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 }

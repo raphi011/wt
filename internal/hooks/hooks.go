@@ -12,7 +12,6 @@ import (
 	"github.com/raphi011/wt/internal/config"
 )
 
-
 // CommandType identifies which command is triggering the hook
 type CommandType string
 
@@ -43,21 +42,25 @@ type HookMatch struct {
 }
 
 // SelectHooks determines which hooks to run based on config and CLI flags.
-// Returns all matching hooks. If hookName is specified, only that hook runs.
+// Returns all matching hooks. If hookNames are specified, those hooks run.
 // Otherwise, all hooks with matching "on" conditions run.
-// Returns nil slice if no hooks should run, error if specified hook doesn't exist.
-func SelectHooks(cfg config.HooksConfig, hookName string, noHook bool, cmdType CommandType) ([]HookMatch, error) {
+// Returns nil slice if no hooks should run, error if any specified hook doesn't exist.
+func SelectHooks(cfg config.HooksConfig, hookNames []string, noHook bool, cmdType CommandType) ([]HookMatch, error) {
 	if noHook {
 		return nil, nil
 	}
 
-	// If explicit hook specified, use it directly (ignores "on" condition)
-	if hookName != "" {
-		hook, exists := cfg.Hooks[hookName]
-		if !exists {
-			return nil, fmt.Errorf("unknown hook %q", hookName)
+	// If explicit hooks specified, use them directly (ignores "on" condition)
+	if len(hookNames) > 0 {
+		var matches []HookMatch
+		for _, hookName := range hookNames {
+			hook, exists := cfg.Hooks[hookName]
+			if !exists {
+				return nil, fmt.Errorf("unknown hook %q", hookName)
+			}
+			matches = append(matches, HookMatch{Hook: &hook, Name: hookName})
 		}
-		return []HookMatch{{Hook: &hook, Name: hookName}}, nil
+		return matches, nil
 	}
 
 	// Find all hooks with matching "on" conditions

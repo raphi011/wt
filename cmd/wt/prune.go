@@ -44,14 +44,19 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 	cfg := c.Config
 	workDir := c.WorkDir
 
-	// Validate -f requires -i
-	if c.Force && len(c.ID) == 0 {
+	// Validate -f requires -n
+	if c.Force && len(c.ID) == 0 && !c.Interactive {
 		return fmt.Errorf("-f/--force requires -n/--number to target specific worktree(s)")
 	}
 
-	// Validate --verbose cannot be used with -i
+	// Validate --verbose cannot be used with -n
 	if c.Verbose && len(c.ID) > 0 {
 		return fmt.Errorf("--verbose cannot be used with -n/--number")
+	}
+
+	// Validate --interactive cannot be used with -n
+	if c.Interactive && len(c.ID) > 0 {
+		return fmt.Errorf("--interactive cannot be used with -n/--number")
 	}
 
 	worktreeDir, err := cfg.GetAbsWorktreeDir()
@@ -215,6 +220,58 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 		} else {
 			toSkip = append(toSkip, wt)
 			reasonMap[wt.Path] = skipReason
+		}
+	}
+
+	// Handle interactive mode
+	if c.Interactive {
+		// Build worktree info for the wizard
+		wizardInfos := make([]ui.PruneWorktreeInfo, 0, len(worktrees))
+		for _, wt := range worktrees {
+			wizardInfos = append(wizardInfos, ui.PruneWorktreeInfo{
+				ID:       pathToID[wt.Path],
+				RepoName: wt.RepoName,
+				Branch:   wt.Branch,
+				Reason:   string(reasonMap[wt.Path]),
+				IsDirty:  wt.IsDirty,
+				Worktree: wt,
+			})
+		}
+
+		opts, err := ui.PruneInteractive(ui.PruneWizardParams{
+			Worktrees:    wizardInfos,
+			IncludeClean: c.IncludeClean,
+		})
+		if err != nil {
+			return fmt.Errorf("interactive mode error: %w", err)
+		}
+		if opts.Cancelled {
+			return nil
+		}
+
+		// If no worktrees selected, nothing to do
+		if len(opts.SelectedIDs) == 0 {
+			out.Println("No worktrees selected for removal")
+			return nil
+		}
+
+		// Rebuild toRemove/toRemoveMap based on user selection
+		selectedIDSet := make(map[int]bool)
+		for _, id := range opts.SelectedIDs {
+			selectedIDSet[id] = true
+		}
+
+		toRemove = nil
+		toRemoveMap = make(map[string]bool)
+		toSkip = nil
+
+		for _, wt := range worktrees {
+			if selectedIDSet[pathToID[wt.Path]] {
+				toRemove = append(toRemove, wt)
+				toRemoveMap[wt.Path] = true
+			} else {
+				toSkip = append(toSkip, wt)
+			}
 		}
 	}
 

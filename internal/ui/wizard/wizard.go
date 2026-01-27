@@ -9,18 +9,19 @@ import (
 
 // Wizard orchestrates a multi-step interactive flow.
 type Wizard struct {
-	title        string
-	steps        []Step
-	stepIndex    map[string]int // id -> index
-	currentStep  int
+	title          string
+	steps          []Step
+	stepIndex      map[string]int // id -> index
+	currentStep    int
 	skipConditions map[string]func(*Wizard) bool // step id -> skip condition
-	onComplete   map[string]func(*Wizard)        // step id -> callback
-	infoLine     func(*Wizard) string           // dynamic info line
-	summaryTitle string
-	done         bool
-	cancelled    bool
-	width        int
-	height       int
+	onComplete     map[string]func(*Wizard)      // step id -> callback
+	infoLine       func(*Wizard) string          // dynamic info line
+	summaryTitle   string
+	done           bool
+	cancelled      bool
+	width          int
+	height         int
+	confirmedSteps map[string]bool // tracks steps user has confirmed (advanced past)
 }
 
 // NewWizard creates a new wizard with the given title.
@@ -34,6 +35,7 @@ func NewWizard(title string) *Wizard {
 		summaryTitle:   "Review and confirm",
 		width:          60,
 		height:         20,
+		confirmedSteps: make(map[string]bool),
 	}
 }
 
@@ -150,7 +152,18 @@ func (w *Wizard) Init() tea.Cmd {
 		if w.currentStep < 0 {
 			// All steps complete, go to summary
 			w.currentStep = len(w.steps)
-			return nil
+		}
+		// Mark all complete steps before currentStep as confirmed
+		// (they were pre-filled and we're skipping past them)
+		for i := 0; i < w.currentStep && i < len(w.steps); i++ {
+			step := w.steps[i]
+			// Skip steps that are conditionally skipped
+			if cond, ok := w.skipConditions[step.ID()]; ok && cond(w) {
+				continue
+			}
+			if step.IsComplete() {
+				w.confirmedSteps[step.ID()] = true
+			}
 		}
 		if w.currentStep < len(w.steps) {
 			return w.steps[w.currentStep].Init()
@@ -186,6 +199,8 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch result {
 		case StepAdvance:
+			// Mark step as confirmed (user advanced past it)
+			w.confirmedSteps[step.ID()] = true
 			// Run completion callback
 			if cb, ok := w.onComplete[step.ID()]; ok {
 				cb(w)
@@ -279,18 +294,18 @@ func (w *Wizard) renderStepTabs() string {
 		}
 
 		isActive := i == w.currentStep
-		isCompleted := step.IsComplete()
+		isConfirmed := w.confirmedSteps[step.ID()]
 		label := fmt.Sprintf("%d. %s", displayNum, step.Title())
 		displayNum++
 
 		var tabText string
-		if isActive && isCompleted {
-			// Current step that's also completed (went back to edit)
+		if isActive && isConfirmed {
+			// Current step that's also confirmed (went back to edit)
 			checkmark := StepCheckStyle.Render("✓ ")
 			tabText = checkmark + StepActiveStyle.Render(label)
 		} else if isActive {
 			tabText = "  " + StepActiveStyle.Render(label)
-		} else if isCompleted {
+		} else if isConfirmed {
 			checkmark := StepCheckStyle.Render("✓ ")
 			tabText = checkmark + StepCompletedStyle.Render(label)
 		} else {
