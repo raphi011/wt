@@ -598,26 +598,30 @@ func (c *MvCmd) Run(ctx context.Context) error {
 // PrCheckoutCmd creates a worktree for a PR, cloning the repo if needed.
 type PrCheckoutCmd struct {
 	Deps
-	Number     int      `arg:"" required:"" placeholder:"NUMBER" help:"PR number"`
-	Repo       string   `arg:"" optional:"" placeholder:"ORG/REPO" help:"clone repo (org/repo format)"`
-	Repository string   `short:"r" name:"repository" help:"local repo name"`
-	Forge      string   `name:"forge" env:"WT_FORGE" placeholder:"FORGE" help:"forge for cloning: github or gitlab"`
-	Note       string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
-	Hook       []string `name:"hook" help:"run named hook(s) instead of default (repeatable)" xor:"hook-ctrl"`
-	NoHook     bool     `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
-	Env        []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
+	Number      int      `arg:"" optional:"" placeholder:"NUMBER" help:"PR number (required unless -i)"`
+	Repo        string   `arg:"" optional:"" placeholder:"ORG/REPO" help:"clone repo (org/repo format)"`
+	Repository  string   `short:"r" name:"repository" help:"local repo name"`
+	Forge       string   `name:"forge" env:"WT_FORGE" placeholder:"FORGE" help:"forge for cloning: github or gitlab"`
+	Note        string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
+	Hook        []string `name:"hook" help:"run named hook(s) instead of default (repeatable)" xor:"hook-ctrl"`
+	NoHook      bool     `name:"no-hook" help:"skip post-create hook" xor:"hook-ctrl"`
+	Env         []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
+	Interactive bool     `short:"i" name:"interactive" help:"interactive PR selection"`
 }
 
 func (c *PrCheckoutCmd) Help() string {
 	return `Checkout a PR, cloning the repo if it doesn't exist locally.
 
-Two modes:
+Three modes:
+  Interactive (-i): Select repo and PR from a list
   Clone mode (positional org/repo): Clones repo first, then creates worktree
   Local mode (-r flag or no args): Uses existing local repo
 
 Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
+  wt pr checkout -i                     # Interactive: select repo and PR
+  wt pr checkout -i -r myrepo           # Interactive: select PR from myrepo
   wt pr checkout 123                    # PR from current directory
   wt pr checkout 123 -r myrepo          # PR from local repo by name
   wt pr checkout 123 org/repo           # Clone repo and checkout PR

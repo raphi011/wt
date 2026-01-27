@@ -19,12 +19,49 @@ import (
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/resolve"
+	"github.com/raphi011/wt/internal/ui"
 )
 
 func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 	l := log.FromContext(ctx)
 	cfg := c.Config
 	workDir := c.WorkDir
+
+	// Handle interactive mode
+	if c.Interactive {
+		// Error if clone mode is used with interactive
+		if c.Repo != "" {
+			return fmt.Errorf("cannot use clone mode (org/repo) with interactive mode (-i)")
+		}
+
+		opts, err := c.runInteractive(ctx)
+		if err != nil {
+			return err
+		}
+		if opts.Cancelled {
+			return nil
+		}
+
+		// Apply gathered options
+		c.Number = opts.SelectedPR
+		if opts.SelectedRepo != "" && c.Repository == "" {
+			// Find repo name from path
+			c.Repository = git.GetRepoDisplayName(opts.SelectedRepo)
+		}
+
+		// Apply hook selection from wizard
+		if opts.NoHook {
+			c.NoHook = true
+		} else if len(opts.SelectedHooks) > 0 {
+			c.Hook = opts.SelectedHooks
+		}
+	}
+
+	// Validate PR number is provided (required unless cancelled in interactive mode)
+	if c.Number == 0 {
+		return fmt.Errorf("PR number required (use -i for interactive mode)")
+	}
+
 	// Validate mutual exclusion: positional org/repo and -r flag can't both be used
 	if c.Repo != "" && c.Repository != "" {
 		return fmt.Errorf("cannot use both positional org/repo argument and -r/--repository flag\nUse 'wt pr checkout %d %s' (clone mode) OR 'wt pr checkout %d -r %s' (local mode)", c.Number, c.Repo, c.Number, c.Repository)
@@ -436,6 +473,111 @@ func (c *PrViewCmd) runPrView(ctx context.Context) error {
 
 	// View the PR
 	return f.ViewPR(ctx, originURL, pr.Number, c.Web)
+}
+
+// runInteractive runs the interactive PR checkout wizard.
+func (c *PrCheckoutCmd) runInteractive(ctx context.Context) (ui.PrCheckoutOptions, error) {
+	cfg := c.Config
+	workDir := c.WorkDir
+	l := log.FromContext(ctx)
+
+	insideRepo := git.IsInsideRepoPath(ctx, workDir)
+
+	// Get repo scan directory
+	repoDir := cfg.RepoScanDir()
+	if repoDir == "" {
+		repoDir = cfg.WorktreeDir
+	}
+	if repoDir == "" && insideRepo {
+		repoDir = workDir
+	}
+
+	// Build wizard params
+	params := ui.PrCheckoutWizardParams{
+		PreSelectedRepo: -1,
+	}
+
+	// If -r flag is provided, use that specific repo
+	if c.Repository != "" {
+		if repoDir == "" {
+			return ui.PrCheckoutOptions{}, fmt.Errorf("directory required when using -r (set WT_WORKTREE_DIR or worktree_dir in config)")
+		}
+
+		repoPath, err := git.FindRepoByName(repoDir, c.Repository)
+		if err != nil {
+			return ui.PrCheckoutOptions{}, fmt.Errorf("repository %q not found: %w", c.Repository, err)
+		}
+
+		params.AvailableRepos = []string{repoPath}
+		params.RepoNames = []string{c.Repository}
+		params.PreSelectedRepo = 0
+	} else if insideRepo {
+		// Inside a repo - use current repo
+		currentRepoPath, _ := git.GetMainRepoPath(workDir)
+		if currentRepoPath == "" {
+			currentRepoPath = workDir
+		}
+		params.AvailableRepos = []string{currentRepoPath}
+		params.RepoNames = []string{git.GetRepoDisplayName(currentRepoPath)}
+		params.PreSelectedRepo = 0
+	} else {
+		// Outside repo - scan for all repos
+		if repoDir == "" {
+			return ui.PrCheckoutOptions{}, fmt.Errorf("directory required for interactive mode (set WT_WORKTREE_DIR or worktree_dir in config)")
+		}
+
+		allRepos, err := git.FindAllRepos(repoDir)
+		if err != nil {
+			return ui.PrCheckoutOptions{}, fmt.Errorf("failed to find repositories: %w", err)
+		}
+		if len(allRepos) == 0 {
+			return ui.PrCheckoutOptions{}, fmt.Errorf("no repositories found in %s", repoDir)
+		}
+
+		for _, repoPath := range allRepos {
+			params.AvailableRepos = append(params.AvailableRepos, repoPath)
+			params.RepoNames = append(params.RepoNames, git.GetRepoDisplayName(repoPath))
+		}
+	}
+
+	// PR fetcher function
+	params.FetchPRs = func(repoPath string) ([]forge.OpenPR, error) {
+		l.Printf("Fetching open PRs for %s...\n", git.GetRepoDisplayName(repoPath))
+
+		// Get origin URL and detect forge
+		originURL, err := git.GetOriginURL(ctx, repoPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get origin URL: %w", err)
+		}
+
+		f := forge.Detect(originURL, cfg.Hosts, &cfg.Forge)
+		if err := f.Check(ctx); err != nil {
+			return nil, err
+		}
+
+		return f.ListOpenPRs(ctx, originURL)
+	}
+
+	// Build available hooks info (skip if --hook or --no-hook was passed)
+	params.HooksFromCLI = len(c.Hook) > 0 || c.NoHook
+	if !params.HooksFromCLI {
+		for name, hook := range cfg.Hooks.Hooks {
+			isDefault := false
+			for _, on := range hook.On {
+				if on == "pr" || on == "all" {
+					isDefault = true
+					break
+				}
+			}
+			params.AvailableHooks = append(params.AvailableHooks, ui.HookInfo{
+				Name:        name,
+				Description: hook.Description,
+				IsDefault:   isDefault,
+			})
+		}
+	}
+
+	return ui.PrCheckoutInteractive(params)
 }
 
 // openBrowser opens the specified URL in the default browser
