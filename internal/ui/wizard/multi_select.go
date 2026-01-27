@@ -76,6 +76,8 @@ func (s *MultiSelectStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) {
 					s.selected[idx] = true
 				}
 			}
+			// Re-sort to keep selected items at top
+			s.applyFilter()
 		}
 	case "enter", "right":
 		if s.canAdvance() {
@@ -208,6 +210,8 @@ func (s *MultiSelectStep) SetSelected(indices []int) {
 			s.selected[idx] = true
 		}
 	}
+	// Re-sort to keep selected items at top
+	s.applyFilter()
 }
 
 // GetSelectedIndices returns the selected option indices in original order.
@@ -237,20 +241,34 @@ func (s *MultiSelectStep) GetCursor() int {
 }
 
 func (s *MultiSelectStep) applyFilter() {
+	// First, collect all matching indices
+	var matching []int
 	if s.filter == "" {
-		s.filtered = make([]int, len(s.options))
+		matching = make([]int, len(s.options))
 		for i := range s.options {
-			s.filtered[i] = i
+			matching[i] = i
 		}
 	} else {
 		filter := strings.ToLower(s.filter)
-		s.filtered = nil
 		for i, opt := range s.options {
 			if strings.Contains(strings.ToLower(opt.Label), filter) {
-				s.filtered = append(s.filtered, i)
+				matching = append(matching, i)
 			}
 		}
 	}
+
+	// Sort: selected items first, then unselected (maintaining relative order within each group)
+	var selectedItems []int
+	var unselectedItems []int
+	for _, idx := range matching {
+		if s.selected[idx] {
+			selectedItems = append(selectedItems, idx)
+		} else {
+			unselectedItems = append(unselectedItems, idx)
+		}
+	}
+	s.filtered = append(selectedItems, unselectedItems...)
+
 	// Reset cursor if out of bounds
 	if s.cursor >= len(s.filtered) {
 		s.cursor = max(0, len(s.filtered)-1)

@@ -9,15 +9,23 @@ import (
 
 // FilterableListStep allows selecting one option from a filterable list
 // with support for disabled items (cursor skips them).
+// Optionally supports a "create from filter" option that appears when the filter
+// doesn't match any existing option exactly.
 type FilterableListStep struct {
 	id       string
 	title    string
 	prompt   string
 	options  []Option
 	filtered []int // indices into options
-	cursor   int   // position in filtered list
+	cursor   int   // position in filtered list (0 = create option if shown)
 	selected int   // selected index in filtered list, -1 if none
 	filter   string
+
+	// Create-from-filter functionality
+	allowCreate   bool                                              // Enable "Create {filter}" option
+	createLabelFn func(filter string) string                        // Format create label
+	valueLabelFn  func(value string, isNew bool, opt Option) string // Format summary label
+	selectedIsNew bool                                              // True if "Create" was selected
 }
 
 // NewFilterableList creates a new filterable single-select step.
@@ -51,12 +59,50 @@ func NewFilterableList(id, title, prompt string, options []Option) *FilterableLi
 func (s *FilterableListStep) ID() string    { return s.id }
 func (s *FilterableListStep) Title() string { return s.title }
 
+// WithCreateFromFilter enables the "Create {filter}" option when the filter
+// doesn't match any existing option exactly (case-insensitive).
+// labelFn formats the create option label, e.g. func(f string) string { return fmt.Sprintf("+ Create %q", f) }
+func (s *FilterableListStep) WithCreateFromFilter(labelFn func(filter string) string) *FilterableListStep {
+	s.allowCreate = true
+	s.createLabelFn = labelFn
+	return s
+}
+
+// WithValueLabel sets a custom function for formatting the selected value in the summary.
+// The function receives the value, whether it's a new/created item, and the original option (if not new).
+func (s *FilterableListStep) WithValueLabel(fn func(value string, isNew bool, opt Option) string) *FilterableListStep {
+	s.valueLabelFn = fn
+	return s
+}
+
+// IsCreateSelected returns true if the user selected the "Create {filter}" option.
+func (s *FilterableListStep) IsCreateSelected() bool {
+	return s.selectedIsNew
+}
+
+// shouldShowCreate returns true if the create option should be shown.
+// It's shown when: allowCreate is true, filter is non-empty, and no exact match exists.
+func (s *FilterableListStep) shouldShowCreate() bool {
+	if !s.allowCreate || s.filter == "" {
+		return false
+	}
+	// Check for case-insensitive exact match
+	filterLower := strings.ToLower(s.filter)
+	for _, opt := range s.options {
+		if strings.ToLower(opt.Label) == filterLower {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *FilterableListStep) Init() tea.Cmd {
 	return nil
 }
 
 func (s *FilterableListStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) {
 	key := msg.String()
+	showCreate := s.shouldShowCreate()
 
 	switch key {
 	case "up", "k":
@@ -68,10 +114,22 @@ func (s *FilterableListStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) 
 	case "end", "pgdown":
 		s.cursor = s.findLastEnabled()
 	case "enter", "right":
-		if len(s.filtered) > 0 && s.cursor >= 0 && s.cursor < len(s.filtered) {
-			idx := s.filtered[s.cursor]
+		// Check if selecting create option (cursor 0 when create is shown)
+		if showCreate && s.cursor == 0 {
+			s.selected = 0
+			s.selectedIsNew = true
+			return s, nil, StepAdvance
+		}
+		// Adjust cursor for option selection when create is shown
+		optionCursor := s.cursor
+		if showCreate {
+			optionCursor = s.cursor - 1
+		}
+		if len(s.filtered) > 0 && optionCursor >= 0 && optionCursor < len(s.filtered) {
+			idx := s.filtered[optionCursor]
 			if !s.options[idx].Disabled {
 				s.selected = s.cursor
+				s.selectedIsNew = false
 				return s, nil, StepAdvance
 			}
 		}
@@ -103,20 +161,51 @@ func (s *FilterableListStep) View() string {
 	b.WriteString(s.prompt + ":\n")
 	b.WriteString(FilterLabelStyle.Render("Filter: ") + FilterStyle.Render(s.filter) + "\n\n")
 
+	showCreate := s.shouldShowCreate()
+
+	// Calculate total items (create option + filtered options)
+	totalItems := len(s.filtered)
+	if showCreate {
+		totalItems++
+	}
+
 	// Show filtered list with scroll
 	maxVisible := 10
 	start := 0
 	if s.cursor >= maxVisible {
 		start = s.cursor - maxVisible + 1
 	}
-	end := min(start+maxVisible, len(s.filtered))
+	end := min(start+maxVisible, totalItems)
 
 	if start > 0 {
 		b.WriteString(OptionNormalStyle.Render("  ↑ more above") + "\n")
 	}
 
 	for i := start; i < end; i++ {
-		idx := s.filtered[i]
+		// Handle create option at position 0 when shown
+		if showCreate && i == 0 {
+			cursor := "  "
+			style := OptionNormalStyle
+			if s.cursor == 0 {
+				cursor = "> "
+				style = OptionSelectedStyle
+			}
+			createLabel := s.createLabelFn(s.filter)
+			b.WriteString(cursor + style.Render(createLabel) + "\n")
+			continue
+		}
+
+		// Adjust index for filtered options when create is shown
+		filteredIdx := i
+		if showCreate {
+			filteredIdx = i - 1
+		}
+
+		if filteredIdx < 0 || filteredIdx >= len(s.filtered) {
+			continue
+		}
+
+		idx := s.filtered[filteredIdx]
 		opt := s.options[idx]
 
 		cursor := "  "
@@ -137,14 +226,18 @@ func (s *FilterableListStep) View() string {
 			style = OptionSelectedStyle
 		}
 
-		b.WriteString(cursor + style.Render(opt.Label) + "\n")
+		label := opt.Label
+		if opt.Description != "" {
+			label += " (" + opt.Description + ")"
+		}
+		b.WriteString(cursor + style.Render(label) + "\n")
 	}
 
-	if end < len(s.filtered) {
+	if end < totalItems {
 		b.WriteString(OptionNormalStyle.Render("  ↓ more below") + "\n")
 	}
 
-	if len(s.filtered) == 0 {
+	if totalItems == 0 {
 		b.WriteString(OptionNormalStyle.Render("  No matching items") + "\n")
 	}
 
@@ -156,14 +249,50 @@ func (s *FilterableListStep) Help() string {
 }
 
 func (s *FilterableListStep) Value() StepValue {
-	if s.selected < 0 || s.selected >= len(s.filtered) {
+	if s.selected < 0 {
 		return StepValue{Key: s.id}
 	}
-	idx := s.filtered[s.selected]
+
+	// Handle create selection
+	if s.selectedIsNew {
+		value := s.filter
+		label := value
+		if s.valueLabelFn != nil {
+			label = s.valueLabelFn(value, true, Option{})
+		}
+		return StepValue{
+			Key:   s.id,
+			Label: label,
+			Raw:   value,
+		}
+	}
+
+	// Handle existing option selection
+	// Adjust for create option offset if it was shown when selected
+	optionIdx := s.selected
+	if s.shouldShowCreate() {
+		optionIdx = s.selected - 1
+	}
+
+	if optionIdx < 0 || optionIdx >= len(s.filtered) {
+		return StepValue{Key: s.id}
+	}
+
+	idx := s.filtered[optionIdx]
 	opt := s.options[idx]
+
+	label := opt.Label
+	if s.valueLabelFn != nil {
+		if strVal, ok := opt.Value.(string); ok {
+			label = s.valueLabelFn(strVal, false, opt)
+		} else {
+			label = s.valueLabelFn(opt.Label, false, opt)
+		}
+	}
+
 	return StepValue{
 		Key:   s.id,
-		Label: opt.Label,
+		Label: label,
 		Raw:   opt.Value,
 	}
 }
@@ -174,8 +303,8 @@ func (s *FilterableListStep) IsComplete() bool {
 
 func (s *FilterableListStep) Reset() {
 	s.selected = -1
-	s.filter = ""
-	s.applyFilter()
+	s.selectedIsNew = false
+	// Note: filter is intentionally NOT reset to preserve user input when navigating back
 }
 
 // SetOptions updates the options list.
@@ -195,21 +324,62 @@ func (s *FilterableListStep) GetCursor() int {
 }
 
 // GetSelectedValue returns the selected option's value, or nil if none.
+// If "Create" was selected, returns the filter string.
 func (s *FilterableListStep) GetSelectedValue() interface{} {
-	if s.selected < 0 || s.selected >= len(s.filtered) {
+	if s.selected < 0 {
 		return nil
 	}
-	idx := s.filtered[s.selected]
+	if s.selectedIsNew {
+		return s.filter
+	}
+	// Adjust for create option offset
+	optionIdx := s.selected
+	if s.shouldShowCreate() {
+		optionIdx = s.selected - 1
+	}
+	if optionIdx < 0 || optionIdx >= len(s.filtered) {
+		return nil
+	}
+	idx := s.filtered[optionIdx]
 	return s.options[idx].Value
 }
 
 // GetSelectedLabel returns the selected option's label, or empty if none.
+// If "Create" was selected, returns the filter string.
 func (s *FilterableListStep) GetSelectedLabel() string {
-	if s.selected < 0 || s.selected >= len(s.filtered) {
+	if s.selected < 0 {
 		return ""
 	}
-	idx := s.filtered[s.selected]
+	if s.selectedIsNew {
+		return s.filter
+	}
+	// Adjust for create option offset
+	optionIdx := s.selected
+	if s.shouldShowCreate() {
+		optionIdx = s.selected - 1
+	}
+	if optionIdx < 0 || optionIdx >= len(s.filtered) {
+		return ""
+	}
+	idx := s.filtered[optionIdx]
 	return s.options[idx].Label
+}
+
+// GetSelectedOption returns the selected option, or empty Option if none or if "Create" was selected.
+func (s *FilterableListStep) GetSelectedOption() Option {
+	if s.selected < 0 || s.selectedIsNew {
+		return Option{}
+	}
+	// Adjust for create option offset
+	optionIdx := s.selected
+	if s.shouldShowCreate() {
+		optionIdx = s.selected - 1
+	}
+	if optionIdx < 0 || optionIdx >= len(s.filtered) {
+		return Option{}
+	}
+	idx := s.filtered[optionIdx]
+	return s.options[idx]
 }
 
 func (s *FilterableListStep) applyFilter() {
@@ -227,13 +397,33 @@ func (s *FilterableListStep) applyFilter() {
 			}
 		}
 	}
-	// Reset cursor if out of bounds
-	if s.cursor >= len(s.filtered) {
-		s.cursor = max(0, len(s.filtered)-1)
+
+	// Calculate total items (including create option if shown)
+	showCreate := s.shouldShowCreate()
+	totalItems := len(s.filtered)
+	if showCreate {
+		totalItems++
 	}
-	// Ensure cursor is on a non-disabled item
-	if len(s.filtered) > 0 {
-		idx := s.filtered[s.cursor]
+
+	// Reset cursor if out of bounds
+	if s.cursor >= totalItems {
+		s.cursor = max(0, totalItems-1)
+	}
+
+	// Ensure cursor is on a non-disabled item (create option is always enabled)
+	if showCreate && s.cursor == 0 {
+		// Already on create option, which is enabled
+		return
+	}
+
+	// Check if cursor is on a disabled option
+	filteredIdx := s.cursor
+	if showCreate {
+		filteredIdx = s.cursor - 1
+	}
+
+	if filteredIdx >= 0 && filteredIdx < len(s.filtered) {
+		idx := s.filtered[filteredIdx]
 		if s.options[idx].Disabled {
 			// Try to find next non-disabled
 			if next := s.findNextEnabled(s.cursor); next >= 0 {
@@ -258,6 +448,10 @@ func (s *FilterableListStep) moveCursorDown() {
 }
 
 func (s *FilterableListStep) findFirstEnabled() int {
+	// Create option at position 0 is always enabled
+	if s.shouldShowCreate() {
+		return 0
+	}
 	for i := 0; i < len(s.filtered); i++ {
 		idx := s.filtered[i]
 		if !s.options[idx].Disabled {
@@ -268,30 +462,79 @@ func (s *FilterableListStep) findFirstEnabled() int {
 }
 
 func (s *FilterableListStep) findLastEnabled() int {
+	showCreate := s.shouldShowCreate()
+	offset := 0
+	if showCreate {
+		offset = 1
+	}
 	for i := len(s.filtered) - 1; i >= 0; i-- {
 		idx := s.filtered[i]
 		if !s.options[idx].Disabled {
-			return i
+			return i + offset
 		}
+	}
+	if showCreate {
+		return 0 // Create option
 	}
 	return max(0, len(s.filtered)-1)
 }
 
 func (s *FilterableListStep) findNextEnabled(from int) int {
-	for i := from; i < len(s.filtered); i++ {
-		idx := s.filtered[i]
-		if !s.options[idx].Disabled {
-			return i
+	showCreate := s.shouldShowCreate()
+
+	// Create option at position 0 is always enabled
+	if showCreate && from == 0 {
+		return 0
+	}
+
+	// Calculate total items
+	totalItems := len(s.filtered)
+	if showCreate {
+		totalItems++
+	}
+
+	for i := from; i < totalItems; i++ {
+		// Create option is always enabled
+		if showCreate && i == 0 {
+			return 0
+		}
+
+		// Adjust for filtered options
+		filteredIdx := i
+		if showCreate {
+			filteredIdx = i - 1
+		}
+
+		if filteredIdx >= 0 && filteredIdx < len(s.filtered) {
+			idx := s.filtered[filteredIdx]
+			if !s.options[idx].Disabled {
+				return i
+			}
 		}
 	}
 	return -1
 }
 
 func (s *FilterableListStep) findPrevEnabled(from int) int {
+	showCreate := s.shouldShowCreate()
+
 	for i := from; i >= 0; i-- {
-		idx := s.filtered[i]
-		if !s.options[idx].Disabled {
-			return i
+		// Create option is always enabled
+		if showCreate && i == 0 {
+			return 0
+		}
+
+		// Adjust for filtered options
+		filteredIdx := i
+		if showCreate {
+			filteredIdx = i - 1
+		}
+
+		if filteredIdx >= 0 && filteredIdx < len(s.filtered) {
+			idx := s.filtered[filteredIdx]
+			if !s.options[idx].Disabled {
+				return i
+			}
 		}
 	}
 	return -1

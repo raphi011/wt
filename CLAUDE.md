@@ -104,6 +104,20 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 
 **Never modify git internal files directly** - Always use git CLI commands via `exec.Command`. Never read/write `.git/` directory contents, `.git` files in worktrees, or git refs directly. Use `git worktree repair` for fixing broken links, `git worktree prune` for cleanup.
 
+**Interactive Mode (`-i` flag)** - When implementing interactive wizard mode for commands:
+
+1. **Respect explicit CLI arguments** - If a flag is passed explicitly (e.g., `--hook`, `--no-hook`, `-r`), skip that wizard step entirely. Don't allow the user to change values that were explicitly set.
+
+2. **Show all values in summary** - The final summary should display both wizard-selected and CLI-provided values. Don't distinguish between them visually.
+
+3. **Skip irrelevant steps** - Skip steps when there are no options available (e.g., no hooks configured) or when the step doesn't apply based on previous selections.
+
+4. **Pre-select sensible defaults** - Pre-select "default" options (e.g., hooks with `on=["checkout"]`), pre-select current repo when inside a git repo.
+
+5. **Handle empty selections** - If a multi-select step has no selections, translate to the appropriate flag (e.g., no hooks selected → `--no-hook`).
+
+6. **File structure** - Create wizard UI in `internal/ui/<command>_wizard.go`. Define `<Command>Options` struct for wizard output and `<Command>WizardParams` struct for wizard input. The wizard returns options which the command applies to its flags.
+
 **Forge Feature Parity** - Any feature that involves forge operations (PRs, cloning, etc.) MUST support both GitHub and GitLab. Always:
 - Add methods to the `Forge` interface first
 - Implement in both `github.go` and `gitlab.go`

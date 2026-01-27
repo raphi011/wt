@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/raphi011/wt/internal/ui/wizard"
 )
 
@@ -8,28 +11,44 @@ import (
 type CheckoutOptions struct {
 	Branch        string
 	NewBranch     bool
+	IsWorktree    bool // True if selected branch already has a worktree (hooks only)
 	Fetch         bool
 	Cancelled     bool
 	SelectedRepos []string // Selected repo paths (when outside a repo)
+	SelectedHooks []string // Hook names to run (empty if NoHook is true)
+	NoHook        bool     // True if no hooks selected
 }
 
-// BranchFetchResult contains branches and which ones are in worktrees.
+// BranchInfo contains branch info including worktree status.
+type BranchInfo struct {
+	Name       string
+	InWorktree bool
+}
+
+// BranchFetchResult contains branches with their worktree status.
 type BranchFetchResult struct {
-	Branches         []string        // All branches
-	WorktreeBranches map[string]bool // Branches already checked out in worktrees
+	Branches []BranchInfo
 }
 
 // BranchFetcher is a function that fetches branches for a repo path.
 type BranchFetcher func(repoPath string) BranchFetchResult
 
+// HookInfo contains hook display info for the wizard.
+type HookInfo struct {
+	Name        string
+	Description string
+	IsDefault   bool // Has on=["checkout"]
+}
+
 // CheckoutWizardParams contains parameters for the checkout wizard.
 type CheckoutWizardParams struct {
-	Branches         []string        // Existing branches for selection
-	WorktreeBranches map[string]bool // Branches already in worktrees (unselectable)
-	AvailableRepos   []string        // All available repo paths
-	RepoNames        []string        // Display names for repos
-	PreSelectedRepos []int           // Indices of pre-selected repos (e.g., current repo when inside one)
-	FetchBranches    BranchFetcher   // Optional callback to fetch branches after repo selection
+	Branches         []BranchInfo // Existing branches with worktree status
+	AvailableRepos   []string     // All available repo paths
+	RepoNames        []string     // Display names for repos
+	PreSelectedRepos []int        // Indices of pre-selected repos (e.g., current repo when inside one)
+	FetchBranches    BranchFetcher
+	AvailableHooks   []HookInfo
+	HooksFromCLI     bool // True if --hook or --no-hook was passed (skip hooks step)
 }
 
 // CheckoutInteractive runs the interactive checkout wizard.
@@ -40,6 +59,9 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	repoPaths := params.AvailableRepos
 	repoNames := params.RepoNames
 	hasRepos := len(repoPaths) > 0
+
+	// Keep track of current branches for worktree lookup
+	currentBranches := params.Branches
 
 	// Step 1: Repos (only when available)
 	if hasRepos {
@@ -61,50 +83,63 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 		w.AddStep(repoStep)
 	}
 
-	// Step 2: Mode
-	modeOptions := []wizard.Option{
-		{Label: "Create new branch", Value: true},
-		{Label: "Checkout existing branch", Value: false},
-	}
-	modeStep := wizard.NewSingleSelect("mode", "Mode", "Create new branch or checkout existing?", modeOptions)
-	w.AddStep(modeStep)
-
-	// Step 3: Branch
-	// This will be dynamically updated based on mode selection
-	branchOptions := buildBranchOptions(params.Branches, params.WorktreeBranches)
-	branchStep := wizard.NewFilterableList("branch", "Branch", "Select a branch", branchOptions)
-
-	// Also create text input for new branch name
-	newBranchStep := wizard.NewTextInput("newbranch", "Branch", "Enter branch name:", "feature/my-feature")
-
+	// Step 2: Branch (combined mode + branch selection)
+	// Supports creating new branch via filter or selecting existing
+	branchOptions := buildBranchOptions(params.Branches)
+	branchStep := wizard.NewFilterableList("branch", "Branch", "Select or create a branch", branchOptions).
+		WithCreateFromFilter(func(filter string) string {
+			return fmt.Sprintf("+ Create %q", filter)
+		}).
+		WithValueLabel(func(value string, isNew bool, opt wizard.Option) string {
+			if isNew {
+				return value + " (new)"
+			}
+			if opt.Description == "in worktree" {
+				return value + " (hooks only)"
+			}
+			return value
+		})
 	w.AddStep(branchStep)
-	w.AddStep(newBranchStep)
 
-	// Step 4: Options (fetch)
+	// Step 3: Options (fetch) - only for new branches
 	fetchOptions := []wizard.Option{
 		{Label: "Yes", Value: true},
 		{Label: "No", Value: false},
 	}
-	fetchStep := wizard.NewSingleSelect("fetch", "Options", "Fetch from origin first?", fetchOptions)
+	fetchStep := wizard.NewSingleSelect("fetch", "Fetch", "Fetch from origin first?", fetchOptions)
 	w.AddStep(fetchStep)
 
+	// Step 4: Hooks (only when available and not set via CLI)
+	hasHooks := len(params.AvailableHooks) > 0 && !params.HooksFromCLI
+	if hasHooks {
+		hookOptions := make([]wizard.Option, len(params.AvailableHooks))
+		var preSelectedHooks []int
+		for i, hook := range params.AvailableHooks {
+			label := hook.Name
+			if hook.Description != "" {
+				label = hook.Name + " - " + hook.Description
+			}
+			hookOptions[i] = wizard.Option{
+				Label: label,
+				Value: hook.Name,
+			}
+			if hook.IsDefault {
+				preSelectedHooks = append(preSelectedHooks, i)
+			}
+		}
+		hookStep := wizard.NewMultiSelect("hooks", "Hooks", "Select hooks to run after checkout", hookOptions)
+		hookStep.SetMinMax(0, 0) // No minimum required (can select none)
+		if len(preSelectedHooks) > 0 {
+			hookStep.SetSelected(preSelectedHooks)
+		}
+		w.AddStep(hookStep)
+	}
+
 	// Skip conditions
-	// Skip "repos" step if already pre-selected and no changes needed
-	// (This is handled by the wizard - if step is completed, user can still go back)
-
-	// Skip "branch" step when creating new branch (use newbranch instead)
-	w.SkipWhen("branch", func(wiz *wizard.Wizard) bool {
-		return wiz.GetBool("mode") // mode=true means "create new branch"
-	})
-
-	// Skip "newbranch" step when checking out existing branch
-	w.SkipWhen("newbranch", func(wiz *wizard.Wizard) bool {
-		return !wiz.GetBool("mode") // mode=false means "checkout existing"
-	})
-
-	// Skip "fetch" step when checking out existing branch
+	// Skip "fetch" step when checking out existing branch (not creating new)
 	w.SkipWhen("fetch", func(wiz *wizard.Wizard) bool {
-		return !wiz.GetBool("mode")
+		step := wiz.GetStep("branch").(*wizard.FilterableListStep)
+		return !step.IsCreateSelected()
 	})
 
 	// Callbacks
@@ -117,21 +152,16 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 				return
 			}
 
-			// Disable "checkout existing" if multiple repos selected
-			modeStep := wiz.GetStep("mode").(*wizard.SingleSelectStep)
-			if len(indices) > 1 {
-				modeStep.DisableOption(1, "single repo only")
-			} else {
-				modeStep.EnableAllOptions()
-			}
-
 			// Fetch branches from first selected repo
 			firstRepoPath := repoPaths[indices[0]]
 			result := params.FetchBranches(firstRepoPath)
 
+			// Update current branches for worktree lookup
+			currentBranches = result.Branches
+
 			// Update branch step with fetched branches
 			branchStep := wiz.GetStep("branch").(*wizard.FilterableListStep)
-			branchOpts := buildBranchOptions(result.Branches, result.WorktreeBranches)
+			branchOpts := buildBranchOptions(result.Branches)
 			branchStep.SetOptions(branchOpts)
 		})
 	}
@@ -169,34 +199,47 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 		opts.SelectedRepos = result.GetStrings("repos")
 	}
 
-	// Mode
-	opts.NewBranch = result.GetBool("mode")
+	// Branch - get from the combined branch step
+	branchStepResult := result.GetStep("branch").(*wizard.FilterableListStep)
+	opts.Branch = result.GetString("branch")
+	opts.NewBranch = branchStepResult.IsCreateSelected()
 
-	// Branch name
+	// Check if selected branch is in worktree
+	if !opts.NewBranch {
+		for _, b := range currentBranches {
+			if strings.EqualFold(b.Name, opts.Branch) && b.InWorktree {
+				opts.IsWorktree = true
+				break
+			}
+		}
+	}
+
+	// Fetch (only relevant for new branches)
 	if opts.NewBranch {
-		opts.Branch = result.GetString("newbranch")
 		opts.Fetch = result.GetBool("fetch")
-	} else {
-		opts.Branch = result.GetString("branch")
-		opts.Fetch = false
+	}
+
+	// Hooks
+	if hasHooks {
+		opts.SelectedHooks = result.GetStrings("hooks")
+		opts.NoHook = len(opts.SelectedHooks) == 0
 	}
 
 	return opts, nil
 }
 
-// buildBranchOptions creates Option slice from branches, marking worktree branches as disabled.
-func buildBranchOptions(branches []string, worktreeBranches map[string]bool) []wizard.Option {
+// buildBranchOptions creates Option slice from branches with worktree info.
+// Worktree branches are NOT disabled but have a description indicating their status.
+func buildBranchOptions(branches []BranchInfo) []wizard.Option {
 	opts := make([]wizard.Option, len(branches))
 	for i, branch := range branches {
 		opts[i] = wizard.Option{
-			Label:    branch,
-			Value:    branch,
-			Disabled: worktreeBranches[branch],
+			Label: branch.Name,
+			Value: branch.Name,
 		}
-		if worktreeBranches[branch] {
+		if branch.InWorktree {
 			opts[i].Description = "in worktree"
 		}
 	}
 	return opts
 }
-
