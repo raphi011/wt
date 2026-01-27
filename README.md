@@ -60,6 +60,16 @@ wt list -g
 
 You're ready to go! See Scenarios below for common workflows.
 
+## Interactive Mode
+
+For guided worktree creation, use the `-i` flag:
+
+```bash
+wt checkout -i
+```
+
+This launches a step-by-step wizard that guides you through the checkout process.
+
 ## Scenarios
 
 ### Starting a New Feature
