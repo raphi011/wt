@@ -410,27 +410,7 @@ worktree_format = "{repo}-{branch}"
 # Hooks with "on" run automatically for matching commands.
 # Hooks without "on" only run when explicitly called with --hook=name.
 #
-# [hooks.kitty]
-# command = "kitty @ launch --type=tab --cwd={worktree-dir}"
-# description = "Open new kitty tab"
-# on = ["checkout"]  # auto-run for checkout command
-#
-# [hooks.pr-setup]
-# command = "cd {worktree-dir} && npm install && code {worktree-dir}"
-# description = "Install deps and open editor"
-# on = ["pr"]  # auto-run when opening PRs
-#
-# [hooks.cleanup]
-# command = "echo 'Removed {branch} from {repo}'"
-# description = "Log removed branches"
-# on = ["prune"]  # auto-run when removing worktrees
-#
-# [hooks.vscode]
-# command = "code {worktree-dir}"
-# description = "Open VS Code"
-# # no "on" - only runs via --hook=vscode
-#
-# Available "on" values: "checkout", "pr", "prune", "merge", "all"
+# Available "on" values: "checkout", "pr", "prune", "merge", "cd", "all"
 #
 # Hooks run with working directory set to the worktree path.
 # For "prune" hooks, working directory is the main repo (worktree is deleted).
@@ -441,14 +421,56 @@ worktree_format = "{repo}-{branch}"
 #   {branch}       - branch name
 #   {repo}         - folder name of git repo (matches -r flag)
 #   {origin}       - repo name from git origin (falls back to {repo})
-#   {trigger}      - command that triggered the hook (checkout, pr, prune, merge)
+#   {trigger}      - command that triggered the hook (checkout, pr, prune, merge, cd)
 #   {key}          - custom variable passed via --arg key=value
 #   {key:-def}     - custom variable with default value if not provided
 #
-# Custom variables example:
+# === Editor Examples ===
+#
+# VS Code - open worktree in VS Code
+# [hooks.code]
+# command = "code {worktree-dir}"
+# description = "Open in VS Code"
+# on = ["checkout"]
+#
+# IntelliJ IDEA - open worktree in IDEA
+# [hooks.idea]
+# command = "idea {worktree-dir}"
+# description = "Open in IntelliJ IDEA"
+# on = ["checkout"]
+#
+# === AI Assistant Examples ===
+#
+# Claude Code - start Claude in the worktree (interactive)
 # [hooks.claude]
-# command = "kitty @ launch --cwd={worktree-dir} -- claude {prompt:-help me}"
-# Run with: wt hook claude --arg prompt="implement feature X"
+# command = "cd {worktree-dir} && claude"
+# description = "Start Claude Code session"
+#
+# Claude Code with custom prompt
+# [hooks.claude-task]
+# command = "cd {worktree-dir} && claude -p {prompt}"
+# description = "Run Claude with a task"
+# Run with: wt hook claude-task --arg prompt="implement feature X"
+#
+# Claude Code in new terminal tab (kitty example)
+# [hooks.claude-tab]
+# command = "kitty @ launch --type=tab --cwd={worktree-dir} -- claude"
+# description = "Open Claude in new tab"
+# on = ["checkout"]
+#
+# === Other Examples ===
+#
+# Setup hook - install dependencies after checkout
+# [hooks.setup]
+# command = "npm install"
+# description = "Install dependencies"
+# on = ["checkout", "pr"]
+#
+# Cleanup notification
+# [hooks.cleanup]
+# command = "echo 'Removed {branch} from {repo}'"
+# description = "Log removed branches"
+# on = ["prune"]
 
 # Forge settings - configure forge type, default org, and multi-account auth
 # Used for PR operations and "wt pr checkout <number> org/repo" when cloning
