@@ -22,7 +22,7 @@ import (
 func testContext(t *testing.T) context.Context {
 	t.Helper()
 	ctx := context.Background()
-	ctx = log.WithLogger(ctx, log.New(io.Discard, false))
+	ctx = log.WithLogger(ctx, log.New(io.Discard, false, false))
 	ctx = output.WithPrinter(ctx, io.Discard)
 	return ctx
 }
@@ -32,7 +32,7 @@ func testContextWithOutput(t *testing.T) (context.Context, *strings.Builder) {
 	t.Helper()
 	var out strings.Builder
 	ctx := context.Background()
-	ctx = log.WithLogger(ctx, log.New(io.Discard, false))
+	ctx = log.WithLogger(ctx, log.New(io.Discard, false, false))
 	ctx = output.WithPrinter(ctx, &out)
 	return ctx, &out
 }

@@ -844,6 +844,7 @@ type CLI struct {
 	Doctor     DoctorCmd     `cmd:"" help:"Diagnose and repair cache" group:"config"`
 
 	Verbose bool        `short:"v" name:"verbose" help:"Show external commands being executed"`
+	Quiet   bool        `short:"q" name:"quiet" help:"Suppress all log output"`
 	Version VersionFlag `name:"version" help:"Show version"`
 }
 

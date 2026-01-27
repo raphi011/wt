@@ -14,11 +14,12 @@ type ctxKey struct{}
 type Logger struct {
 	out     io.Writer
 	verbose bool
+	quiet   bool
 }
 
 // New creates a new logger.
-func New(out io.Writer, verbose bool) *Logger {
-	return &Logger{out: out, verbose: verbose}
+func New(out io.Writer, verbose, quiet bool) *Logger {
+	return &Logger{out: out, verbose: verbose, quiet: quiet}
 }
 
 // WithLogger attaches a logger to the context.
@@ -37,18 +38,24 @@ func FromContext(ctx context.Context) *Logger {
 
 // Printf writes formatted output.
 func (l *Logger) Printf(format string, args ...any) {
+	if l.quiet {
+		return
+	}
 	fmt.Fprintf(l.out, format, args...)
 }
 
 // Println writes a line of output.
 func (l *Logger) Println(args ...any) {
+	if l.quiet {
+		return
+	}
 	fmt.Fprintln(l.out, args...)
 }
 
 // Command logs an external command execution.
-// Only prints when verbose mode is enabled.
+// Only prints when verbose mode is enabled and quiet mode is disabled.
 func (l *Logger) Command(name string, args ...string) {
-	if l.verbose {
+	if l.verbose && !l.quiet {
 		fmt.Fprintf(l.out, "$ %s %s\n", name, strings.Join(args, " "))
 	}
 }
@@ -56,6 +63,11 @@ func (l *Logger) Command(name string, args ...string) {
 // Verbose returns true if verbose mode is enabled.
 func (l *Logger) Verbose() bool {
 	return l.verbose
+}
+
+// Quiet returns true if quiet mode is enabled.
+func (l *Logger) Quiet() bool {
+	return l.quiet
 }
 
 // Writer returns the underlying writer.

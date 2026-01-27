@@ -64,6 +64,12 @@ func main() {
 		parser.FatalIfErrorf(err)
 	}
 
+	// Validate mutually exclusive flags
+	if cli.Verbose && cli.Quiet {
+		fmt.Fprintln(os.Stderr, "wt: --verbose and --quiet are mutually exclusive")
+		os.Exit(1)
+	}
+
 	// Apply format default from config to MvCmd
 	if cli.Mv.Format == "" {
 		cli.Mv.Format = cfg.WorktreeFormat
@@ -73,8 +79,8 @@ func main() {
 	bgCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	// Create logger with verbose mode from CLI flag (stderr for diagnostics)
-	logger := log.New(os.Stderr, cli.Verbose)
+	// Create logger with verbose/quiet mode from CLI flags (stderr for diagnostics)
+	logger := log.New(os.Stderr, cli.Verbose, cli.Quiet)
 	bgCtx = log.WithLogger(bgCtx, logger)
 
 	// Add output printer for stdout

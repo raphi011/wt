@@ -1349,6 +1349,8 @@ complete -c wt -n "__fish_seen_subcommand_from completion" -a "zsh" -d "Zsh shel
 complete -c wt -n "__fish_seen_subcommand_from doctor" -l fix -d "Auto-fix recoverable issues"
 complete -c wt -n "__fish_seen_subcommand_from doctor" -l reset -d "Rebuild cache from scratch"
 
-# Global help
+# Global flags
 complete -c wt -s h -l help -d "Show help message"
+complete -c wt -s v -l verbose -d "Show external commands being executed"
+complete -c wt -s q -l quiet -d "Suppress all log output"
 `
