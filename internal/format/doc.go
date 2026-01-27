@@ -7,9 +7,9 @@
 //
 // Available placeholders for worktree_format config:
 //
-//   - {repo}: Repository name extracted from git remote origin URL
+//   - {repo}: Folder name of git repo (matches -r flag)
 //   - {branch}: Branch name as provided to the command
-//   - {folder}: Actual folder name of the git repo on disk
+//   - {origin}: Repository name from git origin URL (falls back to {repo})
 //
 // Default format is "{repo}-{branch}", creating folders like "my-repo-feature-x".
 //

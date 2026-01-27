@@ -11,13 +11,13 @@ import (
 const DefaultWorktreeFormat = "{repo}-{branch}"
 
 // ValidPlaceholders lists all supported placeholders
-var ValidPlaceholders = []string{"{repo}", "{branch}", "{folder}"}
+var ValidPlaceholders = []string{"{repo}", "{branch}", "{origin}"}
 
 // FormatParams contains the values for placeholder substitution
 type FormatParams struct {
-	GitOrigin  string // repo name from git remote get-url origin
+	RepoName   string // folder name of git repo (matches -r flag)
 	BranchName string // branch name as provided
-	FolderName string // actual folder name of git repo on disk
+	Origin     string // repo name from git origin URL (falls back to RepoName if empty)
 }
 
 // placeholderRegex matches {placeholder-name} patterns
@@ -58,9 +58,9 @@ func isValidPlaceholder(placeholder string) bool {
 // FormatWorktreeName applies the format template to generate a worktree folder name
 func FormatWorktreeName(format string, params FormatParams) string {
 	result := format
-	result = strings.ReplaceAll(result, "{repo}", SanitizeForPath(params.GitOrigin))
+	result = strings.ReplaceAll(result, "{repo}", SanitizeForPath(params.RepoName))
 	result = strings.ReplaceAll(result, "{branch}", SanitizeForPath(params.BranchName))
-	result = strings.ReplaceAll(result, "{folder}", SanitizeForPath(params.FolderName))
+	result = strings.ReplaceAll(result, "{origin}", SanitizeForPath(params.Origin))
 	return result
 }
 

@@ -227,11 +227,11 @@ This checklist ensures all functionality works correctly and documentation is co
 
 ### 6.2 Hook Placeholders
 
-- [ ] **{path}** - worktree absolute path
+- [ ] **{worktree-dir}** - worktree absolute path
+- [ ] **{repo-dir}** - main repo absolute path
 - [ ] **{branch}** - branch name
-- [ ] **{repo}** - repo name from origin
-- [ ] **{folder}** - main repo folder name
-- [ ] **{main-repo}** - main repo path
+- [ ] **{repo}** - folder name of git repo (matches -r flag)
+- [ ] **{origin}** - repo name from git origin (falls back to {repo})
 - [ ] **{trigger}** - triggering command name
 - [ ] **Shell quoting** - values properly escaped
 

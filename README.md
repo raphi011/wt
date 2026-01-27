@@ -93,7 +93,7 @@ With hooks configured, your editor opens automatically:
 ```toml
 # ~/.config/wt/config.toml
 [hooks.vscode]
-command = "code {path}"
+command = "code {worktree-dir}"
 on = ["checkout"]
 ```
 
@@ -313,7 +313,7 @@ worktree_dir = "~/Git/worktrees"
 # Where repos live (for -r/-l lookup, defaults to worktree_dir)
 repo_dir = "~/Git"
 
-# Folder naming: {repo}, {branch}, {folder}
+# Folder naming: {repo}, {branch}, {origin}
 worktree_format = "{repo}-{branch}"
 
 # Base ref for new branches: "remote" (default) or "local"
@@ -327,12 +327,12 @@ default_sort = "id"
 
 ```toml
 [hooks.vscode]
-command = "code {path}"
+command = "code {worktree-dir}"
 description = "Open VS Code"
 on = ["checkout", "pr"]  # Auto-run for these commands
 
 [hooks.kitty]
-command = "kitty @ launch --type=tab --cwd={path}"
+command = "kitty @ launch --type=tab --cwd={worktree-dir}"
 description = "Open new kitty tab"
 on = ["checkout"]
 
@@ -341,14 +341,14 @@ command = "echo 'Removed {branch}'"
 on = ["prune"]
 
 [hooks.claude]
-command = "kitty @ launch --cwd={path} -- claude {prompt:-help me}"
+command = "kitty @ launch --cwd={worktree-dir} -- claude {prompt:-help me}"
 description = "Open Claude with prompt"
 # No "on" = only runs via: wt hook claude --arg prompt="..."
 ```
 
 **Hook triggers:** `checkout`, `pr`, `prune`, `merge`, `all`
 
-**Placeholders:** `{path}`, `{branch}`, `{repo}`, `{folder}`, `{main-repo}`, `{trigger}`, `{key}`, `{key:-default}`
+**Placeholders:** `{worktree-dir}`, `{repo-dir}`, `{branch}`, `{repo}`, `{origin}`, `{trigger}`, `{key}`, `{key:-default}`
 
 ### Forge Settings
 

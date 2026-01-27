@@ -25,14 +25,14 @@ const (
 
 // Context holds the values for placeholder substitution
 type Context struct {
-	Path     string            // absolute worktree path
-	Branch   string            // branch name
-	Repo     string            // repo name from git origin
-	Folder   string            // main repo folder name
-	MainRepo string            // main repo path
-	Trigger  string            // command that triggered the hook (add, pr, prune, merge)
-	Env      map[string]string // custom variables from -e key=value flags
-	DryRun   bool              // if true, print command instead of executing
+	WorktreeDir string            // absolute worktree path
+	RepoDir     string            // absolute main repo path
+	Branch      string            // branch name
+	Repo        string            // folder name of git repo (matches -r flag)
+	Origin      string            // repo name from git origin URL (falls back to Repo)
+	Trigger     string            // command that triggered the hook (checkout, pr, prune, merge)
+	Env         map[string]string // custom variables from --arg key=value flags
+	DryRun      bool              // if true, print command instead of executing
 }
 
 // HookMatch represents a hook that matched the current command
@@ -98,7 +98,7 @@ func hookMatchesCommand(hook config.Hook, cmdType CommandType) bool {
 // Prints "No hooks matched" if matches is empty, otherwise runs each hook.
 // Returns on first error.
 func RunAll(matches []HookMatch, ctx Context) error {
-	return runAll(matches, ctx, ctx.Path)
+	return runAll(matches, ctx, ctx.WorktreeDir)
 }
 
 // runAll runs all matched hooks with a custom working directory.
@@ -144,7 +144,7 @@ func RunForEach(matches []HookMatch, ctx Context, workDir string) {
 // RunSingle runs a single hook by name with the given context.
 // Used by `wt hook` to execute a specific hook manually.
 func RunSingle(name string, hook *config.Hook, ctx Context) error {
-	return runHook(name, hook, ctx, ctx.Path)
+	return runHook(name, hook, ctx, ctx.WorktreeDir)
 }
 
 // runHook executes a single hook with variable substitution.
@@ -254,19 +254,19 @@ var envPlaceholderRegex = regexp.MustCompile(`\{([a-zA-Z_][a-zA-Z0-9_]*)(?::-([^
 
 // SubstitutePlaceholders replaces {placeholder} with values from Context.
 //
-// Static placeholders: {path}, {branch}, {repo}, {folder}, {main-repo}, {trigger}
+// Static placeholders: {worktree-dir}, {repo-dir}, {branch}, {repo}, {origin}, {trigger}
 // Env placeholders (from Context.Env via --arg key=value):
 //   - {key}           - value from --arg key=value
 //   - {key:-default}  - value with default if key not set
 func SubstitutePlaceholders(command string, ctx Context) string {
 	// First, handle static replacements
 	replacements := map[string]string{
-		"{path}":      ctx.Path,
-		"{branch}":    ctx.Branch,
-		"{repo}":      ctx.Repo,
-		"{folder}":    ctx.Folder,
-		"{main-repo}": ctx.MainRepo,
-		"{trigger}":   ctx.Trigger,
+		"{worktree-dir}": ctx.WorktreeDir,
+		"{repo-dir}":     ctx.RepoDir,
+		"{branch}":       ctx.Branch,
+		"{repo}":         ctx.Repo,
+		"{origin}":       ctx.Origin,
+		"{trigger}":      ctx.Trigger,
 	}
 
 	result := command

@@ -598,9 +598,9 @@ func TestMv_FolderFormatPlaceholder(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	// Use {folder} placeholder instead of {repo}
+	// Use {repo} placeholder (folder name) instead of {origin}
 	cmd := &MvCmd{
-		Format: "{folder}_{branch}",
+		Format: "{repo}_{branch}",
 	}
 	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
 		t.Fatalf("wt mv --format failed: %v", err)
@@ -609,7 +609,7 @@ func TestMv_FolderFormatPlaceholder(t *testing.T) {
 	// Verify worktree uses folder name (my-local-folder_feature)
 	newWorktreePath := filepath.Join(destDir, "my-local-folder_feature")
 	if _, err := os.Stat(newWorktreePath); os.IsNotExist(err) {
-		t.Errorf("worktree should be at %s (using folder placeholder)", newWorktreePath)
+		t.Errorf("worktree should be at %s (using repo placeholder)", newWorktreePath)
 	}
 
 	verifyWorktreeWorks(t, newWorktreePath)

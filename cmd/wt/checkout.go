@@ -388,13 +388,13 @@ func (c *CheckoutCmd) runCheckoutInRepo(ctx context.Context) error {
 	}
 
 	hookCtx := hooks.Context{
-		Path:     result.Path,
-		Branch:   result.Branch,
-		Repo:     result.RepoName,
-		Folder:   result.Folder,
-		MainRepo: result.MainRepo,
-		Trigger:  string(hooks.CommandCheckout),
-		Env:      env,
+		WorktreeDir: result.Path,
+		RepoDir:     result.MainRepo,
+		Branch:      result.Branch,
+		Repo:        result.Folder,
+		Origin:      result.RepoName,
+		Trigger:     string(hooks.CommandCheckout),
+		Env:         env,
 	}
 
 	return hooks.RunAll(hookMatches, hookCtx)
@@ -459,13 +459,13 @@ func (c *CheckoutCmd) runCheckoutMultiRepo(ctx context.Context, insideRepo bool)
 
 	for _, r := range results {
 		hookCtx := hooks.Context{
-			Path:     r.Path,
-			Branch:   r.Branch,
-			Repo:     r.RepoName,
-			Folder:   r.Folder,
-			MainRepo: r.MainRepo,
-			Trigger:  string(hooks.CommandCheckout),
-			Env:      env,
+			WorktreeDir: r.Path,
+			RepoDir:     r.MainRepo,
+			Branch:      r.Branch,
+			Repo:        r.Folder,
+			Origin:      r.RepoName,
+			Trigger:     string(hooks.CommandCheckout),
+			Env:         env,
 		}
 		hooks.RunForEach(hookMatches, hookCtx, r.Path)
 	}
