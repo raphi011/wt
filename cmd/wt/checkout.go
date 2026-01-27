@@ -7,10 +7,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
+	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/ui"
 )
 
@@ -72,12 +74,31 @@ func createWorktree(ctx context.Context, p createWorktreeParams) (*successResult
 		mainRepo, _ = filepath.Abs(effectiveRepoPath)
 	}
 
-	// Print result
-	if result.AlreadyExists {
-		l.Printf("→ Worktree already exists at: %s\n", result.Path)
-	} else {
-		l.Printf("✓ Worktree created at: %s\n", result.Path)
+	// Assign worktree ID and save to cache
+	var id int
+	wtCache, unlock, err := cache.LoadWithLock(p.targetDir)
+	if err == nil {
+		defer unlock()
+		id = wtCache.GetOrAssignID(cache.WorktreeInfo{
+			Path:     result.Path,
+			RepoPath: mainRepo,
+			Branch:   p.branch,
+		})
+		if saveErr := cache.Save(p.targetDir, wtCache); saveErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", saveErr)
+		}
 	}
+
+	// Print result (to stderr via logger)
+	if result.AlreadyExists {
+		l.Printf("→ Worktree already exists at: %s (nr: %d)\n", result.Path, id)
+	} else {
+		l.Printf("✓ Worktree created at: %s (nr: %d)\n", result.Path, id)
+	}
+
+	// Print path to stdout for piping
+	out := output.FromContext(ctx)
+	out.Println(result.Path)
 
 	// Set note if provided
 	if p.note != "" {
