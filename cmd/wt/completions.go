@@ -401,7 +401,7 @@ _wt_completions() {
                         return
                         ;;
                 esac
-                COMPREPLY=($(compgen -W "-r --repository --forge --note --hook --no-hook -a --arg" -- "$cur"))
+                COMPREPLY=($(compgen -W "-i --interactive -r --repository --forge --note --hook --no-hook -a --arg" -- "$cur"))
             elif [[ "${words[2]}" == "create" ]]; then
                 case "$prev" in
                     -n|--number)
@@ -845,6 +845,8 @@ _wt() {
                                     _arguments \
                                         '1:PR number:' \
                                         '2:org/repo (clone mode):' \
+                                        '-i[interactive PR selection]' \
+                                        '--interactive[interactive PR selection]' \
                                         '-r[local repo name]:repository:__wt_repo_names' \
                                         '--repository[local repo name]:repository:__wt_repo_names' \
                                         '--forge[forge type]:forge:(github gitlab)' \
@@ -1253,6 +1255,7 @@ complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcomman
 complete -c wt -n "__fish_seen_subcommand_from pr; and not __fish_seen_subcommand_from checkout create merge view" -a "view" -d "View PR details or open in browser"
 # pr checkout: PR number (first positional), then org/repo (second positional for clone mode), then flags
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -a "(gh pr list --json number,title --jq '.[] | \"\\(.number)\t\\(.title)\"' 2>/dev/null)" -d "PR number"
+complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -s i -l interactive -d "Interactive PR selection"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -s r -l repository -r -a "(__wt_list_repos)" -d "Local repo name"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -l forge -r -a "github gitlab" -d "Forge type (for cloning)"
 complete -c wt -n "__fish_seen_subcommand_from pr; and __fish_seen_subcommand_from checkout" -l note -r -d "Set note on branch"

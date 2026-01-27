@@ -230,6 +230,45 @@ func (g *GitHub) ViewPR(ctx context.Context, repoURL string, number int, web boo
 	return c.Run()
 }
 
+// ListOpenPRs lists all open PRs for a repository
+func (g *GitHub) ListOpenPRs(ctx context.Context, repoURL string) ([]OpenPR, error) {
+	repoPath := extractRepoPath(repoURL)
+	output, err := g.outputWithUser(ctx, repoPath, "pr", "list",
+		"-R", repoPath,
+		"--state", "open",
+		"--json", "number,title,headRefName,author,isDraft",
+		"--limit", "100")
+	if err != nil {
+		return nil, fmt.Errorf("gh command failed: %v", err)
+	}
+
+	var prs []struct {
+		Number      int    `json:"number"`
+		Title       string `json:"title"`
+		HeadRefName string `json:"headRefName"`
+		IsDraft     bool   `json:"isDraft"`
+		Author      struct {
+			Login string `json:"login"`
+		} `json:"author"`
+	}
+	if err := json.Unmarshal(output, &prs); err != nil {
+		return nil, fmt.Errorf("failed to parse gh output: %w", err)
+	}
+
+	result := make([]OpenPR, len(prs))
+	for i, pr := range prs {
+		result[i] = OpenPR{
+			Number:  pr.Number,
+			Title:   pr.Title,
+			Author:  pr.Author.Login,
+			Branch:  pr.HeadRefName,
+			IsDraft: pr.IsDraft,
+		}
+	}
+
+	return result, nil
+}
+
 // FormatState returns a human-readable PR state
 func (g *GitHub) FormatState(state string) string {
 	switch state {

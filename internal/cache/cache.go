@@ -14,8 +14,8 @@ const CacheMaxAge = 24 * time.Hour
 // PRInfo represents pull request information
 type PRInfo struct {
 	Number       int       `json:"number"`
-	State        string    `json:"state"`         // Normalized: OPEN, MERGED, CLOSED
-	IsDraft      bool      `json:"is_draft"`      // true if PR is a draft
+	State        string    `json:"state"`    // Normalized: OPEN, MERGED, CLOSED
+	IsDraft      bool      `json:"is_draft"` // true if PR is a draft
 	URL          string    `json:"url"`
 	Author       string    `json:"author"`        // username/login
 	CommentCount int       `json:"comment_count"` // number of comments
@@ -37,11 +37,11 @@ func (m *PRInfo) IsStale() bool {
 type WorktreeIDEntry struct {
 	ID        int        `json:"id"`
 	Path      string     `json:"path"`
-	RepoPath  string     `json:"repo_path,omitempty"`   // main repo path for repair
-	Branch    string     `json:"branch,omitempty"`      // branch name for repair
-	OriginURL string     `json:"origin_url,omitempty"`  // origin URL (may be empty for local-only repos)
-	RemovedAt *time.Time `json:"removed_at,omitempty"`  // nil if still exists
-	PR        *PRInfo    `json:"pr,omitempty"`          // embedded PR info
+	RepoPath  string     `json:"repo_path,omitempty"`  // main repo path for repair
+	Branch    string     `json:"branch,omitempty"`     // branch name for repair
+	OriginURL string     `json:"origin_url,omitempty"` // origin URL (may be empty for local-only repos)
+	RemovedAt *time.Time `json:"removed_at,omitempty"` // nil if still exists
+	PR        *PRInfo    `json:"pr,omitempty"`         // embedded PR info
 }
 
 // Cache is the unified cache structure stored in .wt-cache.json

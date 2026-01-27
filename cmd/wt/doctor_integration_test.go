@@ -592,4 +592,3 @@ func TestDoctor_EmptyWorktreeDir(t *testing.T) {
 		t.Fatalf("doctor failed on empty dir: %v", err)
 	}
 }
-

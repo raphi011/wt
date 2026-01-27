@@ -226,11 +226,10 @@ func (s *FilterableListStep) View() string {
 			style = OptionSelectedStyle
 		}
 
-		label := opt.Label
+		b.WriteString(cursor + style.Render(opt.Label) + "\n")
 		if opt.Description != "" {
-			label += " (" + opt.Description + ")"
+			b.WriteString("    " + OptionDescriptionStyle.Render(opt.Description) + "\n")
 		}
-		b.WriteString(cursor + style.Render(label) + "\n")
 	}
 
 	if end < totalItems {

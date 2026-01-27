@@ -140,6 +140,9 @@ func (s *MultiSelectStep) View() string {
 		}
 
 		b.WriteString(cursor + checkbox + " " + style.Render(opt.Label) + "\n")
+		if opt.Description != "" {
+			b.WriteString("      " + OptionDescriptionStyle.Render(opt.Description) + "\n")
+		}
 	}
 
 	if end < len(s.filtered) {

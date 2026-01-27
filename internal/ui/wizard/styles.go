@@ -73,4 +73,8 @@ var (
 
 	// SummaryValueStyle for summary field values
 	SummaryValueStyle = OptionSelectedStyle
+
+	// OptionDescriptionStyle for two-row option descriptions
+	OptionDescriptionStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("240"))
 )
