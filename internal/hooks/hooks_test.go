@@ -9,12 +9,12 @@ import (
 
 func TestSubstitutePlaceholders(t *testing.T) {
 	ctx := Context{
-		Path:     "/home/user/worktrees/repo-branch",
-		Branch:   "feature-branch",
-		Repo:     "myrepo",
-		Folder:   "repo",
-		MainRepo: "/home/user/repo",
-		Trigger:  "checkout",
+		WorktreeDir: "/home/user/worktrees/repo-branch",
+		RepoDir:     "/home/user/repo",
+		Branch:      "feature-branch",
+		Repo:        "repo",
+		Origin:      "myrepo",
+		Trigger:     "checkout",
 	}
 
 	tests := []struct {
@@ -24,18 +24,18 @@ func TestSubstitutePlaceholders(t *testing.T) {
 	}{
 		{
 			name:     "single placeholder",
-			command:  "code {path}",
+			command:  "code {worktree-dir}",
 			expected: "code /home/user/worktrees/repo-branch",
 		},
 		{
 			name:     "multiple placeholders",
-			command:  "cd {path} && echo {branch}",
+			command:  "cd {worktree-dir} && echo {branch}",
 			expected: "cd /home/user/worktrees/repo-branch && echo feature-branch",
 		},
 		{
 			name:     "all placeholders",
-			command:  "{path} {branch} {repo} {folder} {main-repo} {trigger}",
-			expected: "/home/user/worktrees/repo-branch feature-branch myrepo repo /home/user/repo checkout",
+			command:  "{worktree-dir} {branch} {repo} {origin} {repo-dir} {trigger}",
+			expected: "/home/user/worktrees/repo-branch feature-branch repo myrepo /home/user/repo checkout",
 		},
 		{
 			name:     "no placeholders",
@@ -44,7 +44,7 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		},
 		{
 			name:     "repeated placeholder",
-			command:  "{path} and {path}",
+			command:  "{worktree-dir} and {worktree-dir}",
 			expected: "/home/user/worktrees/repo-branch and /home/user/worktrees/repo-branch",
 		},
 		{
@@ -74,9 +74,9 @@ func TestSubstitutePlaceholders_SpecialChars(t *testing.T) {
 		{
 			name: "path with spaces",
 			ctx: Context{
-				Path: "/home/user/my documents/worktree",
+				WorktreeDir: "/home/user/my documents/worktree",
 			},
-			command:  "code {path}",
+			command:  "code {worktree-dir}",
 			expected: "code /home/user/my documents/worktree",
 		},
 		{
@@ -90,9 +90,9 @@ func TestSubstitutePlaceholders_SpecialChars(t *testing.T) {
 		{
 			name: "value with single quotes",
 			ctx: Context{
-				Path: "/home/user/it's a path",
+				WorktreeDir: "/home/user/it's a path",
 			},
-			command:  "code {path}",
+			command:  "code {worktree-dir}",
 			expected: "code /home/user/it's a path",
 		},
 	}
@@ -111,12 +111,12 @@ func TestSelectHooks(t *testing.T) {
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
 			"kitty": {
-				Command:     "kitty @ launch --cwd={path}",
+				Command:     "kitty @ launch --cwd={worktree-dir}",
 				Description: "Open kitty tab",
 				On:          []string{"checkout"},
 			},
 			"vscode": {
-				Command:     "code {path}",
+				Command:     "code {worktree-dir}",
 				Description: "Open VS Code",
 				// no On - only runs via explicit --hook
 			},
@@ -218,7 +218,7 @@ func TestSelectHooks(t *testing.T) {
 func TestSelectHooks_NoOnCondition(t *testing.T) {
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
-			"vscode": {Command: "code {path}"}, // no On - only via --hook
+			"vscode": {Command: "code {worktree-dir}"}, // no On - only via --hook
 		},
 	}
 
@@ -259,15 +259,15 @@ func TestSelectHooks_OnCondition(t *testing.T) {
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
 			"editor": {
-				Command: "code {path}",
+				Command: "code {worktree-dir}",
 				On:      []string{"checkout"},
 			},
 			"pr-setup": {
-				Command: "npm install && code {path}",
+				Command: "npm install && code {worktree-dir}",
 				On:      []string{"pr"},
 			},
 			"universal": {
-				Command: "echo {path}",
+				Command: "echo {worktree-dir}",
 				// On is empty - only runs via --hook
 			},
 		},
@@ -339,7 +339,7 @@ func TestSelectHooks_MultipleMatches(t *testing.T) {
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
 			"editor": {
-				Command: "code {path}",
+				Command: "code {worktree-dir}",
 				On:      []string{"checkout"},
 			},
 			"setup": {
@@ -390,7 +390,7 @@ func TestSelectHooks_PruneCommand(t *testing.T) {
 				On:          []string{"prune"},
 			},
 			"editor": {
-				Command: "code {path}",
+				Command: "code {worktree-dir}",
 				On:      []string{"checkout"},
 			},
 		},
@@ -654,10 +654,10 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 		},
 		{
 			name:    "mixed static and env placeholders",
-			command: "claude --cwd={path} {prompt:-help}",
+			command: "claude --cwd={worktree-dir} {prompt:-help}",
 			ctx: Context{
-				Path: "/home/user/worktree",
-				Env:  map[string]string{"prompt": "implement feature"},
+				WorktreeDir: "/home/user/worktree",
+				Env:         map[string]string{"prompt": "implement feature"},
 			},
 			expected: "claude --cwd=/home/user/worktree implement feature",
 		},

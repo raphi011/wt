@@ -384,10 +384,10 @@ const defaultConfigAfterWorktreeDir = `
 
 # Worktree folder naming format
 # Available placeholders:
-#   {repo}    - repo name extracted from git remote origin URL
+#   {repo}    - folder name of git repo (matches -r flag)
 #   {branch}  - the branch name as provided
-#   {folder}  - actual folder name of the git repo on disk
-# Example: "{folder}_{branch}" creates "my-repo_feature-branch"
+#   {origin}  - repo name from git origin URL (falls back to {repo})
+# Example: "{origin}_{branch}" creates "origin-name_feature-branch"
 worktree_format = "{repo}-{branch}"
 
 # Base ref mode for new branches (wt checkout -b)
@@ -411,12 +411,12 @@ worktree_format = "{repo}-{branch}"
 # Hooks without "on" only run when explicitly called with --hook=name.
 #
 # [hooks.kitty]
-# command = "kitty @ launch --type=tab --cwd={path}"
+# command = "kitty @ launch --type=tab --cwd={worktree-dir}"
 # description = "Open new kitty tab"
 # on = ["checkout"]  # auto-run for checkout command
 #
 # [hooks.pr-setup]
-# command = "cd {path} && npm install && code {path}"
+# command = "cd {worktree-dir} && npm install && code {worktree-dir}"
 # description = "Install deps and open editor"
 # on = ["pr"]  # auto-run when opening PRs
 #
@@ -426,7 +426,7 @@ worktree_format = "{repo}-{branch}"
 # on = ["prune"]  # auto-run when removing worktrees
 #
 # [hooks.vscode]
-# command = "code {path}"
+# command = "code {worktree-dir}"
 # description = "Open VS Code"
 # # no "on" - only runs via --hook=vscode
 #
@@ -436,18 +436,18 @@ worktree_format = "{repo}-{branch}"
 # For "prune" hooks, working directory is the main repo (worktree is deleted).
 #
 # Available placeholders:
-#   {path}      - absolute worktree path
-#   {branch}    - branch name
-#   {repo}      - repo name from git origin
-#   {folder}    - main repo folder name
-#   {main-repo} - main repo path
-#   {trigger}   - command that triggered the hook (checkout, pr, prune, merge)
-#   {key}       - custom variable passed via --arg key=value
-#   {key:-def}  - custom variable with default value if not provided
+#   {worktree-dir} - absolute worktree path
+#   {repo-dir}     - absolute main repo path
+#   {branch}       - branch name
+#   {repo}         - folder name of git repo (matches -r flag)
+#   {origin}       - repo name from git origin (falls back to {repo})
+#   {trigger}      - command that triggered the hook (checkout, pr, prune, merge)
+#   {key}          - custom variable passed via --arg key=value
+#   {key:-def}     - custom variable with default value if not provided
 #
 # Custom variables example:
 # [hooks.claude]
-# command = "kitty @ launch --cwd={path} -- claude {prompt:-help me}"
+# command = "kitty @ launch --cwd={worktree-dir} -- claude {prompt:-help me}"
 # Run with: wt hook claude --arg prompt="implement feature X"
 
 # Forge settings - configure forge type, default org, and multi-account auth

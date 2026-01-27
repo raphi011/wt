@@ -270,7 +270,7 @@ type worktreeParams struct {
 // If repoPath is empty, uses current directory.
 func resolveWorktreeParams(ctx context.Context, repoPath, basePath, branch, worktreeFmt string) (*worktreeParams, error) {
 	var absRepoPath string
-	var gitOrigin, folderName string
+	var repoName, origin string
 	var err error
 
 	if repoPath != "" {
@@ -278,19 +278,21 @@ func resolveWorktreeParams(ctx context.Context, repoPath, basePath, branch, work
 		if err != nil {
 			return nil, err
 		}
-		gitOrigin, err = GetRepoNameFrom(ctx, absRepoPath)
+		repoName = filepath.Base(absRepoPath)
+		origin, err = GetRepoNameFrom(ctx, absRepoPath)
 		if err != nil {
-			return nil, err
+			// Fallback to folder name when no origin
+			origin = repoName
 		}
-		folderName = filepath.Base(absRepoPath)
 	} else {
-		gitOrigin, err = GetRepoName(ctx)
+		repoName, err = GetRepoFolderName(ctx)
 		if err != nil {
 			return nil, err
 		}
-		folderName, err = GetRepoFolderName(ctx)
+		origin, err = GetRepoName(ctx)
 		if err != nil {
-			return nil, err
+			// Fallback to folder name when no origin
+			origin = repoName
 		}
 	}
 
@@ -304,9 +306,9 @@ func resolveWorktreeParams(ctx context.Context, repoPath, basePath, branch, work
 	}
 
 	worktreeName := format.FormatWorktreeName(worktreeFmt, format.FormatParams{
-		GitOrigin:  gitOrigin,
+		RepoName:   repoName,
 		BranchName: branch,
-		FolderName: folderName,
+		Origin:     origin,
 	})
 
 	return &worktreeParams{

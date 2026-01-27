@@ -23,7 +23,7 @@
 // Hooks are defined in [hooks.NAME] sections:
 //
 //	[hooks.vscode]
-//	command = "code {path}"
+//	command = "code {worktree-dir}"
 //	description = "Open VS Code"
 //	on = ["checkout"]  # auto-run for checkout command
 //

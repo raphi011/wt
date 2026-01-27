@@ -148,14 +148,17 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 	if len(nestedWorktrees) > 0 {
 		for _, wt := range nestedWorktrees {
 			// Get repo info for formatting
-			gitOrigin := wt.RepoName
-			folderName := filepath.Base(wt.MainRepo)
+			repoName := filepath.Base(wt.MainRepo)
+			origin := wt.RepoName // RepoName is from git origin URL
+			if origin == "" {
+				origin = repoName
+			}
 
 			// Format new worktree name
 			newName := format.FormatWorktreeName(c.Format, format.FormatParams{
-				GitOrigin:  gitOrigin,
+				RepoName:   repoName,
 				BranchName: wt.Branch,
-				FolderName: folderName,
+				Origin:     origin,
 			})
 
 			newPath := filepath.Join(destPath, newName)
@@ -263,14 +266,17 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 
 	for _, wt := range worktrees {
 		// Get repo info for formatting
-		gitOrigin := wt.RepoName
-		folderName := filepath.Base(wt.MainRepo)
+		repoName := filepath.Base(wt.MainRepo)
+		origin := wt.RepoName // RepoName is from git origin URL
+		if origin == "" {
+			origin = repoName
+		}
 
 		// Format new worktree name
 		newName := format.FormatWorktreeName(c.Format, format.FormatParams{
-			GitOrigin:  gitOrigin,
+			RepoName:   repoName,
 			BranchName: wt.Branch,
-			FolderName: folderName,
+			Origin:     origin,
 		})
 
 		newPath := filepath.Join(destPath, newName)

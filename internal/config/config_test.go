@@ -89,24 +89,24 @@ func TestParseHooksConfig(t *testing.T) {
 			name: "full hooks config",
 			raw: map[string]interface{}{
 				"kitty": map[string]interface{}{
-					"command":     "kitty @ launch --cwd={path}",
+					"command":     "kitty @ launch --cwd={worktree-dir}",
 					"description": "Open kitty tab",
 					"on":          []interface{}{"create", "open"},
 				},
 				"vscode": map[string]interface{}{
-					"command":     "code {path}",
+					"command":     "code {worktree-dir}",
 					"description": "Open VS Code",
 				},
 			},
 			expected: HooksConfig{
 				Hooks: map[string]Hook{
 					"kitty": {
-						Command:     "kitty @ launch --cwd={path}",
+						Command:     "kitty @ launch --cwd={worktree-dir}",
 						Description: "Open kitty tab",
 						On:          []string{"create", "open"},
 					},
 					"vscode": {
-						Command:     "code {path}",
+						Command:     "code {worktree-dir}",
 						Description: "Open VS Code",
 					},
 				},

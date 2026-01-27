@@ -310,13 +310,16 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 
 				// Run prune hooks for this worktree
 				hookCtx := hooks.Context{
-					Path:     wt.Path,
-					Branch:   wt.Branch,
-					Repo:     wt.RepoName,
-					Folder:   filepath.Base(wt.MainRepo),
-					MainRepo: wt.MainRepo,
-					Trigger:  string(hooks.CommandPrune),
-					Env:      env,
+					WorktreeDir: wt.Path,
+					RepoDir:     wt.MainRepo,
+					Branch:      wt.Branch,
+					Repo:        filepath.Base(wt.MainRepo),
+					Origin:      wt.RepoName,
+					Trigger:     string(hooks.CommandPrune),
+					Env:         env,
+				}
+				if hookCtx.Origin == "" {
+					hookCtx.Origin = hookCtx.Repo
 				}
 				hooks.RunForEach(hookMatches, hookCtx, wt.MainRepo)
 			}
@@ -423,13 +426,16 @@ func (c *PruneCmd) runPruneTargetByID(ctx context.Context, id int, worktreeDir s
 
 	// Run hooks
 	hookCtx := hooks.Context{
-		Path:     wt.Path,
-		Branch:   wt.Branch,
-		Repo:     wt.RepoName,
-		Folder:   filepath.Base(wt.MainRepo),
-		MainRepo: wt.MainRepo,
-		Trigger:  string(hooks.CommandPrune),
-		Env:      env,
+		WorktreeDir: wt.Path,
+		RepoDir:     wt.MainRepo,
+		Branch:      wt.Branch,
+		Repo:        filepath.Base(wt.MainRepo),
+		Origin:      wt.RepoName,
+		Trigger:     string(hooks.CommandPrune),
+		Env:         env,
+	}
+	if hookCtx.Origin == "" {
+		hookCtx.Origin = hookCtx.Repo
 	}
 	hooks.RunForEach(hookMatches, hookCtx, wt.MainRepo)
 

@@ -14,7 +14,7 @@
 // Example config:
 //
 //	[hooks.vscode]
-//	command = "code {path}"
+//	command = "code {worktree-dir}"
 //	on = ["checkout", "pr"]  # auto-run for checkout and pr commands
 //
 //	[hooks.cleanup]
@@ -25,11 +25,11 @@
 //
 // Static placeholders available in all hooks:
 //
-//   - {path}: Absolute worktree path
+//   - {worktree-dir}: Absolute worktree path
+//   - {repo-dir}: Absolute main repo path
 //   - {branch}: Branch name
-//   - {repo}: Repository name from git origin
-//   - {folder}: Main repo folder name
-//   - {main-repo}: Main repo path
+//   - {repo}: Folder name of git repo (matches -r flag)
+//   - {origin}: Repository name from git origin (falls back to {repo})
 //   - {trigger}: Command that triggered the hook (checkout, pr, prune, merge)
 //
 // Custom variables via --arg key=value:

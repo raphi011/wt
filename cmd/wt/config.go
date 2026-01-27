@@ -108,7 +108,7 @@ func (c *ConfigShowCmd) runConfigShow(ctx context.Context) error {
 	}
 
 	// Text output
-	out.Printf("# Worktree folder naming format (placeholders: {repo}, {branch}, {folder})\n")
+	out.Printf("# Worktree folder naming format (placeholders: {repo}, {branch}, {origin})\n")
 	out.Printf("worktree_format = %q\n", cfg.WorktreeFormat)
 	if cfg.WorktreeDir != "" {
 		out.Printf("\n# Base directory for new worktrees\n")

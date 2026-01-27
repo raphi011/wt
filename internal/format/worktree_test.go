@@ -18,13 +18,13 @@ func TestValidateFormat(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "folder only",
-			format:  "{folder}",
+			name:    "origin only",
+			format:  "{origin}",
 			wantErr: false,
 		},
 		{
 			name:    "all placeholders",
-			format:  "{repo}_{folder}_{branch}",
+			format:  "{repo}_{origin}_{branch}",
 			wantErr: false,
 		},
 		{
@@ -74,41 +74,41 @@ func TestFormatWorktreeName(t *testing.T) {
 			name:   "default format",
 			format: DefaultWorktreeFormat,
 			params: FormatParams{
-				GitOrigin:  "wt",
+				RepoName:   "wt",
 				BranchName: "feature-branch",
-				FolderName: "wt",
+				Origin:     "wt",
 			},
 			want: "wt-feature-branch",
 		},
 		{
-			name:   "folder format",
-			format: "{folder}_{branch}",
+			name:   "origin format",
+			format: "{origin}_{branch}",
 			params: FormatParams{
-				GitOrigin:  "wt",
+				RepoName:   "my-wt",
 				BranchName: "feature-branch",
-				FolderName: "my-wt",
+				Origin:     "wt-origin",
 			},
-			want: "my-wt_feature-branch",
+			want: "wt-origin_feature-branch",
 		},
 		{
 			name:   "branch with slashes",
 			format: "{repo}-{branch}",
 			params: FormatParams{
-				GitOrigin:  "repo",
+				RepoName:   "repo",
 				BranchName: "feature/add-login",
-				FolderName: "repo",
+				Origin:     "repo",
 			},
 			want: "repo-feature-add-login",
 		},
 		{
 			name:   "all placeholders",
-			format: "{repo}+{folder}+{branch}",
+			format: "{repo}+{origin}+{branch}",
 			params: FormatParams{
-				GitOrigin:  "origin-name",
+				RepoName:   "folder-name",
 				BranchName: "my-branch",
-				FolderName: "folder",
+				Origin:     "origin-name",
 			},
-			want: "origin-name+folder+my-branch",
+			want: "folder-name+origin-name+my-branch",
 		},
 	}
 

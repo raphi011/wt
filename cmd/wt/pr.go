@@ -203,16 +203,19 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 	}
 
 	hookCtx := hooks.Context{
-		Path:    result.Path,
-		Branch:  branch,
-		Folder:  filepath.Base(repoPath),
-		Trigger: string(hooks.CommandPR),
-		Env:     env,
+		WorktreeDir: result.Path,
+		Branch:      branch,
+		Repo:        filepath.Base(repoPath),
+		Trigger:     string(hooks.CommandPR),
+		Env:         env,
 	}
-	hookCtx.Repo, _ = git.GetRepoNameFrom(ctx, repoPath)
-	hookCtx.MainRepo, _ = git.GetMainRepoPath(result.Path)
-	if hookCtx.MainRepo == "" {
-		hookCtx.MainRepo, _ = filepath.Abs(repoPath)
+	hookCtx.Origin, _ = git.GetRepoNameFrom(ctx, repoPath)
+	if hookCtx.Origin == "" {
+		hookCtx.Origin = hookCtx.Repo
+	}
+	hookCtx.RepoDir, _ = git.GetMainRepoPath(result.Path)
+	if hookCtx.RepoDir == "" {
+		hookCtx.RepoDir, _ = filepath.Abs(repoPath)
 	}
 
 	return hooks.RunAll(hookMatches, hookCtx)
@@ -311,14 +314,17 @@ func (c *PrMergeCmd) runPrMerge(ctx context.Context) error {
 	}
 
 	hookCtx := hooks.Context{
-		Path:     target.Path,
-		Branch:   target.Branch,
-		MainRepo: target.MainRepo,
-		Folder:   filepath.Base(target.MainRepo),
-		Trigger:  string(hooks.CommandMerge),
-		Env:      env,
+		WorktreeDir: target.Path,
+		RepoDir:     target.MainRepo,
+		Branch:      target.Branch,
+		Repo:        filepath.Base(target.MainRepo),
+		Trigger:     string(hooks.CommandMerge),
+		Env:         env,
 	}
-	hookCtx.Repo, _ = git.GetRepoNameFrom(ctx, target.MainRepo)
+	hookCtx.Origin, _ = git.GetRepoNameFrom(ctx, target.MainRepo)
+	if hookCtx.Origin == "" {
+		hookCtx.Origin = hookCtx.Repo
+	}
 
 	// If worktree was removed or was main repo, run hooks from main repo
 	hookWorkDir := target.Path
