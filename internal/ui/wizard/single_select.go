@@ -91,6 +91,9 @@ func (s *SingleSelectStep) View() string {
 		}
 
 		b.WriteString(cursor + style.Render(opt.Label) + "\n")
+		if opt.Description != "" {
+			b.WriteString("    " + OptionDescriptionStyle.Render(opt.Description) + "\n")
+		}
 	}
 
 	return b.String()
@@ -242,6 +245,9 @@ func (s *SingleSelectStep) RenderWithScroll(maxVisible int) string {
 		}
 
 		b.WriteString(cursor + style.Render(opt.Label) + "\n")
+		if opt.Description != "" {
+			b.WriteString("    " + OptionDescriptionStyle.Render(opt.Description) + "\n")
+		}
 	}
 
 	if end < len(s.options) {
