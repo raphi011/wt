@@ -321,7 +321,7 @@ type NoteCmd struct {
 }
 
 func (c *NoteCmd) Help() string {
-	return `Notes are stored in git config and displayed in list/tidy output.
+	return `Notes are stored in git config and displayed in list/prune output.
 Inside a worktree, operates on current branch. Outside, specify ID.
 
 Examples:

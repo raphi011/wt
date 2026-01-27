@@ -113,7 +113,7 @@ func GetWorktreeInfo(ctx context.Context, path string) (*Worktree, error) {
 
 // ListWorktrees scans a directory for git worktrees with batched git calls per repo.
 // If includeDirty is true, checks each worktree for dirty status (adds subprocess calls).
-// For 10 worktrees across 2 repos: ~8 calls (list) or ~18 calls with dirty checks (tidy).
+// For 10 worktrees across 2 repos: ~8 calls (list) or ~18 calls with dirty checks (prune).
 func ListWorktrees(ctx context.Context, worktreeDir string, includeDirty bool) ([]Worktree, error) {
 	entries, err := os.ReadDir(worktreeDir)
 	if err != nil {

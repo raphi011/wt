@@ -2,6 +2,8 @@ package config
 
 import (
 	"testing"
+
+	"github.com/BurntSushi/toml"
 )
 
 func TestDefault(t *testing.T) {
@@ -218,6 +220,51 @@ func TestForgeConfigGetUserForRepo(t *testing.T) {
 			got := cfg.GetUserForRepo(tt.repoSpec)
 			if got != tt.want {
 				t.Errorf("GetUserForRepo(%q) = %q, want %q", tt.repoSpec, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDefaultConfigIsValidTOML(t *testing.T) {
+	content := DefaultConfig()
+	var raw rawConfig
+	if _, err := toml.Decode(content, &raw); err != nil {
+		t.Errorf("DefaultConfig() produces invalid TOML: %v\nContent:\n%s", err, content)
+	}
+}
+
+func TestDefaultConfigWithDirIsValidTOML(t *testing.T) {
+	content := DefaultConfigWithDir("~/Git/worktrees")
+	var raw rawConfig
+	if _, err := toml.Decode(content, &raw); err != nil {
+		t.Errorf("DefaultConfigWithDir() produces invalid TOML: %v\nContent:\n%s", err, content)
+	}
+
+	// Verify the worktree_dir was set correctly
+	if raw.WorktreeDir != "~/Git/worktrees" {
+		t.Errorf("worktree_dir = %q, want %q", raw.WorktreeDir, "~/Git/worktrees")
+	}
+}
+
+func TestDefaultConfigWithDirSpecialChars(t *testing.T) {
+	// Test with paths containing special characters that need TOML escaping
+	paths := []string{
+		"/path/with spaces/worktrees",
+		`/path/with\backslash`,
+		"/path/with'quotes",
+		`/path/with"doublequotes`,
+	}
+
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			content := DefaultConfigWithDir(path)
+			var raw rawConfig
+			if _, err := toml.Decode(content, &raw); err != nil {
+				t.Errorf("DefaultConfigWithDir(%q) produces invalid TOML: %v", path, err)
+				return
+			}
+			if raw.WorktreeDir != path {
+				t.Errorf("worktree_dir = %q, want %q", raw.WorktreeDir, path)
 			}
 		})
 	}
