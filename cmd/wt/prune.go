@@ -101,13 +101,7 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 	if !c.Global {
 		currentRepo = git.GetCurrentRepoMainPathFrom(ctx, workDir)
 		if currentRepo != "" {
-			var filtered []git.Worktree
-			for _, wt := range allWorktrees {
-				if wt.MainRepo == currentRepo {
-					filtered = append(filtered, wt)
-				}
-			}
-			worktrees = filtered
+			worktrees = git.FilterWorktreesByRepo(allWorktrees, currentRepo)
 		}
 	}
 
