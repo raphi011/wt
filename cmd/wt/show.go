@@ -118,7 +118,7 @@ func (c *ShowCmd) runShow(ctx context.Context) error {
 		return outputShowJSON(ctx, showInfo)
 	}
 
-	return outputShowText(ctx, showInfo, prInfo)
+	return outputShowText(ctx, showInfo)
 }
 
 // resolveShowTarget resolves the worktree target for show command
@@ -264,7 +264,7 @@ func outputShowJSON(ctx context.Context, info *ShowInfo) error {
 	return nil
 }
 
-func outputShowText(ctx context.Context, info *ShowInfo, _ *forge.PRInfo) error {
+func outputShowText(ctx context.Context, info *ShowInfo) error {
 	out := output.FromContext(ctx)
 
 	// Styles

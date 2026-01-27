@@ -96,13 +96,7 @@ func (c *ListCmd) runList(ctx context.Context) error {
 		// Default behavior: filter by current repo if inside one
 		currentRepo = git.GetCurrentRepoMainPathFrom(ctx, workDir)
 		if currentRepo != "" {
-			var filtered []git.Worktree
-			for _, wt := range allWorktrees {
-				if wt.MainRepo == currentRepo {
-					filtered = append(filtered, wt)
-				}
-			}
-			worktrees = filtered
+			worktrees = git.FilterWorktreesByRepo(allWorktrees, currentRepo)
 		}
 	}
 

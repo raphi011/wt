@@ -122,15 +122,6 @@ func runHooksForContext(hookNames []string, hooksMap map[string]config.Hook, ctx
 	return nil
 }
 
-// resolveHookTargetCurrent resolves the context for the current worktree or repo.
-func resolveHookTargetCurrent(ctx context.Context) (hooks.Context, error) {
-	target, err := resolve.FromCurrentWorktreeOrRepo(ctx)
-	if err != nil {
-		return hooks.Context{}, fmt.Errorf("use -i, -r, or -l when not inside a git repo (run 'wt list' to see IDs)")
-	}
-	return hooks.ContextFromWorktree(target, "run", nil), nil
-}
-
 // resolveHookTargetCurrentPath resolves the context for the given path (worktree or repo).
 func resolveHookTargetCurrentPath(ctx context.Context, workDir string) (hooks.Context, error) {
 	target, err := resolve.FromWorktreeOrRepoPath(ctx, workDir)

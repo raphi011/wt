@@ -497,6 +497,17 @@ func GroupWorktreesByRepo(worktrees []Worktree) map[string][]Worktree {
 	return groups
 }
 
+// FilterWorktreesByRepo returns worktrees that belong to the given main repo path.
+func FilterWorktreesByRepo(worktrees []Worktree, mainRepoPath string) []Worktree {
+	var filtered []Worktree
+	for _, wt := range worktrees {
+		if wt.MainRepo == mainRepoPath {
+			filtered = append(filtered, wt)
+		}
+	}
+	return filtered
+}
+
 // IsWorktree returns true if path is a git worktree (not main repo)
 // Worktrees have .git as a file pointing to the main repo,
 // while main repos have .git as a directory.
