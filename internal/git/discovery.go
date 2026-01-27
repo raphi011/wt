@@ -104,4 +104,3 @@ func FindAllRepos(basePath string) ([]string, error) {
 
 	return repos, nil
 }
-

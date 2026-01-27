@@ -189,7 +189,7 @@ func TestGitHub_PRWorkflow(t *testing.T) {
 		for _, cfg := range [][]string{
 			{"user.email", "test@example.com"},
 			{"user.name", "Test User"},
-			{"credential.helper", ""}, // Clear any existing helper
+			{"credential.helper", ""},                        // Clear any existing helper
 			{"credential.helper", "!gh auth git-credential"}, // Use gh for auth
 		} {
 			c := exec.Command("git", "-C", testClonePath, "config", cfg[0], cfg[1])

@@ -209,8 +209,8 @@ func TestForgeConfigGetUserForRepo(t *testing.T) {
 	}{
 		{"n26/repo", "work-user"},
 		{"personal/repo", "personal-user"},
-		{"company/repo", ""},     // no user in rule
-		{"other/repo", ""},       // no match, returns empty
+		{"company/repo", ""}, // no user in rule
+		{"other/repo", ""},   // no match, returns empty
 	}
 
 	for _, tt := range tests {
