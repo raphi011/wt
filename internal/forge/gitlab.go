@@ -276,6 +276,45 @@ func (g *GitLab) ViewPR(ctx context.Context, repoURL string, number int, web boo
 	return c.Run()
 }
 
+// ListOpenPRs lists all open MRs for a repository
+func (g *GitLab) ListOpenPRs(ctx context.Context, repoURL string) ([]OpenPR, error) {
+	projectPath := extractRepoPath(repoURL)
+	output, err := g.outputGlab(ctx, "mr", "list",
+		"-R", projectPath,
+		"--state", "opened",
+		"-F", "json",
+		"-P", "100")
+	if err != nil {
+		return nil, fmt.Errorf("glab command failed: %v", err)
+	}
+
+	var prs []struct {
+		IID          int    `json:"iid"`
+		Title        string `json:"title"`
+		SourceBranch string `json:"source_branch"`
+		Draft        bool   `json:"draft"`
+		Author       struct {
+			Username string `json:"username"`
+		} `json:"author"`
+	}
+	if err := json.Unmarshal(output, &prs); err != nil {
+		return nil, fmt.Errorf("failed to parse glab output: %w", err)
+	}
+
+	result := make([]OpenPR, len(prs))
+	for i, pr := range prs {
+		result[i] = OpenPR{
+			Number:  pr.IID,
+			Title:   pr.Title,
+			Author:  pr.Author.Username,
+			Branch:  pr.SourceBranch,
+			IsDraft: pr.Draft,
+		}
+	}
+
+	return result, nil
+}
+
 // FormatState returns a human-readable PR state
 func (g *GitLab) FormatState(state string) string {
 	switch state {
@@ -305,4 +344,3 @@ func normalizeGitLabState(state string) string {
 		return strings.ToUpper(state)
 	}
 }
-
