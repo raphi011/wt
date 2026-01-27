@@ -94,11 +94,12 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 			if isNew {
 				return value + " (new)"
 			}
-			if opt.Description == "in worktree" {
+			if strings.HasSuffix(opt.Label, "(checked out)") {
 				return value + " (hooks only)"
 			}
 			return value
-		})
+		}).
+		WithRuneFilter(wizard.RuneFilterNoSpaces)
 	w.AddStep(branchStep)
 
 	// Step 3: Options (fetch) - only for new branches
@@ -229,16 +230,16 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 }
 
 // buildBranchOptions creates Option slice from branches with worktree info.
-// Worktree branches are NOT disabled but have a description indicating their status.
 func buildBranchOptions(branches []BranchInfo) []wizard.Option {
 	opts := make([]wizard.Option, len(branches))
 	for i, branch := range branches {
-		opts[i] = wizard.Option{
-			Label: branch.Name,
-			Value: branch.Name,
-		}
+		label := branch.Name
 		if branch.InWorktree {
-			opts[i].Description = "in worktree"
+			label += " (checked out)"
+		}
+		opts[i] = wizard.Option{
+			Label: label,
+			Value: branch.Name,
 		}
 	}
 	return opts

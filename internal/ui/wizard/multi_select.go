@@ -19,6 +19,9 @@ type MultiSelectStep struct {
 	filter    string
 	minSelect int // minimum required selections (0 = no min)
 	maxSelect int // maximum allowed selections (0 = no max)
+
+	// Input filtering
+	runeFilter RuneFilter // nil = allow all printable
 }
 
 // NewMultiSelect creates a new multi-select step.
@@ -51,11 +54,11 @@ func (s *MultiSelectStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) {
 	key := msg.String()
 
 	switch key {
-	case "up", "k":
+	case "up":
 		if s.cursor > 0 {
 			s.cursor--
 		}
-	case "down", "j":
+	case "down":
 		if s.cursor < len(s.filtered)-1 {
 			s.cursor++
 		}
@@ -96,10 +99,12 @@ func (s *MultiSelectStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) {
 			s.applyFilter()
 		}
 	default:
-		// Handle typing for filter
-		if IsPrintable(key) {
-			s.filter += key
-			s.applyFilter()
+		// Handle typing/pasting for filter
+		if msg.Type == tea.KeyRunes {
+			if text := FilterRunes(msg.Runes, s.runeFilter); text != "" {
+				s.filter += text
+				s.applyFilter()
+			}
 		}
 	}
 
@@ -191,6 +196,12 @@ func (s *MultiSelectStep) Reset() {
 func (s *MultiSelectStep) SetMinMax(minSel, maxSel int) {
 	s.minSelect = minSel
 	s.maxSelect = maxSel
+}
+
+// WithRuneFilter sets a filter for allowed input characters.
+func (s *MultiSelectStep) WithRuneFilter(f RuneFilter) *MultiSelectStep {
+	s.runeFilter = f
+	return s
 }
 
 // SetOptions updates the options list.

@@ -26,6 +26,9 @@ type FilterableListStep struct {
 	createLabelFn func(filter string) string                        // Format create label
 	valueLabelFn  func(value string, isNew bool, opt Option) string // Format summary label
 	selectedIsNew bool                                              // True if "Create" was selected
+
+	// Input filtering
+	runeFilter RuneFilter // nil = allow all printable
 }
 
 // NewFilterableList creates a new filterable single-select step.
@@ -75,6 +78,13 @@ func (s *FilterableListStep) WithValueLabel(fn func(value string, isNew bool, op
 	return s
 }
 
+// WithRuneFilter sets a filter for allowed input characters.
+// Use RuneFilterNoSpaces for branch names or identifiers.
+func (s *FilterableListStep) WithRuneFilter(f RuneFilter) *FilterableListStep {
+	s.runeFilter = f
+	return s
+}
+
 // IsCreateSelected returns true if the user selected the "Create {filter}" option.
 func (s *FilterableListStep) IsCreateSelected() bool {
 	return s.selectedIsNew
@@ -105,9 +115,9 @@ func (s *FilterableListStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) 
 	showCreate := s.shouldShowCreate()
 
 	switch key {
-	case "up", "k":
+	case "up":
 		s.moveCursorUp()
-	case "down", "j":
+	case "down":
 		s.moveCursorDown()
 	case "home", "pgup":
 		s.cursor = s.findFirstEnabled()
@@ -146,10 +156,12 @@ func (s *FilterableListStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) 
 			s.applyFilter()
 		}
 	default:
-		// Handle typing for filter
-		if IsPrintable(key) {
-			s.filter += key
-			s.applyFilter()
+		// Handle typing/pasting for filter
+		if msg.Type == tea.KeyRunes {
+			if text := FilterRunes(msg.Runes, s.runeFilter); text != "" {
+				s.filter += text
+				s.applyFilter()
+			}
 		}
 	}
 
