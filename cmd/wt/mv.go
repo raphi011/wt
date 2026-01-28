@@ -17,6 +17,7 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 	out := output.FromContext(ctx)
 	cfg := c.Config
 	workDir := c.WorkDir
+
 	// Validate worktree format
 	if err := format.ValidateFormat(c.Format); err != nil {
 		return fmt.Errorf("invalid format: %w", err)
@@ -46,8 +47,83 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 		return fmt.Errorf("destination is not a directory: %s", destPath)
 	}
 
-	// Scan for worktrees in working directory
-	worktrees, err := git.ListWorktrees(ctx, workDir, false)
+	// Determine repo destination: repo_dir if set, otherwise worktree_dir
+	repoDestPath := destPath // default to worktree_dir
+	if cfg.RepoDir != "" {
+		if filepath.IsAbs(cfg.RepoDir) {
+			repoDestPath = cfg.RepoDir
+		} else {
+			repoDestPath = filepath.Join(workDir, cfg.RepoDir)
+		}
+		repoDestPath = filepath.Clean(repoDestPath)
+
+		// Validate repo_dir exists
+		if info, err := os.Stat(repoDestPath); os.IsNotExist(err) {
+			return fmt.Errorf("repo_dir does not exist: %s", repoDestPath)
+		} else if err != nil {
+			return fmt.Errorf("failed to check repo_dir: %w", err)
+		} else if !info.IsDir() {
+			return fmt.Errorf("repo_dir is not a directory: %s", repoDestPath)
+		}
+	}
+
+	// Determine scan directory and mode based on Path argument
+	scanDir := workDir
+	var singleWorktree *git.Worktree
+	var singleRepo string
+
+	if c.Path != "" {
+		// Resolve path relative to workDir
+		var targetPath string
+		if filepath.IsAbs(c.Path) {
+			targetPath = c.Path
+		} else {
+			targetPath = filepath.Join(workDir, c.Path)
+		}
+		targetPath = filepath.Clean(targetPath)
+
+		// Check if path exists
+		info, err := os.Stat(targetPath)
+		if os.IsNotExist(err) {
+			return fmt.Errorf("path does not exist: %s", targetPath)
+		} else if err != nil {
+			return fmt.Errorf("failed to check path: %w", err)
+		}
+
+		if !info.IsDir() {
+			return fmt.Errorf("path is not a directory: %s", targetPath)
+		}
+
+		// Check if it's a worktree (has .git file)
+		if git.IsWorktree(targetPath) {
+			wtInfo, err := git.GetWorktreeInfo(ctx, targetPath)
+			if err != nil {
+				return fmt.Errorf("failed to get worktree info: %w", err)
+			}
+			singleWorktree = wtInfo
+			l.Printf("Moving single worktree: %s\n", filepath.Base(targetPath))
+		} else if git.IsMainRepo(targetPath) {
+			// It's a main repo - move the repo and its worktrees
+			singleRepo = targetPath
+			l.Printf("Moving repo and its worktrees: %s\n", filepath.Base(targetPath))
+		} else {
+			// It's a regular directory - use as scan directory
+			scanDir = targetPath
+		}
+	}
+
+	// Handle single worktree mode
+	if singleWorktree != nil {
+		return c.moveSingleWorktree(ctx, l, singleWorktree, destPath)
+	}
+
+	// Handle single repo mode
+	if singleRepo != "" {
+		return c.moveSingleRepo(ctx, l, out, singleRepo, destPath, repoDestPath)
+	}
+
+	// Scan for worktrees in scan directory
+	worktrees, err := git.ListWorktrees(ctx, scanDir, false)
 	if err != nil {
 		return err
 	}
@@ -69,32 +145,12 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 	}
 
 	if len(worktrees) == 0 {
-		out.Println("No worktrees found in current directory")
+		out.Println("No worktrees found in " + scanDir)
 		// Continue to process repos even if no worktrees found
 	}
 
-	// Determine repo destination: repo_dir if set, otherwise worktree_dir
-	repoDestPath := destPath // default to worktree_dir
-	if cfg.RepoDir != "" {
-		if filepath.IsAbs(cfg.RepoDir) {
-			repoDestPath = cfg.RepoDir
-		} else {
-			repoDestPath = filepath.Join(workDir, cfg.RepoDir)
-		}
-		repoDestPath = filepath.Clean(repoDestPath)
-
-		// Validate repo_dir exists
-		if info, err := os.Stat(repoDestPath); os.IsNotExist(err) {
-			return fmt.Errorf("repo_dir does not exist: %s", repoDestPath)
-		} else if err != nil {
-			return fmt.Errorf("failed to check repo_dir: %w", err)
-		} else if !info.IsDir() {
-			return fmt.Errorf("repo_dir is not a directory: %s", repoDestPath)
-		}
-	}
-
-	// Find main repos in workDir first (we move repos before worktrees)
-	repos, err := git.FindAllRepos(workDir)
+	// Find main repos in scanDir first (we move repos before worktrees)
+	repos, err := git.FindAllRepos(scanDir)
 	if err != nil {
 		return fmt.Errorf("failed to scan for repos: %w", err)
 	}
@@ -320,6 +376,175 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 		} else {
 			l.Printf("Worktrees: %d moved, %d skipped, %d failed\n", moved, skipped, failed)
 		}
+	}
+
+	return nil
+}
+
+// moveSingleWorktree moves a single worktree to the destination.
+func (c *MvCmd) moveSingleWorktree(ctx context.Context, l *log.Logger, wt *git.Worktree, destPath string) error {
+	repoName := filepath.Base(wt.MainRepo)
+	origin := wt.RepoName
+	if origin == "" {
+		origin = repoName
+	}
+
+	newName := format.FormatWorktreeName(c.Format, format.FormatParams{
+		RepoName:   repoName,
+		BranchName: wt.Branch,
+		Origin:     origin,
+	})
+
+	newPath := filepath.Join(destPath, newName)
+
+	// Check if already at destination
+	if wt.Path == newPath {
+		l.Printf("→ Skipping %s: already at destination\n", filepath.Base(wt.Path))
+		return nil
+	}
+
+	// If target exists, find a unique path with numbered suffix
+	originalPath := newPath
+	newPath = format.UniqueWorktreePath(newPath, format.DefaultPathExists)
+	if newPath != originalPath {
+		l.Printf("⚠ Collision detected: %s exists, using %s instead\n", filepath.Base(originalPath), filepath.Base(newPath))
+	}
+
+	if c.DryRun {
+		l.Printf("Would move: %s → %s\n", wt.Path, newPath)
+		return nil
+	}
+
+	if err := git.MoveWorktree(ctx, *wt, newPath, c.Force); err != nil {
+		return fmt.Errorf("failed to move worktree: %w", err)
+	}
+
+	l.Printf("✓ Moved: %s → %s\n", wt.Path, newPath)
+	return nil
+}
+
+// moveSingleRepo moves a repo and all its worktrees to the destination.
+func (c *MvCmd) moveSingleRepo(ctx context.Context, l *log.Logger, out *output.Printer, repoPath, destPath, repoDestPath string) error {
+	repoName := filepath.Base(repoPath)
+
+	// Get all worktrees for this repo
+	wtInfos, err := git.ListWorktreesFromRepo(ctx, repoPath)
+	if err != nil {
+		return fmt.Errorf("failed to list worktrees for repo: %w", err)
+	}
+
+	// Separate nested and external worktrees
+	var nestedWorktrees, externalWorktrees []git.Worktree
+	for _, wti := range wtInfos {
+		if wti.Path == repoPath {
+			continue // Skip main repo entry
+		}
+		wtInfo, err := git.GetWorktreeInfo(ctx, wti.Path)
+		if err != nil {
+			l.Printf("⚠ Warning: failed to get info for worktree %s: %v\n", wti.Path, err)
+			continue
+		}
+		if isNestedPath(wti.Path, repoPath) {
+			nestedWorktrees = append(nestedWorktrees, *wtInfo)
+		} else {
+			externalWorktrees = append(externalWorktrees, *wtInfo)
+		}
+	}
+
+	// Move nested worktrees first (before repo moves)
+	for _, wt := range nestedWorktrees {
+		origin := wt.RepoName
+		if origin == "" {
+			origin = repoName
+		}
+
+		newName := format.FormatWorktreeName(c.Format, format.FormatParams{
+			RepoName:   repoName,
+			BranchName: wt.Branch,
+			Origin:     origin,
+		})
+
+		newPath := filepath.Join(destPath, newName)
+		originalPath := newPath
+		newPath = format.UniqueWorktreePath(newPath, format.DefaultPathExists)
+		if newPath != originalPath {
+			l.Printf("⚠ Collision detected: %s exists, using %s instead\n", filepath.Base(originalPath), filepath.Base(newPath))
+		}
+
+		if c.DryRun {
+			l.Printf("Would move nested: %s → %s\n", wt.Path, newPath)
+			continue
+		}
+
+		if err := git.MoveWorktree(ctx, wt, newPath, c.Force); err != nil {
+			l.Printf("✗ Failed to move nested %s: %v\n", filepath.Base(wt.Path), err)
+			continue
+		}
+		l.Printf("✓ Moved nested: %s → %s\n", wt.Path, newPath)
+	}
+
+	// Move the repo
+	newRepoPath := filepath.Join(repoDestPath, repoName)
+
+	if repoPath == newRepoPath {
+		l.Printf("→ Skipping repo %s: already at destination\n", repoName)
+	} else if _, err := os.Stat(newRepoPath); err == nil {
+		l.Printf("⚠ Skipping repo %s: target already exists\n", repoName)
+	} else {
+		if c.DryRun {
+			l.Printf("Would move repo: %s → %s\n", repoPath, newRepoPath)
+		} else {
+			if err := os.Rename(repoPath, newRepoPath); err != nil {
+				return fmt.Errorf("failed to move repo: %w", err)
+			}
+			if err := git.RepairWorktreesFromRepo(ctx, newRepoPath); err != nil {
+				l.Printf("⚠ Warning: failed to repair worktrees: %v\n", err)
+			}
+			l.Printf("✓ Moved repo: %s → %s\n", repoPath, newRepoPath)
+		}
+	}
+
+	// Move external worktrees (updating their MainRepo reference)
+	for _, wt := range externalWorktrees {
+		// Update MainRepo to new location if repo was moved
+		if repoPath != newRepoPath {
+			wt.MainRepo = newRepoPath
+		}
+
+		origin := wt.RepoName
+		if origin == "" {
+			origin = repoName
+		}
+
+		newName := format.FormatWorktreeName(c.Format, format.FormatParams{
+			RepoName:   repoName,
+			BranchName: wt.Branch,
+			Origin:     origin,
+		})
+
+		newPath := filepath.Join(destPath, newName)
+
+		if wt.Path == newPath {
+			l.Printf("→ Skipping %s: already at destination\n", filepath.Base(wt.Path))
+			continue
+		}
+
+		originalPath := newPath
+		newPath = format.UniqueWorktreePath(newPath, format.DefaultPathExists)
+		if newPath != originalPath {
+			l.Printf("⚠ Collision detected: %s exists, using %s instead\n", filepath.Base(originalPath), filepath.Base(newPath))
+		}
+
+		if c.DryRun {
+			l.Printf("Would move: %s → %s\n", wt.Path, newPath)
+			continue
+		}
+
+		if err := git.MoveWorktree(ctx, wt, newPath, c.Force); err != nil {
+			l.Printf("✗ Failed to move %s: %v\n", filepath.Base(wt.Path), err)
+			continue
+		}
+		l.Printf("✓ Moved: %s → %s\n", wt.Path, newPath)
 	}
 
 	return nil

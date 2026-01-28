@@ -34,7 +34,7 @@ func FindRepoByName(basePath, name string) (string, error) {
 			continue
 		}
 		repoPath := filepath.Join(basePath, entry.Name())
-		if isMainRepo(repoPath) {
+		if IsMainRepo(repoPath) {
 			return repoPath, nil
 		}
 	}
@@ -59,7 +59,7 @@ func FindSimilarRepos(basePath, search string) []string {
 		}
 
 		repoPath := filepath.Join(basePath, entry.Name())
-		if !isMainRepo(repoPath) {
+		if !IsMainRepo(repoPath) {
 			continue
 		}
 
@@ -71,9 +71,9 @@ func FindSimilarRepos(basePath, search string) []string {
 	return matches
 }
 
-// isMainRepo checks if path is a main git repository (not a worktree).
+// IsMainRepo checks if path is a main git repository (not a worktree).
 // Main repos have .git as a directory; worktrees have .git as a file.
-func isMainRepo(path string) bool {
+func IsMainRepo(path string) bool {
 	gitPath := filepath.Join(path, ".git")
 	info, err := os.Stat(gitPath)
 	if err != nil {
@@ -97,7 +97,7 @@ func FindAllRepos(basePath string) ([]string, error) {
 		}
 
 		repoPath := filepath.Join(basePath, entry.Name())
-		if isMainRepo(repoPath) {
+		if IsMainRepo(repoPath) {
 			repos = append(repos, repoPath)
 		}
 	}
