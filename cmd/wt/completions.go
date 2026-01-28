@@ -643,6 +643,9 @@ _wt_completions() {
                 if [[ $cword -eq 3 ]] && [[ "$cur" != -* ]]; then
                     # Directory completion for worktree-dir positional arg
                     COMPREPLY=($(compgen -d -- "$cur"))
+                elif [[ $cword -eq 4 ]] && [[ "$cur" != -* ]]; then
+                    # Directory completion for repo-dir positional arg
+                    COMPREPLY=($(compgen -d -- "$cur"))
                 else
                     COMPREPLY=($(compgen -W "-f --force -s --stdout" -- "$cur"))
                 fi
@@ -1017,6 +1020,7 @@ _wt() {
                                 init)
                                     _arguments \
                                         '1:worktree directory:_files -/' \
+                                        '2::repo directory:_files -/' \
                                         '-f[overwrite existing config]' \
                                         '--force[overwrite existing config]' \
                                         '-s[print config to stdout]' \
@@ -1339,7 +1343,7 @@ end
 complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init show hooks" -a "init" -d "Create default config file"
 complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init show hooks" -a "show" -d "Show effective configuration"
 complete -c wt -n "__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from init show hooks" -a "hooks" -d "List available hooks"
-complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from init" -xa "(__fish_complete_directories)" -d "Worktree directory"
+complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from init" -xa "(__fish_complete_directories)" -d "Directory"
 complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from init" -s f -l force -d "Overwrite existing config file"
 complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from init" -s s -l stdout -d "Print config to stdout"
 complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcommand_from show s" -l json -d "Output as JSON"
