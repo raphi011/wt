@@ -472,13 +472,18 @@ func formatNotRemovableReason(wt *git.Worktree, includeCleanSet bool) string {
 
 // refreshPRStatus fetches PR status for all worktrees in parallel and updates the cache
 func refreshPRStatus(ctx context.Context, worktrees []git.Worktree, wtCache *cache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig, sp *ui.Spinner) {
-	// Filter to worktrees with upstream branches
+	// Filter to worktrees with upstream branches, skip already-merged PRs
 	var toFetch []git.Worktree
 	for _, wt := range worktrees {
 		if wt.OriginURL == "" {
 			continue
 		}
 		if git.GetUpstreamBranch(ctx, wt.MainRepo, wt.Branch) == "" {
+			continue
+		}
+		// Skip if PR already fetched and merged - no point re-fetching
+		folderName := filepath.Base(wt.Path)
+		if pr := wtCache.GetPRForBranch(folderName); pr != nil && pr.Fetched && pr.State == "MERGED" {
 			continue
 		}
 		toFetch = append(toFetch, wt)
