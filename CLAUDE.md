@@ -180,6 +180,17 @@ func runCheckoutCommand(t *testing.T, workDir string, cfg *config.Config, cmd *C
 
 **All integration tests use `t.Parallel()`** for concurrent execution.
 
+**Integration Test Documentation** - All integration test functions MUST have doc comments in this format:
+```go
+// TestCommandName_Scenario describes what the test verifies in one line.
+//
+// Scenario: User runs `wt command args`
+// Expected: Description of expected outcome
+func TestCommandName_Scenario(t *testing.T) {
+```
+
+These doc comments are extracted by `make testdoc` to generate `docs/TESTS.md`. When adding new integration tests, always include the doc comment following this format.
+
 ### Commit Messages
 
 Follow **Conventional Commits** for GoReleaser changelog grouping:
