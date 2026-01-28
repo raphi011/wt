@@ -48,8 +48,18 @@ func GetRepoDisplayName(repoPath string) string {
 	return filepath.Base(repoPath)
 }
 
+// resolveToMainRepo returns the main repo path if path is a worktree, otherwise returns path unchanged.
+// This ensures we get the actual repo folder name, not the worktree folder name.
+func resolveToMainRepo(path string) string {
+	if main, err := GetMainRepoPath(path); err == nil {
+		return main
+	}
+	return path
+}
+
 // GetRepoFolderName returns the actual folder name of the git repo on disk
-// Uses git rev-parse --show-toplevel to get the root directory
+// Uses git rev-parse --show-toplevel to get the root directory.
+// If inside a worktree, resolves to the main repo folder name.
 func GetRepoFolderName(ctx context.Context) (string, error) {
 	output, err := outputGit(ctx, "", "rev-parse", "--show-toplevel")
 	if err != nil {
@@ -57,6 +67,8 @@ func GetRepoFolderName(ctx context.Context) (string, error) {
 	}
 
 	repoPath := strings.TrimSpace(string(output))
+	// If inside a worktree, resolve to main repo folder name
+	repoPath = resolveToMainRepo(repoPath)
 	return filepath.Base(repoPath), nil
 }
 
