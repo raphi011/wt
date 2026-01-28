@@ -957,12 +957,12 @@ func TestMv_FormatChangeWithCollision(t *testing.T) {
 	repoB := setupTestRepo(t, repoDir, "repo-b")
 
 	// Create worktrees with format {repo}-{branch}
-	// Both have branch "main" so they'll collide if format changes to {branch}
-	wtA := filepath.Join(worktreeDir, "repo-a-main")
-	setupWorktree(t, repoA, wtA, "main")
+	// Both have branch "feature" so they'll collide if format changes to {branch}
+	wtA := filepath.Join(worktreeDir, "repo-a-feature")
+	setupWorktree(t, repoA, wtA, "feature")
 
-	wtB := filepath.Join(worktreeDir, "repo-b-main")
-	setupWorktree(t, repoB, wtB, "main")
+	wtB := filepath.Join(worktreeDir, "repo-b-feature")
+	setupWorktree(t, repoB, wtB, "feature")
 
 	// Change format to just {branch} - this will cause collision
 	cfg := &config.Config{
@@ -978,30 +978,30 @@ func TestMv_FormatChangeWithCollision(t *testing.T) {
 		t.Fatalf("wt mv failed: %v", err)
 	}
 
-	// One worktree should be "main", the other "main-1"
-	mainPath := filepath.Join(worktreeDir, "main")
-	main1Path := filepath.Join(worktreeDir, "main-1")
+	// One worktree should be "feature", the other "feature-1"
+	featurePath := filepath.Join(worktreeDir, "feature")
+	feature1Path := filepath.Join(worktreeDir, "feature-1")
 
-	mainExists := false
-	if _, err := os.Stat(mainPath); err == nil {
-		mainExists = true
+	featureExists := false
+	if _, err := os.Stat(featurePath); err == nil {
+		featureExists = true
 	}
 
-	main1Exists := false
-	if _, err := os.Stat(main1Path); err == nil {
-		main1Exists = true
+	feature1Exists := false
+	if _, err := os.Stat(feature1Path); err == nil {
+		feature1Exists = true
 	}
 
-	if !mainExists || !main1Exists {
-		t.Errorf("expected both 'main' and 'main-1' to exist, got main=%v main-1=%v", mainExists, main1Exists)
+	if !featureExists || !feature1Exists {
+		t.Errorf("expected both 'feature' and 'feature-1' to exist, got feature=%v feature-1=%v", featureExists, feature1Exists)
 	}
 
 	// Verify both worktrees still work
-	if mainExists {
-		verifyWorktreeWorks(t, mainPath)
+	if featureExists {
+		verifyWorktreeWorks(t, featurePath)
 	}
-	if main1Exists {
-		verifyWorktreeWorks(t, main1Path)
+	if feature1Exists {
+		verifyWorktreeWorks(t, feature1Path)
 	}
 
 	// Verify old paths are gone
