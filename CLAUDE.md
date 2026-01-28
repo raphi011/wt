@@ -87,7 +87,7 @@ internal/ui/             - Terminal UI components
 
 Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt hook`, `wt pr create`, `wt pr merge`, `wt prune`
 
-**Keep completions/config in sync** - When CLI commands, flags, or subcommands change, always update the shell completion scripts (fish, bash, zsh in `cmd/wt/main.go`) and any config generation commands to match.
+**Keep completions in sync** - **IMPORTANT**: When adding or modifying CLI flags, you MUST update the shell completion scripts in `cmd/wt/completions.go`. This file contains completions for fish, bash, and zsh. Search for existing flags of the same command to find where to add the new flag in each shell format.
 
 **Reuse flags consistently** - When adding flags that serve the same purpose across commands, use identical names/shortcuts. Standard flags:
 - `-n, --number` - worktree number for targeting
