@@ -29,6 +29,8 @@ type CheckoutCmd struct {
 	NoHook      bool     `name:"no-hook" help:"skip post-checkout hook" xor:"hook-ctrl"`
 	Env         []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
 	Interactive bool     `short:"i" name:"interactive" help:"interactive mode: prompt for branch name and options"`
+
+	stdinContent string `kong:"-"` // pre-read stdin content for -a KEY=- args
 }
 
 func (c *CheckoutCmd) Help() string {

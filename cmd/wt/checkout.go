@@ -168,6 +168,18 @@ func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
 	cfg := c.Config
 	workDir := c.WorkDir
 
+	// Read stdin early if needed (before wizard takes control)
+	if hooks.NeedsStdin(c.Env) {
+		var err error
+		c.stdinContent, err = hooks.ReadStdinIfPiped()
+		if err != nil {
+			return err
+		}
+		if c.stdinContent == "" {
+			return fmt.Errorf("stdin not piped: KEY=- requires piped input")
+		}
+	}
+
 	// Handle interactive mode
 	if c.Interactive {
 		insideRepo := git.IsInsideRepoPath(ctx, workDir)
@@ -404,7 +416,7 @@ func (c *CheckoutCmd) runCheckoutInRepo(ctx context.Context) error {
 		return err
 	}
 
-	env, err := hooks.ParseEnvWithStdin(c.Env)
+	env, err := hooks.ParseEnvWithCachedStdin(c.Env, c.stdinContent)
 	if err != nil {
 		return err
 	}
@@ -474,7 +486,7 @@ func (c *CheckoutCmd) runCheckoutMultiRepo(ctx context.Context, insideRepo bool)
 		return err
 	}
 
-	env, err := hooks.ParseEnvWithStdin(c.Env)
+	env, err := hooks.ParseEnvWithCachedStdin(c.Env, c.stdinContent)
 	if err != nil {
 		return err
 	}
