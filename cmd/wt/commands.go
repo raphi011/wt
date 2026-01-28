@@ -566,7 +566,7 @@ func (c *HookCmd) Run(ctx context.Context) error {
 	return c.runHookRun(ctx)
 }
 
-// MvCmd moves worktrees to a different directory with optional renaming.
+// MvCmd moves worktrees and repos in the current directory (or specified path) to configured destinations.
 type MvCmd struct {
 	Deps
 	Path       string   `arg:"" optional:"" placeholder:"PATH" help:"path to move (worktree, repo, or folder to scan)"`
@@ -584,7 +584,7 @@ If PATH is specified:
   - Repository: moves the repo and all its worktrees
   - Directory: scans for worktrees/repos and moves all found
 
-If PATH is omitted, scans current directory.
+If PATH is omitted, scans current directory and moves all repos/worktrees found.
 
 Worktrees are moved to worktree_dir.
 Repositories are moved to repo_dir (if set) or worktree_dir.
@@ -852,7 +852,7 @@ type CLI struct {
 	// Utility commands
 	Exec  ExecCmd  `cmd:"" aliases:"x" help:"Run command in worktree(s) or repo(s)" group:"util"`
 	Cd    CdCmd    `cmd:"" help:"Print worktree path" group:"util"`
-	Mv    MvCmd    `cmd:"" help:"Move worktrees to another directory" group:"util"`
+	Mv    MvCmd    `cmd:"" help:"Move worktrees and repos to configured directories" group:"util"`
 	Note  NoteCmd  `cmd:"" help:"Manage branch notes" group:"util"`
 	Label LabelCmd `cmd:"" help:"Manage repository labels" group:"util"`
 	Hook  HookCmd  `cmd:"" help:"Run configured hook" group:"util"`
