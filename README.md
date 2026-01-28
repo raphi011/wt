@@ -40,10 +40,11 @@ Requires `git` in PATH. For GitHub repos: `gh` CLI. For GitLab repos: `glab` CLI
 ### 1. Create Config
 
 ```bash
-wt config init ~/Git/worktrees
+wt config init ~/Git/worktrees           # worktrees dir only
+wt config init ~/Git/worktrees ~/Code    # with separate repo dir
 ```
 
-This creates `~/.config/wt/config.toml` with your worktree directory.
+This creates `~/.config/wt/config.toml` with your worktree directory (and optionally repo directory).
 
 ### 2. Migrate Existing Repos (Optional)
 
@@ -316,9 +317,10 @@ wt doctor --reset
 Config file: `~/.config/wt/config.toml`
 
 ```bash
-wt config init ~/Git/worktrees  # Create config with worktree dir
-wt config show                  # Show effective config
-wt config hooks                 # List configured hooks
+wt config init ~/Git/worktrees           # worktrees dir only
+wt config init ~/Git/worktrees ~/Code    # with separate repo dir
+wt config show                           # Show effective config
+wt config hooks                          # List configured hooks
 ```
 
 ### Basic Settings

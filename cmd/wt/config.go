@@ -18,11 +18,17 @@ func (c *ConfigInitCmd) runConfigInit(ctx context.Context) error {
 	if err := config.ValidatePath(c.WorktreeDir, "worktree_dir"); err != nil {
 		return err
 	}
+	// Validate repo_dir if provided
+	if c.RepoDir != "" {
+		if err := config.ValidatePath(c.RepoDir, "repo_dir"); err != nil {
+			return err
+		}
+	}
 	if c.Stdout {
-		out.Print(config.DefaultConfigWithDir(c.WorktreeDir))
+		out.Print(config.DefaultConfigWithDirs(c.WorktreeDir, c.RepoDir))
 		return nil
 	}
-	path, err := config.Init(c.WorktreeDir, c.Force)
+	path, err := config.Init(c.WorktreeDir, c.RepoDir, c.Force)
 	if err != nil {
 		return err
 	}

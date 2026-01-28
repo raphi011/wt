@@ -530,7 +530,7 @@ const defaultConfig = `# wt configuration
 // Init creates a default config file at ~/.config/wt/config.toml
 // If force is true, overwrites existing file
 // Returns the path to the created file
-func Init(worktreeDir string, force bool) (string, error) {
+func Init(worktreeDir, repoDir string, force bool) (string, error) {
 	path, err := configPath()
 	if err != nil {
 		return "", err
@@ -549,8 +549,8 @@ func Init(worktreeDir string, force bool) (string, error) {
 		return "", err
 	}
 
-	// Write config with worktree dir
-	content := DefaultConfigWithDir(worktreeDir)
+	// Write config with worktree dir and optional repo dir
+	content := DefaultConfigWithDirs(worktreeDir, repoDir)
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return "", err
 	}
@@ -565,9 +565,18 @@ func DefaultConfig() string {
 
 // DefaultConfigWithDir returns the default configuration with worktree_dir set.
 func DefaultConfigWithDir(worktreeDir string) string {
+	return DefaultConfigWithDirs(worktreeDir, "")
+}
+
+// DefaultConfigWithDirs returns the default configuration with worktree_dir and optional repo_dir set.
+func DefaultConfigWithDirs(worktreeDir, repoDir string) string {
+	repoDirLine := ""
+	if repoDir != "" {
+		repoDirLine = fmt.Sprintf("\n# Directory where repositories are stored\nrepo_dir = %q\n", repoDir)
+	}
 	return fmt.Sprintf(`# wt configuration
 
 # Base directory for new worktrees
 worktree_dir = %q
-`+defaultConfigAfterWorktreeDir, worktreeDir)
+%s`+defaultConfigAfterWorktreeDir, worktreeDir, repoDirLine)
 }

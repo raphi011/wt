@@ -464,6 +464,7 @@ func (c *CompletionCmd) Run(ctx context.Context) error {
 type ConfigInitCmd struct {
 	Deps
 	WorktreeDir string `arg:"" help:"base directory for worktrees (absolute path or ~/...)"`
+	RepoDir     string `arg:"" optional:"" help:"directory where repositories are stored (optional)"`
 	Force       bool   `short:"f" name:"force" negatable:"" help:"overwrite existing config file"`
 	Stdout      bool   `short:"s" name:"stdout" help:"print config to stdout instead of writing to file"`
 }
@@ -471,9 +472,10 @@ type ConfigInitCmd struct {
 func (c *ConfigInitCmd) Help() string {
 	return `Create default config file at ~/.config/wt/config.toml
 Examples:
-  wt config init ~/Git/worktrees     # Create config with worktree dir
-  wt config init ~/Git/worktrees -f  # Overwrite existing config
-  wt config init ~/Git -s            # Print config to stdout`
+  wt config init ~/Git/worktrees              # Worktrees dir only
+  wt config init ~/Git/worktrees ~/Code       # With separate repo dir
+  wt config init ~/Git/worktrees -f           # Overwrite existing config
+  wt config init ~/Git -s                     # Print config to stdout`
 }
 
 func (c *ConfigInitCmd) Run(ctx context.Context) error {

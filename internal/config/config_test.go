@@ -246,6 +246,40 @@ func TestDefaultConfigWithDirIsValidTOML(t *testing.T) {
 	}
 }
 
+func TestDefaultConfigWithDirsIsValidTOML(t *testing.T) {
+	content := DefaultConfigWithDirs("~/Git/worktrees", "~/Code")
+	var raw rawConfig
+	if _, err := toml.Decode(content, &raw); err != nil {
+		t.Errorf("DefaultConfigWithDirs() produces invalid TOML: %v\nContent:\n%s", err, content)
+	}
+
+	// Verify both dirs were set correctly
+	if raw.WorktreeDir != "~/Git/worktrees" {
+		t.Errorf("worktree_dir = %q, want %q", raw.WorktreeDir, "~/Git/worktrees")
+	}
+	if raw.RepoDir != "~/Code" {
+		t.Errorf("repo_dir = %q, want %q", raw.RepoDir, "~/Code")
+	}
+}
+
+func TestDefaultConfigWithDirsNoRepoDir(t *testing.T) {
+	// When repo_dir is empty, it should not appear in the output
+	content := DefaultConfigWithDirs("~/Git/worktrees", "")
+	var raw rawConfig
+	if _, err := toml.Decode(content, &raw); err != nil {
+		t.Errorf("DefaultConfigWithDirs() produces invalid TOML: %v\nContent:\n%s", err, content)
+	}
+
+	// Verify worktree_dir was set
+	if raw.WorktreeDir != "~/Git/worktrees" {
+		t.Errorf("worktree_dir = %q, want %q", raw.WorktreeDir, "~/Git/worktrees")
+	}
+	// Verify repo_dir is empty (not set)
+	if raw.RepoDir != "" {
+		t.Errorf("repo_dir = %q, want empty", raw.RepoDir)
+	}
+}
+
 func TestDefaultConfigWithDirSpecialChars(t *testing.T) {
 	// Test with paths containing special characters that need TOML escaping
 	paths := []string{
