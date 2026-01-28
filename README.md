@@ -283,6 +283,8 @@ wt mv -f
 
 This updates git's worktree tracking automatically—no manual fixup needed.
 
+**Tip:** If you change `worktree_format` in your config, run `wt mv` to rename existing worktrees to match the new format. Collisions are handled automatically by appending a numbered suffix (e.g., `repo-main-1`).
+
 ### Diagnosing Issues
 
 If worktrees get into a bad state (broken links, stale cache entries):

@@ -169,3 +169,62 @@ func TestSanitizeForPath(t *testing.T) {
 		})
 	}
 }
+
+func TestUniqueWorktreePath(t *testing.T) {
+	tests := []struct {
+		name       string
+		basePath   string
+		existsFunc PathExistsFunc
+		want       string
+	}{
+		{
+			name:     "path does not exist",
+			basePath: "/worktrees/repo-feature",
+			existsFunc: func(path string) bool {
+				return false
+			},
+			want: "/worktrees/repo-feature",
+		},
+		{
+			name:     "path exists, first suffix available",
+			basePath: "/worktrees/repo-feature",
+			existsFunc: func(path string) bool {
+				return path == "/worktrees/repo-feature"
+			},
+			want: "/worktrees/repo-feature-1",
+		},
+		{
+			name:     "first two suffixes taken",
+			basePath: "/worktrees/repo-feature",
+			existsFunc: func(path string) bool {
+				return path == "/worktrees/repo-feature" ||
+					path == "/worktrees/repo-feature-1"
+			},
+			want: "/worktrees/repo-feature-2",
+		},
+		{
+			name:     "many suffixes taken",
+			basePath: "/worktrees/repo-main",
+			existsFunc: func(path string) bool {
+				existing := map[string]bool{
+					"/worktrees/repo-main":   true,
+					"/worktrees/repo-main-1": true,
+					"/worktrees/repo-main-2": true,
+					"/worktrees/repo-main-3": true,
+					"/worktrees/repo-main-4": true,
+				}
+				return existing[path]
+			},
+			want: "/worktrees/repo-main-5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := UniqueWorktreePath(tt.basePath, tt.existsFunc)
+			if got != tt.want {
+				t.Errorf("UniqueWorktreePath(%q) = %q, want %q", tt.basePath, got, tt.want)
+			}
+		})
+	}
+}
