@@ -15,9 +15,13 @@ But worktrees can pile up fast. You end up with a dozen directories, can't remem
 - **Prune** removes merged worktrees and shows PR/MR status so you know what's safe to delete
 - **PR checkout** opens pull requests in worktrees for easier code review
 
-> ⚠️ **Pre-1.0 Notice**: Commands and configuration are not yet stable and may change before v1.0. If something breaks:
-> - Delete `wt-cache.*` files in your worktree directory
-> - Compare your config with `wt config init -s` and update to match newer config format
+## ⚠️ Pre-1.0 Notice
+
+This project may include breaking command & configuration changes until v1.0 is released. Once v1 is released, backwards compatibility will be maintained.
+
+If something breaks:
+- Delete `wt-cache.*` files in your worktree directory
+- Compare your config with `wt config init -s` and update to match newer config format
 
 ## Install
 
