@@ -278,7 +278,8 @@ func resolveWorktreeParams(ctx context.Context, repoPath, basePath, branch, work
 		if err != nil {
 			return nil, err
 		}
-		repoName = filepath.Base(absRepoPath)
+		// Resolve to main repo if this is a worktree path
+		repoName = filepath.Base(resolveToMainRepo(absRepoPath))
 		origin, err = GetRepoNameFrom(ctx, absRepoPath)
 		if err != nil {
 			// Fallback to folder name when no origin
