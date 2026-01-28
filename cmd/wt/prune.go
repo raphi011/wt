@@ -70,10 +70,26 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 		return c.runPruneTargets(ctx, worktreeDir)
 	}
 
-	if c.DryRun {
-		l.Printf("Pruning worktrees in %s (dry run)\n", worktreeDir)
+	// Determine scope before starting spinner (quick local git call)
+	var currentRepo string
+	if !c.Global {
+		currentRepo = git.GetCurrentRepoMainPathFrom(ctx, workDir)
+	}
+
+	// Print scope-aware message before spinner
+	if currentRepo != "" {
+		repoName := filepath.Base(currentRepo)
+		if c.DryRun {
+			l.Printf("Pruning worktrees for %s (dry run)\n", repoName)
+		} else {
+			l.Printf("Pruning worktrees for %s\n", repoName)
+		}
 	} else {
-		l.Printf("Pruning worktrees in %s\n", worktreeDir)
+		if c.DryRun {
+			l.Printf("Pruning all worktrees in %s (dry run)\n", worktreeDir)
+		} else {
+			l.Printf("Pruning all worktrees in %s\n", worktreeDir)
+		}
 	}
 
 	// Start spinner
@@ -93,14 +109,10 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 		return nil
 	}
 
-	// If in a git repo and not using --global, filter to only prune worktrees from that repo
+	// Filter to current repo if not using --global
 	worktrees := allWorktrees
-	var currentRepo string
-	if !c.Global {
-		currentRepo = git.GetCurrentRepoMainPathFrom(ctx, workDir)
-		if currentRepo != "" {
-			worktrees = git.FilterWorktreesByRepo(allWorktrees, currentRepo)
-		}
+	if currentRepo != "" {
+		worktrees = git.FilterWorktreesByRepo(allWorktrees, currentRepo)
 	}
 
 	if len(worktrees) == 0 {
