@@ -12,6 +12,11 @@ import (
 
 // --- Basic Listing Tests ---
 
+// TestRepos_ListsReposInDirectory verifies that `wt repos` lists all repositories
+// in the configured repo_dir.
+//
+// Scenario: User runs `wt repos` with 2 repos in repo_dir
+// Expected: Both repo-a and repo-b listed in output
 func TestRepos_ListsReposInDirectory(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -36,6 +41,10 @@ func TestRepos_ListsReposInDirectory(t *testing.T) {
 	}
 }
 
+// TestRepos_SingleRepo verifies listing a single repository with count display.
+//
+// Scenario: User runs `wt repos` with 1 repo
+// Expected: myrepo listed with count (1)
 func TestRepos_SingleRepo(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -59,6 +68,10 @@ func TestRepos_SingleRepo(t *testing.T) {
 	}
 }
 
+// TestRepos_NoReposFound verifies message when no repos exist in directory.
+//
+// Scenario: User runs `wt repos` in empty directory
+// Expected: "No repositories found" message
 func TestRepos_NoReposFound(t *testing.T) {
 	t.Parallel()
 	emptyDir := t.TempDir()
@@ -79,6 +92,10 @@ func TestRepos_NoReposFound(t *testing.T) {
 
 // --- Label Filter Tests ---
 
+// TestRepos_FilterByLabel verifies filtering repos by label with -l flag.
+//
+// Scenario: User runs `wt repos -l backend` with 3 repos (2 have backend label)
+// Expected: Only repo-a and repo-c (backend label) shown, not repo-b
 func TestRepos_FilterByLabel(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -111,6 +128,10 @@ func TestRepos_FilterByLabel(t *testing.T) {
 	}
 }
 
+// TestRepos_FilterByLabel_NoMatch verifies message when no repos match label filter.
+//
+// Scenario: User runs `wt repos -l nonexistent`
+// Expected: "No repositories found with label" message
 func TestRepos_FilterByLabel_NoMatch(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -133,6 +154,10 @@ func TestRepos_FilterByLabel_NoMatch(t *testing.T) {
 
 // --- Sort Tests ---
 
+// TestRepos_SortByName verifies sorting repos alphabetically by name.
+//
+// Scenario: User runs `wt repos --sort=name --json` on repos created out of order
+// Expected: Repos sorted alphabetically (alpha, beta, zebra)
 func TestRepos_SortByName(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -171,6 +196,10 @@ func TestRepos_SortByName(t *testing.T) {
 	}
 }
 
+// TestRepos_SortByBranch verifies sorting repos by current branch name.
+//
+// Scenario: User runs `wt repos --sort=branch --json` with repos on different branches
+// Expected: Repos sorted alphabetically by branch (alpha-branch, beta-branch, zebra-branch)
 func TestRepos_SortByBranch(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -214,6 +243,10 @@ func TestRepos_SortByBranch(t *testing.T) {
 	}
 }
 
+// TestRepos_SortByWorktrees verifies sorting repos by worktree count descending.
+//
+// Scenario: User runs `wt repos --sort=worktrees --json` with repos having 2, 0, 1 worktrees
+// Expected: Repos sorted by count descending (2, 1, 0)
 func TestRepos_SortByWorktrees(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -263,6 +296,10 @@ func TestRepos_SortByWorktrees(t *testing.T) {
 	}
 }
 
+// TestRepos_SortByLabel verifies sorting repos by label alphabetically (unlabeled last).
+//
+// Scenario: User runs `wt repos --sort=label --json` with repos having zebra, alpha, none, beta labels
+// Expected: Repos sorted alphabetically (alpha, beta, zebra), unlabeled last
 func TestRepos_SortByLabel(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -315,6 +352,10 @@ func TestRepos_SortByLabel(t *testing.T) {
 
 // --- JSON Output Tests ---
 
+// TestRepos_JSONOutput verifies JSON output contains all required fields.
+//
+// Scenario: User runs `wt repos --json`
+// Expected: JSON with name, branch, labels, worktree_count, path, origin_url
 func TestRepos_JSONOutput(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -364,6 +405,10 @@ func TestRepos_JSONOutput(t *testing.T) {
 	}
 }
 
+// TestRepos_JSONOutputEmpty verifies JSON output is empty array (not null) when no repos.
+//
+// Scenario: User runs `wt repos --json` in empty directory
+// Expected: Empty JSON array []
 func TestRepos_JSONOutputEmpty(t *testing.T) {
 	t.Parallel()
 	emptyDir := t.TempDir()
@@ -392,6 +437,10 @@ func TestRepos_JSONOutputEmpty(t *testing.T) {
 
 // --- Worktree Count Tests ---
 
+// TestRepos_ShowsCorrectWorktreeCount verifies worktree count is accurate.
+//
+// Scenario: User runs `wt repos --json` on repo with 3 worktrees
+// Expected: worktree_count is 3
 func TestRepos_ShowsCorrectWorktreeCount(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -429,6 +478,11 @@ func TestRepos_ShowsCorrectWorktreeCount(t *testing.T) {
 	}
 }
 
+// TestRepos_ZeroWorktreesForRepoWithoutWorktrees verifies worktree count is 0
+// for repos without additional worktrees.
+//
+// Scenario: User runs `wt repos --json` on repo with no worktrees
+// Expected: worktree_count is 0
 func TestRepos_ZeroWorktreesForRepoWithoutWorktrees(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -460,6 +514,10 @@ func TestRepos_ZeroWorktreesForRepoWithoutWorktrees(t *testing.T) {
 
 // --- Labels Display Tests ---
 
+// TestRepos_ShowsMultipleLabels verifies multiple labels are shown in JSON output.
+//
+// Scenario: User runs `wt repos --json` on repo with 3 labels
+// Expected: labels array contains all 3 labels
 func TestRepos_ShowsMultipleLabels(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -490,6 +548,10 @@ func TestRepos_ShowsMultipleLabels(t *testing.T) {
 	}
 }
 
+// TestRepos_TableShowsLabels verifies labels are shown in table output.
+//
+// Scenario: User runs `wt repos` on repo with backend label
+// Expected: Table output contains "backend"
 func TestRepos_TableShowsLabels(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()

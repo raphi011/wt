@@ -12,6 +12,10 @@ import (
 
 // === note set tests ===
 
+// TestNoteSet_ByID verifies setting a branch note by worktree ID.
+//
+// Scenario: User runs `wt note set -n 1 "Test note"`
+// Expected: Note stored in git config branch.<branch>.description
 func TestNoteSet_ByID(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -43,6 +47,10 @@ func TestNoteSet_ByID(t *testing.T) {
 	}
 }
 
+// TestNoteSet_ByRepoName verifies setting a branch note by repo name.
+//
+// Scenario: User runs `wt note set -r myrepo "Test note"`
+// Expected: Note set on main branch of the repo
 func TestNoteSet_ByRepoName(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -72,6 +80,10 @@ func TestNoteSet_ByRepoName(t *testing.T) {
 	}
 }
 
+// TestNoteSet_InsideWorktree verifies setting a note when running from inside a worktree.
+//
+// Scenario: User runs `wt note set "Note"` from inside a worktree
+// Expected: Note set on current worktree's branch
 func TestNoteSet_InsideWorktree(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -101,6 +113,10 @@ func TestNoteSet_InsideWorktree(t *testing.T) {
 	}
 }
 
+// TestNoteSet_InsideMainRepo verifies setting a note when running from inside main repo.
+//
+// Scenario: User runs `wt note set "Note"` from inside main repo
+// Expected: Note set on main branch
 func TestNoteSet_InsideMainRepo(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -126,6 +142,10 @@ func TestNoteSet_InsideMainRepo(t *testing.T) {
 	}
 }
 
+// TestNoteSet_OverwriteExisting verifies that setting a note overwrites existing note.
+//
+// Scenario: User sets a note, then sets a different note
+// Expected: Second note replaces the first
 func TestNoteSet_OverwriteExisting(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -175,6 +195,10 @@ func TestNoteSet_OverwriteExisting(t *testing.T) {
 
 // === note get tests ===
 
+// TestNoteGet_ByID verifies retrieving a branch note by worktree ID.
+//
+// Scenario: User runs `wt note get -n 1`
+// Expected: Note content printed to stdout
 func TestNoteGet_ByID(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -208,6 +232,10 @@ func TestNoteGet_ByID(t *testing.T) {
 	}
 }
 
+// TestNoteGet_ByRepoName verifies retrieving a branch note by repo name.
+//
+// Scenario: User runs `wt note get -r myrepo`
+// Expected: Note from main branch printed to stdout
 func TestNoteGet_ByRepoName(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -238,6 +266,10 @@ func TestNoteGet_ByRepoName(t *testing.T) {
 	}
 }
 
+// TestNoteGet_InsideWorktree verifies getting a note from inside a worktree.
+//
+// Scenario: User runs `wt note get` from inside a worktree
+// Expected: Note from current branch printed
 func TestNoteGet_InsideWorktree(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -268,6 +300,10 @@ func TestNoteGet_InsideWorktree(t *testing.T) {
 	}
 }
 
+// TestNoteGet_NoNoteExists verifies graceful handling when no note exists.
+//
+// Scenario: User runs `wt note get -n 1` but no note has been set
+// Expected: Empty output, no error
 func TestNoteGet_NoNoteExists(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -299,6 +335,10 @@ func TestNoteGet_NoNoteExists(t *testing.T) {
 	}
 }
 
+// TestNoteGet_DefaultSubcommand verifies that "get" is the default subcommand.
+//
+// Scenario: User runs `wt note -n 1` (without explicit "get")
+// Expected: Note content printed (same as `wt note get -n 1`)
 func TestNoteGet_DefaultSubcommand(t *testing.T) {
 	t.Parallel()
 	// Test that `wt note -n 1` works (get is default subcommand)
@@ -336,6 +376,10 @@ func TestNoteGet_DefaultSubcommand(t *testing.T) {
 
 // === note clear tests ===
 
+// TestNoteClear_ByID verifies clearing a branch note by worktree ID.
+//
+// Scenario: User runs `wt note clear -n 1`
+// Expected: Note removed from git config
 func TestNoteClear_ByID(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -369,6 +413,10 @@ func TestNoteClear_ByID(t *testing.T) {
 	}
 }
 
+// TestNoteClear_ByRepoName verifies clearing a branch note by repo name.
+//
+// Scenario: User runs `wt note clear -r myrepo`
+// Expected: Note removed from main branch
 func TestNoteClear_ByRepoName(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -399,6 +447,10 @@ func TestNoteClear_ByRepoName(t *testing.T) {
 	}
 }
 
+// TestNoteClear_InsideWorktree verifies clearing a note from inside a worktree.
+//
+// Scenario: User runs `wt note clear` from inside a worktree
+// Expected: Note removed from current branch
 func TestNoteClear_InsideWorktree(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -429,6 +481,10 @@ func TestNoteClear_InsideWorktree(t *testing.T) {
 	}
 }
 
+// TestNoteClear_NonExistentNote verifies graceful handling when clearing a non-existent note.
+//
+// Scenario: User runs `wt note clear -n 1` but no note exists
+// Expected: Command succeeds (idempotent)
 func TestNoteClear_NonExistentNote(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -465,6 +521,10 @@ func TestNoteClear_NonExistentNote(t *testing.T) {
 
 // === error cases ===
 
+// TestNoteGet_ErrorInvalidID verifies error when specified ID doesn't exist.
+//
+// Scenario: User runs `wt note get -n 999`
+// Expected: Error for invalid ID
 func TestNoteGet_ErrorInvalidID(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -491,6 +551,10 @@ func TestNoteGet_ErrorInvalidID(t *testing.T) {
 	}
 }
 
+// TestNoteGet_ErrorRepoNotFound verifies error when specified repo doesn't exist.
+//
+// Scenario: User runs `wt note get -r nonexistent-repo`
+// Expected: Error mentioning the nonexistent repository
 func TestNoteGet_ErrorRepoNotFound(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -518,6 +582,10 @@ func TestNoteGet_ErrorRepoNotFound(t *testing.T) {
 	}
 }
 
+// TestNoteSet_ErrorInvalidID verifies error when specified ID doesn't exist.
+//
+// Scenario: User runs `wt note set -n 999 "note"`
+// Expected: Error for invalid ID
 func TestNoteSet_ErrorInvalidID(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -545,6 +613,10 @@ func TestNoteSet_ErrorInvalidID(t *testing.T) {
 	}
 }
 
+// TestNoteClear_ErrorInvalidID verifies error when specified ID doesn't exist.
+//
+// Scenario: User runs `wt note clear -n 999`
+// Expected: Error for invalid ID
 func TestNoteClear_ErrorInvalidID(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())

@@ -13,6 +13,11 @@ import (
 	"github.com/raphi011/wt/internal/config"
 )
 
+// TestList_InsideRepo verifies that listing worktrees from inside a repo
+// shows only worktrees for the current repo.
+//
+// Scenario: User runs `wt list` from inside a worktree
+// Expected: List shows worktrees for the current repo
 func TestList_InsideRepo(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -46,6 +51,11 @@ func TestList_InsideRepo(t *testing.T) {
 	}
 }
 
+// TestList_OutsideRepo verifies that listing worktrees from outside any repo
+// shows all worktrees in worktree_dir.
+//
+// Scenario: User runs `wt list` from worktree_dir (not inside a repo)
+// Expected: List shows all worktrees
 func TestList_OutsideRepo(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -79,6 +89,11 @@ func TestList_OutsideRepo(t *testing.T) {
 	}
 }
 
+// TestList_Global verifies that -g flag lists worktrees from all repos
+// regardless of which repo you're currently in.
+//
+// Scenario: User runs `wt list -g` from inside repo-a worktree
+// Expected: List shows worktrees from both repo-a and repo-b
 func TestList_Global(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -121,6 +136,11 @@ func TestList_Global(t *testing.T) {
 	}
 }
 
+// TestList_NoWorktrees verifies that listing worktrees in empty directory
+// succeeds without error.
+//
+// Scenario: User runs `wt list` in empty worktree_dir
+// Expected: Command succeeds, no worktrees listed
 func TestList_NoWorktrees(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -146,6 +166,11 @@ func TestList_NoWorktrees(t *testing.T) {
 	_ = output
 }
 
+// TestList_MultipleWorktreesSameRepo verifies listing multiple worktrees
+// from the same repository.
+//
+// Scenario: User runs `wt list` for repo with 3 worktrees
+// Expected: All 3 worktrees (feature1, feature2, feature3) shown
 func TestList_MultipleWorktreesSameRepo(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -191,6 +216,11 @@ func TestList_MultipleWorktreesSameRepo(t *testing.T) {
 	}
 }
 
+// TestList_FilterByRepo verifies that -r flag filters worktrees
+// to show only those from the specified repository.
+//
+// Scenario: User runs `wt list -r repo-a` with repo-a and repo-b
+// Expected: Only repo-a worktrees shown
 func TestList_FilterByRepo(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -232,6 +262,11 @@ func TestList_FilterByRepo(t *testing.T) {
 	// Use JSON to verify precisely
 }
 
+// TestList_FilterByMultipleRepos verifies filtering by multiple repos
+// using repeated -r flags.
+//
+// Scenario: User runs `wt list -r repo-a -r repo-b --json` with 3 repos
+// Expected: Only repo-a and repo-b worktrees shown, not repo-c
 func TestList_FilterByMultipleRepos(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -299,6 +334,11 @@ func TestList_FilterByMultipleRepos(t *testing.T) {
 	}
 }
 
+// TestList_FilterByRepoOverridesCurrentRepo verifies that -r flag overrides
+// the default "current repo" filtering behavior.
+//
+// Scenario: User runs `wt list -r repo-b --json` from inside repo-a worktree
+// Expected: Only repo-b worktrees shown (not repo-a even though inside it)
 func TestList_FilterByRepoOverridesCurrentRepo(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -353,6 +393,11 @@ func TestList_FilterByRepoOverridesCurrentRepo(t *testing.T) {
 	}
 }
 
+// TestList_FilterByRepoNotFound verifies that filtering by non-existent repo
+// produces a warning but doesn't fail.
+//
+// Scenario: User runs `wt list -r nonexistent-repo`
+// Expected: Command succeeds with warning, no worktrees shown
 func TestList_FilterByRepoNotFound(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -381,6 +426,11 @@ func TestList_FilterByRepoNotFound(t *testing.T) {
 	// Command should succeed even with nonexistent repo filter
 }
 
+// TestList_FilterByLabel verifies that -l flag filters worktrees
+// to show only those from repos with the specified label.
+//
+// Scenario: User runs `wt list -l frontend --json` with frontend and backend repos
+// Expected: Only repo-a (frontend) worktrees shown
 func TestList_FilterByLabel(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -436,6 +486,11 @@ func TestList_FilterByLabel(t *testing.T) {
 	}
 }
 
+// TestList_FilterByMultipleLabels verifies filtering by multiple labels
+// using repeated -l flags (OR condition).
+//
+// Scenario: User runs `wt list -l frontend -l backend --json` with 3 repos
+// Expected: repo-a (frontend) and repo-b (backend) shown, not repo-c (infra)
 func TestList_FilterByMultipleLabels(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -506,6 +561,11 @@ func TestList_FilterByMultipleLabels(t *testing.T) {
 	}
 }
 
+// TestList_FilterByLabelOverridesCurrentRepo verifies that -l flag overrides
+// the default "current repo" filtering behavior.
+//
+// Scenario: User runs `wt list -l backend --json` from inside repo-a worktree
+// Expected: Only repo-b (backend) shown (not repo-a even though inside it)
 func TestList_FilterByLabelOverridesCurrentRepo(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -562,6 +622,11 @@ func TestList_FilterByLabelOverridesCurrentRepo(t *testing.T) {
 	}
 }
 
+// TestList_FilterByLabelNotFound verifies that filtering by non-existent label
+// produces a warning but doesn't fail.
+//
+// Scenario: User runs `wt list -l nonexistent-label`
+// Expected: Command succeeds with warning, no worktrees shown
 func TestList_FilterByLabelNotFound(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -596,6 +661,10 @@ func TestList_FilterByLabelNotFound(t *testing.T) {
 	// Command should succeed even with nonexistent label filter
 }
 
+// TestList_CombineRepoAndLabel verifies combining -r and -l flags (OR condition).
+//
+// Scenario: User runs `wt list -r repo-a -l backend --json` with 3 repos
+// Expected: repo-a (from -r) and repo-b (backend label) shown, not repo-c
 func TestList_CombineRepoAndLabel(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -668,6 +737,11 @@ func TestList_CombineRepoAndLabel(t *testing.T) {
 	}
 }
 
+// TestList_FilterFromMultipleRepos verifies filtering shows all worktrees
+// from multiple repos (not just one per repo).
+//
+// Scenario: User runs `wt list -r repo-a -r repo-b --json` (repo-a has 2 worktrees)
+// Expected: All 3 worktrees shown (2 from repo-a, 1 from repo-b)
 func TestList_FilterFromMultipleRepos(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -716,6 +790,10 @@ func TestList_FilterFromMultipleRepos(t *testing.T) {
 	}
 }
 
+// TestList_SortByID verifies that -s id sorts worktrees by ID in ascending order.
+//
+// Scenario: User runs `wt list -s id --json`
+// Expected: Worktrees sorted by ID (1, 2, 3...)
 func TestList_SortByID(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -773,6 +851,10 @@ func TestList_SortByID(t *testing.T) {
 	}
 }
 
+// TestList_SortByRepo verifies that -s repo sorts worktrees alphabetically by repo name.
+//
+// Scenario: User runs `wt list -s repo --json` on repos created out of order
+// Expected: Worktrees sorted alphabetically (repo-a, repo-b, repo-c)
 func TestList_SortByRepo(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -830,6 +912,10 @@ func TestList_SortByRepo(t *testing.T) {
 	}
 }
 
+// TestList_SortByBranch verifies that -s branch sorts worktrees alphabetically by branch name.
+//
+// Scenario: User runs `wt list -s branch --json` on branches created out of order
+// Expected: Worktrees sorted alphabetically (alpha, beta, zeta)
 func TestList_SortByBranch(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -886,6 +972,11 @@ func TestList_SortByBranch(t *testing.T) {
 	}
 }
 
+// TestList_SortByCommit verifies that -s commit sorts worktrees by last commit date
+// in descending order (most recent first).
+//
+// Scenario: User runs `wt list -s commit --json` with worktrees having different commit dates
+// Expected: Worktrees sorted by commit date (recent first)
 func TestList_SortByCommit(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -945,6 +1036,10 @@ func TestList_SortByCommit(t *testing.T) {
 	}
 }
 
+// TestList_JSONOutput verifies that --json flag outputs valid JSON with required fields.
+//
+// Scenario: User runs `wt list --json`
+// Expected: Valid JSON array with id, path, branch, origin_url fields
 func TestList_JSONOutput(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -1009,6 +1104,11 @@ func TestList_JSONOutput(t *testing.T) {
 	}
 }
 
+// TestList_JSONOutputMultiple verifies that --json outputs multiple worktrees
+// with unique IDs.
+//
+// Scenario: User runs `wt list --json` with 2 worktrees
+// Expected: JSON array with 2 entries, each having unique ID
 func TestList_JSONOutputMultiple(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)

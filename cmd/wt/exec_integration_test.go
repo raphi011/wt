@@ -11,6 +11,10 @@ import (
 	"github.com/raphi011/wt/internal/config"
 )
 
+// TestExec_ByWorktreeID verifies executing a command in a worktree by numeric ID.
+//
+// Scenario: User runs `wt exec -n 1 -- touch exec-marker.txt`
+// Expected: Command runs in worktree, creates marker file
 func TestExec_ByWorktreeID(t *testing.T) {
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -46,6 +50,10 @@ func TestExec_ByWorktreeID(t *testing.T) {
 	}
 }
 
+// TestExec_MultipleIDs verifies executing a command in multiple worktrees by ID.
+//
+// Scenario: User runs `wt exec -n 1 -n 2 -- touch marker.txt`
+// Expected: Command runs in both worktrees, marker file created in each
 func TestExec_MultipleIDs(t *testing.T) {
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -87,6 +95,10 @@ func TestExec_MultipleIDs(t *testing.T) {
 	}
 }
 
+// TestExec_ByRepoName verifies executing a command in a repo by name.
+//
+// Scenario: User runs `wt exec -r myrepo -- touch marker.txt`
+// Expected: Command runs in main repo directory
 func TestExec_ByRepoName(t *testing.T) {
 	// Setup temp directories
 	repoDir := t.TempDir()
@@ -118,6 +130,10 @@ func TestExec_ByRepoName(t *testing.T) {
 	}
 }
 
+// TestExec_ByLabel verifies executing a command in repos matching a label.
+//
+// Scenario: User runs `wt exec -l backend -- touch marker.txt`
+// Expected: Command runs in all repos with "backend" label
 func TestExec_ByLabel(t *testing.T) {
 	// Setup temp directories
 	repoDir := t.TempDir()
@@ -150,6 +166,10 @@ func TestExec_ByLabel(t *testing.T) {
 	}
 }
 
+// TestExec_MultipleRepos verifies executing a command in multiple repos by name.
+//
+// Scenario: User runs `wt exec -r repo-a -r repo-b -- touch marker.txt`
+// Expected: Command runs in both repos
 func TestExec_MultipleRepos(t *testing.T) {
 	// Setup temp directories
 	repoDir := t.TempDir()
@@ -184,6 +204,10 @@ func TestExec_MultipleRepos(t *testing.T) {
 	}
 }
 
+// TestExec_MultipleLabels verifies executing a command in repos matching multiple labels.
+//
+// Scenario: User runs `wt exec -l frontend -l backend -- touch marker.txt`
+// Expected: Command runs in repos with either label, not in repos with other labels
 func TestExec_MultipleLabels(t *testing.T) {
 	// Setup temp directories
 	repoDir := t.TempDir()
@@ -230,6 +254,10 @@ func TestExec_MultipleLabels(t *testing.T) {
 	}
 }
 
+// TestExec_CombineRepoAndLabel verifies combining -r and -l flags.
+//
+// Scenario: User runs `wt exec -r repo-a -l backend -- touch marker.txt`
+// Expected: Command runs in repo-a (by name) AND repos with "backend" label
 func TestExec_CombineRepoAndLabel(t *testing.T) {
 	// Setup temp directories
 	repoDir := t.TempDir()
@@ -273,6 +301,10 @@ func TestExec_CombineRepoAndLabel(t *testing.T) {
 	}
 }
 
+// TestExec_ErrorNoTargetSpecified verifies error when no target is specified.
+//
+// Scenario: User runs `wt exec -- echo hello` without -n, -r, or -l
+// Expected: Error "specify target"
 func TestExec_ErrorNoTargetSpecified(t *testing.T) {
 	worktreeDir := t.TempDir()
 
@@ -295,6 +327,10 @@ func TestExec_ErrorNoTargetSpecified(t *testing.T) {
 	}
 }
 
+// TestExec_ErrorNoCommandSpecified verifies error when no command is provided.
+//
+// Scenario: User runs `wt exec -n 1` without a command
+// Expected: Error "no command"
 func TestExec_ErrorNoCommandSpecified(t *testing.T) {
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -327,6 +363,10 @@ func TestExec_ErrorNoCommandSpecified(t *testing.T) {
 	}
 }
 
+// TestExec_ErrorInvalidID verifies error when specified ID doesn't exist.
+//
+// Scenario: User runs `wt exec -n 999 -- echo hello`
+// Expected: Error for invalid ID
 func TestExec_ErrorInvalidID(t *testing.T) {
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -356,6 +396,10 @@ func TestExec_ErrorInvalidID(t *testing.T) {
 	}
 }
 
+// TestExec_ErrorRepoNotFound verifies error when specified repo doesn't exist.
+//
+// Scenario: User runs `wt exec -r nonexistent-repo -- echo hello`
+// Expected: Error mentioning the nonexistent repository
 func TestExec_ErrorRepoNotFound(t *testing.T) {
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -383,6 +427,10 @@ func TestExec_ErrorRepoNotFound(t *testing.T) {
 	}
 }
 
+// TestExec_ErrorLabelNotFound verifies error when no repos match the label.
+//
+// Scenario: User runs `wt exec -l nonexistent-label -- echo hello`
+// Expected: Error mentioning the nonexistent label
 func TestExec_ErrorLabelNotFound(t *testing.T) {
 	repoDir := t.TempDir()
 	worktreeDir := t.TempDir()
@@ -410,6 +458,10 @@ func TestExec_ErrorLabelNotFound(t *testing.T) {
 	}
 }
 
+// TestExec_CommandFails verifies error propagation when command fails.
+//
+// Scenario: User runs `wt exec -n 1 -- false` (always fails)
+// Expected: Error returned from exec
 func TestExec_CommandFails(t *testing.T) {
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -440,6 +492,10 @@ func TestExec_CommandFails(t *testing.T) {
 	}
 }
 
+// TestExec_PartialFailure verifies error reporting when command fails in some worktrees.
+//
+// Scenario: User runs `wt exec -n 1 -n 2 -- cat only-in-wt1.txt` (file exists in wt1 only)
+// Expected: Error returned, mentions "failed"
 func TestExec_PartialFailure(t *testing.T) {
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -486,6 +542,10 @@ func TestExec_PartialFailure(t *testing.T) {
 	}
 }
 
+// TestExec_CommandWithArguments verifies command execution with multiple arguments.
+//
+// Scenario: User runs `wt exec -n 1 -- sh -c "echo 'test' > marker.txt"`
+// Expected: Command runs with all arguments preserved
 func TestExec_CommandWithArguments(t *testing.T) {
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -525,6 +585,10 @@ func TestExec_CommandWithArguments(t *testing.T) {
 	}
 }
 
+// TestExec_StripLeadingDashes verifies that leading "--" is stripped from commands.
+//
+// Scenario: Kong passthrough includes "--" prefix in command array
+// Expected: Command runs successfully with "--" stripped
 func TestExec_StripLeadingDashes(t *testing.T) {
 	// Setup temp directories (resolve symlinks for macOS compatibility)
 	worktreeDir := resolvePath(t, t.TempDir())

@@ -12,6 +12,11 @@ import (
 	"github.com/raphi011/wt/internal/config"
 )
 
+// TestCheckout_ExistingBranchInsideRepo verifies worktree creation for an existing
+// branch when running checkout from inside a repository.
+//
+// Scenario: User runs `wt checkout feature-branch` from inside a repo
+// Expected: Worktree created at {worktree_dir}/myrepo-feature-branch
 func TestCheckout_ExistingBranchInsideRepo(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -45,6 +50,11 @@ func TestCheckout_ExistingBranchInsideRepo(t *testing.T) {
 	verifyWorktreeWorks(t, expectedPath)
 }
 
+// TestCheckout_NewBranchInsideRepo verifies creating a new branch with -b flag
+// when running from inside a repository.
+//
+// Scenario: User runs `wt checkout -b new-feature` from inside a repo
+// Expected: New branch created, worktree at {worktree_dir}/myrepo-new-feature
 func TestCheckout_NewBranchInsideRepo(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -80,6 +90,11 @@ func TestCheckout_NewBranchInsideRepo(t *testing.T) {
 	verifyBranchExists(t, repoPath, "new-feature")
 }
 
+// TestCheckout_NewBranchFromCustomBase verifies creating a new branch from a
+// custom base branch using --base flag.
+//
+// Scenario: User runs `wt checkout -b feature-from-develop --base develop`
+// Expected: New branch based on develop, containing develop's commits
 func TestCheckout_NewBranchFromCustomBase(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -122,6 +137,11 @@ func TestCheckout_NewBranchFromCustomBase(t *testing.T) {
 	}
 }
 
+// TestCheckout_WithNote verifies setting a branch note during checkout using
+// the --note flag.
+//
+// Scenario: User runs `wt checkout -b feature --note "Working on JIRA-123"`
+// Expected: Branch note stored in git config branch.feature.description
 func TestCheckout_WithNote(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -154,6 +174,11 @@ func TestCheckout_WithNote(t *testing.T) {
 	}
 }
 
+// TestCheckout_WorktreeAlreadyExists verifies graceful handling when the target
+// worktree already exists.
+//
+// Scenario: User runs `wt checkout feature` but worktree already exists
+// Expected: Command succeeds without error, existing worktree preserved
 func TestCheckout_WorktreeAlreadyExists(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -183,6 +208,11 @@ func TestCheckout_WorktreeAlreadyExists(t *testing.T) {
 	verifyWorktreeWorks(t, worktreePath)
 }
 
+// TestCheckout_MultiRepoByName verifies checking out the same branch in multiple
+// repositories using -r flags.
+//
+// Scenario: User runs `wt checkout shared-feature -r repo-a -r repo-b`
+// Expected: Worktrees created for both repos at {worktree_dir}/repo-*-shared-feature
 func TestCheckout_MultiRepoByName(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -225,6 +255,11 @@ func TestCheckout_MultiRepoByName(t *testing.T) {
 	}
 }
 
+// TestCheckout_MultiRepoByLabel verifies checking out branches in repos matching
+// a label using the -l flag.
+//
+// Scenario: User runs `wt checkout ui-feature -l frontend`
+// Expected: Worktrees created only for repos labeled "frontend"
 func TestCheckout_MultiRepoByLabel(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -281,6 +316,10 @@ func TestCheckout_MultiRepoByLabel(t *testing.T) {
 	}
 }
 
+// TestCheckout_ErrorMissingBranchInsideRepo verifies error when no branch name provided.
+//
+// Scenario: User runs `wt checkout` without specifying a branch
+// Expected: Error "branch name required"
 func TestCheckout_ErrorMissingBranchInsideRepo(t *testing.T) {
 	t.Parallel()
 	// Setup
@@ -304,6 +343,11 @@ func TestCheckout_ErrorMissingBranchInsideRepo(t *testing.T) {
 	}
 }
 
+// TestCheckout_ErrorOutsideRepoWithoutRepoFlag verifies error when running
+// outside a git repository without specifying -r or -l flags.
+//
+// Scenario: User runs `wt checkout branch` from non-repo directory
+// Expected: Error requiring --repository or --label flag
 func TestCheckout_ErrorOutsideRepoWithoutRepoFlag(t *testing.T) {
 	t.Parallel()
 	// Setup
@@ -328,6 +372,11 @@ func TestCheckout_ErrorOutsideRepoWithoutRepoFlag(t *testing.T) {
 	}
 }
 
+// TestCheckout_ErrorRepoNotFound verifies error when specified repository
+// doesn't exist in repo_dir.
+//
+// Scenario: User runs `wt checkout branch -r nonexistent-repo`
+// Expected: Error mentioning the nonexistent repository
 func TestCheckout_ErrorRepoNotFound(t *testing.T) {
 	t.Parallel()
 	// Setup
@@ -354,6 +403,11 @@ func TestCheckout_ErrorRepoNotFound(t *testing.T) {
 	}
 }
 
+// TestCheckout_ErrorLabelNotFound verifies error when no repos match
+// the specified label.
+//
+// Scenario: User runs `wt checkout branch -l nonexistent-label`
+// Expected: Error mentioning the nonexistent label
 func TestCheckout_ErrorLabelNotFound(t *testing.T) {
 	t.Parallel()
 	// Setup
@@ -383,6 +437,11 @@ func TestCheckout_ErrorLabelNotFound(t *testing.T) {
 	}
 }
 
+// TestCheckout_CustomWorktreeFormat verifies worktree naming respects
+// the configured worktree_format setting.
+//
+// Scenario: User configures worktree_format="{branch}" (no repo prefix)
+// Expected: Worktree created at {worktree_dir}/feature instead of myrepo-feature
 func TestCheckout_CustomWorktreeFormat(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -419,6 +478,11 @@ func TestCheckout_CustomWorktreeFormat(t *testing.T) {
 	}
 }
 
+// TestCheckout_WorktreeDirDefaultsToCurrent verifies that when worktree_dir
+// is not configured, worktrees are created in the current directory.
+//
+// Scenario: User has no worktree_dir configured, runs checkout from inside repo
+// Expected: Worktree created in current (repo) directory
 func TestCheckout_WorktreeDirDefaultsToCurrent(t *testing.T) {
 	t.Parallel()
 	// Setup
@@ -447,6 +511,11 @@ func TestCheckout_WorktreeDirDefaultsToCurrent(t *testing.T) {
 	}
 }
 
+// TestCheckout_InsideRepoWithRepoFlag verifies that -r flag overrides current
+// repo context (doesn't auto-include current repo).
+//
+// Scenario: User runs `wt checkout branch -r repo-b` from inside repo-a
+// Expected: Only repo-b gets worktree, not current repo (repo-a)
 func TestCheckout_InsideRepoWithRepoFlag(t *testing.T) {
 	t.Parallel()
 	// When inside repo with -r flag, should create ONLY in specified repo (not current repo)
@@ -492,6 +561,11 @@ func TestCheckout_InsideRepoWithRepoFlag(t *testing.T) {
 	}
 }
 
+// TestCheckout_NewBranchMultiRepo verifies creating new branches simultaneously
+// in multiple repositories.
+//
+// Scenario: User runs `wt checkout -b new-feature -r repo-a -r repo-b`
+// Expected: New branches created in both repos, worktrees created for both
 func TestCheckout_NewBranchMultiRepo(t *testing.T) {
 	t.Parallel()
 	// Test creating new branches in multiple repos
@@ -538,6 +612,11 @@ func TestCheckout_NewBranchMultiRepo(t *testing.T) {
 	}
 }
 
+// TestCheckout_BranchWithSlashes verifies branch names with slashes (e.g., feature/name)
+// are sanitized in the worktree directory name.
+//
+// Scenario: User runs `wt checkout -b feature/my-feature`
+// Expected: Worktree at myrepo-feature-my-feature (slashes become dashes)
 func TestCheckout_BranchWithSlashes(t *testing.T) {
 	t.Parallel()
 	// Test branch names with slashes (feature/name format)
@@ -574,6 +653,11 @@ func TestCheckout_BranchWithSlashes(t *testing.T) {
 	verifyBranchExists(t, repoPath, "feature/my-feature")
 }
 
+// TestCheckout_ErrorBranchDoesNotExist verifies error when checking out a
+// non-existent branch without -b flag.
+//
+// Scenario: User runs `wt checkout nonexistent-branch` (no -b flag)
+// Expected: Git error that branch doesn't exist
 func TestCheckout_ErrorBranchDoesNotExist(t *testing.T) {
 	t.Parallel()
 	// Setup
@@ -596,6 +680,11 @@ func TestCheckout_ErrorBranchDoesNotExist(t *testing.T) {
 	}
 }
 
+// TestCheckout_ErrorBranchAlreadyCheckedOut verifies graceful handling when
+// the branch is already checked out in another worktree.
+//
+// Scenario: User runs `wt checkout feature` when feature already has a worktree
+// Expected: Command succeeds (idempotent), returns existing worktree info
 func TestCheckout_ErrorBranchAlreadyCheckedOut(t *testing.T) {
 	t.Parallel()
 	// Setup
@@ -625,6 +714,11 @@ func TestCheckout_ErrorBranchAlreadyCheckedOut(t *testing.T) {
 	}
 }
 
+// TestCheckout_CombineRepoAndLabel verifies combining -r and -l flags to target
+// repos both by name and by label.
+//
+// Scenario: User runs `wt checkout branch -r repo-a -l frontend`
+// Expected: Worktrees for repo-a (by name) AND repos with "frontend" label
 func TestCheckout_CombineRepoAndLabel(t *testing.T) {
 	t.Parallel()
 	// Test using both -r and -l together
@@ -682,6 +776,11 @@ func TestCheckout_CombineRepoAndLabel(t *testing.T) {
 	}
 }
 
+// TestCheckout_MultipleLabels verifies targeting repos with multiple labels
+// using repeated -l flags.
+//
+// Scenario: User runs `wt checkout branch -l frontend -l backend`
+// Expected: Worktrees for all repos matching either label, not repos with other labels
 func TestCheckout_MultipleLabels(t *testing.T) {
 	t.Parallel()
 	// Test using multiple -l flags
@@ -738,6 +837,11 @@ func TestCheckout_MultipleLabels(t *testing.T) {
 	}
 }
 
+// TestCheckout_InsideRepoWithLabelOnly verifies that -l flag alone doesn't
+// auto-include the current repo.
+//
+// Scenario: User runs `wt checkout branch -l frontend` from inside repo-a (no label)
+// Expected: Only repos with "frontend" label get worktrees, not current repo
 func TestCheckout_InsideRepoWithLabelOnly(t *testing.T) {
 	t.Parallel()
 	// When inside repo with -l only (no -r), should NOT auto-include current repo
@@ -784,6 +888,10 @@ func TestCheckout_InsideRepoWithLabelOnly(t *testing.T) {
 	}
 }
 
+// TestCheckout_NoHookFlag verifies that --no-hook flag skips hook execution.
+//
+// Scenario: User runs `wt checkout -b feature --no-hook`
+// Expected: Worktree created, but hooks are not executed
 func TestCheckout_NoHookFlag(t *testing.T) {
 	t.Parallel()
 	// Test --no-hook flag skips hooks
@@ -817,6 +925,11 @@ func TestCheckout_NoHookFlag(t *testing.T) {
 	}
 }
 
+// TestCheckout_PartialFailureMultiRepo verifies that failures in some repos
+// don't prevent success in others.
+//
+// Scenario: User runs `wt checkout only-in-a -r repo-a -r repo-b` (branch only in repo-a)
+// Expected: Error returned, but repo-a worktree still created
 func TestCheckout_PartialFailureMultiRepo(t *testing.T) {
 	t.Parallel()
 	// Test that partial failures are reported but don't stop other repos
@@ -855,6 +968,11 @@ func TestCheckout_PartialFailureMultiRepo(t *testing.T) {
 	}
 }
 
+// TestCheckout_AutoStash verifies --autostash flag stashes changes and applies
+// them to the new worktree.
+//
+// Scenario: User has uncommitted changes, runs `wt checkout -b feature -s`
+// Expected: Source repo clean, changes moved to new worktree
 func TestCheckout_AutoStash(t *testing.T) {
 	t.Parallel()
 	// Test --autostash flag: stash changes in current worktree and apply to new worktree
@@ -923,6 +1041,11 @@ func TestCheckout_AutoStash(t *testing.T) {
 	}
 }
 
+// TestCheckout_AutoStashNoChanges verifies --autostash is a no-op when there
+// are no uncommitted changes.
+//
+// Scenario: User runs `wt checkout -b feature -s` in a clean repo
+// Expected: Worktree created normally, both repos remain clean
 func TestCheckout_AutoStashNoChanges(t *testing.T) {
 	t.Parallel()
 	// Test --autostash with no uncommitted changes (should be a no-op)
@@ -972,6 +1095,11 @@ func TestCheckout_AutoStashNoChanges(t *testing.T) {
 	}
 }
 
+// TestCheckout_AutoStashWithStagedChanges verifies --autostash handles both
+// staged and unstaged changes correctly.
+//
+// Scenario: User has staged and unstaged changes, runs `wt checkout -b feature -s`
+// Expected: Both staged and unstaged changes moved to new worktree
 func TestCheckout_AutoStashWithStagedChanges(t *testing.T) {
 	t.Parallel()
 	// Test --autostash with both staged and unstaged changes

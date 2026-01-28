@@ -70,6 +70,11 @@ func deleteRemoteBranch(t *testing.T, clonePath, branch string) {
 
 // Read-only tests - can run in parallel
 
+// TestGitHub_Check verifies that GitHub CLI (gh) is properly configured
+// and authenticated.
+//
+// Scenario: User has gh CLI installed and authenticated
+// Expected: Check() returns nil (no error)
 func TestGitHub_Check(t *testing.T) {
 	skipIfNoGitHub(t)
 	t.Parallel()
@@ -81,6 +86,10 @@ func TestGitHub_Check(t *testing.T) {
 	}
 }
 
+// TestGitHub_GetPRForBranch_Main verifies fetching PR info for the main branch.
+//
+// Scenario: User checks PR status for main branch (typically no open PR)
+// Expected: GetPRForBranch() succeeds with Fetched=true
 func TestGitHub_GetPRForBranch_Main(t *testing.T) {
 	skipIfNoGitHub(t)
 	t.Parallel()
@@ -99,6 +108,11 @@ func TestGitHub_GetPRForBranch_Main(t *testing.T) {
 	// but we just verify the call succeeded
 }
 
+// TestGitHub_GetPRForBranch_NonExistent verifies fetching PR info for
+// a branch that doesn't exist.
+//
+// Scenario: User checks PR status for non-existent branch
+// Expected: GetPRForBranch() succeeds with Fetched=true and Number=0
 func TestGitHub_GetPRForBranch_NonExistent(t *testing.T) {
 	skipIfNoGitHub(t)
 	t.Parallel()
@@ -118,6 +132,10 @@ func TestGitHub_GetPRForBranch_NonExistent(t *testing.T) {
 	}
 }
 
+// TestGitHub_CloneRepo verifies cloning a repository via gh CLI.
+//
+// Scenario: User clones a GitHub repo to temp directory
+// Expected: Repo cloned with .git directory created
 func TestGitHub_CloneRepo(t *testing.T) {
 	skipIfNoGitHub(t)
 	t.Parallel()
@@ -137,6 +155,10 @@ func TestGitHub_CloneRepo(t *testing.T) {
 	}
 }
 
+// TestGitHub_CloneRepo_InvalidSpec verifies error handling for invalid repo specs.
+//
+// Scenario: User tries to clone with invalid spec (no slash, empty org/repo)
+// Expected: CloneRepo() returns error for all invalid specs
 func TestGitHub_CloneRepo_InvalidSpec(t *testing.T) {
 	skipIfNoGitHub(t)
 	t.Parallel()
@@ -164,6 +186,11 @@ func TestGitHub_CloneRepo_InvalidSpec(t *testing.T) {
 // Write tests - combined into single test to ensure sequential execution
 // and proper cleanup (t.Cleanup runs after ALL subtests complete)
 
+// TestGitHub_PRWorkflow verifies the full PR lifecycle: create, view, get branch, merge.
+// This test runs subtests sequentially to manage a single PR.
+//
+// Scenario: Create test branch, push, create PR, view PR, get PR branch, merge PR
+// Expected: All operations succeed, PR is created and merged
 func TestGitHub_PRWorkflow(t *testing.T) {
 	skipIfNoGitHub(t)
 
