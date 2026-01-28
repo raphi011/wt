@@ -194,12 +194,8 @@ func gatherShowInfo(ctx context.Context, target *resolve.Target, prInfo *forge.P
 	// Get dirty status
 	info.IsDirty = git.IsDirty(ctx, target.Path)
 
-	// Get merge status
-	isMerged, _ := git.IsBranchMerged(ctx, target.MainRepo, target.Branch)
-	info.IsMerged = isMerged
-	if prInfo != nil && prInfo.State == "MERGED" {
-		info.IsMerged = true
-	}
+	// Set merge status based on PR
+	info.IsMerged = prInfo != nil && prInfo.State == "MERGED"
 
 	// Get last commit time
 	info.LastCommit, _ = git.GetLastCommitRelative(ctx, target.Path)

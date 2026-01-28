@@ -26,8 +26,7 @@ type PruneWorktreeInfo struct {
 
 // PruneWizardParams contains parameters for the prune wizard.
 type PruneWizardParams struct {
-	Worktrees    []PruneWorktreeInfo // All worktrees with their prune status
-	IncludeClean bool                // Whether -c flag was set (affects which are pre-selected)
+	Worktrees []PruneWorktreeInfo // All worktrees with their prune status
 }
 
 // PruneInteractive runs the interactive prune wizard.
@@ -130,5 +129,5 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 // isPrunableReason returns true if the reason indicates auto-prunable status.
 func isPrunableReason(reason string) bool {
 	reason = strings.ToLower(reason)
-	return strings.Contains(reason, "merged") || reason == "clean"
+	return reason == "merged pr"
 }

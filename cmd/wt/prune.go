@@ -28,14 +28,12 @@ type pruneReason string
 
 const (
 	// Prune reasons (will be removed)
-	reasonMergedPR     pruneReason = "Merged PR"
-	reasonMergedBranch pruneReason = "Merged branch"
-	reasonClean        pruneReason = "Clean"
+	reasonMergedPR pruneReason = "Merged PR"
 
 	// Skip reasons (will not be removed)
-	skipDirty      pruneReason = "Dirty"
-	skipNotMerged  pruneReason = "Not merged"
-	skipHasCommits pruneReason = "Has commits"
+	skipDirty     pruneReason = "Dirty"
+	skipNoPR      pruneReason = "No PR"
+	skipPRNotDone pruneReason = "PR open"
 )
 
 func (c *PruneCmd) runPrune(ctx context.Context) error {
@@ -187,23 +185,19 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 		var reason pruneReason
 		var skipReason pruneReason
 
-		// Check for PR merged first (highest priority)
+		// Only auto-prune worktrees with merged PRs
 		folderName := filepath.Base(wt.Path)
 		pr := wtCache.GetPRForBranch(folderName)
 		if pr != nil && pr.Fetched && pr.State == "MERGED" && !wt.IsDirty {
 			reason = reasonMergedPR
-		} else if wt.IsMerged && !wt.IsDirty {
-			reason = reasonMergedBranch
-		} else if c.IncludeClean && wt.CommitCount == 0 && !wt.IsDirty {
-			reason = reasonClean
 		} else {
 			// Determine skip reason
 			if wt.IsDirty {
 				skipReason = skipDirty
-			} else if wt.CommitCount > 0 {
-				skipReason = skipHasCommits
+			} else if pr == nil || !pr.Fetched {
+				skipReason = skipNoPR
 			} else {
-				skipReason = skipNotMerged
+				skipReason = skipPRNotDone
 			}
 		}
 
@@ -233,8 +227,7 @@ func (c *PruneCmd) runPrune(ctx context.Context) error {
 		}
 
 		opts, err := ui.PruneInteractive(ui.PruneWizardParams{
-			Worktrees:    wizardInfos,
-			IncludeClean: c.IncludeClean,
+			Worktrees: wizardInfos,
 		})
 		if err != nil {
 			return fmt.Errorf("interactive mode error: %w", err)
@@ -392,14 +385,9 @@ func (c *PruneCmd) runPruneTargetByID(ctx context.Context, id int, worktreeDir s
 		return fmt.Errorf("failed to get worktree info: %w", err)
 	}
 
-	// Check if removable (unless force)
+	// Targeted prune by ID always requires force (no auto-detection of prunability)
 	if !c.Force {
-		isPrunable := (wt.IsMerged && !wt.IsDirty) ||
-			(c.IncludeClean && wt.CommitCount == 0 && !wt.IsDirty)
-		if !isPrunable {
-			return fmt.Errorf("worktree %q is not removable: %s",
-				target.Branch, formatNotRemovableReason(wt, c.IncludeClean))
-		}
+		return fmt.Errorf("worktree %q requires -f/--force to remove when using -n/--number", target.Branch)
 	}
 
 	// Dry run output
@@ -444,30 +432,6 @@ func (c *PruneCmd) runPruneTargetByID(ctx context.Context, id int, worktreeDir s
 
 	l.Printf("Removed worktree: %s (%s)\n", target.Branch, target.Path)
 	return nil
-}
-
-// formatNotRemovableReason returns a helpful error message explaining why a worktree
-// can't be removed and what flags could help
-func formatNotRemovableReason(wt *git.Worktree, includeCleanSet bool) string {
-	if wt.IsDirty {
-		return "has uncommitted changes (use -f to force)"
-	}
-
-	// Not dirty, but not merged
-	if wt.CommitCount == 0 {
-		if includeCleanSet {
-			// -c was set but still not removable - shouldn't happen if not dirty
-			return "not merged (use -f to force)"
-		}
-		return "clean (use -c to include clean worktrees, or -f to force)"
-	}
-
-	// Has commits ahead and not merged
-	commitWord := "commit"
-	if wt.CommitCount > 1 {
-		commitWord = "commits"
-	}
-	return fmt.Sprintf("not merged (%d %s ahead of default branch), use -f to force", wt.CommitCount, commitWord)
 }
 
 // refreshPRStatus fetches PR status for all worktrees in parallel and updates the cache

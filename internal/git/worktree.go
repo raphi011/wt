@@ -73,14 +73,8 @@ func GetWorktreeInfo(ctx context.Context, path string) (*Worktree, error) {
 	// Get origin URL (errors treated as empty string)
 	originURL, _ := GetOriginURL(ctx, mainRepo)
 
-	// Get merge status (errors treated as "not merged" - safe default)
-	isMerged, _ := IsBranchMerged(ctx, mainRepo, branch)
-
-	// Get commit count if not merged (errors treated as 0 commits)
-	var commitCount int
-	if !isMerged {
-		commitCount, _ = GetCommitCount(ctx, mainRepo, branch)
-	}
+	// Get commit count (errors treated as 0 commits)
+	commitCount, _ := GetCommitCount(ctx, mainRepo, branch)
 
 	// Check dirty status via git status --porcelain
 	isDirty := IsDirty(ctx, path)
@@ -101,7 +95,7 @@ func GetWorktreeInfo(ctx context.Context, path string) (*Worktree, error) {
 		MainRepo:       mainRepo,
 		RepoName:       repoName,
 		OriginURL:      originURL,
-		IsMerged:       isMerged,
+		IsMerged:       false, // Set later based on PR status
 		CommitCount:    commitCount,
 		IsDirty:        isDirty,
 		HasUpstream:    hasUpstream,
@@ -165,8 +159,6 @@ func ListWorktrees(ctx context.Context, worktreeDir string, includeDirty bool) (
 	repoUpstreams := make(map[string]map[string]bool)
 	// Map: mainRepo -> originURL
 	repoOrigins := make(map[string]string)
-	// Map: mainRepo -> merged branches
-	repoMerged := make(map[string]map[string]bool)
 
 	for mainRepo := range mainRepos {
 		// Get all worktrees from this repo in one call
@@ -187,9 +179,6 @@ func ListWorktrees(ctx context.Context, worktreeDir string, includeDirty bool) (
 		notes, upstreams := GetAllBranchConfig(ctx, mainRepo)
 		repoNotes[mainRepo] = notes
 		repoUpstreams[mainRepo] = upstreams
-
-		// Get merged branches in one call
-		repoMerged[mainRepo] = GetMergedBranches(ctx, mainRepo)
 	}
 
 	// Phase 3: Build worktrees by merging batched data
@@ -205,11 +194,10 @@ func ListWorktrees(ctx context.Context, worktreeDir string, includeDirty bool) (
 		}
 
 		branch := wtInfo.Branch
-		isMerged := repoMerged[p.mainRepo][branch]
 
-		// Get commit count if not merged
+		// Get commit count
 		var commitCount int
-		if !isMerged && branch != "(detached)" {
+		if branch != "(detached)" {
 			commitCount, _ = GetCommitCount(ctx, p.mainRepo, branch)
 		}
 
@@ -241,7 +229,7 @@ func ListWorktrees(ctx context.Context, worktreeDir string, includeDirty bool) (
 			MainRepo:       p.mainRepo,
 			RepoName:       filepath.Base(p.mainRepo),
 			OriginURL:      repoOrigins[p.mainRepo],
-			IsMerged:       isMerged,
+			IsMerged:       false, // Set later based on PR status
 			CommitCount:    commitCount,
 			IsDirty:        isDirty,
 			HasUpstream:    hasUpstream,
