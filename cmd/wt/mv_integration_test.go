@@ -11,6 +11,11 @@ import (
 	"github.com/raphi011/wt/internal/config"
 )
 
+// TestMv_MoveWorktreesToWorktreeDir verifies that worktrees and their repos
+// are moved to the configured worktree_dir.
+//
+// Scenario: User runs `wt mv` with worktree_dir configured, repo has worktree
+// Expected: Both repo and worktree moved to worktree_dir
 func TestMv_MoveWorktreesToWorktreeDir(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -64,6 +69,11 @@ func TestMv_MoveWorktreesToWorktreeDir(t *testing.T) {
 	}
 }
 
+// TestMv_MoveReposToRepoDir verifies that repos are moved to repo_dir
+// while worktrees go to worktree_dir when both are configured.
+//
+// Scenario: User runs `wt mv` with both worktree_dir and repo_dir configured
+// Expected: Repos in repo_dir, worktrees in worktree_dir, .git references updated
 func TestMv_MoveReposToRepoDir(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -112,6 +122,11 @@ func TestMv_MoveReposToRepoDir(t *testing.T) {
 	verifyWorktreeWorks(t, newWorktreePath)
 }
 
+// TestMv_MoveReposToWorktreeDirWhenNoRepoDir verifies that repos are moved
+// to worktree_dir when repo_dir is not configured.
+//
+// Scenario: User runs `wt mv` with only worktree_dir configured (no repo_dir)
+// Expected: Repo moved to worktree_dir alongside worktrees
 func TestMv_MoveReposToWorktreeDirWhenNoRepoDir(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -147,6 +162,11 @@ func TestMv_MoveReposToWorktreeDirWhenNoRepoDir(t *testing.T) {
 	}
 }
 
+// TestMv_CollisionAddsNumberedSuffix verifies that when the destination path
+// already exists, a numbered suffix (-1) is added to avoid collision.
+//
+// Scenario: User runs `wt mv` but myrepo-feature already exists at destination
+// Expected: Worktree moved to myrepo-feature-1
 func TestMv_CollisionAddsNumberedSuffix(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -196,6 +216,11 @@ func TestMv_CollisionAddsNumberedSuffix(t *testing.T) {
 	verifyWorktreeWorks(t, newWorktreePath)
 }
 
+// TestMv_MultipleCollisionsIncrementSuffix verifies that collision suffixes
+// increment when multiple conflicts exist (-1, -2, -3, etc.).
+//
+// Scenario: User runs `wt mv` but myrepo-feature, myrepo-feature-1, myrepo-feature-2 exist
+// Expected: Worktree moved to myrepo-feature-3
 func TestMv_MultipleCollisionsIncrementSuffix(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -237,6 +262,11 @@ func TestMv_MultipleCollisionsIncrementSuffix(t *testing.T) {
 	verifyWorktreeWorks(t, newWorktreePath)
 }
 
+// TestMv_SkipRepoIfTargetExists verifies that repos are skipped (not moved)
+// when a repo with the same name already exists at the destination.
+//
+// Scenario: User runs `wt mv` but myrepo already exists at destination as a git repo
+// Expected: Source repo left in place (skipped), no error returned
 func TestMv_SkipRepoIfTargetExists(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -268,6 +298,11 @@ func TestMv_SkipRepoIfTargetExists(t *testing.T) {
 	}
 }
 
+// TestMv_DryRunDoesNotMove verifies that --dry-run previews moves
+// without actually performing them.
+//
+// Scenario: User runs `wt mv --dry-run`
+// Expected: Nothing moved, original files remain, destination empty
 func TestMv_DryRunDoesNotMove(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -307,6 +342,10 @@ func TestMv_DryRunDoesNotMove(t *testing.T) {
 	}
 }
 
+// TestMv_FilterByRepository verifies that -r flag filters which repos are moved.
+//
+// Scenario: User runs `wt mv -r repo-a` with repo-a and repo-b present
+// Expected: Only repo-a and its worktrees moved, repo-b unchanged
 func TestMv_FilterByRepository(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -348,6 +387,11 @@ func TestMv_FilterByRepository(t *testing.T) {
 	}
 }
 
+// TestMv_MovesDirtyWorktree verifies that worktrees with uncommitted changes
+// are moved with their changes preserved.
+//
+// Scenario: User runs `wt mv` on worktree with dirty.txt uncommitted
+// Expected: Worktree moved, dirty.txt preserved at new location
 func TestMv_MovesDirtyWorktree(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -395,6 +439,11 @@ func TestMv_MovesDirtyWorktree(t *testing.T) {
 	verifyWorktreeWorks(t, newWorktreePath)
 }
 
+// TestMv_SkipIfAlreadyAtDestination verifies that worktrees already at the
+// configured destination are not moved (no-op).
+//
+// Scenario: User runs `wt mv` but worktree is already in worktree_dir
+// Expected: Worktree remains in place, no errors
 func TestMv_SkipIfAlreadyAtDestination(t *testing.T) {
 	t.Parallel()
 	// Setup: worktree already in worktree_dir
@@ -431,6 +480,11 @@ func TestMv_SkipIfAlreadyAtDestination(t *testing.T) {
 	verifyWorktreeWorks(t, worktreePath)
 }
 
+// TestMv_WorktreeReferenceUpdatedAfterRepoMove verifies that worktree .git files
+// are updated to point to the new repo location after the repo is moved.
+//
+// Scenario: User runs `wt mv` moving repo from source to repo_dir
+// Expected: Worktree's .git file updated to reference new repo path
 func TestMv_WorktreeReferenceUpdatedAfterRepoMove(t *testing.T) {
 	t.Parallel()
 	// Setup: repo in source, worktree in different location
@@ -472,6 +526,11 @@ func TestMv_WorktreeReferenceUpdatedAfterRepoMove(t *testing.T) {
 	verifyWorktreeWorks(t, worktreePath)
 }
 
+// TestMv_MultipleWorktreesFromSameRepo verifies that all worktrees from
+// a single repo are moved correctly and all references updated.
+//
+// Scenario: User runs `wt mv` on repo with feature1, feature2, feature3 worktrees
+// Expected: All 3 worktrees moved, all .git files point to new repo location
 func TestMv_MultipleWorktreesFromSameRepo(t *testing.T) {
 	t.Parallel()
 	// Setup
@@ -524,6 +583,11 @@ func TestMv_MultipleWorktreesFromSameRepo(t *testing.T) {
 	}
 }
 
+// TestMv_EmptyDirectory verifies that running mv on an empty directory
+// succeeds without errors (no-op).
+//
+// Scenario: User runs `wt mv` in directory with no repos or worktrees
+// Expected: Command succeeds with no-op
 func TestMv_EmptyDirectory(t *testing.T) {
 	t.Parallel()
 	// Setup empty directory
@@ -545,6 +609,11 @@ func TestMv_EmptyDirectory(t *testing.T) {
 	}
 }
 
+// TestMv_DestinationDoesNotExist verifies that mv fails with error when
+// the configured worktree_dir doesn't exist.
+//
+// Scenario: User runs `wt mv` with worktree_dir pointing to non-existent path
+// Expected: Error returned mentioning destination doesn't exist
 func TestMv_DestinationDoesNotExist(t *testing.T) {
 	t.Parallel()
 	sourceDir := resolvePath(t, t.TempDir())
@@ -572,6 +641,11 @@ func TestMv_DestinationDoesNotExist(t *testing.T) {
 	}
 }
 
+// TestMv_NoWorktreeDirConfigured verifies that mv fails with error when
+// worktree_dir is not configured.
+//
+// Scenario: User runs `wt mv` without worktree_dir in config
+// Expected: Error returned mentioning destination not configured
 func TestMv_NoWorktreeDirConfigured(t *testing.T) {
 	t.Parallel()
 	sourceDir := resolvePath(t, t.TempDir())
@@ -596,6 +670,11 @@ func TestMv_NoWorktreeDirConfigured(t *testing.T) {
 	}
 }
 
+// TestMv_CustomFormatRenamesWorktree verifies that --format flag renames
+// worktrees to match the new naming format.
+//
+// Scenario: User runs `wt mv --format {branch}` (default was {repo}-{branch})
+// Expected: myrepo-feature renamed to just "feature"
 func TestMv_CustomFormatRenamesWorktree(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -636,6 +715,11 @@ func TestMv_CustomFormatRenamesWorktree(t *testing.T) {
 	verifyWorktreeWorks(t, newWorktreePath)
 }
 
+// TestMv_FolderFormatPlaceholder verifies that {repo} placeholder uses
+// the local folder name (not the origin remote name).
+//
+// Scenario: User runs `wt mv --format {repo}_{branch}` on repo "my-local-folder"
+// Expected: Worktree named "my-local-folder_feature"
 func TestMv_FolderFormatPlaceholder(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -669,6 +753,11 @@ func TestMv_FolderFormatPlaceholder(t *testing.T) {
 	verifyWorktreeWorks(t, newWorktreePath)
 }
 
+// TestMv_NestedWorktreeMovedToWorktreeDir verifies that worktrees nested
+// inside a repo directory are moved out to worktree_dir.
+//
+// Scenario: User runs `wt mv` on repo with worktree at repo/worktrees/feature
+// Expected: Nested worktree moved to worktree_dir/myrepo-feature
 func TestMv_NestedWorktreeMovedToWorktreeDir(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -728,6 +817,11 @@ func TestMv_NestedWorktreeMovedToWorktreeDir(t *testing.T) {
 	verifyWorktreeWorks(t, newWorktreePath)
 }
 
+// TestMv_MultipleNestedWorktrees verifies that multiple worktrees nested
+// inside a repo directory are all moved to worktree_dir.
+//
+// Scenario: User runs `wt mv` on repo with 3 nested worktrees
+// Expected: All 3 nested worktrees moved to worktree_dir
 func TestMv_MultipleNestedWorktrees(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -784,6 +878,11 @@ func TestMv_MultipleNestedWorktrees(t *testing.T) {
 	}
 }
 
+// TestMv_MixedNestedAndExternalWorktrees verifies that both nested worktrees
+// (inside repo dir) and external worktrees (sibling to repo) are moved.
+//
+// Scenario: User runs `wt mv` on repo with nested and external worktrees
+// Expected: Both worktrees moved to worktree_dir
 func TestMv_MixedNestedAndExternalWorktrees(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -837,6 +936,11 @@ func TestMv_MixedNestedAndExternalWorktrees(t *testing.T) {
 	verifyWorktreeWorks(t, newExternalWtPath)
 }
 
+// TestMv_NestedDirtyWorktreeMoved verifies that nested worktrees with
+// uncommitted changes are moved with changes preserved.
+//
+// Scenario: User runs `wt mv` on repo with dirty nested worktree
+// Expected: Nested worktree moved with dirty.txt preserved
 func TestMv_NestedDirtyWorktreeMoved(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -891,6 +995,11 @@ func TestMv_NestedDirtyWorktreeMoved(t *testing.T) {
 	verifyWorktreeWorks(t, newWtPath)
 }
 
+// TestMv_FormatChangeRenamesWorktreesInPlace verifies that worktrees already
+// at destination are renamed in place when format changes.
+//
+// Scenario: User runs `wt mv --format {branch}` on existing {repo}-{branch} worktrees
+// Expected: Worktrees renamed from myrepo-feature1 to feature1 (in place)
 func TestMv_FormatChangeRenamesWorktreesInPlace(t *testing.T) {
 	t.Parallel()
 	// Setup: worktrees already in worktree_dir with old format
@@ -946,6 +1055,11 @@ func TestMv_FormatChangeRenamesWorktreesInPlace(t *testing.T) {
 	verifyWorktreeWorks(t, newWt2)
 }
 
+// TestMv_FormatChangeWithCollision verifies that format changes that would
+// cause naming collisions add numbered suffixes.
+//
+// Scenario: User runs `wt mv --format {branch}` on repo-a/feature and repo-b/feature
+// Expected: One becomes "feature", other becomes "feature-1"
 func TestMv_FormatChangeWithCollision(t *testing.T) {
 	t.Parallel()
 	// Setup: two worktrees from different repos that would collide with new format
@@ -1013,6 +1127,11 @@ func TestMv_FormatChangeWithCollision(t *testing.T) {
 	}
 }
 
+// TestMv_PathArgumentSingleWorktree verifies that PATH argument moves only
+// the specified worktree, leaving other worktrees and repos in place.
+//
+// Scenario: User runs `wt mv /path/to/myrepo-feature1` with feature1 and feature2
+// Expected: Only feature1 worktree moved, feature2 and repo unchanged
 func TestMv_PathArgumentSingleWorktree(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -1060,6 +1179,11 @@ func TestMv_PathArgumentSingleWorktree(t *testing.T) {
 	verifyWorktreeWorks(t, newWt1)
 }
 
+// TestMv_PathArgumentSingleRepo verifies that PATH argument for a repo moves
+// that repo and all its worktrees, leaving other repos unchanged.
+//
+// Scenario: User runs `wt mv /path/to/repo-a` with repo-a and repo-b present
+// Expected: repo-a and its worktrees moved, repo-b unchanged
 func TestMv_PathArgumentSingleRepo(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -1117,6 +1241,11 @@ func TestMv_PathArgumentSingleRepo(t *testing.T) {
 	verifyWorktreeWorks(t, newWtA)
 }
 
+// TestMv_PathArgumentFolder verifies that PATH argument for a folder moves
+// all repos and worktrees within that folder.
+//
+// Scenario: User runs `wt mv /path/to/projects` containing repos
+// Expected: All repos and worktrees in /projects moved to destination
 func TestMv_PathArgumentFolder(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -1170,6 +1299,11 @@ func TestMv_PathArgumentFolder(t *testing.T) {
 	verifyWorktreeWorks(t, newWtPath)
 }
 
+// TestMv_PathArgumentRepoWithNestedWorktree verifies that PATH argument for a repo
+// with nested worktrees moves both the repo and extracts nested worktrees.
+//
+// Scenario: User runs `wt mv /path/to/myrepo` which has nested worktree
+// Expected: Repo moved to repo_dir, nested worktree moved to worktree_dir
 func TestMv_PathArgumentRepoWithNestedWorktree(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -1217,6 +1351,11 @@ func TestMv_PathArgumentRepoWithNestedWorktree(t *testing.T) {
 	verifyWorktreeWorks(t, newWtPath)
 }
 
+// TestMv_PathDoesNotExist verifies that mv fails with error when
+// the specified PATH argument doesn't exist.
+//
+// Scenario: User runs `wt mv /path/that/does-not-exist`
+// Expected: Error returned mentioning path doesn't exist
 func TestMv_PathDoesNotExist(t *testing.T) {
 	t.Parallel()
 	sourceDir := resolvePath(t, t.TempDir())

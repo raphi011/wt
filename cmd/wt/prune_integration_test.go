@@ -11,6 +11,11 @@ import (
 	"github.com/raphi011/wt/internal/config"
 )
 
+// TestPrune_NoPR_NotRemoved verifies that locally merged branches without PRs
+// are not auto-pruned.
+//
+// Scenario: Branch merged locally but no PR exists
+// Expected: Worktree NOT removed (no merged PR to trigger auto-prune)
 func TestPrune_NoPR_NotRemoved(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -47,6 +52,10 @@ func TestPrune_NoPR_NotRemoved(t *testing.T) {
 	verifyWorktreeExists(t, worktreePath)
 }
 
+// TestPrune_SkipsDirty verifies that dirty worktrees are skipped during auto-prune.
+//
+// Scenario: Merged branch has uncommitted changes
+// Expected: Worktree preserved due to dirty state
 func TestPrune_SkipsDirty(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -84,6 +93,11 @@ func TestPrune_SkipsDirty(t *testing.T) {
 	verifyWorktreeExists(t, worktreePath)
 }
 
+// TestPrune_SkipsUnmergedWithCommits verifies that branches with unmerged commits
+// are not auto-pruned.
+//
+// Scenario: Branch has commits that haven't been merged
+// Expected: Worktree preserved to prevent data loss
 func TestPrune_SkipsUnmergedWithCommits(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -117,6 +131,11 @@ func TestPrune_SkipsUnmergedWithCommits(t *testing.T) {
 	verifyWorktreeExists(t, worktreePath)
 }
 
+// TestPrune_CleanBranch_NotRemoved verifies that clean branches (0 commits ahead)
+// without merged PRs are not auto-pruned.
+//
+// Scenario: Clean branch with no merged PR
+// Expected: Worktree NOT removed (no merged PR)
 func TestPrune_CleanBranch_NotRemoved(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -149,6 +168,11 @@ func TestPrune_CleanBranch_NotRemoved(t *testing.T) {
 	verifyWorktreeExists(t, worktreePath)
 }
 
+// TestPrune_DryRun verifies --dry-run flag shows what would be pruned without
+// actually removing anything.
+//
+// Scenario: User runs `wt prune -g -d` with merged branch
+// Expected: Worktree still exists (dry run)
 func TestPrune_DryRun(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -186,6 +210,10 @@ func TestPrune_DryRun(t *testing.T) {
 	verifyWorktreeExists(t, worktreePath)
 }
 
+// TestPrune_ByID_RequiresForce verifies that pruning by ID requires -f flag for safety.
+//
+// Scenario: User runs `wt prune -n 1` without -f flag
+// Expected: Error requiring --force, then succeeds with -f
 func TestPrune_ByID_RequiresForce(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -229,6 +257,10 @@ func TestPrune_ByID_RequiresForce(t *testing.T) {
 	verifyWorktreeRemoved(t, worktreePath)
 }
 
+// TestPrune_MultipleIDs verifies pruning multiple worktrees by ID.
+//
+// Scenario: User runs `wt prune -n 1 -n 2 -f`
+// Expected: Both worktrees removed
 func TestPrune_MultipleIDs(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -266,6 +298,11 @@ func TestPrune_MultipleIDs(t *testing.T) {
 	verifyWorktreeRemoved(t, wt2)
 }
 
+// TestPrune_InsideRepoOnly_NoPR verifies that without -g flag, prune only
+// considers the current repo.
+//
+// Scenario: User runs `wt prune` from inside repo-a (no -g flag)
+// Expected: Only repo-a worktrees considered, no auto-prune without merged PRs
 func TestPrune_InsideRepoOnly_NoPR(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -303,6 +340,10 @@ func TestPrune_InsideRepoOnly_NoPR(t *testing.T) {
 	verifyWorktreeExists(t, wtB)
 }
 
+// TestPrune_Global_NoPR verifies that -g flag considers all repos.
+//
+// Scenario: User runs `wt prune -g`
+// Expected: All repos' worktrees considered, no auto-prune without merged PRs
 func TestPrune_Global_NoPR(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -340,6 +381,10 @@ func TestPrune_Global_NoPR(t *testing.T) {
 	verifyWorktreeExists(t, wtB)
 }
 
+// TestPrune_ErrorForceWithoutID verifies error when -f is used without -n.
+//
+// Scenario: User runs `wt prune -f` without specifying -n
+// Expected: Error "-f/--force requires -n/--number"
 func TestPrune_ErrorForceWithoutID(t *testing.T) {
 	t.Parallel()
 	worktreeDir := t.TempDir()
@@ -362,6 +407,10 @@ func TestPrune_ErrorForceWithoutID(t *testing.T) {
 	}
 }
 
+// TestPrune_ErrorVerboseWithID verifies error when --verbose is used with -n.
+//
+// Scenario: User runs `wt prune -n 1 --verbose`
+// Expected: Error "--verbose cannot be used with -n/--number"
 func TestPrune_ErrorVerboseWithID(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -394,6 +443,10 @@ func TestPrune_ErrorVerboseWithID(t *testing.T) {
 	}
 }
 
+// TestPrune_ErrorInvalidID verifies error when specified ID doesn't exist.
+//
+// Scenario: User runs `wt prune -n 999`
+// Expected: Error for invalid ID
 func TestPrune_ErrorInvalidID(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -422,6 +475,10 @@ func TestPrune_ErrorInvalidID(t *testing.T) {
 	}
 }
 
+// TestPrune_ErrorResetCacheWithID verifies error when --reset-cache is used with -n.
+//
+// Scenario: User runs `wt prune -n 1 --reset-cache`
+// Expected: Error "--reset-cache cannot be used with --number"
 func TestPrune_ErrorResetCacheWithID(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -454,6 +511,10 @@ func TestPrune_ErrorResetCacheWithID(t *testing.T) {
 	}
 }
 
+// TestPrune_ByID_DryRun verifies dry run with -n flag doesn't remove worktree.
+//
+// Scenario: User runs `wt prune -n 1 -f -d`
+// Expected: Worktree still exists (dry run)
 func TestPrune_ByID_DryRun(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -487,6 +548,10 @@ func TestPrune_ByID_DryRun(t *testing.T) {
 	verifyWorktreeExists(t, worktreePath)
 }
 
+// TestPrune_ForceRemovesDirty verifies that -f flag removes dirty worktrees.
+//
+// Scenario: User runs `wt prune -n 1 -f` on dirty worktree
+// Expected: Worktree removed despite uncommitted changes
 func TestPrune_ForceRemovesDirty(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())

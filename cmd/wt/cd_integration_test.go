@@ -10,6 +10,10 @@ import (
 	"github.com/raphi011/wt/internal/config"
 )
 
+// TestCd_ByWorktreeID verifies navigating to a worktree by its numeric ID.
+//
+// Scenario: User runs `wt cd -n 1`
+// Expected: Outputs path to worktree with ID 1
 func TestCd_ByWorktreeID(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -43,6 +47,11 @@ func TestCd_ByWorktreeID(t *testing.T) {
 	}
 }
 
+// TestCd_ByWorktreeIDWithProjectFlag verifies -p flag returns main repo path
+// instead of worktree path.
+//
+// Scenario: User runs `wt cd -n 1 -p`
+// Expected: Outputs path to main repo, not the worktree
 func TestCd_ByWorktreeIDWithProjectFlag(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -78,6 +87,10 @@ func TestCd_ByWorktreeIDWithProjectFlag(t *testing.T) {
 	}
 }
 
+// TestCd_ByRepoName verifies navigating to a repo by its name using -r flag.
+//
+// Scenario: User runs `wt cd -r myrepo`
+// Expected: Outputs path to the main repository
 func TestCd_ByRepoName(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -109,6 +122,10 @@ func TestCd_ByRepoName(t *testing.T) {
 	}
 }
 
+// TestCd_ByLabel verifies navigating to a repo by its label using -l flag.
+//
+// Scenario: User runs `wt cd -l backend`
+// Expected: Outputs path to the repo with "backend" label
 func TestCd_ByLabel(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
@@ -141,6 +158,11 @@ func TestCd_ByLabel(t *testing.T) {
 	}
 }
 
+// TestCd_MultipleWorktrees verifies ID-based navigation with multiple worktrees
+// in the same repo.
+//
+// Scenario: User has 3 worktrees, navigates using IDs 1, 2, 3
+// Expected: Each ID returns the correct worktree path
 func TestCd_MultipleWorktrees(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -185,6 +207,11 @@ func TestCd_MultipleWorktrees(t *testing.T) {
 	}
 }
 
+// TestCd_ErrorNoTargetSpecified verifies error when no target (ID, repo, or
+// label) is specified.
+//
+// Scenario: User runs `wt cd` without any flags
+// Expected: Error "specify target"
 func TestCd_ErrorNoTargetSpecified(t *testing.T) {
 	t.Parallel()
 	worktreeDir := t.TempDir()
@@ -207,6 +234,10 @@ func TestCd_ErrorNoTargetSpecified(t *testing.T) {
 	}
 }
 
+// TestCd_ErrorInvalidID verifies error when specified ID doesn't exist.
+//
+// Scenario: User runs `wt cd -n 999` when only 1 worktree exists
+// Expected: Error for invalid ID
 func TestCd_ErrorInvalidID(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -236,6 +267,10 @@ func TestCd_ErrorInvalidID(t *testing.T) {
 	}
 }
 
+// TestCd_ErrorRepoNotFound verifies error when specified repo doesn't exist.
+//
+// Scenario: User runs `wt cd -r nonexistent-repo`
+// Expected: Error mentioning the nonexistent repository
 func TestCd_ErrorRepoNotFound(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -263,6 +298,10 @@ func TestCd_ErrorRepoNotFound(t *testing.T) {
 	}
 }
 
+// TestCd_ErrorLabelNotFound verifies error when no repos match the label.
+//
+// Scenario: User runs `wt cd -l nonexistent-label`
+// Expected: Error mentioning the nonexistent label
 func TestCd_ErrorLabelNotFound(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -290,6 +329,11 @@ func TestCd_ErrorLabelNotFound(t *testing.T) {
 	}
 }
 
+// TestCd_ErrorMultipleReposMatchLabel verifies error when label matches
+// multiple repos (ambiguous target).
+//
+// Scenario: User runs `wt cd -l frontend` when 2 repos have "frontend" label
+// Expected: Error "multiple repos"
 func TestCd_ErrorMultipleReposMatchLabel(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -321,6 +365,10 @@ func TestCd_ErrorMultipleReposMatchLabel(t *testing.T) {
 	}
 }
 
+// TestCd_NoHookFlag verifies --no-hook flag skips hook execution.
+//
+// Scenario: User runs `wt cd --no-hook -n 1`
+// Expected: Path returned, hooks not executed
 func TestCd_NoHookFlag(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -355,6 +403,11 @@ func TestCd_NoHookFlag(t *testing.T) {
 	}
 }
 
+// TestCd_MultipleReposSameWorktreeDir verifies navigation works when multiple
+// repos have worktrees in the same worktree_dir.
+//
+// Scenario: Two repos have worktrees in same directory, user navigates by ID and name
+// Expected: Each target resolves to correct path
 func TestCd_MultipleReposSameWorktreeDir(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -424,6 +477,11 @@ func TestCd_MultipleReposSameWorktreeDir(t *testing.T) {
 	}
 }
 
+// TestCd_WorktreeDirFromEnvOrConfig verifies worktree_dir config is used
+// regardless of current working directory.
+//
+// Scenario: User runs `wt cd -n 1` from a different directory
+// Expected: worktree_dir from config is used to resolve path
 func TestCd_WorktreeDirFromEnvOrConfig(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -457,6 +515,11 @@ func TestCd_WorktreeDirFromEnvOrConfig(t *testing.T) {
 	}
 }
 
+// TestCd_BranchWithSlashesInName verifies navigation works for branches
+// with slashes (e.g., feature/name).
+//
+// Scenario: User has worktree for feature/my-feature branch
+// Expected: Worktree path returned correctly (slashes sanitized in dir name)
 func TestCd_BranchWithSlashesInName(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories (resolve symlinks for macOS compatibility)
@@ -490,6 +553,11 @@ func TestCd_BranchWithSlashesInName(t *testing.T) {
 	}
 }
 
+// TestCd_RepoUsesWorktreeDirIfNoRepoDir verifies -r flag scans worktree_dir
+// for repos when repo_dir is not configured.
+//
+// Scenario: No repo_dir set, user runs `wt cd -r myrepo`
+// Expected: Repo found in worktree_dir
 func TestCd_RepoUsesWorktreeDirIfNoRepoDir(t *testing.T) {
 	t.Parallel()
 	// When repo_dir not set, -r should scan worktree_dir for repos
@@ -520,6 +588,11 @@ func TestCd_RepoUsesWorktreeDirIfNoRepoDir(t *testing.T) {
 	}
 }
 
+// TestCd_LabelUsesWorktreeDirIfNoRepoDir verifies -l flag scans worktree_dir
+// for repos when repo_dir is not configured.
+//
+// Scenario: No repo_dir set, user runs `wt cd -l backend`
+// Expected: Repo with label found in worktree_dir
 func TestCd_LabelUsesWorktreeDirIfNoRepoDir(t *testing.T) {
 	t.Parallel()
 	// When repo_dir not set, -l should scan worktree_dir for repos

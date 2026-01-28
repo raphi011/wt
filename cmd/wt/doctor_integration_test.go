@@ -14,6 +14,10 @@ import (
 	"github.com/raphi011/wt/internal/git"
 )
 
+// TestDoctor_NoIssues verifies that doctor reports no issues for healthy setup.
+//
+// Scenario: User runs `wt doctor` with valid repo and worktree
+// Expected: No errors, doctor completes successfully
 func TestDoctor_NoIssues(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -40,6 +44,11 @@ func TestDoctor_NoIssues(t *testing.T) {
 	}
 }
 
+// TestDoctor_StaleEntry verifies that doctor detects and fixes stale cache entries
+// (worktrees that no longer exist on disk).
+//
+// Scenario: User runs `wt doctor --fix` after deleting worktree manually
+// Expected: Doctor marks stale entry as removed
 func TestDoctor_StaleEntry(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -93,6 +102,11 @@ func TestDoctor_StaleEntry(t *testing.T) {
 	}
 }
 
+// TestDoctor_DuplicateIDs verifies that doctor fixes duplicate worktree IDs
+// by reassigning new unique IDs.
+//
+// Scenario: User runs `wt doctor --fix` with cache containing duplicate IDs
+// Expected: IDs are made unique
 func TestDoctor_DuplicateIDs(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -157,6 +171,11 @@ func TestDoctor_DuplicateIDs(t *testing.T) {
 	}
 }
 
+// TestDoctor_MissingMetadata verifies that doctor populates missing cache metadata
+// (repo_path, branch) by reading from the actual worktree.
+//
+// Scenario: User runs `wt doctor --fix` with cache entry missing repo_path/branch
+// Expected: Metadata populated from actual worktree
 func TestDoctor_MissingMetadata(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -210,6 +229,11 @@ func TestDoctor_MissingMetadata(t *testing.T) {
 	}
 }
 
+// TestDoctor_OrphanWorktree verifies that doctor adds untracked worktrees
+// (orphans) to the cache.
+//
+// Scenario: User runs `wt doctor --fix` with worktree not in cache
+// Expected: Orphan worktree added to cache with new ID
 func TestDoctor_OrphanWorktree(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -253,6 +277,11 @@ func TestDoctor_OrphanWorktree(t *testing.T) {
 	}
 }
 
+// TestDoctor_Reset verifies that --reset rebuilds the cache from scratch
+// with IDs starting from 1.
+//
+// Scenario: User runs `wt doctor --reset` with cache having high IDs (50, 75)
+// Expected: Cache rebuilt with IDs 1 and 2
 func TestDoctor_Reset(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -336,6 +365,11 @@ func TestDoctor_Reset(t *testing.T) {
 	// so they are preserved across reset. Only cache IDs are reset.
 }
 
+// TestDoctor_BrokenGitLink verifies that doctor repairs broken git links
+// when the repo has been moved.
+//
+// Scenario: User moves repo to new location, runs `wt doctor --fix`
+// Expected: Worktree .git file updated to point to new repo location
 func TestDoctor_BrokenGitLink(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -385,6 +419,11 @@ func TestDoctor_BrokenGitLink(t *testing.T) {
 	verifyWorktreeWorks(t, worktreePath)
 }
 
+// TestDoctor_WorktreeMoved verifies that doctor repairs broken git links
+// when the worktree has been moved.
+//
+// Scenario: User moves worktree to new location, runs `wt doctor --fix`
+// Expected: Repo's gitdir reference updated to point to new worktree location
 func TestDoctor_WorktreeMoved(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -432,6 +471,11 @@ func TestDoctor_WorktreeMoved(t *testing.T) {
 	verifyWorktreeWorks(t, newWorktreePath)
 }
 
+// TestDoctor_BothMoved verifies that doctor repairs broken git links
+// when both the repo and worktree have been moved.
+//
+// Scenario: User moves both repo and worktree to new locations, runs `wt doctor --fix`
+// Expected: Both directions of git links repaired
 func TestDoctor_BothMoved(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -488,6 +532,10 @@ func TestDoctor_BothMoved(t *testing.T) {
 	verifyWorktreeWorks(t, newWorktreePath)
 }
 
+// TestDoctor_MultipleRepos verifies doctor handles multiple repos correctly.
+//
+// Scenario: User runs `wt doctor` with 2 repos each having 1 worktree
+// Expected: Doctor completes successfully, finds no issues
 func TestDoctor_MultipleRepos(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -518,6 +566,11 @@ func TestDoctor_MultipleRepos(t *testing.T) {
 	}
 }
 
+// TestDoctor_PathMismatch verifies that doctor fixes cache entries with
+// incorrect paths.
+//
+// Scenario: User runs `wt doctor --fix` with cache having wrong path
+// Expected: Path updated to actual worktree location
 func TestDoctor_PathMismatch(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
@@ -568,6 +621,10 @@ func TestDoctor_PathMismatch(t *testing.T) {
 	}
 }
 
+// TestDoctor_EmptyWorktreeDir verifies doctor handles empty directories gracefully.
+//
+// Scenario: User runs `wt doctor` with empty worktree_dir
+// Expected: Doctor completes successfully with no issues
 func TestDoctor_EmptyWorktreeDir(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())

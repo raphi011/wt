@@ -16,6 +16,11 @@ import (
 
 // --- Label Add Tests ---
 
+// TestLabelAdd_CurrentRepo verifies adding a label to the current repo
+// when running from inside it.
+//
+// Scenario: User runs `wt label add backend` from inside a repo
+// Expected: Label "backend" added to the repo's git config
 func TestLabelAdd_CurrentRepo(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -34,6 +39,11 @@ func TestLabelAdd_CurrentRepo(t *testing.T) {
 	}
 }
 
+// TestLabelAdd_ByRepoName verifies adding a label using -r flag
+// to specify the target repo by name.
+//
+// Scenario: User runs `wt label add frontend -r myrepo` from outside repo
+// Expected: Label "frontend" added to myrepo's git config
 func TestLabelAdd_ByRepoName(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -56,6 +66,11 @@ func TestLabelAdd_ByRepoName(t *testing.T) {
 	}
 }
 
+// TestLabelAdd_MultipleRepos verifies adding the same label to multiple repos
+// using repeated -r flags.
+//
+// Scenario: User runs `wt label add shared -r repo-a -r repo-b`
+// Expected: Label "shared" added to both repo-a and repo-b
 func TestLabelAdd_MultipleRepos(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -83,6 +98,11 @@ func TestLabelAdd_MultipleRepos(t *testing.T) {
 	}
 }
 
+// TestLabelAdd_DuplicateIsIdempotent verifies that adding an existing label
+// is a no-op (idempotent) - no error and no duplicate created.
+//
+// Scenario: User runs `wt label add existing` when "existing" label already set
+// Expected: Command succeeds, label appears exactly once
 func TestLabelAdd_DuplicateIsIdempotent(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -112,6 +132,11 @@ func TestLabelAdd_DuplicateIsIdempotent(t *testing.T) {
 	}
 }
 
+// TestLabelAdd_AddsToExistingLabels verifies that adding a label preserves
+// existing labels (append, not replace).
+//
+// Scenario: Repo has "first" label, user runs `wt label add second`
+// Expected: Both "first" and "second" labels present
 func TestLabelAdd_AddsToExistingLabels(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -136,6 +161,11 @@ func TestLabelAdd_AddsToExistingLabels(t *testing.T) {
 	}
 }
 
+// TestLabelAdd_ErrorOutsideRepoWithoutFlag verifies error when running
+// outside a repo without specifying -r flag.
+//
+// Scenario: User runs `wt label add backend` from non-repo directory
+// Expected: Error about requiring -r/--repository flag
 func TestLabelAdd_ErrorOutsideRepoWithoutFlag(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
@@ -152,6 +182,11 @@ func TestLabelAdd_ErrorOutsideRepoWithoutFlag(t *testing.T) {
 	}
 }
 
+// TestLabelAdd_ErrorRepoNotFound verifies error when specified repo
+// doesn't exist in repo_dir.
+//
+// Scenario: User runs `wt label add backend -r nonexistent`
+// Expected: Error about no valid repositories found
 func TestLabelAdd_ErrorRepoNotFound(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -173,6 +208,11 @@ func TestLabelAdd_ErrorRepoNotFound(t *testing.T) {
 
 // --- Label Remove Tests ---
 
+// TestLabelRemove_CurrentRepo verifies removing a label from the current repo
+// when running from inside it.
+//
+// Scenario: User runs `wt label remove toremove` from inside repo with that label
+// Expected: Label "toremove" removed from repo's git config
 func TestLabelRemove_CurrentRepo(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -194,6 +234,11 @@ func TestLabelRemove_CurrentRepo(t *testing.T) {
 	}
 }
 
+// TestLabelRemove_ByRepoName verifies removing a label using -r flag
+// to specify the target repo by name.
+//
+// Scenario: User runs `wt label remove toremove -r myrepo`
+// Expected: Label "toremove" removed from myrepo's git config
 func TestLabelRemove_ByRepoName(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -217,6 +262,11 @@ func TestLabelRemove_ByRepoName(t *testing.T) {
 	}
 }
 
+// TestLabelRemove_MultipleRepos verifies removing a label from multiple repos
+// using repeated -r flags.
+//
+// Scenario: User runs `wt label remove shared -r repo-a -r repo-b`
+// Expected: Label "shared" removed from both repo-a and repo-b
 func TestLabelRemove_MultipleRepos(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -247,6 +297,11 @@ func TestLabelRemove_MultipleRepos(t *testing.T) {
 	}
 }
 
+// TestLabelRemove_NonexistentLabel verifies that removing a label that
+// doesn't exist is a no-op (succeeds without error).
+//
+// Scenario: User runs `wt label remove nonexistent` on repo without that label
+// Expected: Command succeeds with no-op
 func TestLabelRemove_NonexistentLabel(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -261,6 +316,11 @@ func TestLabelRemove_NonexistentLabel(t *testing.T) {
 	}
 }
 
+// TestLabelRemove_PreservesOtherLabels verifies that removing a label
+// preserves other labels on the repo.
+//
+// Scenario: Repo has "keep", "remove", "also-keep", user removes "remove"
+// Expected: "keep" and "also-keep" preserved, "remove" gone
 func TestLabelRemove_PreservesOtherLabels(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -290,6 +350,11 @@ func TestLabelRemove_PreservesOtherLabels(t *testing.T) {
 
 // --- Label List Tests ---
 
+// TestLabelList_CurrentRepo verifies listing labels from the current repo
+// when running from inside it.
+//
+// Scenario: User runs `wt label list` from inside repo with labels
+// Expected: Command succeeds, outputs repo labels
 func TestLabelList_CurrentRepo(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -306,6 +371,11 @@ func TestLabelList_CurrentRepo(t *testing.T) {
 	}
 }
 
+// TestLabelList_ByRepoName verifies listing labels using -r flag
+// to specify the target repo by name.
+//
+// Scenario: User runs `wt label list -r myrepo`
+// Expected: Command succeeds, outputs myrepo's labels
 func TestLabelList_ByRepoName(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -319,6 +389,11 @@ func TestLabelList_ByRepoName(t *testing.T) {
 	}
 }
 
+// TestLabelList_MultipleRepos verifies listing labels from multiple repos
+// using repeated -r flags.
+//
+// Scenario: User runs `wt label list -r repo-a -r repo-b`
+// Expected: Command succeeds, outputs labels for both repos
 func TestLabelList_MultipleRepos(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -336,6 +411,10 @@ func TestLabelList_MultipleRepos(t *testing.T) {
 	}
 }
 
+// TestLabelList_Global verifies listing labels from all repos using -g flag.
+//
+// Scenario: User runs `wt label list -g` with 3 repos (2 with labels)
+// Expected: Command succeeds, outputs labels from all repos
 func TestLabelList_Global(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -354,6 +433,11 @@ func TestLabelList_Global(t *testing.T) {
 	}
 }
 
+// TestLabelList_NoLabels verifies that listing labels on repo with no labels
+// succeeds with empty output.
+//
+// Scenario: User runs `wt label list` on repo without any labels
+// Expected: Command succeeds, no output
 func TestLabelList_NoLabels(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -368,6 +452,11 @@ func TestLabelList_NoLabels(t *testing.T) {
 	}
 }
 
+// TestLabelList_ErrorOutsideRepoWithoutFlag verifies error when running
+// outside a repo without specifying -r or -g flag.
+//
+// Scenario: User runs `wt label list` from non-repo directory
+// Expected: Error about requiring -r or -g flag
 func TestLabelList_ErrorOutsideRepoWithoutFlag(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
@@ -383,6 +472,11 @@ func TestLabelList_ErrorOutsideRepoWithoutFlag(t *testing.T) {
 
 // --- Label Clear Tests ---
 
+// TestLabelClear_CurrentRepo verifies clearing all labels from the current repo
+// when running from inside it.
+//
+// Scenario: User runs `wt label clear` from inside repo with 3 labels
+// Expected: All labels removed from repo's git config
 func TestLabelClear_CurrentRepo(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -403,6 +497,11 @@ func TestLabelClear_CurrentRepo(t *testing.T) {
 	}
 }
 
+// TestLabelClear_ByRepoName verifies clearing labels using -r flag
+// to specify the target repo by name.
+//
+// Scenario: User runs `wt label clear -r myrepo`
+// Expected: All labels removed from myrepo's git config
 func TestLabelClear_ByRepoName(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -423,6 +522,11 @@ func TestLabelClear_ByRepoName(t *testing.T) {
 	}
 }
 
+// TestLabelClear_MultipleRepos verifies clearing labels from multiple repos
+// using repeated -r flags.
+//
+// Scenario: User runs `wt label clear -r repo-a -r repo-b`
+// Expected: All labels removed from both repos
 func TestLabelClear_MultipleRepos(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -450,6 +554,11 @@ func TestLabelClear_MultipleRepos(t *testing.T) {
 	}
 }
 
+// TestLabelClear_NoLabels verifies that clearing labels on repo with no labels
+// succeeds as a no-op.
+//
+// Scenario: User runs `wt label clear` on repo without any labels
+// Expected: Command succeeds with no-op
 func TestLabelClear_NoLabels(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -464,6 +573,11 @@ func TestLabelClear_NoLabels(t *testing.T) {
 	}
 }
 
+// TestLabelClear_ErrorOutsideRepoWithoutFlag verifies error when running
+// outside a repo without specifying -r flag.
+//
+// Scenario: User runs `wt label clear` from non-repo directory
+// Expected: Error about requiring -r flag
 func TestLabelClear_ErrorOutsideRepoWithoutFlag(t *testing.T) {
 	t.Parallel()
 	tempDir := t.TempDir()
@@ -479,6 +593,11 @@ func TestLabelClear_ErrorOutsideRepoWithoutFlag(t *testing.T) {
 
 // --- Inside Worktree Tests ---
 
+// TestLabelAdd_InsideWorktree verifies that running label add from inside
+// a worktree adds the label to the main repo (not the worktree).
+//
+// Scenario: User runs `wt label add backend` from inside a worktree
+// Expected: Label "backend" added to main repo's git config
 func TestLabelAdd_InsideWorktree(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
@@ -503,6 +622,11 @@ func TestLabelAdd_InsideWorktree(t *testing.T) {
 	}
 }
 
+// TestLabelList_InsideWorktree verifies that running label list from inside
+// a worktree shows labels from the main repo.
+//
+// Scenario: User runs `wt label list` from inside a worktree
+// Expected: Labels from main repo are listed
 func TestLabelList_InsideWorktree(t *testing.T) {
 	t.Parallel()
 	repoDir := t.TempDir()
