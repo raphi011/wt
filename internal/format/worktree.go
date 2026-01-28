@@ -2,6 +2,7 @@ package format
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"slices"
 	"strings"
@@ -79,4 +80,30 @@ func SanitizeForPath(name string) string {
 		"|", "-",
 	)
 	return replacer.Replace(name)
+}
+
+// PathExistsFunc is a function that checks if a path exists.
+// Used for dependency injection in tests.
+type PathExistsFunc func(path string) bool
+
+// DefaultPathExists checks if a path exists on the filesystem.
+func DefaultPathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// UniqueWorktreePath returns a unique path by appending a numbered suffix if needed.
+// If basePath doesn't exist, it returns basePath unchanged.
+// If basePath exists, it tries basePath-1, basePath-2, etc. until finding a unique path.
+func UniqueWorktreePath(basePath string, exists PathExistsFunc) string {
+	if !exists(basePath) {
+		return basePath
+	}
+
+	for i := 1; ; i++ {
+		candidate := fmt.Sprintf("%s-%d", basePath, i)
+		if !exists(candidate) {
+			return candidate
+		}
+	}
 }

@@ -144,7 +144,7 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 	}
 
 	// Move nested worktrees first (before repos move)
-	var nestedMoved, nestedSkipped, nestedFailed int
+	var nestedMoved, nestedFailed int
 	if len(nestedWorktrees) > 0 {
 		for _, wt := range nestedWorktrees {
 			// Get repo info for formatting
@@ -163,11 +163,11 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 
 			newPath := filepath.Join(destPath, newName)
 
-			// Check if target path already exists
-			if _, err := os.Stat(newPath); err == nil {
-				l.Printf("⚠ Skipping nested %s: target path already exists: %s\n", filepath.Base(wt.Path), newPath)
-				nestedSkipped++
-				continue
+			// If target exists, find a unique path with numbered suffix
+			originalPath := newPath
+			newPath = format.UniqueWorktreePath(newPath, format.DefaultPathExists)
+			if newPath != originalPath {
+				l.Printf("⚠ Collision detected: %s exists, using %s instead\n", filepath.Base(originalPath), filepath.Base(newPath))
 			}
 
 			if c.DryRun {
@@ -190,9 +190,9 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 		// Print nested worktree summary
 		l.Println()
 		if c.DryRun {
-			l.Printf("Nested worktrees: %d would be moved, %d skipped\n", nestedMoved, nestedSkipped)
+			l.Printf("Nested worktrees: %d would be moved\n", nestedMoved)
 		} else {
-			l.Printf("Nested worktrees: %d moved, %d skipped, %d failed\n", nestedMoved, nestedSkipped, nestedFailed)
+			l.Printf("Nested worktrees: %d moved, %d failed\n", nestedMoved, nestedFailed)
 		}
 	}
 
@@ -288,11 +288,11 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 			continue
 		}
 
-		// Check if target path already exists
-		if _, err := os.Stat(newPath); err == nil {
-			l.Printf("⚠ Skipping %s: target path already exists: %s\n", filepath.Base(wt.Path), newPath)
-			skipped++
-			continue
+		// If target exists, find a unique path with numbered suffix
+		originalPath := newPath
+		newPath = format.UniqueWorktreePath(newPath, format.DefaultPathExists)
+		if newPath != originalPath {
+			l.Printf("⚠ Collision detected: %s exists, using %s instead\n", filepath.Base(originalPath), filepath.Base(newPath))
 		}
 
 		if c.DryRun {
