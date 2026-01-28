@@ -366,7 +366,12 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-r --repository --format -d --dry-run -f --force" -- "$cur"))
+            # Complete directories for optional path argument, then flags
+            if [[ "$cur" != -* ]]; then
+                COMPREPLY=($(compgen -d -- "$cur"))
+            else
+                COMPREPLY=($(compgen -W "-r --repository --format -d --dry-run -f --force" -- "$cur"))
+            fi
             ;;
         pr)
             if [[ $cword -eq 2 ]]; then
@@ -817,11 +822,10 @@ _wt() {
                     ;;
                 mv)
                     _arguments \
+                        '1::path to move:_files -/' \
                         '*-r[filter by repository name]:repository:__wt_repo_names' \
                         '*--repository[filter by repository name]:repository:__wt_repo_names' \
                         '--format[worktree naming format]:format:' \
-                        '-d[show what would be moved]' \
-                        '--dry-run[show what would be moved]' \
                         '-d[show what would be moved]' \
                         '--dry-run[show what would be moved]' \
                         '-f[force move locked worktrees]' \
@@ -1212,7 +1216,8 @@ complete -c wt -n "__fish_seen_subcommand_from cd" -l hook -d "Run named hook in
 complete -c wt -n "__fish_seen_subcommand_from cd" -l no-hook -d "Skip hooks"
 complete -c wt -n "__fish_seen_subcommand_from cd" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 
-# mv: flags (destination from config/env)
+# mv: optional path argument (directories), then flags
+complete -c wt -n "__fish_seen_subcommand_from mv" -a "(__fish_complete_directories)" -d "Path to move"
 complete -c wt -n "__fish_seen_subcommand_from mv" -s r -l repository -r -a "(__wt_list_repos)" -d "Filter by repository name (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from mv" -l format -d "Worktree naming format"
 complete -c wt -n "__fish_seen_subcommand_from mv" -s d -l dry-run -d "Show what would be moved"

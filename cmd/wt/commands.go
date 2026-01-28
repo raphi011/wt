@@ -569,6 +569,7 @@ func (c *HookCmd) Run(ctx context.Context) error {
 // MvCmd moves worktrees to a different directory with optional renaming.
 type MvCmd struct {
 	Deps
+	Path       string   `arg:"" optional:"" placeholder:"PATH" help:"path to move (worktree, repo, or folder to scan)"`
 	Repository []string `short:"r" name:"repository" sep:"," help:"filter by repository name(s) (repeatable, comma-separated)"`
 	Format     string   `name:"format" placeholder:"FORMAT" help:"worktree naming format"`
 	DryRun     bool     `short:"d" name:"dry-run" negatable:"" help:"show what would be moved"`
@@ -576,7 +577,14 @@ type MvCmd struct {
 }
 
 func (c *MvCmd) Help() string {
-	return `Scans current directory for worktrees and repositories, moving them to configured destinations.
+	return `Moves worktrees and repositories to configured destinations.
+
+If PATH is specified:
+  - Worktree: moves only that worktree
+  - Repository: moves the repo and all its worktrees
+  - Directory: scans for worktrees/repos and moves all found
+
+If PATH is omitted, scans current directory.
 
 Worktrees are moved to worktree_dir.
 Repositories are moved to repo_dir (if set) or worktree_dir.
@@ -588,9 +596,11 @@ Destinations are set via config or environment variables:
   repo_dir / WT_REPO_DIR          - where repositories are moved (optional)
 
 Examples:
-  wt mv                              # Move all worktrees and repos
+  wt mv                              # Move all worktrees and repos in cwd
+  wt mv ~/old-projects               # Move all from specified folder
+  wt mv ~/old-projects/my-worktree   # Move single worktree
+  wt mv ~/old-projects/my-repo       # Move repo and its worktrees
   wt mv -r myrepo                    # Move only myrepo's worktrees and repo
-  wt mv -r repo1,repo2               # Move worktrees and repos for multiple repos
   wt mv --format={branch}            # Move and rename worktrees
   wt mv --dry-run                    # Preview what would be moved
   wt mv -f                           # Force move locked worktrees`
