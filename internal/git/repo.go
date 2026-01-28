@@ -100,27 +100,6 @@ func GetCurrentBranch(ctx context.Context, path string) (string, error) {
 	return branch, nil
 }
 
-// IsBranchMerged checks if a branch is merged into the default branch (main/master)
-func IsBranchMerged(ctx context.Context, repoPath, branch string) (bool, error) {
-	defaultBranch := GetDefaultBranch(ctx, repoPath)
-	output, err := outputGit(ctx, repoPath, "branch", "--merged", "origin/"+defaultBranch)
-	if err != nil {
-		return false, fmt.Errorf("failed to check merge status: %v", err)
-	}
-
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		// Handle "branch", "* branch" (current), and "+ branch" (in worktree) formats
-		trimmed = strings.TrimPrefix(trimmed, "* ")
-		trimmed = strings.TrimPrefix(trimmed, "+ ")
-		if trimmed == branch {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // GetCommitCount returns number of commits ahead of the default branch
 func GetCommitCount(ctx context.Context, repoPath, branch string) (int, error) {
 	defaultBranch := GetDefaultBranch(ctx, repoPath)
@@ -396,29 +375,6 @@ func GetWorktreeBranches(ctx context.Context, repoPath string) map[string]bool {
 		}
 	}
 	return branches
-}
-
-// GetMergedBranches returns a set of branches that are merged into the default branch.
-// Uses a single git call: `git branch --merged origin/<default>`
-func GetMergedBranches(ctx context.Context, repoPath string) map[string]bool {
-	merged := make(map[string]bool)
-
-	defaultBranch := GetDefaultBranch(ctx, repoPath)
-	output, err := outputGit(ctx, repoPath, "branch", "--merged", "origin/"+defaultBranch)
-	if err != nil {
-		return merged
-	}
-
-	for _, line := range strings.Split(string(output), "\n") {
-		trimmed := strings.TrimSpace(line)
-		// Handle "branch", "* branch" (current), and "+ branch" (in worktree) formats
-		trimmed = strings.TrimPrefix(trimmed, "* ")
-		trimmed = strings.TrimPrefix(trimmed, "+ ")
-		if trimmed != "" {
-			merged[trimmed] = true
-		}
-	}
-	return merged
 }
 
 // GetAllBranchConfig returns branch notes and upstreams for a repository in one call.

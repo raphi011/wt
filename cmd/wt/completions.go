@@ -112,7 +112,7 @@ _wt_completions() {
                     return
                     ;;
             esac
-            COMPREPLY=($(compgen -W "-n --number -d --dry-run -f --force -c --include-clean -g --global -v --verbose -R --refresh --reset-cache --hook --no-hook -a --arg" -- "$cur"))
+            COMPREPLY=($(compgen -W "-n --number -d --dry-run -f --force -g --global -v --verbose -R --refresh --reset-cache --hook --no-hook -a --arg -i --interactive" -- "$cur"))
             ;;
         list|ls)
             case "$prev" in
@@ -742,11 +742,8 @@ _wt() {
                         '-d[preview without removing]' \
                         '--dry-run[preview without removing]' \
                         '-d[preview without removing]' \
-                        '--dry-run[preview without removing]' \
-                        '-f[force remove even if not merged/dirty]' \
-                        '--force[force remove even if not merged/dirty]' \
-                        '-c[also remove clean worktrees]' \
-                        '--include-clean[also remove clean worktrees]' \
+                        '-f[force remove targeted worktree]' \
+                        '--force[force remove targeted worktree]' \
                         '-g[prune all worktrees, not just current repo]' \
                         '--global[prune all worktrees, not just current repo]' \
                         '-v[show skipped worktrees with reasons]' \
@@ -757,7 +754,9 @@ _wt() {
                         '--hook[run named hook]:hook:' \
                         '--no-hook[skip post-removal hooks]' \
                         '*-a[set hook variable KEY=VALUE]:arg:' \
-                        '*--arg[set hook variable KEY=VALUE]:arg:'
+                        '*--arg[set hook variable KEY=VALUE]:arg:' \
+                        '-i[interactive mode]' \
+                        '--interactive[interactive mode]'
                     ;;
                 list|ls)
                     _arguments \
@@ -1167,10 +1166,9 @@ complete -c wt -n "__fish_seen_subcommand_from checkout co" -l no-hook -d "Skip 
 complete -c wt -n "__fish_seen_subcommand_from checkout co" -s a -l arg -r -d "Set hook variable KEY=VALUE"
 
 # prune: --number flag, then other flags
-complete -c wt -n "__fish_seen_subcommand_from prune p" -s n -l number -r -a "(__wt_worktree_ids)" -d "Worktree number to remove"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -s n -l number -r -a "(__wt_worktree_ids)" -d "Worktree number to remove (requires -f)"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -s d -l dry-run -d "Preview without removing"
-complete -c wt -n "__fish_seen_subcommand_from prune p" -s f -l force -d "Force remove even if not merged/dirty"
-complete -c wt -n "__fish_seen_subcommand_from prune p" -s c -l include-clean -d "Also remove clean worktrees"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -s f -l force -d "Force remove targeted worktree (-n)"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -s g -l global -d "Prune all worktrees (not just current repo)"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -s v -l verbose -d "Show skipped worktrees with reasons"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -s R -l refresh -d "Fetch origin and refresh PR status"
@@ -1178,6 +1176,7 @@ complete -c wt -n "__fish_seen_subcommand_from prune p" -l reset-cache -d "Clear
 complete -c wt -n "__fish_seen_subcommand_from prune p" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -l no-hook -d "Skip post-removal hooks"
 complete -c wt -n "__fish_seen_subcommand_from prune p" -s a -l arg -r -d "Set hook variable KEY=VALUE"
+complete -c wt -n "__fish_seen_subcommand_from prune p" -s i -l interactive -d "Interactive mode"
 
 # list: flags only (no positional args)
 complete -c wt -n "__fish_seen_subcommand_from list ls" -l json -d "Output as JSON"

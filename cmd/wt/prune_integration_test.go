@@ -11,7 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/config"
 )
 
-func TestPrune_MergedBranch(t *testing.T) {
+func TestPrune_NoPR_NotRemoved(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := resolvePath(t, t.TempDir())
@@ -21,10 +21,10 @@ func TestPrune_MergedBranch(t *testing.T) {
 	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
 	setupWorktree(t, repoPath, worktreePath, "feature")
 
-	// Make a commit in worktree so merge has something to do
+	// Make a commit in worktree
 	makeCommitInWorktree(t, worktreePath, "feature.txt")
 
-	// Merge the branch into main and push (makes it prunable)
+	// Merge the branch locally (but no PR - won't be auto-pruned)
 	mergeBranchToMain(t, repoPath, "feature")
 
 	// Populate cache
@@ -43,8 +43,8 @@ func TestPrune_MergedBranch(t *testing.T) {
 		t.Fatalf("wt prune failed: %v", err)
 	}
 
-	// Verify worktree was removed
-	verifyWorktreeRemoved(t, worktreePath)
+	// Verify worktree NOT removed - no merged PR means not auto-pruned
+	verifyWorktreeExists(t, worktreePath)
 }
 
 func TestPrune_SkipsDirty(t *testing.T) {
@@ -117,7 +117,7 @@ func TestPrune_SkipsUnmergedWithCommits(t *testing.T) {
 	verifyWorktreeExists(t, worktreePath)
 }
 
-func TestPrune_IncludeClean(t *testing.T) {
+func TestPrune_CleanBranch_NotRemoved(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := resolvePath(t, t.TempDir())
@@ -128,6 +128,7 @@ func TestPrune_IncludeClean(t *testing.T) {
 	setupWorktree(t, repoPath, worktreePath, "feature")
 
 	// No commits on branch - it's "clean" (0 commits ahead)
+	// Without a merged PR, it won't be auto-pruned
 
 	// Populate cache
 	populateCache(t, worktreeDir)
@@ -137,24 +138,15 @@ func TestPrune_IncludeClean(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	// First, verify without -c it's skipped
-	cmdNoClean := &PruneCmd{
+	cmd := &PruneCmd{
 		Global: true,
 	}
-	if err := runPruneCommand(t, worktreeDir, cfg, cmdNoClean); err != nil {
+	if err := runPruneCommand(t, worktreeDir, cfg, cmd); err != nil {
 		t.Fatalf("wt prune failed: %v", err)
 	}
-	verifyWorktreeExists(t, worktreePath)
 
-	// Now with -c it should be removed
-	cmdWithClean := &PruneCmd{
-		Global:       true,
-		IncludeClean: true,
-	}
-	if err := runPruneCommand(t, worktreeDir, cfg, cmdWithClean); err != nil {
-		t.Fatalf("wt prune -c failed: %v", err)
-	}
-	verifyWorktreeRemoved(t, worktreePath)
+	// Verify worktree NOT removed - no merged PR
+	verifyWorktreeExists(t, worktreePath)
 }
 
 func TestPrune_DryRun(t *testing.T) {
@@ -194,43 +186,7 @@ func TestPrune_DryRun(t *testing.T) {
 	verifyWorktreeExists(t, worktreePath)
 }
 
-func TestPrune_ByID(t *testing.T) {
-	t.Parallel()
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create repo with local origin (required for merge detection)
-	repoPath := setupTestRepoWithLocalOrigin(t, repoDir, "myrepo")
-	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
-	setupWorktree(t, repoPath, worktreePath, "feature")
-
-	// Make a commit so merge has something to do
-	makeCommitInWorktree(t, worktreePath, "feature.txt")
-
-	// Merge the branch (makes it prunable)
-	mergeBranchToMain(t, repoPath, "feature")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &PruneCmd{
-		ID: []int{1},
-	}
-
-	if err := runPruneCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt prune -n 1 failed: %v", err)
-	}
-
-	// Verify worktree was removed
-	verifyWorktreeRemoved(t, worktreePath)
-}
-
-func TestPrune_ByID_Force(t *testing.T) {
+func TestPrune_ByID_RequiresForce(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := resolvePath(t, t.TempDir())
@@ -240,9 +196,6 @@ func TestPrune_ByID_Force(t *testing.T) {
 	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
 	setupWorktree(t, repoPath, worktreePath, "feature")
 
-	// Make a commit (not merged) - normally not prunable
-	makeCommitInWorktree(t, worktreePath, "feature.txt")
-
 	// Populate cache
 	populateCache(t, worktreeDir)
 
@@ -251,25 +204,28 @@ func TestPrune_ByID_Force(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	// First verify it can't be pruned without force
+	// Without -f flag, should fail
 	cmdNoForce := &PruneCmd{
 		ID: []int{1},
 	}
+
 	err := runPruneCommand(t, worktreeDir, cfg, cmdNoForce)
 	if err == nil {
-		t.Fatal("expected error when pruning unmerged worktree without -f")
+		t.Fatal("expected error when pruning by ID without -f")
 	}
 	verifyWorktreeExists(t, worktreePath)
 
-	// Now with force
-	cmdForce := &PruneCmd{
+	// With -f flag, should succeed
+	cmdWithForce := &PruneCmd{
 		ID:    []int{1},
 		Force: true,
 	}
-	if err := runPruneCommand(t, worktreeDir, cfg, cmdForce); err != nil {
+
+	if err := runPruneCommand(t, worktreeDir, cfg, cmdWithForce); err != nil {
 		t.Fatalf("wt prune -n 1 -f failed: %v", err)
 	}
 
+	// Verify worktree was removed
 	verifyWorktreeRemoved(t, worktreePath)
 }
 
@@ -278,18 +234,14 @@ func TestPrune_MultipleIDs(t *testing.T) {
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := resolvePath(t, t.TempDir())
 
-	// Create repo with local origin (required for merge detection)
-	repoPath := setupTestRepoWithLocalOrigin(t, repoDir, "myrepo")
+	// Create repo
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
 
 	wt1 := filepath.Join(worktreeDir, "myrepo-feature1")
 	setupWorktree(t, repoPath, wt1, "feature1")
-	makeCommitInWorktree(t, wt1, "feature1.txt")
-	mergeBranchToMain(t, repoPath, "feature1")
 
 	wt2 := filepath.Join(worktreeDir, "myrepo-feature2")
 	setupWorktree(t, repoPath, wt2, "feature2")
-	makeCommitInWorktree(t, wt2, "feature2.txt")
-	mergeBranchToMain(t, repoPath, "feature2")
 
 	// Populate cache
 	populateCache(t, worktreeDir)
@@ -299,12 +251,14 @@ func TestPrune_MultipleIDs(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
+	// Prune by ID requires force
 	cmd := &PruneCmd{
-		ID: []int{1, 2},
+		ID:    []int{1, 2},
+		Force: true,
 	}
 
 	if err := runPruneCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt prune -n 1 -n 2 failed: %v", err)
+		t.Fatalf("wt prune -n 1 -n 2 -f failed: %v", err)
 	}
 
 	// Verify both worktrees were removed
@@ -312,23 +266,19 @@ func TestPrune_MultipleIDs(t *testing.T) {
 	verifyWorktreeRemoved(t, wt2)
 }
 
-func TestPrune_InsideRepoOnly(t *testing.T) {
+func TestPrune_InsideRepoOnly_NoPR(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := resolvePath(t, t.TempDir())
 
-	// Create two repos with local origins (required for merge detection)
-	repoA := setupTestRepoWithLocalOrigin(t, repoDir, "repo-a")
+	// Create two repos
+	repoA := setupTestRepo(t, repoDir, "repo-a")
 	wtA := filepath.Join(worktreeDir, "repo-a-feature")
 	setupWorktree(t, repoA, wtA, "feature")
-	makeCommitInWorktree(t, wtA, "feature.txt")
-	mergeBranchToMain(t, repoA, "feature")
 
-	repoB := setupTestRepoWithLocalOrigin(t, repoDir, "repo-b")
+	repoB := setupTestRepo(t, repoDir, "repo-b")
 	wtB := filepath.Join(worktreeDir, "repo-b-feature")
 	setupWorktree(t, repoB, wtB, "feature")
-	makeCommitInWorktree(t, wtB, "feature.txt")
-	mergeBranchToMain(t, repoB, "feature")
 
 	// Populate cache
 	populateCache(t, worktreeDir)
@@ -339,6 +289,7 @@ func TestPrune_InsideRepoOnly(t *testing.T) {
 	}
 
 	// Run from inside repo-a (no --global)
+	// Without merged PRs, nothing should be auto-pruned
 	cmd := &PruneCmd{
 		// Global: false (default)
 	}
@@ -347,28 +298,24 @@ func TestPrune_InsideRepoOnly(t *testing.T) {
 		t.Fatalf("wt prune failed: %v", err)
 	}
 
-	// Only repo-a's worktree should be removed
-	verifyWorktreeRemoved(t, wtA)
+	// No worktrees removed (no merged PRs)
+	verifyWorktreeExists(t, wtA)
 	verifyWorktreeExists(t, wtB)
 }
 
-func TestPrune_Global(t *testing.T) {
+func TestPrune_Global_NoPR(t *testing.T) {
 	t.Parallel()
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := resolvePath(t, t.TempDir())
 
-	// Create two repos with local origins (required for merge detection)
-	repoA := setupTestRepoWithLocalOrigin(t, repoDir, "repo-a")
+	// Create two repos
+	repoA := setupTestRepo(t, repoDir, "repo-a")
 	wtA := filepath.Join(worktreeDir, "repo-a-feature")
 	setupWorktree(t, repoA, wtA, "feature")
-	makeCommitInWorktree(t, wtA, "feature.txt")
-	mergeBranchToMain(t, repoA, "feature")
 
-	repoB := setupTestRepoWithLocalOrigin(t, repoDir, "repo-b")
+	repoB := setupTestRepo(t, repoDir, "repo-b")
 	wtB := filepath.Join(worktreeDir, "repo-b-feature")
 	setupWorktree(t, repoB, wtB, "feature")
-	makeCommitInWorktree(t, wtB, "feature.txt")
-	mergeBranchToMain(t, repoB, "feature")
 
 	// Populate cache
 	populateCache(t, worktreeDir)
@@ -378,7 +325,8 @@ func TestPrune_Global(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
-	// Run from inside repo-a with --global
+	// Run with --global
+	// Without merged PRs, nothing should be auto-pruned
 	cmd := &PruneCmd{
 		Global: true,
 	}
@@ -387,9 +335,9 @@ func TestPrune_Global(t *testing.T) {
 		t.Fatalf("wt prune -g failed: %v", err)
 	}
 
-	// Both worktrees should be removed
-	verifyWorktreeRemoved(t, wtA)
-	verifyWorktreeRemoved(t, wtB)
+	// No worktrees removed (no merged PRs)
+	verifyWorktreeExists(t, wtA)
+	verifyWorktreeExists(t, wtB)
 }
 
 func TestPrune_ErrorForceWithoutID(t *testing.T) {
@@ -511,16 +459,10 @@ func TestPrune_ByID_DryRun(t *testing.T) {
 	worktreeDir := resolvePath(t, t.TempDir())
 	repoDir := resolvePath(t, t.TempDir())
 
-	// Create repo with local origin (required for merge detection)
-	repoPath := setupTestRepoWithLocalOrigin(t, repoDir, "myrepo")
+	// Create repo
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
 	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
 	setupWorktree(t, repoPath, worktreePath, "feature")
-
-	// Make a commit so merge has something to do
-	makeCommitInWorktree(t, worktreePath, "feature.txt")
-
-	// Merge the branch (makes it prunable)
-	mergeBranchToMain(t, repoPath, "feature")
 
 	// Populate cache
 	populateCache(t, worktreeDir)
@@ -530,13 +472,15 @@ func TestPrune_ByID_DryRun(t *testing.T) {
 		WorktreeFormat: config.DefaultWorktreeFormat,
 	}
 
+	// Dry run with force flag (required for -n)
 	cmd := &PruneCmd{
 		ID:     []int{1},
+		Force:  true,
 		DryRun: true,
 	}
 
 	if err := runPruneCommand(t, worktreeDir, cfg, cmd); err != nil {
-		t.Fatalf("wt prune -n 1 -n failed: %v", err)
+		t.Fatalf("wt prune -n 1 -f -d failed: %v", err)
 	}
 
 	// Verify worktree still exists (dry run)

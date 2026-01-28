@@ -20,7 +20,7 @@
 //
 //   - [GetOriginURL], [GetRepoName]: Extract repository information
 //   - [GetCurrentBranch], [BranchExists]: Branch operations
-//   - [IsBranchMerged], [GetCommitCount]: Merge status checks
+//   - [GetCommitCount]: Commits ahead of default branch
 //   - [GetDefaultBranch]: Detect main/master branch
 //
 // # Repository Discovery

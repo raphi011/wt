@@ -63,33 +63,32 @@ func (c *CheckoutCmd) Run(ctx context.Context) error {
 	return c.runCheckout(ctx)
 }
 
-// PruneCmd removes merged and clean worktrees.
+// PruneCmd removes worktrees with merged PRs.
 type PruneCmd struct {
 	Deps
-	ID           []int    `short:"n" name:"number" help:"worktree(s) to remove (by number, repeatable)"`
-	DryRun       bool     `short:"d" name:"dry-run" negatable:"" help:"preview without removing"`
-	Force        bool     `short:"f" name:"force" help:"force remove targeted worktree (-n) even if not merged or dirty"`
-	IncludeClean bool     `short:"c" name:"include-clean" help:"also remove worktrees with 0 commits ahead and clean working directory"`
-	Verbose      bool     `short:"v" name:"verbose" help:"also show non-prunable worktrees with reasons"`
-	Global       bool     `short:"g" name:"global" help:"prune all worktrees (not just current repo)"`
-	Refresh      bool     `short:"R" name:"refresh" help:"fetch origin and refresh PR status before pruning"`
-	ResetCache   bool     `name:"reset-cache" help:"clear all cached data (PR info, worktree history) and reset IDs from 1"`
-	Hook         []string `name:"hook" help:"run named hook(s) instead of default (repeatable)" xor:"hook-ctrl"`
-	NoHook       bool     `name:"no-hook" help:"skip post-removal hooks" xor:"hook-ctrl"`
-	Env          []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
-	Interactive  bool     `short:"i" name:"interactive" help:"interactive mode: select worktrees to prune"`
+	ID          []int    `short:"n" name:"number" help:"worktree(s) to remove (by number, repeatable, requires -f)"`
+	DryRun      bool     `short:"d" name:"dry-run" negatable:"" help:"preview without removing"`
+	Force       bool     `short:"f" name:"force" help:"force remove targeted worktree (-n)"`
+	Verbose     bool     `short:"v" name:"verbose" help:"also show non-prunable worktrees with reasons"`
+	Global      bool     `short:"g" name:"global" help:"prune all worktrees (not just current repo)"`
+	Refresh     bool     `short:"R" name:"refresh" help:"fetch origin and refresh PR status before pruning"`
+	ResetCache  bool     `name:"reset-cache" help:"clear all cached data (PR info, worktree history) and reset IDs from 1"`
+	Hook        []string `name:"hook" help:"run named hook(s) instead of default (repeatable)" xor:"hook-ctrl"`
+	NoHook      bool     `name:"no-hook" help:"skip post-removal hooks" xor:"hook-ctrl"`
+	Env         []string `short:"a" name:"arg" help:"set hook variable KEY=VALUE (use KEY=- to read from stdin)"`
+	Interactive bool     `short:"i" name:"interactive" help:"interactive mode: select worktrees to prune"`
 }
 
 func (c *PruneCmd) Help() string {
-	return `Without --number, removes all worktrees where the branch is merged AND
-working directory is clean. With --number, removes only that specific worktree.
+	return `Without --number, removes all worktrees with merged PRs (GitHub/GitLab).
+With --number and --force, removes specific worktree(s) by ID.
 Use --interactive to select worktrees to prune from a list.
 
 When run inside a git repository, only prunes worktrees for that repo.
 Use --global to prune worktrees from all repos in the directory.
 
-Uses cached merge status and PR info. Use --refresh to fetch from origin and
-update PR status from GitHub/GitLab.
+Uses cached PR info. Use --refresh to fetch from origin and update
+PR status from GitHub/GitLab before pruning.
 
 Hooks with on=["prune"] run after each worktree removal. Hooks run with
 working directory set to the main repo (since worktree path is deleted).
@@ -98,16 +97,13 @@ Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
 Examples:
   wt prune -R                   # Fetch origin + PR status, then prune
-  wt prune                      # Remove merged worktrees (uses cached PR info)
+  wt prune                      # Remove worktrees with merged PRs (uses cached info)
   wt prune --global             # Prune all repos (not just current)
   wt prune -d                   # Dry-run: preview without removing
   wt prune -d --verbose         # Dry-run with skip reasons shown
-  wt prune -c                   # Also remove clean (0-commit) worktrees
   wt prune -i                   # Interactive mode: select worktrees to prune
-  wt prune -i -c                # Interactive with clean worktrees pre-selected
-  wt prune -n 1                 # Remove specific worktree by number
-  wt prune -n 1 -n 2 -n 3       # Remove multiple worktrees by number
-  wt prune -n 1 -f              # Force remove even if not merged/dirty
+  wt prune -n 1 -f              # Force remove specific worktree by number
+  wt prune -n 1 -n 2 -f         # Force remove multiple worktrees by number
   wt prune --no-hook            # Skip post-removal hooks
   wt prune --hook=cleanup       # Run 'cleanup' hook instead of default
   wt prune --reset-cache        # Clear PR cache and reset IDs from 1`
