@@ -350,6 +350,16 @@ func (c *CheckoutCmd) runCheckoutInRepo(ctx context.Context) error {
 		return err
 	}
 
+	// Handle autostash: stash uncommitted changes before creating worktree
+	var didStash bool
+	if c.AutoStash && git.IsDirty(ctx, workDir) {
+		l.Printf("Stashing uncommitted changes...\n")
+		if err := git.Stash(ctx, workDir); err != nil {
+			return err
+		}
+		didStash = true
+	}
+
 	// Resolve base ref if creating new branch
 	var baseRef string
 	if c.NewBranch {
@@ -373,7 +383,19 @@ func (c *CheckoutCmd) runCheckoutInRepo(ctx context.Context) error {
 		workDir:   workDir,
 	})
 	if err != nil {
+		if didStash {
+			l.Printf("Warning: worktree creation failed but changes are stashed. Run 'git stash pop' to restore.\n")
+		}
 		return err
+	}
+
+	// Apply stashed changes to the new worktree
+	if didStash {
+		l.Printf("Applying stashed changes to new worktree...\n")
+		if err := git.StashPop(ctx, result.Path); err != nil {
+			l.Printf("Warning: failed to apply stash to new worktree: %v\n", err)
+			l.Printf("Your changes are still in the stash. Run 'git stash pop' in %s to apply manually.\n", workDir)
+		}
 	}
 
 	// Run post-add hooks

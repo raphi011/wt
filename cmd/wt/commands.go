@@ -23,6 +23,7 @@ type CheckoutCmd struct {
 	NewBranch   bool     `short:"b" name:"new-branch" help:"create a new branch"`
 	Base        string   `name:"base" placeholder:"BRANCH" help:"base branch to create from (default: main/master)"`
 	Fetch       bool     `short:"f" name:"fetch" help:"fetch base branch from origin before creating"`
+	AutoStash   bool     `short:"s" name:"autostash" help:"stash changes and apply to new worktree"`
 	Note        string   `name:"note" placeholder:"TEXT" help:"set a note on the branch"`
 	Hook        []string `name:"hook" help:"run named hook(s) instead of default (repeatable)" xor:"hook-ctrl"`
 	NoHook      bool     `name:"no-hook" help:"skip post-checkout hook" xor:"hook-ctrl"`
@@ -38,6 +39,7 @@ Use -i for interactive mode to be prompted for options.
 New branches are created from the default branch (main/master) by default.
 Use --base to specify a different base branch.
 Use -f/--fetch to fetch the base branch before creating (ensures up-to-date).
+Use -s/--autostash to stash uncommitted changes and apply them to the new worktree.
 
 Target directory is set via WT_WORKTREE_DIR env var or worktree_dir config.
 
@@ -46,6 +48,7 @@ Examples:
   wt checkout -b feature-branch           # Create new branch from origin/main
   wt checkout -b feature-branch -f        # Fetch main first, then create branch
   wt checkout -b feature-branch --base develop  # Create from origin/develop
+  wt checkout -b feature-branch -s        # Stash changes and apply to new worktree
   wt checkout feature-branch --no-hook    # Skip post-checkout hook
   wt checkout -b feature -r repo1 -r repo2      # By repo name
   wt checkout -b feature -l backend             # By label

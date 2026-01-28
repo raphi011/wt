@@ -4,6 +4,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -851,6 +852,186 @@ func TestCheckout_PartialFailureMultiRepo(t *testing.T) {
 	wtA := filepath.Join(worktreeDir, "repo-a-only-in-a")
 	if _, err := os.Stat(wtA); os.IsNotExist(err) {
 		t.Errorf("worktree for repo-a should be created despite repo-b failing")
+	}
+}
+
+func TestCheckout_AutoStash(t *testing.T) {
+	t.Parallel()
+	// Test --autostash flag: stash changes in current worktree and apply to new worktree
+
+	// Setup temp directories
+	sourceDir := t.TempDir()
+	worktreeDir := t.TempDir()
+
+	// Create repo
+	repoPath := setupTestRepo(t, sourceDir, "myrepo")
+
+	// Make the repo dirty (uncommitted changes)
+	dirtyFile := filepath.Join(repoPath, "uncommitted.txt")
+	if err := os.WriteFile(dirtyFile, []byte("uncommitted changes\n"), 0644); err != nil {
+		t.Fatalf("failed to create dirty file: %v", err)
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+		BaseRef:        "local",
+	}
+
+	cmd := &CheckoutCmd{
+		Branch:    "feature-with-stash",
+		NewBranch: true,
+		AutoStash: true,
+	}
+
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -b -s failed: %v", err)
+	}
+
+	// Verify worktree created
+	expectedPath := filepath.Join(worktreeDir, "myrepo-feature-with-stash")
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("worktree not created at %s", expectedPath)
+	}
+
+	// Verify source repo is now clean (changes were stashed and popped in new worktree)
+	cmd2 := exec.Command("git", "status", "--porcelain")
+	cmd2.Dir = repoPath
+	out, err := cmd2.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git status failed: %v\n%s", err, out)
+	}
+	if strings.TrimSpace(string(out)) != "" {
+		t.Errorf("source repo should be clean after autostash, but has changes: %s", out)
+	}
+
+	// Verify changes exist in new worktree
+	newDirtyFile := filepath.Join(expectedPath, "uncommitted.txt")
+	if _, err := os.Stat(newDirtyFile); os.IsNotExist(err) {
+		t.Errorf("uncommitted.txt should exist in new worktree (stash was applied)")
+	}
+
+	// Verify the new worktree is dirty (has the uncommitted changes)
+	cmd3 := exec.Command("git", "status", "--porcelain")
+	cmd3.Dir = expectedPath
+	out, err = cmd3.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git status in new worktree failed: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "uncommitted.txt") {
+		t.Errorf("new worktree should have uncommitted.txt as untracked, got: %s", out)
+	}
+}
+
+func TestCheckout_AutoStashNoChanges(t *testing.T) {
+	t.Parallel()
+	// Test --autostash with no uncommitted changes (should be a no-op)
+
+	// Setup temp directories
+	sourceDir := t.TempDir()
+	worktreeDir := t.TempDir()
+
+	// Create repo (clean, no uncommitted changes)
+	repoPath := setupTestRepo(t, sourceDir, "myrepo")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+		BaseRef:        "local",
+	}
+
+	cmd := &CheckoutCmd{
+		Branch:    "feature-clean",
+		NewBranch: true,
+		AutoStash: true,
+	}
+
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -b -s (clean repo) failed: %v", err)
+	}
+
+	// Verify worktree created
+	expectedPath := filepath.Join(worktreeDir, "myrepo-feature-clean")
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("worktree not created at %s", expectedPath)
+	}
+
+	// Verify both are clean
+	cmd2 := exec.Command("git", "status", "--porcelain")
+	cmd2.Dir = repoPath
+	out, _ := cmd2.CombinedOutput()
+	if strings.TrimSpace(string(out)) != "" {
+		t.Errorf("source repo should be clean: %s", out)
+	}
+
+	cmd3 := exec.Command("git", "status", "--porcelain")
+	cmd3.Dir = expectedPath
+	out, _ = cmd3.CombinedOutput()
+	if strings.TrimSpace(string(out)) != "" {
+		t.Errorf("new worktree should be clean: %s", out)
+	}
+}
+
+func TestCheckout_AutoStashWithStagedChanges(t *testing.T) {
+	t.Parallel()
+	// Test --autostash with both staged and unstaged changes
+
+	// Setup temp directories
+	sourceDir := t.TempDir()
+	worktreeDir := t.TempDir()
+
+	// Create repo
+	repoPath := setupTestRepo(t, sourceDir, "myrepo")
+
+	// Create a staged change
+	stagedFile := filepath.Join(repoPath, "staged.txt")
+	if err := os.WriteFile(stagedFile, []byte("staged content\n"), 0644); err != nil {
+		t.Fatalf("failed to create staged file: %v", err)
+	}
+	runGitCommand(t, repoPath, "git", "add", "staged.txt")
+
+	// Create an unstaged change
+	unstagedFile := filepath.Join(repoPath, "unstaged.txt")
+	if err := os.WriteFile(unstagedFile, []byte("unstaged content\n"), 0644); err != nil {
+		t.Fatalf("failed to create unstaged file: %v", err)
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+		BaseRef:        "local",
+	}
+
+	cmd := &CheckoutCmd{
+		Branch:    "feature-mixed-changes",
+		NewBranch: true,
+		AutoStash: true,
+	}
+
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -b -s (mixed changes) failed: %v", err)
+	}
+
+	// Verify worktree created
+	expectedPath := filepath.Join(worktreeDir, "myrepo-feature-mixed-changes")
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("worktree not created at %s", expectedPath)
+	}
+
+	// Verify source repo is clean
+	cmd2 := exec.Command("git", "status", "--porcelain")
+	cmd2.Dir = repoPath
+	out, _ := cmd2.CombinedOutput()
+	if strings.TrimSpace(string(out)) != "" {
+		t.Errorf("source repo should be clean after autostash: %s", out)
+	}
+
+	// Verify both files exist in new worktree
+	if _, err := os.Stat(filepath.Join(expectedPath, "staged.txt")); os.IsNotExist(err) {
+		t.Errorf("staged.txt should exist in new worktree")
+	}
+	if _, err := os.Stat(filepath.Join(expectedPath, "unstaged.txt")); os.IsNotExist(err) {
+		t.Errorf("unstaged.txt should exist in new worktree")
 	}
 }
 

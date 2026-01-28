@@ -97,7 +97,7 @@ _wt_completions() {
                 local branches=$(git branch --all --format='%(refname:short)' 2>/dev/null | sed 's|origin/||' | sort -u)
                 COMPREPLY=($(compgen -W "$branches" -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "-i --interactive -b --new-branch -r --repository -l --label --base -f --fetch --note --hook --no-hook -a --arg" -- "$cur"))
+                COMPREPLY=($(compgen -W "-i --interactive -b --new-branch -r --repository -l --label --base -f --fetch -s --autostash --note --hook --no-hook -a --arg" -- "$cur"))
             fi
             ;;
         prune|p)
@@ -727,6 +727,8 @@ _wt() {
                         '--base[base branch to create from]:branch:__wt_all_branches' \
                         '-f[fetch base branch before creating]' \
                         '--fetch[fetch base branch before creating]' \
+                        '-s[stash changes and apply to new worktree]' \
+                        '--autostash[stash changes and apply to new worktree]' \
                         '--note[set note on branch]:note:' \
                         '--hook[run named hook]:hook:' \
                         '--no-hook[skip post-checkout hook]' \
@@ -1158,6 +1160,7 @@ complete -c wt -n "__fish_seen_subcommand_from checkout co" -s r -l repository -
 complete -c wt -n "__fish_seen_subcommand_from checkout co" -s l -l label -r -a "(__wt_list_labels)" -d "Target repos by label (repeatable)"
 complete -c wt -n "__fish_seen_subcommand_from checkout co" -l base -r -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Base branch to create from"
 complete -c wt -n "__fish_seen_subcommand_from checkout co" -s f -l fetch -d "Fetch base branch before creating"
+complete -c wt -n "__fish_seen_subcommand_from checkout co" -s s -l autostash -d "Stash changes and apply to new worktree"
 complete -c wt -n "__fish_seen_subcommand_from checkout co" -l note -r -d "Set note on branch"
 complete -c wt -n "__fish_seen_subcommand_from checkout co" -l hook -d "Run named hook instead of default"
 complete -c wt -n "__fish_seen_subcommand_from checkout co" -l no-hook -d "Skip post-checkout hook"
