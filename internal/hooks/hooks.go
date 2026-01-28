@@ -192,9 +192,9 @@ func ParseEnv(envSlice []string) (map[string]string, error) {
 	return result, nil
 }
 
-// readStdinIfPiped reads all content from stdin if it's piped (not a TTY).
+// ReadStdinIfPiped reads all content from stdin if it's piped (not a TTY).
 // Returns empty string and nil if stdin is a TTY (interactive).
-func readStdinIfPiped() (string, error) {
+func ReadStdinIfPiped() (string, error) {
 	if isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd()) {
 		return "", nil
 	}
@@ -205,14 +205,42 @@ func readStdinIfPiped() (string, error) {
 	return string(data), nil
 }
 
+// NeedsStdin returns true if any env entry has "-" as value
+func NeedsStdin(envSlice []string) bool {
+	for _, e := range envSlice {
+		_, value, ok := strings.Cut(e, "=")
+		if ok && value == "-" {
+			return true
+		}
+	}
+	return false
+}
+
 // ParseEnvWithStdin parses a slice of "key=value" strings into a map.
 // If any value is "-", reads stdin content and assigns it to all such keys.
 // Returns an error if stdin is requested but not piped or empty.
 func ParseEnvWithStdin(envSlice []string) (map[string]string, error) {
-	result := make(map[string]string)
-	var stdinKeys []string
+	// Read stdin if needed
+	var stdinContent string
+	if NeedsStdin(envSlice) {
+		var err error
+		stdinContent, err = ReadStdinIfPiped()
+		if err != nil {
+			return nil, err
+		}
+		if stdinContent == "" {
+			return nil, fmt.Errorf("stdin not piped: KEY=- requires piped input")
+		}
+	}
+	return ParseEnvWithCachedStdin(envSlice, stdinContent)
+}
 
-	// First pass: parse all entries and identify stdin keys
+// ParseEnvWithCachedStdin parses a slice of "key=value" strings into a map,
+// using pre-read stdin content for any "-" values.
+// Returns an error if stdin is needed but stdinContent is empty.
+func ParseEnvWithCachedStdin(envSlice []string, stdinContent string) (map[string]string, error) {
+	result := make(map[string]string)
+
 	for _, e := range envSlice {
 		key, value, ok := strings.Cut(e, "=")
 		if !ok {
@@ -222,23 +250,12 @@ func ParseEnvWithStdin(envSlice []string) (map[string]string, error) {
 			return nil, fmt.Errorf("invalid env format %q: key cannot be empty", e)
 		}
 		if value == "-" {
-			stdinKeys = append(stdinKeys, key)
+			if stdinContent == "" {
+				return nil, fmt.Errorf("stdin not piped: KEY=- requires piped input")
+			}
+			result[key] = stdinContent
 		} else {
 			result[key] = value
-		}
-	}
-
-	// If any keys need stdin, read it once
-	if len(stdinKeys) > 0 {
-		content, err := readStdinIfPiped()
-		if err != nil {
-			return nil, err
-		}
-		if content == "" {
-			return nil, fmt.Errorf("stdin not piped: KEY=- requires piped input")
-		}
-		for _, key := range stdinKeys {
-			result[key] = content
 		}
 	}
 

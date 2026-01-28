@@ -597,6 +597,166 @@ func TestParseEnvWithStdin(t *testing.T) {
 	}
 }
 
+func TestNeedsStdin(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		expected bool
+	}{
+		{
+			name:     "empty slice",
+			input:    []string{},
+			expected: false,
+		},
+		{
+			name:     "no stdin markers",
+			input:    []string{"key=value", "other=data"},
+			expected: false,
+		},
+		{
+			name:     "single stdin marker",
+			input:    []string{"content=-"},
+			expected: true,
+		},
+		{
+			name:     "mixed with stdin marker",
+			input:    []string{"mode=ask", "content=-"},
+			expected: true,
+		},
+		{
+			name:     "multiple stdin markers",
+			input:    []string{"a=-", "b=-"},
+			expected: true,
+		},
+		{
+			name:     "dash in value (not marker)",
+			input:    []string{"key=value-with-dashes"},
+			expected: false,
+		},
+		{
+			name:     "invalid format (no equals)",
+			input:    []string{"invalid"},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := NeedsStdin(tt.input)
+			if result != tt.expected {
+				t.Errorf("NeedsStdin(%v) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseEnvWithCachedStdin(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        []string
+		stdinContent string
+		expected     map[string]string
+		expectError  bool
+		errorMsg     string
+	}{
+		{
+			name:         "empty slice",
+			input:        []string{},
+			stdinContent: "",
+			expected:     map[string]string{},
+		},
+		{
+			name:         "regular values only",
+			input:        []string{"key=value", "other=data"},
+			stdinContent: "",
+			expected: map[string]string{
+				"key":   "value",
+				"other": "data",
+			},
+		},
+		{
+			name:         "stdin marker with content",
+			input:        []string{"content=-"},
+			stdinContent: "piped data",
+			expected: map[string]string{
+				"content": "piped data",
+			},
+		},
+		{
+			name:         "mixed regular and stdin",
+			input:        []string{"mode=ask", "content=-"},
+			stdinContent: "piped data",
+			expected: map[string]string{
+				"mode":    "ask",
+				"content": "piped data",
+			},
+		},
+		{
+			name:         "multiple stdin markers share content",
+			input:        []string{"a=-", "b=-"},
+			stdinContent: "shared content",
+			expected: map[string]string{
+				"a": "shared content",
+				"b": "shared content",
+			},
+		},
+		{
+			name:         "stdin marker but no content",
+			input:        []string{"content=-"},
+			stdinContent: "",
+			expectError:  true,
+			errorMsg:     "stdin not piped",
+		},
+		{
+			name:         "invalid format",
+			input:        []string{"invalid"},
+			stdinContent: "",
+			expectError:  true,
+			errorMsg:     "invalid env format",
+		},
+		{
+			name:         "empty key",
+			input:        []string{"=value"},
+			stdinContent: "",
+			expectError:  true,
+			errorMsg:     "key cannot be empty",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ParseEnvWithCachedStdin(tt.input, tt.stdinContent)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+					return
+				}
+				if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("expected error containing %q, got %q", tt.errorMsg, err.Error())
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if len(result) != len(tt.expected) {
+				t.Errorf("expected %d entries, got %d", len(tt.expected), len(result))
+				return
+			}
+
+			for k, v := range tt.expected {
+				if result[k] != v {
+					t.Errorf("expected %q=%q, got %q=%q", k, v, k, result[k])
+				}
+			}
+		})
+	}
+}
+
 func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 	tests := []struct {
 		name     string
