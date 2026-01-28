@@ -50,11 +50,13 @@ This creates `~/.config/wt/config.toml` with your worktree directory.
 If you have repos and worktrees scattered around, consolidate them:
 
 ```bash
-wt mv -d          # Preview what would be moved
-wt mv             # Move to configured directories
+wt mv -d                      # Preview what would be moved
+wt mv                         # Move to configured directories
+wt mv ~/old-projects          # Move all repos/worktrees from a folder
+wt mv ~/old-projects/my-repo  # Move a single repo (and its worktrees)
 ```
 
-Scans the current directory for git repos and worktrees. Worktrees are moved to `worktree_dir`, repos to `repo_dir` (if configured, otherwise `worktree_dir`).
+Scans the current directory (or specified path) for git repos and worktrees. Worktrees are moved to `worktree_dir`, repos to `repo_dir` (if configured, otherwise `worktree_dir`).
 
 ### 3. List Worktrees
 
@@ -273,6 +275,15 @@ wt mv -d
 
 # Move all worktrees to configured worktree_dir
 wt mv
+
+# Move all from a specific folder
+wt mv ~/old-projects
+
+# Move a single worktree
+wt mv ~/old-projects/my-worktree
+
+# Move a repo and all its worktrees
+wt mv ~/old-projects/my-repo
 
 # Move and rename to consistent format
 wt mv --format={repo}-{branch}
