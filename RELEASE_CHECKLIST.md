@@ -1,424 +1,164 @@
-# wt Release Checklist
+# wt Release Testing Checklist
 
-This checklist ensures all functionality works correctly and documentation is consistent before a release.
-
-**Review Process:** For each section, Claude does initial review, user verifies, then tick off when both agree.
+Manual testing reference for pre-release verification. Test each command and flag combination.
 
 ---
 
-## Quick Reference
+## Core Commands
 
-- [ ] [1. Core Commands](#1-core-commands)
-- [ ] [2. PR Commands](#2-pr-commands)
-- [ ] [3. Utility Commands](#3-utility-commands)
-- [ ] [4. Configuration Commands](#4-configuration-commands)
-- [ ] [5. Configuration System](#5-configuration-system)
-- [ ] [6. Hook System](#6-hook-system)
-- [ ] [7. Shell Completions](#7-shell-completions)
-- [ ] [8. Documentation Consistency](#8-documentation-consistency)
-- [ ] [9. Build & Release](#9-build--release)
-
----
-
-## 1. Core Commands
-
-### 1.1 `wt checkout`
-
-- [ ] **Basic checkout** - `wt checkout <branch>` creates worktree for existing branch
-- [ ] **New branch** - `wt checkout -b <branch>` creates new branch and worktree
-- [ ] **Directory flag** - `-d/--dir` overrides default path
-- [ ] **Multi-repo by name** - `-r <repo> [-r <repo>...]` targets multiple repos
-- [ ] **Multi-repo by label** - `-l <label> [-l <label>...]` targets repos with label
-- [ ] **Note flag** - `--note` sets branch note on creation
-- [ ] **Hook control** - `--hook`, `--no-hook`, `-a/--arg` work correctly
-- [ ] **Error handling** - proper errors for missing branch, invalid dir, etc.
-
-### 1.2 `wt list`
-
-- [ ] **Basic list** - shows worktrees with stable IDs
-- [ ] **JSON output** - `--json` produces valid JSON
-- [ ] **Global flag** - `-g/--global` shows all repos
-- [ ] **Sort options** - `-s {id|repo|branch}` sorts correctly
-- [ ] **Refresh flag** - `-r/--refresh` fetches latest PR status
-- [ ] **Directory flag** - `-d/--dir` scans correct directory
-
-### 1.3 `wt show`
-
-- [ ] **Current worktree** - works without `-i` inside worktree
-- [ ] **By ID** - `-i <id>` shows specific worktree
-- [ ] **JSON output** - `--json` produces valid JSON
-- [ ] **Refresh flag** - `-r/--refresh` fetches latest PR status
-- [ ] **Shows commits** - displays commits ahead/behind
-- [ ] **Shows changes** - displays uncommitted changes
-- [ ] **Shows PR info** - displays PR/MR status if exists
-
-### 1.4 `wt prune`
-
-- [ ] **Interactive prune** - shows table, confirms before removing
-- [ ] **By ID** - `-i <id>` removes specific worktree(s)
-- [ ] **Dry run** - `-n/--dry-run` previews without removing
-- [ ] **Force** - `-f/--force` removes even if dirty/unmerged
-- [ ] **Include clean** - `-c/--include-clean` also removes clean worktrees
-- [ ] **Global** - `-g/--global` prunes all repos
-- [ ] **Refresh** - `-r/--refresh` fetches latest PR status first
-- [ ] **Reset cache** - `--reset-cache` clears cache and resets IDs
-- [ ] **Hook control** - `--hook`, `--no-hook`, `-a/--arg` work correctly
+| Command | Expected Behavior | Watch For |
+|---------|-------------------|-----------|
+| `wt checkout <branch>` | Creates worktree for existing branch | Fails if branch doesn't exist |
+| `wt checkout -b <branch>` | Creates new branch + worktree from main/master | Base branch detection |
+| `wt checkout -b <branch> --base develop` | Creates from specified base | Custom base branch |
+| `wt checkout -b <branch> -f` | Fetches base before creating | Network errors |
+| `wt checkout -b <branch> -s` | Stashes changes, applies to new worktree | Stash apply conflicts |
+| `wt checkout -r repo1 -r repo2 <branch>` | Multi-repo by name | All repos found |
+| `wt checkout -l backend <branch>` | Multi-repo by label | Label matching |
+| `wt checkout --note "text" <branch>` | Sets branch note | Note persists |
+| `wt checkout --hook=myhook <branch>` | Runs specific hook | Hook found, executes |
+| `wt checkout --no-hook <branch>` | Skips all hooks | No hook runs |
+| `wt checkout -i` | Interactive wizard | All prompts work |
+| `wt list` | Shows worktrees with stable IDs | Inside repo: filters to current |
+| `wt list --json` | Valid JSON output | Parseable JSON |
+| `wt list -g` | Shows all repos' worktrees | Global scope |
+| `wt list -s {id\|repo\|branch\|commit}` | Sorts by column | Correct ordering |
+| `wt list -R` | Fetches origin + PR status | Network errors, cache update |
+| `wt list -r repo1,repo2` | Filters by repo name | Multiple filters |
+| `wt list -l backend` | Filters by label | Label matching |
+| `wt show` | Shows current worktree details | Inside worktree only |
+| `wt show -n <id>` | Shows specific worktree | ID resolution |
+| `wt show -r myrepo` | Shows repo's current branch | Repo resolution |
+| `wt show -R` | Refreshes PR status | API call |
+| `wt show --json` | Valid JSON output | Parseable JSON |
+| `wt prune` | Removes merged worktrees | Uses cached PR info |
+| `wt prune -R` | Refreshes PR status first | Network, then prune |
+| `wt prune -d` | Dry-run preview | No actual removal |
+| `wt prune -d -v` | Dry-run with skip reasons | Shows why not pruned |
+| `wt prune -n 1 -f` | Force removes by ID | Requires -f |
+| `wt prune -n 1 -n 2 -f` | Multiple IDs | All removed |
+| `wt prune -g` | Prunes all repos | Global scope |
+| `wt prune --reset-cache` | Clears cache, resets IDs | IDs renumbered from 1 |
+| `wt prune --hook=cleanup` | Runs specific hook | Hook after each removal |
+| `wt prune --no-hook` | Skips all hooks | No hook runs |
+| `wt prune -i` | Interactive selection | Multi-select works |
+| `wt repos` | Lists repos in directory | Correct dir scanned |
+| `wt repos -l backend` | Filters by label | Label matching |
+| `wt repos -s {name\|branch\|worktrees\|label}` | Sorts by column | Correct ordering |
+| `wt repos --json` | Valid JSON output | Parseable JSON |
 
 ---
 
-## 2. PR Commands
+## PR Commands
 
-### 2.1 `wt pr checkout`
-
-- [ ] **Open by number** - `wt pr checkout <number>` from inside repo
-- [ ] **Open with repo** - `wt pr checkout <number> <repo>` finds repo locally
-- [ ] **Hook control** - `--hook`, `--no-hook`, `-a/--arg` work correctly
-- [ ] **GitHub support** - works with `gh` CLI
-- [ ] **GitLab support** - works with `glab` CLI
-- [ ] **Local repo flag** - `-r/--repository` finds repo by name
-- [ ] **Clone mode** - positional `org/repo` clones and creates worktree
-- [ ] **Org default** - respects `[forge] default_org` config in clone mode
-- [ ] **Forge flag** - `--forge {github|gitlab}` overrides detection in clone mode
-- [ ] **Clone rules** - respects pattern-based forge routing in clone mode
-- [ ] **Note flag** - `--note` sets branch note
-- [ ] **Mutual exclusion** - errors if both positional `org/repo` and `-r` flag used
-
-### 2.2 `wt pr view`
-
-- [ ] **View current** - works without `-i` inside worktree
-- [ ] **View by ID** - `-i <id>` views specific worktree's PR
-- [ ] **Web flag** - `-w/--web` opens PR in browser
-- [ ] **GitHub support** - works with `gh pr view`
-- [ ] **GitLab support** - works with `glab mr view`
-
-### 2.3 `wt pr merge`
-
-- [ ] **Merge current** - works without `-i` inside worktree
-- [ ] **Merge by ID** - `-i <id>` merges specific worktree's PR
-- [ ] **Strategy flag** - `-s {squash|rebase|merge}` uses correct strategy
-- [ ] **Keep flag** - `-k/--keep` preserves worktree after merge
-- [ ] **Hook control** - `--hook`, `--no-hook`, `-a/--arg` work correctly
-- [ ] **Cleanup** - removes worktree and branch after merge (unless --keep)
-
----
-
-## 3. Utility Commands
-
-### 3.1 `wt exec`
-
-- [ ] **Single ID** - `wt exec -i <id> -- <cmd>` runs in one worktree
-- [ ] **Multiple IDs** - `-i <id> -i <id>` runs in multiple worktrees
-- [ ] **Requires ID** - fails appropriately when `-i` not provided
-- [ ] **Command execution** - command runs with correct working directory
-- [ ] **Exit codes** - propagates command exit codes
-
-### 3.2 `wt cd`
-
-- [ ] **Print path** - `wt cd -n <id>` prints worktree path
-- [ ] **Project flag** - `-p/--project` prints main repo path instead
-- [ ] **Requires ID** - fails appropriately when `-i` not provided
-- [ ] **Shell integration** - output usable in `$(wt cd -n X)` syntax
-
-### 3.3 `wt mv`
-
-- [ ] **Move worktrees** - moves all worktrees to new directory
-- [ ] **Format flag** - `--format` renames during move
-- [ ] **Dry run** - `-n/--dry-run` previews without moving
-- [ ] **Force** - `-f/--force` moves dirty worktrees
-- [ ] **Git worktree repair** - updates git worktree paths
-
-### 3.4 `wt note`
-
-- [ ] **Set note** - `wt note set "text"` sets note on current branch
-- [ ] **Get note** - `wt note get` retrieves note
-- [ ] **Clear note** - `wt note clear` removes note
-- [ ] **By ID** - `-i <id>` operates on specific worktree
-- [ ] **Default subcommand** - `wt note` defaults to `get`
-
-### 3.5 `wt label`
-
-- [ ] **Add label** - `wt label add <label>` adds to current repo
-- [ ] **Remove label** - `wt label remove <label>` removes from repo
-- [ ] **List labels** - `wt label list` shows repo's labels
-- [ ] **List all** - `-a/--all` lists labels from all repos in dir
-- [ ] **Clear labels** - `wt label clear` removes all labels
-- [ ] **Stored in git config** - labels persist in `wt.labels`
-
-### 3.6 `wt hook`
-
-- [ ] **Run by name** - `wt hook <name>` runs specific hook
-- [ ] **Multiple hooks** - `wt hook <name1> <name2>` runs multiple
-- [ ] **By ID** - `-i <id>` runs in specific worktree
-- [ ] **Multiple IDs** - `-i <id> -i <id>` runs for multiple worktrees
-- [ ] **Arg flag** - `-a/--arg KEY=VALUE` passes variables
-- [ ] **Stdin support** - `-a KEY=-` reads from stdin
-- [ ] **Unknown hook error** - proper error for non-existent hook
+| Command | Expected Behavior | Watch For |
+|---------|-------------------|-----------|
+| `wt pr checkout <num>` | Checks out PR branch | Inside repo only |
+| `wt pr checkout <num> -r myrepo` | Checks out from named repo | Repo found |
+| `wt pr checkout <num> org/repo` | Clones repo, checks out PR | Clone mode |
+| `wt pr checkout <num> org/repo --forge=gitlab` | Uses GitLab | GitLab CLI works |
+| `wt pr checkout <num> --note "text"` | Sets branch note | Note persists |
+| `wt pr checkout --hook=myhook` | Runs specific hook | Hook executes |
+| `wt pr checkout --no-hook` | Skips hooks | No hook runs |
+| `wt pr checkout -i` | Interactive PR selection | List loads |
+| `wt pr checkout -i -r myrepo` | Interactive from repo | Scoped to repo |
+| `wt pr view` | Shows PR details | Inside worktree |
+| `wt pr view -n <id>` | Shows by worktree ID | ID resolution |
+| `wt pr view -r myrepo` | Shows by repo name | Repo resolution |
+| `wt pr view -w` | Opens in browser | Browser opens |
+| `wt pr merge` | Merges, removes worktree+branch | Full cleanup |
+| `wt pr merge -n <id>` | Merges by worktree ID | ID resolution |
+| `wt pr merge -r myrepo` | Merges by repo name | Repo resolution |
+| `wt pr merge -s squash` | Uses squash strategy | Strategy applied |
+| `wt pr merge -s rebase` | Uses rebase strategy | **GitLab: not supported** |
+| `wt pr merge -k` | Keeps worktree+branch | No cleanup |
+| `wt pr merge --hook=post-merge` | Runs specific hook | Hook executes |
+| `wt pr merge --no-hook` | Skips hooks | No hook runs |
+| `wt pr create -t "Title"` | Creates PR | Inside worktree |
+| `wt pr create -t "Title" -b "Body"` | With body text | Body set |
+| `wt pr create -t "Title" --body-file=pr.md` | Body from file | File read |
+| `wt pr create -t "Title" --base develop` | Custom base branch | Base used |
+| `wt pr create -t "Title" --draft` | Creates draft PR | Draft status |
+| `wt pr create -t "Title" -w` | Opens in browser | Browser opens |
+| `wt pr create -t "Title" -n <id>` | By worktree ID | ID resolution |
+| `wt pr create -t "Title" -r myrepo` | By repo name | Repo resolution |
 
 ---
 
-## 4. Configuration Commands
+## Utility Commands
 
-### 4.1 `wt config init`
-
-- [ ] **Creates config** - creates `~/.config/wt/config.toml`
-- [ ] **No overwrite** - fails if file exists (without --force)
-- [ ] **Force flag** - `-f/--force` overwrites existing
-- [ ] **Stdout flag** - `-s/--stdout` prints config to stdout instead of file
-- [ ] **Template quality** - generated config has good comments/examples
-
-### 4.2 `wt config show`
-
-- [ ] **Shows config** - displays effective configuration
-- [ ] **JSON output** - `--json` produces valid JSON
-- [ ] **All sections** - shows all non-empty config sections
-
-### 4.3 `wt config hooks`
-
-- [ ] **Lists hooks** - shows all configured hooks
-- [ ] **JSON output** - `--json` produces valid JSON
-- [ ] **Shows metadata** - displays command, description, triggers
-
-### 4.4 `wt completion`
-
-- [ ] **Fish** - `wt completion fish` generates valid fish script
-- [ ] **Bash** - `wt completion bash` generates valid bash script
-- [ ] **Zsh** - `wt completion zsh` generates valid zsh script
-- [ ] **Error for invalid** - fails for unsupported shells
-
----
-
-## 5. Configuration System
-
-### 5.1 Config Loading
-
-- [ ] **Default location** - reads from `~/.config/wt/config.toml`
-- [ ] **Missing file OK** - no error when file doesn't exist
-- [ ] **Parse errors** - reports TOML syntax errors clearly
-- [ ] **Tilde expansion** - `~` in paths expanded to home dir
-
-### 5.2 Config Options
-
-- [ ] **default_path** - used when `-d` not specified
-- [ ] **worktree_format** - controls folder naming with placeholders
-- [ ] **forge.default** - default forge for `pr checkout` clone mode
-- [ ] **forge.default_org** - default org for repo names
-- [ ] **forge.rules** - pattern-based forge routing works
-- [ ] **forge.rules[].user** - multi-account auth with gh CLI
-- [ ] **merge.strategy** - default merge strategy
-- [ ] **hosts** - custom domain to forge mapping
-
-### 5.3 Config Validation
-
-- [ ] **default_path** - rejects relative paths (`.`, `..`)
-- [ ] **forge.default** - only accepts github/gitlab/empty
-- [ ] **merge.strategy** - only accepts squash/rebase/merge/empty
-- [ ] **hosts values** - only accepts github/gitlab
+| Command | Expected Behavior | Watch For |
+|---------|-------------------|-----------|
+| `wt exec -n <id> -- <cmd>` | Runs cmd in worktree | Correct working dir |
+| `wt exec -n 1 -n 2 -- git status` | Multiple worktrees | All executed |
+| `wt exec -r repo1,repo2 -- make` | By repo names | Runs in main repos |
+| `wt exec -l backend -- make` | By label | Runs in labeled repos |
+| `wt cd -n <id>` | Prints worktree path | Path to stdout |
+| `wt cd -n <id> -p` | Prints main repo path | Project path |
+| `wt cd -r myrepo` | Prints repo path | Repo found |
+| `wt cd -l backend` | Prints by label | Exactly one match required |
+| `cd $(wt cd -n 1)` | Shell integration | Logs to stderr only |
+| `wt mv` | Moves worktrees to config dir | Scans cwd |
+| `wt mv ~/old-folder` | Moves from specified path | Path scanned |
+| `wt mv --format={branch}` | Renames during move | Format applied |
+| `wt mv -d` | Dry-run preview | No actual move |
+| `wt mv -f` | Force move locked | Locked worktrees moved |
+| `wt mv -r myrepo` | Filters by repo | Only matching moved |
+| `wt note set "text"` | Sets note on current branch | Inside worktree |
+| `wt note set "text" -n <id>` | Sets by worktree ID | ID resolution |
+| `wt note get` | Gets current branch note | Prints or empty |
+| `wt note get -n <id>` | Gets by worktree ID | ID resolution |
+| `wt note clear` | Clears current branch note | Removed |
+| `wt note clear -n <id>` | Clears by worktree ID | ID resolution |
+| `wt label add backend` | Adds label to current repo | Stored in git config |
+| `wt label add backend -r api,web` | Adds to multiple repos | All updated |
+| `wt label remove backend` | Removes label | Removed |
+| `wt label list` | Lists current repo labels | Shows labels |
+| `wt label list -r api,web` | Lists for specific repos | Filtered |
+| `wt label list -g` | Lists all labels globally | All repos scanned |
+| `wt label clear` | Clears all labels | All removed |
+| `wt hook myhook` | Runs named hook | Inside worktree |
+| `wt hook myhook -n <id>` | By worktree ID | ID resolution |
+| `wt hook myhook -n 1 -n 2` | Multiple worktrees | All executed |
+| `wt hook myhook -r repo1,repo2` | By repo names | Runs in main repos |
+| `wt hook myhook -l backend` | By label | Runs in labeled repos |
+| `wt hook myhook -a KEY=VALUE` | Passes variable | Placeholder substituted |
+| `wt hook myhook -d` | Dry-run | Prints command only |
 
 ---
 
-## 6. Hook System
+## Configuration Commands
 
-### 6.1 Hook Configuration
-
-- [ ] **command** - shell command executes correctly
-- [ ] **description** - shows in `config hooks` output
-- [ ] **on triggers** - `add`, `pr`, `prune`, `merge`, `all`
-- [ ] **Manual-only** - hooks without `on` only run via `--hook`
-
-### 6.2 Hook Placeholders
-
-- [ ] **{worktree-dir}** - worktree absolute path
-- [ ] **{repo-dir}** - main repo absolute path
-- [ ] **{branch}** - branch name
-- [ ] **{repo}** - folder name of git repo (matches -r flag)
-- [ ] **{origin}** - repo name from git origin (falls back to {repo})
-- [ ] **{trigger}** - triggering command name
-- [ ] **Shell quoting** - values properly escaped
-
-### 6.3 Custom Variables
-
-- [ ] **-a KEY=VALUE** - passed to hook command
-- [ ] **{key}** placeholder - substituted in command
-- [ ] **{key:-default}** - default value syntax
-- [ ] **KEY=-** - reads value from stdin
-
-### 6.4 Hook Execution
-
-- [ ] **Working directory** - correct for each trigger type
-- [ ] **Error propagation** - hook failures reported
-- [ ] **Multiple hooks** - all matching hooks run
-- [ ] **--no-hook** - skips all hooks
+| Command | Expected Behavior | Watch For |
+|---------|-------------------|-----------|
+| `wt config init ~/Git` | Creates config file | File at ~/.config/wt/config.toml |
+| `wt config init ~/Git -f` | Overwrites existing | Force works |
+| `wt config init ~/Git -s` | Prints to stdout | No file written |
+| `wt config show` | Shows effective config | All sections |
+| `wt config show --json` | Valid JSON output | Parseable JSON |
+| `wt config hooks` | Lists configured hooks | Shows all hooks |
+| `wt config hooks --json` | Valid JSON output | Parseable JSON |
+| `wt completion fish` | Fish completion script | Valid syntax |
+| `wt completion bash` | Bash completion script | Valid syntax |
+| `wt completion zsh` | Zsh completion script | Valid syntax |
+| `wt doctor` | Checks for issues | Reports problems |
+| `wt doctor --fix` | Auto-fixes issues | Repairs what's possible |
+| `wt doctor --reset` | Rebuilds cache | New IDs assigned |
 
 ---
 
-## 7. Shell Completions
-
-### 7.1 Fish Completions
-
-- [ ] **Commands complete** - all commands suggested
-- [ ] **Flags complete** - all flags for each command
-- [ ] **Branch completion** - branch names complete
-- [ ] **ID completion** - worktree IDs complete
-- [ ] **Repo completion** - repo names complete
-- [ ] **Label completion** - label names complete
-- [ ] **Hook completion** - hook names complete
-
-### 7.2 Bash Completions
-
-- [ ] **Commands complete** - all commands suggested
-- [ ] **Flags complete** - all flags for each command
-- [ ] **Dynamic completion** - branches, IDs, repos, labels, hooks
-
-### 7.3 Zsh Completions
-
-- [ ] **Commands complete** - all commands suggested
-- [ ] **Flags complete** - all flags for each command
-- [ ] **Dynamic completion** - branches, IDs, repos, labels, hooks
-
----
-
-## 8. Documentation Consistency
-
-### 8.1 README.md
-
-- [ ] **All commands listed** - every command has usage example
-- [ ] **Flags documented** - all important flags shown
-- [ ] **Config sections** - all config options explained
-- [ ] **Hook examples** - practical hook examples included
-- [ ] **Completion setup** - all shells documented
-
-### 8.2 CLAUDE.md
-
-- [ ] **Commands accurate** - CLI commands section up to date
-- [ ] **Flags documented** - standard flags list accurate
-- [ ] **Architecture current** - package structure matches code
-
-### 8.3 Help Text
-
-- [ ] **-h/--help** - all commands have help
-- [ ] **Examples** - Help() methods have examples
-- [ ] **Consistent** - help matches actual behavior
-
-### 8.4 Config Template
-
-- [ ] **All options** - template shows all config options
-- [ ] **Good comments** - explains what each option does
-- [ ] **Working examples** - example hooks are valid
-
----
-
-## 9. Build & Release
-
-### 9.1 Build
-
-- [ ] **make build** - produces working binary
-- [ ] **make test** - all tests pass
-- [ ] **make install** - installs to ~/go/bin
-
-### 9.2 GoReleaser
-
-- [ ] **Config valid** - `.goreleaser.yaml` parses
-- [ ] **Targets correct** - darwin/linux, amd64/arm64
-- [ ] **Changelog groups** - conventional commits grouped correctly
-
-### 9.3 Homebrew
-
-- [ ] **Cask config** - homebrew_casks section correct
-- [ ] **Tap repo** - raphi011/homebrew-tap exists and accessible
-
----
-
-## Section Details
-
-Each section below provides context for the checklist items above.
-
-### Section 1: Core Commands
-
-**wt checkout** creates worktrees for branches. Key behaviors:
-- Inside repo: uses current repo's origin
-- Outside repo with `-r`: targets named repos in default_path
-- Outside repo with `-l`: targets repos with matching labels
-- Directory resolution: flag > env WT_DEFAULT_PATH > config > cwd
-
-**wt list** shows worktrees with stable IDs. IDs persist across sessions via `.wt-cache.json`.
-
-**wt show** displays detailed info: commits ahead/behind, uncommitted changes, PR/MR status.
-
-**wt prune** removes worktrees. Safety checks: merged status, clean working directory. PR status fetched from GitHub/GitLab.
-
-### Section 2: PR Commands
-
-**wt pr checkout** checks out a PR, cloning the repo first if needed. Use positional `org/repo` for clone mode, or `-r` flag for local repo.
-
-**wt pr view** shows PR details or opens in browser. Uses `-w/--web` flag for browser.
-
-**wt pr merge** merges the PR via forge CLI and cleans up the worktree.
-
-Forge detection: auto from remote URL, can override with `--forge` or config rules.
-
-### Section 3: Utility Commands
-
-**wt exec** runs shell commands in worktree(s). Useful for bulk operations.
-
-**wt cd** prints path for shell scripting: `cd $(wt cd -n 3)`
-
-**wt mv** relocates worktrees and repairs git worktree paths.
-
-**wt note** stores annotations on branches via git config.
-
-**wt label** tags repos for multi-repo targeting with `wt checkout -l`.
-
-**wt hook** manually triggers configured hooks.
-
-### Section 4: Configuration Commands
-
-**wt config init** creates the config file with extensive comments.
-
-**wt config show** displays the effective config (merges defaults).
-
-**wt config hooks** lists hooks for discoverability.
-
-**wt completion** generates shell-specific completion scripts.
-
-### Section 5: Configuration System
-
-Config file at `~/.config/wt/config.toml` using TOML format.
-
-Key validation rules:
-- `default_path` must be absolute (or ~-prefixed)
-- Forge values: "github" or "gitlab" only
-- Strategy values: "squash", "rebase", "merge" only
-
-### Section 6: Hook System
-
-Hooks run shell commands with placeholder substitution.
-
-Automatic triggers: hooks with `on = ["checkout"]` run automatically.
-Manual triggers: hooks without `on` only run via `--hook=name`.
-
-Working directory varies by trigger:
-- checkout/pr/merge: worktree path
-- prune: main repo (worktree already deleted)
-
-### Section 7: Shell Completions
-
-Completions generated from Go code in `cmd/wt/main.go`.
-
-Dynamic completions fetch: branches (git), IDs (cache), repos (directory scan), labels (git config), hooks (config file).
-
-### Section 8: Documentation Consistency
-
-Three documentation sources must stay in sync:
-1. README.md - user-facing
-2. CLAUDE.md - developer-facing
-3. Built-in help text - CLI users
-
-Common issues: new flags not documented, removed features still listed.
-
-### Section 9: Build & Release
-
-GoReleaser handles builds and releases on tag push.
-
-Homebrew uses casks (pre-compiled binaries), not formulas (source builds).
-
-Conventional commits drive changelog grouping: feat/fix/docs/etc.
+## Cross-Cutting Concerns
+
+When testing commands, verify these behaviors:
+
+| Concern | What to Check |
+|---------|---------------|
+| **Hook execution** | `--hook=name` runs specific hook; `--no-hook` skips all; default `on=[]` hooks run automatically |
+| **GitHub vs GitLab** | Commands work with both `gh` and `glab` CLI; GitLab lacks rebase merge |
+| **Inside vs outside repo** | Some flags optional inside repo/worktree, required outside |
+| **Multi-repo targeting** | `-r repo1,repo2` and `-l label` work; mutual exclusion with `-n` |
+| **Interactive mode (`-i`)** | Respects explicit flags, pre-selects defaults, skips irrelevant steps |
+| **JSON output** | `--json` produces valid, parseable JSON for scripting |
+| **Stdout vs stderr** | Primary data to stdout; logs/progress to stderr (enables `$(...)` patterns) |
+| **Cache persistence** | IDs stable across runs; `--reset-cache` renumbers from 1 |
+| **Error messages** | Clear, actionable errors for invalid flags, missing args, missing repos |
