@@ -147,7 +147,7 @@ func TestMv_MoveReposToWorktreeDirWhenNoRepoDir(t *testing.T) {
 	}
 }
 
-func TestMv_SkipWorktreeIfTargetExists(t *testing.T) {
+func TestMv_CollisionAddsNumberedSuffix(t *testing.T) {
 	t.Parallel()
 	// Setup temp directories
 	sourceDir := resolvePath(t, t.TempDir())
@@ -172,15 +172,69 @@ func TestMv_SkipWorktreeIfTargetExists(t *testing.T) {
 	cmd := &MvCmd{
 		Format: config.DefaultWorktreeFormat,
 	}
-	// Should not return error, just skip
 	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
 		t.Fatalf("wt mv failed: %v", err)
 	}
 
-	// Verify original worktree still exists (was skipped)
-	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
-		t.Errorf("worktree should still exist at %s (should have been skipped)", worktreePath)
+	// Verify worktree was moved with numbered suffix
+	newWorktreePath := filepath.Join(destDir, "myrepo-feature-1")
+	if _, err := os.Stat(newWorktreePath); os.IsNotExist(err) {
+		t.Errorf("worktree should be moved to %s with numbered suffix", newWorktreePath)
 	}
+
+	// Verify original worktree location is gone
+	if _, err := os.Stat(worktreePath); !os.IsNotExist(err) {
+		t.Errorf("old worktree path should not exist: %s", worktreePath)
+	}
+
+	// Verify conflicting directory still exists
+	if _, err := os.Stat(conflictPath); os.IsNotExist(err) {
+		t.Errorf("original conflict path should still exist: %s", conflictPath)
+	}
+
+	// Verify worktree still works
+	verifyWorktreeWorks(t, newWorktreePath)
+}
+
+func TestMv_MultipleCollisionsIncrementSuffix(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	sourceDir := resolvePath(t, t.TempDir())
+	destDir := resolvePath(t, t.TempDir())
+
+	// Create repo and worktree in source
+	repoPath := setupTestRepo(t, sourceDir, "myrepo")
+	worktreePath := filepath.Join(sourceDir, "myrepo-feature")
+	setupWorktree(t, repoPath, worktreePath, "feature")
+
+	// Create multiple conflicting directories at destination
+	for _, suffix := range []string{"", "-1", "-2"} {
+		conflictPath := filepath.Join(destDir, "myrepo-feature"+suffix)
+		if err := os.MkdirAll(conflictPath, 0755); err != nil {
+			t.Fatalf("failed to create conflict dir: %v", err)
+		}
+	}
+
+	cfg := &config.Config{
+		WorktreeDir:    destDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	cmd := &MvCmd{
+		Format: config.DefaultWorktreeFormat,
+	}
+	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv failed: %v", err)
+	}
+
+	// Verify worktree was moved with suffix -3 (since "", "-1", "-2" are taken)
+	newWorktreePath := filepath.Join(destDir, "myrepo-feature-3")
+	if _, err := os.Stat(newWorktreePath); os.IsNotExist(err) {
+		t.Errorf("worktree should be moved to %s", newWorktreePath)
+	}
+
+	// Verify worktree still works
+	verifyWorktreeWorks(t, newWorktreePath)
 }
 
 func TestMv_SkipRepoIfTargetExists(t *testing.T) {
@@ -835,6 +889,128 @@ func TestMv_NestedDirtyWorktreeMoved(t *testing.T) {
 	// Verify worktree points to new repo and works
 	verifyGitdirPoints(t, newWtPath, newRepoPath)
 	verifyWorktreeWorks(t, newWtPath)
+}
+
+func TestMv_FormatChangeRenamesWorktreesInPlace(t *testing.T) {
+	t.Parallel()
+	// Setup: worktrees already in worktree_dir with old format
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := resolvePath(t, t.TempDir())
+
+	// Create repo
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+
+	// Create worktrees with OLD format: {repo}-{branch}
+	wt1 := filepath.Join(worktreeDir, "myrepo-feature1")
+	setupWorktree(t, repoPath, wt1, "feature1")
+
+	wt2 := filepath.Join(worktreeDir, "myrepo-feature2")
+	setupWorktree(t, repoPath, wt2, "feature2")
+
+	// Config with NEW format: just {branch}
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		RepoDir:        repoDir,
+		WorktreeFormat: "{branch}", // Changed from default {repo}-{branch}
+	}
+
+	// Run mv from worktree_dir to rename in place
+	cmd := &MvCmd{
+		Format: "{branch}",
+	}
+	if err := runMvCommand(t, worktreeDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv failed: %v", err)
+	}
+
+	// Verify worktrees renamed to new format
+	newWt1 := filepath.Join(worktreeDir, "feature1")
+	if _, err := os.Stat(newWt1); os.IsNotExist(err) {
+		t.Errorf("worktree should be renamed to %s", newWt1)
+	}
+
+	newWt2 := filepath.Join(worktreeDir, "feature2")
+	if _, err := os.Stat(newWt2); os.IsNotExist(err) {
+		t.Errorf("worktree should be renamed to %s", newWt2)
+	}
+
+	// Verify old names are gone
+	if _, err := os.Stat(wt1); !os.IsNotExist(err) {
+		t.Errorf("old worktree path should not exist: %s", wt1)
+	}
+	if _, err := os.Stat(wt2); !os.IsNotExist(err) {
+		t.Errorf("old worktree path should not exist: %s", wt2)
+	}
+
+	// Verify worktrees still work
+	verifyWorktreeWorks(t, newWt1)
+	verifyWorktreeWorks(t, newWt2)
+}
+
+func TestMv_FormatChangeWithCollision(t *testing.T) {
+	t.Parallel()
+	// Setup: two worktrees from different repos that would collide with new format
+	worktreeDir := resolvePath(t, t.TempDir())
+	repoDir := resolvePath(t, t.TempDir())
+
+	// Create two repos
+	repoA := setupTestRepo(t, repoDir, "repo-a")
+	repoB := setupTestRepo(t, repoDir, "repo-b")
+
+	// Create worktrees with format {repo}-{branch}
+	// Both have branch "main" so they'll collide if format changes to {branch}
+	wtA := filepath.Join(worktreeDir, "repo-a-main")
+	setupWorktree(t, repoA, wtA, "main")
+
+	wtB := filepath.Join(worktreeDir, "repo-b-main")
+	setupWorktree(t, repoB, wtB, "main")
+
+	// Change format to just {branch} - this will cause collision
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		RepoDir:        repoDir,
+		WorktreeFormat: "{branch}",
+	}
+
+	cmd := &MvCmd{
+		Format: "{branch}",
+	}
+	if err := runMvCommand(t, worktreeDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv failed: %v", err)
+	}
+
+	// One worktree should be "main", the other "main-1"
+	mainPath := filepath.Join(worktreeDir, "main")
+	main1Path := filepath.Join(worktreeDir, "main-1")
+
+	mainExists := false
+	if _, err := os.Stat(mainPath); err == nil {
+		mainExists = true
+	}
+
+	main1Exists := false
+	if _, err := os.Stat(main1Path); err == nil {
+		main1Exists = true
+	}
+
+	if !mainExists || !main1Exists {
+		t.Errorf("expected both 'main' and 'main-1' to exist, got main=%v main-1=%v", mainExists, main1Exists)
+	}
+
+	// Verify both worktrees still work
+	if mainExists {
+		verifyWorktreeWorks(t, mainPath)
+	}
+	if main1Exists {
+		verifyWorktreeWorks(t, main1Path)
+	}
+
+	// Verify old paths are gone
+	if _, err := os.Stat(wtA); !os.IsNotExist(err) {
+		t.Errorf("old worktree path should not exist: %s", wtA)
+	}
+	if _, err := os.Stat(wtB); !os.IsNotExist(err) {
+		t.Errorf("old worktree path should not exist: %s", wtB)
+	}
 }
 
 // runMvCommand runs wt mv with the given config and command in the specified directory.
