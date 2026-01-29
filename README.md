@@ -1,5 +1,3 @@
-![Logo](./logo.png)
-
 # wt
 
 Git worktree manager with GitHub/GitLab integration.
