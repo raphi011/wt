@@ -31,8 +31,12 @@ jobs:
           curl -fsSL https://gitlab.com/gitlab-org/cli/-/releases/v1.52.0/downloads/glab_1.52.0_linux_amd64.deb -o glab.deb
           sudo dpkg -i glab.deb
 
-      - name: Verify glab CLI
-        run: glab --version
+      - name: Configure glab CLI
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          glab config set git_protocol https --host gitlab.com
+          glab auth status
 
       - name: Integration Test
         env:
