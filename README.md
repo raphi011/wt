@@ -336,6 +336,9 @@ worktree_format = "{repo}-{branch}"
 # Base ref for new branches: "remote" (default) or "local"
 base_ref = "remote"
 
+# Auto-fetch base branch before creating new branches (default: false)
+auto_fetch = true
+
 # Default sort order for list: "id", "repo", "branch", "commit"
 default_sort = "id"
 ```

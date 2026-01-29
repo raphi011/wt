@@ -60,6 +60,7 @@ func (c *ConfigShowCmd) runConfigShow(ctx context.Context) error {
 			RepoDir        string            `json:"repo_dir,omitempty"`
 			WorktreeFormat string            `json:"worktree_format"`
 			BaseRef        string            `json:"base_ref"`
+			AutoFetch      bool              `json:"auto_fetch"`
 			DefaultSort    string            `json:"default_sort"`
 			Forge          forgeJSON         `json:"forge"`
 			Merge          mergeJSON         `json:"merge"`
@@ -93,6 +94,7 @@ func (c *ConfigShowCmd) runConfigShow(ctx context.Context) error {
 			RepoDir:        cfg.RepoDir,
 			WorktreeFormat: cfg.WorktreeFormat,
 			BaseRef:        baseRef,
+			AutoFetch:      cfg.AutoFetch,
 			DefaultSort:    defaultSort,
 			Forge: forgeJSON{
 				Default:    cfg.Forge.Default,
@@ -130,6 +132,8 @@ func (c *ConfigShowCmd) runConfigShow(ctx context.Context) error {
 	}
 	out.Printf("\n# Base ref for new branches: \"remote\" (origin/<branch>) or \"local\"\n")
 	out.Printf("base_ref = %q\n", baseRef)
+	out.Printf("\n# Auto-fetch base branch before creating new branches\n")
+	out.Printf("auto_fetch = %v\n", cfg.AutoFetch)
 	defaultSort := cfg.DefaultSort
 	if defaultSort == "" {
 		defaultSort = "id"

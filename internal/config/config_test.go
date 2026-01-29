@@ -280,6 +280,31 @@ func TestDefaultConfigWithDirsNoRepoDir(t *testing.T) {
 	}
 }
 
+func TestAutoFetchParsing(t *testing.T) {
+	// Verify auto_fetch is parsed correctly from TOML
+	tests := []struct {
+		name     string
+		toml     string
+		expected bool
+	}{
+		{"not set", `worktree_format = "{repo}-{branch}"`, false},
+		{"set true", `auto_fetch = true`, true},
+		{"set false", `auto_fetch = false`, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var raw rawConfig
+			if _, err := toml.Decode(tt.toml, &raw); err != nil {
+				t.Fatalf("failed to parse TOML: %v", err)
+			}
+			if raw.AutoFetch != tt.expected {
+				t.Errorf("AutoFetch = %v, want %v", raw.AutoFetch, tt.expected)
+			}
+		})
+	}
+}
+
 func TestDefaultConfigWithDirSpecialChars(t *testing.T) {
 	// Test with paths containing special characters that need TOML escaping
 	paths := []string{

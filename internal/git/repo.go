@@ -209,6 +209,11 @@ func FetchBranch(ctx context.Context, repoPath, branch string) error {
 	return nil
 }
 
+// HasRemote checks if a remote with the given name exists
+func HasRemote(ctx context.Context, repoPath, remoteName string) bool {
+	return runGit(ctx, repoPath, "remote", "get-url", remoteName) == nil
+}
+
 // GetMainRepoPath extracts main repo path from .git file in worktree
 func GetMainRepoPath(worktreePath string) (string, error) {
 	gitFile := filepath.Join(worktreePath, ".git")
