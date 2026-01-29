@@ -70,7 +70,7 @@ func (g *GitLab) GetPRForBranch(ctx context.Context, repoURL, branch string) (*P
 	output, err := g.outputGlab(ctx, "mr", "list",
 		"-R", projectPath,
 		"--source-branch", branch,
-		"--state", "all",
+		"--all",
 		"-F", "json",
 		"-P", "1") // limit to 1
 	if err != nil {
