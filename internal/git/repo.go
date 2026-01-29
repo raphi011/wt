@@ -114,8 +114,13 @@ func GetCurrentBranch(ctx context.Context, path string) (string, error) {
 
 // GetCommitCount returns number of commits ahead of the default branch
 func GetCommitCount(ctx context.Context, repoPath, branch string) (int, error) {
-	defaultBranch := GetDefaultBranch(ctx, repoPath)
-	output, err := outputGit(ctx, repoPath, "rev-list", "--count", fmt.Sprintf("origin/%s..%s", defaultBranch, branch))
+	return GetCommitCountWithBase(ctx, repoPath, branch, GetDefaultBranch(ctx, repoPath))
+}
+
+// GetCommitCountWithBase returns number of commits ahead of the given base branch.
+// Use this when you already have the default branch to avoid redundant git calls.
+func GetCommitCountWithBase(ctx context.Context, repoPath, branch, baseBranch string) (int, error) {
+	output, err := outputGit(ctx, repoPath, "rev-list", "--count", fmt.Sprintf("origin/%s..%s", baseBranch, branch))
 	if err != nil {
 		return 0, fmt.Errorf("failed to count commits: %v", err)
 	}
@@ -123,6 +128,37 @@ func GetCommitCount(ctx context.Context, repoPath, branch string) (int, error) {
 	var count int
 	_, err = fmt.Sscanf(strings.TrimSpace(string(output)), "%d", &count)
 	return count, err
+}
+
+// LastCommitInfo contains both relative and absolute time of the last commit
+type LastCommitInfo struct {
+	Relative string    // Human-readable relative time (e.g., "2 days ago")
+	Time     time.Time // Absolute timestamp
+}
+
+// GetLastCommitInfo returns both relative time and absolute timestamp in a single git call.
+// Use this instead of calling GetLastCommitRelative and GetLastCommitTime separately.
+func GetLastCommitInfo(ctx context.Context, path string) (LastCommitInfo, error) {
+	output, err := outputGit(ctx, path, "log", "-1", "--format=%cr|%ct")
+	if err != nil {
+		return LastCommitInfo{}, fmt.Errorf("failed to get last commit: %v", err)
+	}
+
+	parts := strings.SplitN(strings.TrimSpace(string(output)), "|", 2)
+	if len(parts) != 2 {
+		return LastCommitInfo{}, fmt.Errorf("unexpected git log output format")
+	}
+
+	var timestamp int64
+	_, err = fmt.Sscanf(parts[1], "%d", &timestamp)
+	if err != nil {
+		return LastCommitInfo{}, fmt.Errorf("failed to parse commit timestamp: %w", err)
+	}
+
+	return LastCommitInfo{
+		Relative: parts[0],
+		Time:     time.Unix(timestamp, 0),
+	}, nil
 }
 
 // GetLastCommitRelative returns relative time of last commit
@@ -459,8 +495,13 @@ type DiffStats struct {
 
 // GetDiffStats returns additions, deletions, and files changed vs default branch
 func GetDiffStats(ctx context.Context, repoPath, branch string) (DiffStats, error) {
-	defaultBranch := GetDefaultBranch(ctx, repoPath)
-	output, err := outputGit(ctx, repoPath, "diff", "--numstat", fmt.Sprintf("origin/%s...%s", defaultBranch, branch))
+	return GetDiffStatsWithBase(ctx, repoPath, branch, GetDefaultBranch(ctx, repoPath))
+}
+
+// GetDiffStatsWithBase returns additions, deletions, and files changed vs the given base branch.
+// Use this when you already have the default branch to avoid redundant git calls.
+func GetDiffStatsWithBase(ctx context.Context, repoPath, branch, baseBranch string) (DiffStats, error) {
+	output, err := outputGit(ctx, repoPath, "diff", "--numstat", fmt.Sprintf("origin/%s...%s", baseBranch, branch))
 	if err != nil {
 		return DiffStats{}, fmt.Errorf("failed to get diff stats: %v", err)
 	}
@@ -490,8 +531,13 @@ func GetDiffStats(ctx context.Context, repoPath, branch string) (DiffStats, erro
 
 // GetCommitsBehind returns number of commits behind the default branch
 func GetCommitsBehind(ctx context.Context, repoPath, branch string) (int, error) {
-	defaultBranch := GetDefaultBranch(ctx, repoPath)
-	output, err := outputGit(ctx, repoPath, "rev-list", "--count", fmt.Sprintf("%s..origin/%s", branch, defaultBranch))
+	return GetCommitsBehindWithBase(ctx, repoPath, branch, GetDefaultBranch(ctx, repoPath))
+}
+
+// GetCommitsBehindWithBase returns number of commits behind the given base branch.
+// Use this when you already have the default branch to avoid redundant git calls.
+func GetCommitsBehindWithBase(ctx context.Context, repoPath, branch, baseBranch string) (int, error) {
+	output, err := outputGit(ctx, repoPath, "rev-list", "--count", fmt.Sprintf("%s..origin/%s", branch, baseBranch))
 	if err != nil {
 		return 0, fmt.Errorf("failed to count commits behind: %v", err)
 	}
