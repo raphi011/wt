@@ -454,7 +454,8 @@ func refreshPRStatus(ctx context.Context, worktrees []git.Worktree, wtCache *cac
 		if wt.OriginURL == "" {
 			continue
 		}
-		if git.GetUpstreamBranch(ctx, wt.MainRepo, wt.Branch) == "" {
+		// Use cached HasUpstream field instead of git call
+		if !wt.HasUpstream {
 			continue
 		}
 		// Skip if PR already fetched and merged - no point re-fetching

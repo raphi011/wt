@@ -80,8 +80,12 @@ func GetWorktreeInfo(ctx context.Context, path string) (*Worktree, error) {
 	isDirty := IsDirty(ctx, path)
 
 	// Get last commit time (errors treated as empty/zero values)
-	lastCommit, _ := GetLastCommitRelative(ctx, path)
-	lastCommitTime, _ := GetLastCommitTime(ctx, path)
+	var lastCommit string
+	var lastCommitTime time.Time
+	if commitInfo, err := GetLastCommitInfo(ctx, path); err == nil {
+		lastCommit = commitInfo.Relative
+		lastCommitTime = commitInfo.Time
+	}
 
 	// Get branch note (errors treated as empty string)
 	note, _ := GetBranchNote(ctx, mainRepo, branch)
@@ -160,6 +164,9 @@ func ListWorktrees(ctx context.Context, worktreeDir string, includeDirty bool) (
 	// Map: mainRepo -> originURL
 	repoOrigins := make(map[string]string)
 
+	// Map: mainRepo -> default branch (for commit count comparisons)
+	repoDefaultBranches := make(map[string]string)
+
 	for mainRepo := range mainRepos {
 		// Get all worktrees from this repo in one call
 		wtInfos, err := ListWorktreesFromRepo(ctx, mainRepo)
@@ -179,6 +186,9 @@ func ListWorktrees(ctx context.Context, worktreeDir string, includeDirty bool) (
 		notes, upstreams := GetAllBranchConfig(ctx, mainRepo)
 		repoNotes[mainRepo] = notes
 		repoUpstreams[mainRepo] = upstreams
+
+		// Cache default branch for commit count comparisons
+		repoDefaultBranches[mainRepo] = GetDefaultBranch(ctx, mainRepo)
 	}
 
 	// Phase 3: Build worktrees by merging batched data
@@ -195,10 +205,11 @@ func ListWorktrees(ctx context.Context, worktreeDir string, includeDirty bool) (
 
 		branch := wtInfo.Branch
 
-		// Get commit count
+		// Get commit count using cached default branch
 		var commitCount int
 		if branch != "(detached)" {
-			commitCount, _ = GetCommitCount(ctx, p.mainRepo, branch)
+			defaultBranch := repoDefaultBranches[p.mainRepo]
+			commitCount, _ = GetCommitCountWithBase(ctx, p.mainRepo, branch, defaultBranch)
 		}
 
 		// Get note for this branch
@@ -213,9 +224,13 @@ func ListWorktrees(ctx context.Context, worktreeDir string, includeDirty bool) (
 			hasUpstream = upstreams[branch]
 		}
 
-		// Get last commit time (relative and absolute)
-		lastCommit, _ := GetLastCommitRelative(ctx, p.path)
-		lastCommitTime, _ := GetLastCommitTime(ctx, p.path)
+		// Get last commit time (relative and absolute) in single call
+		var lastCommit string
+		var lastCommitTime time.Time
+		if commitInfo, err := GetLastCommitInfo(ctx, p.path); err == nil {
+			lastCommit = commitInfo.Relative
+			lastCommitTime = commitInfo.Time
+		}
 
 		// Phase 4: Only check dirty status if requested
 		var isDirty bool

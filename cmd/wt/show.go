@@ -169,20 +169,23 @@ func gatherShowInfo(ctx context.Context, target *resolve.Target, prInfo *forge.P
 		info.RepoName = filepath.Base(target.MainRepo)
 	}
 
+	// Get default branch once for all comparisons (avoids 3x redundant calls)
+	defaultBranch := git.GetDefaultBranch(ctx, target.MainRepo)
+
 	// Get commits ahead
-	commitsAhead, err := git.GetCommitCount(ctx, target.MainRepo, target.Branch)
+	commitsAhead, err := git.GetCommitCountWithBase(ctx, target.MainRepo, target.Branch, defaultBranch)
 	if err == nil {
 		info.CommitsAhead = commitsAhead
 	}
 
 	// Get commits behind
-	commitsBehind, err := git.GetCommitsBehind(ctx, target.MainRepo, target.Branch)
+	commitsBehind, err := git.GetCommitsBehindWithBase(ctx, target.MainRepo, target.Branch, defaultBranch)
 	if err == nil {
 		info.CommitsBehind = commitsBehind
 	}
 
 	// Get diff stats
-	diffStats, err := git.GetDiffStats(ctx, target.MainRepo, target.Branch)
+	diffStats, err := git.GetDiffStatsWithBase(ctx, target.MainRepo, target.Branch, defaultBranch)
 	if err == nil && (diffStats.Additions > 0 || diffStats.Deletions > 0 || diffStats.Files > 0) {
 		info.DiffStats = &DiffStats{
 			Additions: diffStats.Additions,
