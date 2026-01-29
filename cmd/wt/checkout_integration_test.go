@@ -1163,6 +1163,176 @@ func TestCheckout_AutoStashWithStagedChanges(t *testing.T) {
 	}
 }
 
+// TestCheckout_AutoFetchConfig verifies that auto_fetch config triggers fetch
+// before creating new branches, similar to --fetch flag.
+//
+// Scenario: User has auto_fetch=true in config, runs `wt checkout -b feature`
+// Expected: Base branch fetched from origin before creating worktree
+func TestCheckout_AutoFetchConfig(t *testing.T) {
+	t.Parallel()
+
+	// Skip if no test repo configured
+	testRepo := os.Getenv("WT_TEST_GITHUB_REPO")
+	if testRepo == "" {
+		t.Skip("WT_TEST_GITHUB_REPO not set")
+	}
+
+	// Setup temp directories
+	cloneDir := t.TempDir()
+	worktreeDir := t.TempDir()
+
+	// Clone the test repo
+	cloneCmd := exec.Command("gh", "repo", "clone", testRepo, "testrepo")
+	cloneCmd.Dir = cloneDir
+	if out, err := cloneCmd.CombinedOutput(); err != nil {
+		t.Fatalf("gh repo clone failed: %v\n%s", err, out)
+	}
+
+	repoPath := filepath.Join(cloneDir, "testrepo")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+		AutoFetch:      true, // This should trigger fetch
+	}
+
+	branchName := "test-autofetch-" + t.Name()
+	cmd := &CheckoutCmd{
+		Branch:    branchName,
+		NewBranch: true,
+	}
+
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -b with auto_fetch failed: %v", err)
+	}
+
+	// Verify worktree created
+	expectedPath := filepath.Join(worktreeDir, "testrepo-"+branchName)
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("worktree not created at %s", expectedPath)
+	}
+
+	// Verify the new branch exists and is based on origin/main
+	// by checking that the branch's upstream tracking is correct
+	verifyWorktreeWorks(t, expectedPath)
+	verifyBranchExists(t, repoPath, branchName)
+
+	// Verify the branch was created from origin/main (not local main)
+	// by checking that origin/main is an ancestor of the new branch
+	checkCmd := exec.Command("git", "merge-base", "--is-ancestor", "origin/main", branchName)
+	checkCmd.Dir = repoPath
+	if err := checkCmd.Run(); err != nil {
+		t.Errorf("branch should be based on origin/main: %v", err)
+	}
+}
+
+// TestCheckout_AutoFetchNoRemote verifies that auto_fetch gracefully handles
+// repos without a remote origin.
+//
+// Scenario: User has auto_fetch=true but repo has no remote
+// Expected: Warning logged, falls back to local branch, checkout succeeds
+func TestCheckout_AutoFetchNoRemote(t *testing.T) {
+	t.Parallel()
+
+	// Setup temp directories
+	sourceDir := t.TempDir()
+	worktreeDir := t.TempDir()
+
+	// Create repo WITHOUT a remote
+	repoPath := setupTestRepo(t, sourceDir, "local-only-repo")
+
+	// Remove the origin remote (setupTestRepo may not add one, but be safe)
+	exec.Command("git", "-C", repoPath, "remote", "remove", "origin").Run()
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+		AutoFetch:      true,  // Enabled but no remote exists
+		BaseRef:        "local",
+	}
+
+	cmd := &CheckoutCmd{
+		Branch:    "feature-no-remote",
+		NewBranch: true,
+	}
+
+	// Should succeed despite auto_fetch=true and no remote
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -b with auto_fetch but no remote should succeed: %v", err)
+	}
+
+	// Verify worktree created
+	expectedPath := filepath.Join(worktreeDir, "local-only-repo-feature-no-remote")
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("worktree not created at %s", expectedPath)
+	}
+
+	verifyWorktreeWorks(t, expectedPath)
+	verifyBranchExists(t, repoPath, "feature-no-remote")
+}
+
+// TestCheckout_FetchFlag verifies that --fetch flag triggers fetch
+// before creating new branches.
+//
+// Scenario: User runs `wt checkout -b feature --fetch`
+// Expected: Base branch fetched from origin before creating worktree
+func TestCheckout_FetchFlag(t *testing.T) {
+	t.Parallel()
+
+	// Skip if no test repo configured
+	testRepo := os.Getenv("WT_TEST_GITHUB_REPO")
+	if testRepo == "" {
+		t.Skip("WT_TEST_GITHUB_REPO not set")
+	}
+
+	// Setup temp directories
+	cloneDir := t.TempDir()
+	worktreeDir := t.TempDir()
+
+	// Clone the test repo
+	cloneCmd := exec.Command("gh", "repo", "clone", testRepo, "testrepo")
+	cloneCmd.Dir = cloneDir
+	if out, err := cloneCmd.CombinedOutput(); err != nil {
+		t.Fatalf("gh repo clone failed: %v\n%s", err, out)
+	}
+
+	repoPath := filepath.Join(cloneDir, "testrepo")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+		AutoFetch:      false, // Explicitly false
+	}
+
+	branchName := "test-fetch-flag-" + t.Name()
+	cmd := &CheckoutCmd{
+		Branch:    branchName,
+		NewBranch: true,
+		Fetch:     true, // Use --fetch flag instead
+	}
+
+	if err := runCheckoutCommand(t, repoPath, cfg, cmd); err != nil {
+		t.Fatalf("wt checkout -b --fetch failed: %v", err)
+	}
+
+	// Verify worktree created
+	expectedPath := filepath.Join(worktreeDir, "testrepo-"+branchName)
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("worktree not created at %s", expectedPath)
+	}
+
+	// Verify the new branch exists
+	verifyWorktreeWorks(t, expectedPath)
+	verifyBranchExists(t, repoPath, branchName)
+
+	// Verify the branch was created from origin/main
+	checkCmd := exec.Command("git", "merge-base", "--is-ancestor", "origin/main", branchName)
+	checkCmd.Dir = repoPath
+	if err := checkCmd.Run(); err != nil {
+		t.Errorf("branch should be based on origin/main: %v", err)
+	}
+}
+
 // runCheckoutCommand runs wt checkout with the given config and command in the specified directory.
 func runCheckoutCommand(t *testing.T, workDir string, cfg *config.Config, cmd *CheckoutCmd) error {
 	t.Helper()

@@ -46,6 +46,7 @@ type Config struct {
 	RepoDir        string            `toml:"repo_dir"` // optional: where to find repos for -r/-l
 	WorktreeFormat string            `toml:"worktree_format"`
 	BaseRef        string            `toml:"base_ref"`     // "local" or "remote" (default: "remote")
+	AutoFetch      bool              `toml:"auto_fetch"`   // fetch before creating new branches (default: false)
 	DefaultSort    string            `toml:"default_sort"` // "id", "repo", "branch", "commit" (default: "id")
 	Hooks          HooksConfig       `toml:"-"`            // custom parsing needed
 	Forge          ForgeConfig       `toml:"forge"`
@@ -136,6 +137,7 @@ type rawConfig struct {
 	RepoDir        string                 `toml:"repo_dir"`
 	WorktreeFormat string                 `toml:"worktree_format"`
 	BaseRef        string                 `toml:"base_ref"`
+	AutoFetch      bool                   `toml:"auto_fetch"`
 	DefaultSort    string                 `toml:"default_sort"`
 	Hooks          map[string]interface{} `toml:"hooks"`
 	Forge          ForgeConfig            `toml:"forge"`
@@ -178,6 +180,7 @@ func Load() (Config, error) {
 		RepoDir:        raw.RepoDir,
 		WorktreeFormat: raw.WorktreeFormat,
 		BaseRef:        raw.BaseRef,
+		AutoFetch:      raw.AutoFetch,
 		DefaultSort:    raw.DefaultSort,
 		Hooks:          parseHooksConfig(raw.Hooks),
 		Forge:          raw.Forge,
@@ -395,6 +398,11 @@ worktree_format = "{repo}-{branch}"
 #   "remote" - use origin/<branch> (default, ensures up-to-date base)
 #   "local"  - use local <branch> (faster, but may be stale)
 # base_ref = "remote"
+
+# Auto-fetch before creating new branches (wt checkout -b)
+# When true, fetches the base branch from origin before creating worktree
+# Same as always passing --fetch flag
+# auto_fetch = false
 
 # Default sort order for 'wt list'
 # Available values: "id", "repo", "branch", "commit"

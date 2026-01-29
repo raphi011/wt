@@ -118,9 +118,9 @@ func createWorktree(ctx context.Context, p createWorktreeParams) (*successResult
 }
 
 // resolveBaseRef determines the base ref for creating a new branch.
-// If fetch is true, fetches the base branch from origin first.
+// If fetch is true (or autoFetch config is true), fetches the base branch from origin first.
 // Returns the full ref (e.g., "origin/main" or "main") based on config.
-func resolveBaseRef(ctx context.Context, repoPath, baseBranch string, fetch bool, baseRefConfig string) (string, error) {
+func resolveBaseRef(ctx context.Context, repoPath, baseBranch string, fetch, autoFetch bool, baseRefConfig string) (string, error) {
 	l := log.FromContext(ctx)
 
 	// Determine base branch (default: auto-detected main/master)
@@ -128,19 +128,32 @@ func resolveBaseRef(ctx context.Context, repoPath, baseBranch string, fetch bool
 		baseBranch = git.GetDefaultBranch(ctx, repoPath)
 	}
 
-	// Fetch if requested
-	if fetch {
-		l.Printf("Fetching origin/%s...\n", baseBranch)
-		if err := git.FetchBranch(ctx, repoPath, baseBranch); err != nil {
-			return "", err
+	// Check if remote exists
+	hasRemote := git.HasRemote(ctx, repoPath, "origin")
+
+	// Fetch if requested via flag or auto_fetch config
+	shouldFetch := fetch || autoFetch
+	if shouldFetch {
+		if !hasRemote {
+			l.Printf("Warning: no remote 'origin' found, skipping fetch\n")
+			shouldFetch = false
+		} else {
+			l.Printf("Fetching origin/%s...\n", baseBranch)
+			if err := git.FetchBranch(ctx, repoPath, baseBranch); err != nil {
+				return "", err
+			}
 		}
 	}
 
 	// Determine whether to use remote or local ref
-	// --fetch always implies remote ref, otherwise use config
-	if fetch || baseRefConfig != "local" {
+	// --fetch/auto_fetch always implies remote ref, otherwise use config
+	// But fall back to local if no remote exists
+	useRemote := (shouldFetch || baseRefConfig != "local") && hasRemote
+	if useRemote {
+		l.Printf("Branching from origin/%s\n", baseBranch)
 		return "origin/" + baseBranch, nil
 	}
+	l.Printf("Branching from %s (local)\n", baseBranch)
 	return baseBranch, nil
 }
 
@@ -375,7 +388,7 @@ func (c *CheckoutCmd) runCheckoutInRepo(ctx context.Context) error {
 	// Resolve base ref if creating new branch
 	var baseRef string
 	if c.NewBranch {
-		baseRef, err = resolveBaseRef(ctx, workDir, c.Base, c.Fetch, cfg.BaseRef)
+		baseRef, err = resolveBaseRef(ctx, workDir, c.Base, c.Fetch, cfg.AutoFetch, cfg.BaseRef)
 		if err != nil {
 			return err
 		}
@@ -531,7 +544,7 @@ func (c *CheckoutCmd) createWorktreeForRepoOrCurrent(ctx context.Context, repoPa
 	var baseRef string
 	if c.NewBranch {
 		var err error
-		baseRef, err = resolveBaseRef(ctx, effectiveRepoPath, c.Base, c.Fetch, cfg.BaseRef)
+		baseRef, err = resolveBaseRef(ctx, effectiveRepoPath, c.Base, c.Fetch, cfg.AutoFetch, cfg.BaseRef)
 		if err != nil {
 			return nil, err
 		}
