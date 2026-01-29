@@ -369,7 +369,18 @@ func TestForge_PRWorkflow(t *testing.T) {
 				}
 
 				// Merge the PR with squash strategy (supported by both GitHub and GitLab)
-				err := fc.forge.MergePR(ctx, fc.repoURL, prNumber, "squash")
+				// Retry with backoff - GitLab may need time to calculate mergeability after MR creation
+				var err error
+				for attempt := 1; attempt <= 3; attempt++ {
+					err = fc.forge.MergePR(ctx, fc.repoURL, prNumber, "squash")
+					if err == nil {
+						break
+					}
+					if attempt < 3 {
+						t.Logf("MergePR attempt %d failed: %v, retrying in %ds...", attempt, err, attempt*2)
+						time.Sleep(time.Duration(attempt*2) * time.Second)
+					}
+				}
 				if err != nil {
 					t.Errorf("MergePR() error = %v", err)
 				}
