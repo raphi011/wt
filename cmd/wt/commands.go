@@ -572,6 +572,7 @@ type MvCmd struct {
 	Format     string   `name:"format" placeholder:"FORMAT" help:"worktree naming format"`
 	DryRun     bool     `short:"d" name:"dry-run" negatable:"" help:"show what would be moved"`
 	Force      bool     `short:"f" name:"force" negatable:"" help:"force move locked worktrees"`
+	Cascade    bool     `short:"C" name:"cascade" help:"also move linked repos/worktrees outside target path"`
 }
 
 func (c *MvCmd) Help() string {
@@ -588,6 +589,7 @@ Worktrees are moved to worktree_dir.
 Repositories are moved to repo_dir (if set) or worktree_dir.
 
 Use -r to filter by repository name(s). Use --format to rename worktrees during move.
+Use --cascade to also move linked repos/worktrees that are outside the target path.
 
 Destinations are set via config or environment variables:
   worktree_dir / WT_WORKTREE_DIR  - where worktrees are moved
@@ -601,7 +603,8 @@ Examples:
   wt mv -r myrepo                    # Move only myrepo's worktrees and repo
   wt mv --format={branch}            # Move and rename worktrees
   wt mv --dry-run                    # Preview what would be moved
-  wt mv -f                           # Force move locked worktrees`
+  wt mv -f                           # Force move locked worktrees
+  wt mv --cascade                    # Also move linked repos/worktrees outside path`
 }
 
 func (c *MvCmd) Run(ctx context.Context) error {

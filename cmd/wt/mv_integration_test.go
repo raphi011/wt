@@ -1387,3 +1387,653 @@ func runMvCommand(t *testing.T, workDir string, cfg *config.Config, cmd *MvCmd) 
 	ctx := testContext(t)
 	return cmd.runMv(ctx)
 }
+
+// TestMv_CascadeMovesExternalWorktrees verifies --cascade moves repo's external worktrees.
+//
+// Scenario: User runs `wt mv /source/repo --cascade` where repo has worktrees elsewhere
+// Expected: Repo moves to repo_dir, all worktrees move to worktree_dir
+func TestMv_CascadeMovesExternalWorktrees(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	sourceDir := resolvePath(t, t.TempDir())
+	externalDir1 := resolvePath(t, t.TempDir())
+	externalDir2 := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create repo in source dir
+	repoPath := setupTestRepo(t, sourceDir, "myrepo")
+
+	// Create worktrees in EXTERNAL locations (not in source)
+	wt1Path := filepath.Join(externalDir1, "myrepo-feat1")
+	setupWorktree(t, repoPath, wt1Path, "feat1")
+
+	wt2Path := filepath.Join(externalDir2, "myrepo-feat2")
+	setupWorktree(t, repoPath, wt2Path, "feat2")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Move repo with cascade
+	cmd := &MvCmd{
+		Path:    repoPath,
+		Format:  config.DefaultWorktreeFormat,
+		Cascade: true,
+	}
+	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv --cascade failed: %v", err)
+	}
+
+	// Verify repo moved to repo_dir
+	newRepoPath := filepath.Join(repoDestDir, "myrepo")
+	if _, err := os.Stat(newRepoPath); os.IsNotExist(err) {
+		t.Errorf("repo should be moved to %s", newRepoPath)
+	}
+
+	// Verify external worktrees moved to worktree_dir
+	newWt1Path := filepath.Join(worktreeDestDir, "myrepo-feat1")
+	if _, err := os.Stat(newWt1Path); os.IsNotExist(err) {
+		t.Errorf("external worktree 1 should be moved to %s", newWt1Path)
+	}
+
+	newWt2Path := filepath.Join(worktreeDestDir, "myrepo-feat2")
+	if _, err := os.Stat(newWt2Path); os.IsNotExist(err) {
+		t.Errorf("external worktree 2 should be moved to %s", newWt2Path)
+	}
+
+	// Verify old locations are gone
+	if _, err := os.Stat(repoPath); !os.IsNotExist(err) {
+		t.Errorf("old repo path should not exist: %s", repoPath)
+	}
+	if _, err := os.Stat(wt1Path); !os.IsNotExist(err) {
+		t.Errorf("old worktree 1 path should not exist: %s", wt1Path)
+	}
+	if _, err := os.Stat(wt2Path); !os.IsNotExist(err) {
+		t.Errorf("old worktree 2 path should not exist: %s", wt2Path)
+	}
+
+	// Verify worktrees point to new repo and work
+	verifyGitdirPoints(t, newWt1Path, newRepoPath)
+	verifyGitdirPoints(t, newWt2Path, newRepoPath)
+	verifyWorktreeWorks(t, newWt1Path)
+	verifyWorktreeWorks(t, newWt2Path)
+}
+
+// TestMv_CascadeFromWorktreePullsRepoAndSiblings verifies moving a worktree with --cascade also moves its repo and sibling worktrees.
+//
+// Scenario: User runs `wt mv /path/to/worktree --cascade`
+// Expected: Worktree, its main repo, and all sibling worktrees are moved
+func TestMv_CascadeFromWorktreePullsRepoAndSiblings(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	repoDir := resolvePath(t, t.TempDir())
+	wt1Dir := resolvePath(t, t.TempDir())
+	wt2Dir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create repo
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+
+	// Create worktrees in different locations
+	wt1Path := filepath.Join(wt1Dir, "myrepo-feat1")
+	setupWorktree(t, repoPath, wt1Path, "feat1")
+
+	wt2Path := filepath.Join(wt2Dir, "myrepo-feat2")
+	setupWorktree(t, repoPath, wt2Path, "feat2")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Move just wt1 with cascade - should pull repo and wt2
+	cmd := &MvCmd{
+		Path:    wt1Path,
+		Format:  config.DefaultWorktreeFormat,
+		Cascade: true,
+	}
+	if err := runMvCommand(t, wt1Dir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv --cascade failed: %v", err)
+	}
+
+	// Verify repo was moved
+	newRepoPath := filepath.Join(repoDestDir, "myrepo")
+	if _, err := os.Stat(newRepoPath); os.IsNotExist(err) {
+		t.Errorf("repo should be moved to %s", newRepoPath)
+	}
+
+	// Verify both worktrees moved
+	newWt1Path := filepath.Join(worktreeDestDir, "myrepo-feat1")
+	if _, err := os.Stat(newWt1Path); os.IsNotExist(err) {
+		t.Errorf("worktree 1 should be moved to %s", newWt1Path)
+	}
+
+	newWt2Path := filepath.Join(worktreeDestDir, "myrepo-feat2")
+	if _, err := os.Stat(newWt2Path); os.IsNotExist(err) {
+		t.Errorf("sibling worktree 2 should be moved to %s", newWt2Path)
+	}
+
+	// Verify old locations are gone
+	if _, err := os.Stat(repoPath); !os.IsNotExist(err) {
+		t.Errorf("old repo path should not exist: %s", repoPath)
+	}
+	if _, err := os.Stat(wt1Path); !os.IsNotExist(err) {
+		t.Errorf("old worktree 1 path should not exist: %s", wt1Path)
+	}
+	if _, err := os.Stat(wt2Path); !os.IsNotExist(err) {
+		t.Errorf("old worktree 2 path should not exist: %s", wt2Path)
+	}
+
+	// Verify worktrees work
+	verifyGitdirPoints(t, newWt1Path, newRepoPath)
+	verifyGitdirPoints(t, newWt2Path, newRepoPath)
+	verifyWorktreeWorks(t, newWt1Path)
+	verifyWorktreeWorks(t, newWt2Path)
+}
+
+// TestMv_CascadeFolderMovesAllLinkedItems verifies scanning a folder with --cascade includes external worktrees.
+//
+// Scenario: User runs `wt mv /source --cascade` on folder containing repos with external worktrees
+// Expected: All repos and their external worktrees are moved
+func TestMv_CascadeFolderMovesAllLinkedItems(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	sourceDir := resolvePath(t, t.TempDir())
+	externalDir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create two repos in source with external worktrees
+	repoA := setupTestRepo(t, sourceDir, "repoA")
+	wtAPath := filepath.Join(externalDir, "repoA-feat")
+	setupWorktree(t, repoA, wtAPath, "feat")
+
+	repoB := setupTestRepo(t, sourceDir, "repoB")
+	wtBPath := filepath.Join(externalDir, "repoB-feat")
+	setupWorktree(t, repoB, wtBPath, "feat")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Move source folder with cascade
+	cmd := &MvCmd{
+		Path:    sourceDir,
+		Format:  config.DefaultWorktreeFormat,
+		Cascade: true,
+	}
+	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv --cascade failed: %v", err)
+	}
+
+	// Verify both repos moved
+	newRepoA := filepath.Join(repoDestDir, "repoA")
+	if _, err := os.Stat(newRepoA); os.IsNotExist(err) {
+		t.Errorf("repoA should be moved to %s", newRepoA)
+	}
+
+	newRepoB := filepath.Join(repoDestDir, "repoB")
+	if _, err := os.Stat(newRepoB); os.IsNotExist(err) {
+		t.Errorf("repoB should be moved to %s", newRepoB)
+	}
+
+	// Verify external worktrees moved
+	newWtA := filepath.Join(worktreeDestDir, "repoA-feat")
+	if _, err := os.Stat(newWtA); os.IsNotExist(err) {
+		t.Errorf("repoA external worktree should be moved to %s", newWtA)
+	}
+
+	newWtB := filepath.Join(worktreeDestDir, "repoB-feat")
+	if _, err := os.Stat(newWtB); os.IsNotExist(err) {
+		t.Errorf("repoB external worktree should be moved to %s", newWtB)
+	}
+
+	// Verify old external worktree locations are gone
+	if _, err := os.Stat(wtAPath); !os.IsNotExist(err) {
+		t.Errorf("old repoA worktree path should not exist: %s", wtAPath)
+	}
+	if _, err := os.Stat(wtBPath); !os.IsNotExist(err) {
+		t.Errorf("old repoB worktree path should not exist: %s", wtBPath)
+	}
+
+	// Verify worktrees work
+	verifyWorktreeWorks(t, newWtA)
+	verifyWorktreeWorks(t, newWtB)
+}
+
+// TestMv_CascadeNoOpWhenAllNested verifies --cascade has no extra effect when worktrees are nested.
+//
+// Scenario: User runs `wt mv /source/repo --cascade` where all worktrees are inside repo
+// Expected: Same behavior as without --cascade (nested worktrees extracted, then repo moved)
+func TestMv_CascadeNoOpWhenAllNested(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	sourceDir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create repo with nested worktree
+	repoPath := setupTestRepo(t, sourceDir, "myrepo")
+	nestedWtPath := filepath.Join(repoPath, "worktrees", "feat1")
+	if err := os.MkdirAll(filepath.Dir(nestedWtPath), 0755); err != nil {
+		t.Fatalf("failed to create nested dir: %v", err)
+	}
+	setupWorktree(t, repoPath, nestedWtPath, "feat1")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Move repo with cascade (should behave same as without cascade for nested)
+	cmd := &MvCmd{
+		Path:    repoPath,
+		Format:  config.DefaultWorktreeFormat,
+		Cascade: true,
+	}
+	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv --cascade failed: %v", err)
+	}
+
+	// Verify repo moved
+	newRepoPath := filepath.Join(repoDestDir, "myrepo")
+	if _, err := os.Stat(newRepoPath); os.IsNotExist(err) {
+		t.Errorf("repo should be moved to %s", newRepoPath)
+	}
+
+	// Verify nested worktree was extracted to worktree_dir
+	newWtPath := filepath.Join(worktreeDestDir, "myrepo-feat1")
+	if _, err := os.Stat(newWtPath); os.IsNotExist(err) {
+		t.Errorf("nested worktree should be extracted to %s", newWtPath)
+	}
+
+	// Verify worktree works
+	verifyGitdirPoints(t, newWtPath, newRepoPath)
+	verifyWorktreeWorks(t, newWtPath)
+}
+
+// TestMv_CascadeDryRunShowsAllItems verifies dry-run output includes cascaded items.
+//
+// Scenario: User runs `wt mv /source/repo --cascade --dry-run`
+// Expected: Output lists repo AND external worktrees that would move
+func TestMv_CascadeDryRunShowsAllItems(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	sourceDir := resolvePath(t, t.TempDir())
+	externalDir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create repo with external worktree
+	repoPath := setupTestRepo(t, sourceDir, "myrepo")
+	wtPath := filepath.Join(externalDir, "myrepo-feat")
+	setupWorktree(t, repoPath, wtPath, "feat")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Dry run with cascade
+	cmd := &MvCmd{
+		Path:    repoPath,
+		Format:  config.DefaultWorktreeFormat,
+		Cascade: true,
+		DryRun:  true,
+	}
+	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv --cascade --dry-run failed: %v", err)
+	}
+
+	// Verify nothing was actually moved
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		t.Errorf("repo should still exist at %s (dry-run)", repoPath)
+	}
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Errorf("worktree should still exist at %s (dry-run)", wtPath)
+	}
+
+	// Verify nothing at destination
+	newRepoPath := filepath.Join(repoDestDir, "myrepo")
+	if _, err := os.Stat(newRepoPath); !os.IsNotExist(err) {
+		t.Errorf("repo should not be at destination %s (dry-run)", newRepoPath)
+	}
+	newWtPath := filepath.Join(worktreeDestDir, "myrepo-feat")
+	if _, err := os.Stat(newWtPath); !os.IsNotExist(err) {
+		t.Errorf("worktree should not be at destination %s (dry-run)", newWtPath)
+	}
+}
+
+// TestMv_CascadeRespectsRepositoryFilter verifies -r filter limits which repos cascade.
+//
+// Scenario: User runs `wt mv /source -r repoA --cascade` with multiple repos
+// Expected: Only repoA and its worktrees move, repoB untouched
+func TestMv_CascadeRespectsRepositoryFilter(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	sourceDir := resolvePath(t, t.TempDir())
+	externalDir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create two repos with external worktrees
+	repoA := setupTestRepo(t, sourceDir, "repoA")
+	wtAPath := filepath.Join(externalDir, "repoA-feat")
+	setupWorktree(t, repoA, wtAPath, "feat")
+
+	repoB := setupTestRepo(t, sourceDir, "repoB")
+	wtBPath := filepath.Join(externalDir, "repoB-feat")
+	setupWorktree(t, repoB, wtBPath, "feat")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Move with filter for repoA only
+	cmd := &MvCmd{
+		Path:       sourceDir,
+		Format:     config.DefaultWorktreeFormat,
+		Cascade:    true,
+		Repository: []string{"repoA"},
+	}
+	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv --cascade -r repoA failed: %v", err)
+	}
+
+	// Verify repoA moved
+	newRepoA := filepath.Join(repoDestDir, "repoA")
+	if _, err := os.Stat(newRepoA); os.IsNotExist(err) {
+		t.Errorf("repoA should be moved to %s", newRepoA)
+	}
+
+	// Verify repoA's worktree moved
+	newWtA := filepath.Join(worktreeDestDir, "repoA-feat")
+	if _, err := os.Stat(newWtA); os.IsNotExist(err) {
+		t.Errorf("repoA worktree should be moved to %s", newWtA)
+	}
+
+	// Verify repoB NOT moved
+	if _, err := os.Stat(repoB); os.IsNotExist(err) {
+		t.Errorf("repoB should still be at %s (filtered out)", repoB)
+	}
+
+	// Verify repoB's worktree NOT moved
+	if _, err := os.Stat(wtBPath); os.IsNotExist(err) {
+		t.Errorf("repoB worktree should still be at %s (filtered out)", wtBPath)
+	}
+
+	// Verify repoA worktree works
+	verifyWorktreeWorks(t, newWtA)
+}
+
+// TestMv_CascadeDeduplicatesOverlappingTargets verifies items aren't moved twice.
+//
+// Scenario: User runs `wt mv /source --cascade` where repo and its worktree are both in source
+// Expected: Each item moved exactly once, no errors
+func TestMv_CascadeDeduplicatesOverlappingTargets(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	sourceDir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create repo in source
+	repoPath := setupTestRepo(t, sourceDir, "myrepo")
+
+	// Create worktree ALSO in source (so it's in the scan)
+	wtPath := filepath.Join(sourceDir, "myrepo-feat")
+	setupWorktree(t, repoPath, wtPath, "feat")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Move with cascade - worktree is in scan AND is linked to repo
+	cmd := &MvCmd{
+		Path:    sourceDir,
+		Format:  config.DefaultWorktreeFormat,
+		Cascade: true,
+	}
+	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv --cascade failed: %v", err)
+	}
+
+	// Verify repo moved
+	newRepoPath := filepath.Join(repoDestDir, "myrepo")
+	if _, err := os.Stat(newRepoPath); os.IsNotExist(err) {
+		t.Errorf("repo should be moved to %s", newRepoPath)
+	}
+
+	// Verify worktree moved (exactly once)
+	newWtPath := filepath.Join(worktreeDestDir, "myrepo-feat")
+	if _, err := os.Stat(newWtPath); os.IsNotExist(err) {
+		t.Errorf("worktree should be moved to %s", newWtPath)
+	}
+
+	// Verify no duplicate (myrepo-feat-1 should not exist)
+	duplicatePath := filepath.Join(worktreeDestDir, "myrepo-feat-1")
+	if _, err := os.Stat(duplicatePath); !os.IsNotExist(err) {
+		t.Errorf("should not have duplicate at %s", duplicatePath)
+	}
+
+	// Verify worktree works
+	verifyGitdirPoints(t, newWtPath, newRepoPath)
+	verifyWorktreeWorks(t, newWtPath)
+}
+
+// TestMv_CascadeHandlesMultipleWorktreesFromSameRepo verifies cascading from one worktree finds all siblings.
+//
+// Scenario: User targets one worktree with --cascade, repo has 3 total worktrees
+// Expected: All 3 worktrees and the repo are moved
+func TestMv_CascadeHandlesMultipleWorktreesFromSameRepo(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	repoDir := resolvePath(t, t.TempDir())
+	wtDir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create repo
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+
+	// Create 3 worktrees
+	wt1Path := filepath.Join(wtDir, "myrepo-feat1")
+	setupWorktree(t, repoPath, wt1Path, "feat1")
+
+	wt2Path := filepath.Join(wtDir, "myrepo-feat2")
+	setupWorktree(t, repoPath, wt2Path, "feat2")
+
+	wt3Path := filepath.Join(wtDir, "myrepo-feat3")
+	setupWorktree(t, repoPath, wt3Path, "feat3")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Move just wt1 with cascade - should find all siblings and repo
+	cmd := &MvCmd{
+		Path:    wt1Path,
+		Format:  config.DefaultWorktreeFormat,
+		Cascade: true,
+	}
+	if err := runMvCommand(t, wtDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv --cascade failed: %v", err)
+	}
+
+	// Verify repo moved
+	newRepoPath := filepath.Join(repoDestDir, "myrepo")
+	if _, err := os.Stat(newRepoPath); os.IsNotExist(err) {
+		t.Errorf("repo should be moved to %s", newRepoPath)
+	}
+
+	// Verify all 3 worktrees moved
+	for _, branch := range []string{"feat1", "feat2", "feat3"} {
+		newWtPath := filepath.Join(worktreeDestDir, "myrepo-"+branch)
+		if _, err := os.Stat(newWtPath); os.IsNotExist(err) {
+			t.Errorf("worktree %s should be moved to %s", branch, newWtPath)
+			continue
+		}
+		verifyGitdirPoints(t, newWtPath, newRepoPath)
+		verifyWorktreeWorks(t, newWtPath)
+	}
+
+	// Verify old locations are gone
+	if _, err := os.Stat(repoPath); !os.IsNotExist(err) {
+		t.Errorf("old repo path should not exist: %s", repoPath)
+	}
+	for _, path := range []string{wt1Path, wt2Path, wt3Path} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("old worktree path should not exist: %s", path)
+		}
+	}
+}
+
+// TestMv_CascadeFolderWithExternalRepo verifies scanning a folder with --cascade includes external repos.
+//
+// Scenario: User runs `wt mv /source --cascade` where source contains worktrees whose repos are elsewhere
+// Expected: Worktrees in source move, their external repos move, sibling worktrees also move
+func TestMv_CascadeFolderWithExternalRepo(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	sourceDir := resolvePath(t, t.TempDir())   // contains worktrees
+	repoDir := resolvePath(t, t.TempDir())     // contains repo (external to source)
+	siblingDir := resolvePath(t, t.TempDir())  // contains sibling worktree
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create repo OUTSIDE source
+	repoPath := setupTestRepo(t, repoDir, "myrepo")
+
+	// Create worktree IN source
+	wt1Path := filepath.Join(sourceDir, "myrepo-feat1")
+	setupWorktree(t, repoPath, wt1Path, "feat1")
+
+	// Create sibling worktree in yet another location
+	wt2Path := filepath.Join(siblingDir, "myrepo-feat2")
+	setupWorktree(t, repoPath, wt2Path, "feat2")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Scan source folder with cascade - should pull external repo and sibling
+	cmd := &MvCmd{
+		Path:    sourceDir,
+		Format:  config.DefaultWorktreeFormat,
+		Cascade: true,
+	}
+	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv --cascade failed: %v", err)
+	}
+
+	// Verify repo was moved (pulled by cascade from worktree)
+	newRepoPath := filepath.Join(repoDestDir, "myrepo")
+	if _, err := os.Stat(newRepoPath); os.IsNotExist(err) {
+		t.Errorf("external repo should be moved to %s (cascade)", newRepoPath)
+	}
+
+	// Verify worktree from source moved
+	newWt1Path := filepath.Join(worktreeDestDir, "myrepo-feat1")
+	if _, err := os.Stat(newWt1Path); os.IsNotExist(err) {
+		t.Errorf("worktree in source should be moved to %s", newWt1Path)
+	}
+
+	// Verify sibling worktree also moved (cascade pulls siblings)
+	newWt2Path := filepath.Join(worktreeDestDir, "myrepo-feat2")
+	if _, err := os.Stat(newWt2Path); os.IsNotExist(err) {
+		t.Errorf("sibling worktree should be moved to %s (cascade)", newWt2Path)
+	}
+
+	// Verify old locations are gone
+	if _, err := os.Stat(repoPath); !os.IsNotExist(err) {
+		t.Errorf("old repo path should not exist: %s", repoPath)
+	}
+	if _, err := os.Stat(wt1Path); !os.IsNotExist(err) {
+		t.Errorf("old worktree 1 path should not exist: %s", wt1Path)
+	}
+	if _, err := os.Stat(wt2Path); !os.IsNotExist(err) {
+		t.Errorf("old worktree 2 path should not exist: %s", wt2Path)
+	}
+
+	// Verify worktrees work
+	verifyGitdirPoints(t, newWt1Path, newRepoPath)
+	verifyGitdirPoints(t, newWt2Path, newRepoPath)
+	verifyWorktreeWorks(t, newWt1Path)
+	verifyWorktreeWorks(t, newWt2Path)
+}
+
+// TestMv_WithoutCascadeExternalWorktreesStay verifies folder scan without cascade doesn't move external worktrees.
+//
+// Scenario: User runs `wt mv /source` (no --cascade) where repo has external worktrees
+// Expected: Repo and in-folder worktrees move, external worktrees stay but refs are repaired
+func TestMv_WithoutCascadeExternalWorktreesStay(t *testing.T) {
+	t.Parallel()
+	// Setup temp directories
+	sourceDir := resolvePath(t, t.TempDir())
+	externalDir := resolvePath(t, t.TempDir())
+	worktreeDestDir := resolvePath(t, t.TempDir())
+	repoDestDir := resolvePath(t, t.TempDir())
+
+	// Create repo in source
+	repoPath := setupTestRepo(t, sourceDir, "myrepo")
+
+	// Create external worktree (outside source folder)
+	wtPath := filepath.Join(externalDir, "myrepo-feat")
+	setupWorktree(t, repoPath, wtPath, "feat")
+
+	cfg := &config.Config{
+		WorktreeDir:    worktreeDestDir,
+		RepoDir:        repoDestDir,
+		WorktreeFormat: config.DefaultWorktreeFormat,
+	}
+
+	// Scan source folder WITHOUT cascade (folder scan mode, not single repo mode)
+	cmd := &MvCmd{
+		Path:    sourceDir,
+		Format:  config.DefaultWorktreeFormat,
+		Cascade: false,
+	}
+	if err := runMvCommand(t, sourceDir, cfg, cmd); err != nil {
+		t.Fatalf("wt mv failed: %v", err)
+	}
+
+	// Verify repo moved
+	newRepoPath := filepath.Join(repoDestDir, "myrepo")
+	if _, err := os.Stat(newRepoPath); os.IsNotExist(err) {
+		t.Errorf("repo should be moved to %s", newRepoPath)
+	}
+
+	// Verify external worktree is STILL at original location (not moved - no cascade)
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Errorf("external worktree should still be at %s (no cascade)", wtPath)
+	}
+
+	// Verify worktree was NOT moved to destination
+	destWtPath := filepath.Join(worktreeDestDir, "myrepo-feat")
+	if _, err := os.Stat(destWtPath); !os.IsNotExist(err) {
+		t.Errorf("worktree should not be at %s (no cascade)", destWtPath)
+	}
+
+	// Verify worktree's .git file was updated to point to new repo location (repaired)
+	verifyGitdirPoints(t, wtPath, newRepoPath)
+
+	// Verify worktree still works
+	verifyWorktreeWorks(t, wtPath)
+}

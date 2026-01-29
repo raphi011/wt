@@ -370,7 +370,7 @@ _wt_completions() {
             if [[ "$cur" != -* ]]; then
                 COMPREPLY=($(compgen -d -- "$cur"))
             else
-                COMPREPLY=($(compgen -W "-r --repository --format -d --dry-run -f --force" -- "$cur"))
+                COMPREPLY=($(compgen -W "-r --repository --format -d --dry-run -f --force -C --cascade" -- "$cur"))
             fi
             ;;
         pr)
@@ -831,7 +831,9 @@ _wt() {
                         '-d[show what would be moved]' \
                         '--dry-run[show what would be moved]' \
                         '-f[force move locked worktrees]' \
-                        '--force[force move locked worktrees]'
+                        '--force[force move locked worktrees]' \
+                        '-C[also move linked repos/worktrees outside target path]' \
+                        '--cascade[also move linked repos/worktrees outside target path]'
                     ;;
                 pr)
                     _arguments -C \
@@ -1225,6 +1227,7 @@ complete -c wt -n "__fish_seen_subcommand_from mv" -s r -l repository -r -a "(__
 complete -c wt -n "__fish_seen_subcommand_from mv" -l format -d "Worktree naming format"
 complete -c wt -n "__fish_seen_subcommand_from mv" -s d -l dry-run -d "Show what would be moved"
 complete -c wt -n "__fish_seen_subcommand_from mv" -s f -l force -d "Force move locked worktrees"
+complete -c wt -n "__fish_seen_subcommand_from mv" -s C -l cascade -d "Also move linked repos/worktrees outside target path"
 
 # note: subcommands (get is default, so flags work directly on note)
 complete -c wt -n "__fish_seen_subcommand_from note; and not __fish_seen_subcommand_from set get clear" -a "set" -d "Set a note on a branch"

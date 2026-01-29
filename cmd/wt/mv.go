@@ -114,12 +114,17 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 
 	// Handle single worktree mode
 	if singleWorktree != nil {
+		if c.Cascade {
+			// Cascade: also move repo and sibling worktrees
+			l.Printf("Cascade: including repo and sibling worktrees\n")
+			return c.moveSingleRepo(ctx, l, singleWorktree.MainRepo, destPath, repoDestPath)
+		}
 		return c.moveSingleWorktree(ctx, l, singleWorktree, destPath)
 	}
 
 	// Handle single repo mode
 	if singleRepo != "" {
-		return c.moveSingleRepo(ctx, l, out, singleRepo, destPath, repoDestPath)
+		return c.moveSingleRepo(ctx, l, singleRepo, destPath, repoDestPath)
 	}
 
 	// Scan for worktrees in scan directory
@@ -155,26 +160,67 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 		return fmt.Errorf("failed to scan for repos: %w", err)
 	}
 
-	// Filter repos by repository if specified
+	// Build repo filter set if specified
+	var repoFilter map[string]bool
 	if len(c.Repository) > 0 {
-		repoSet := make(map[string]bool)
+		repoFilter = make(map[string]bool)
 		for _, r := range c.Repository {
-			repoSet[r] = true
+			repoFilter[r] = true
 		}
+	}
+
+	// Filter repos by repository if specified
+	if repoFilter != nil {
 		var filtered []string
 		for _, repoPath := range repos {
 			repoName := filepath.Base(repoPath)
-			if repoSet[repoName] {
+			if repoFilter[repoName] {
 				filtered = append(filtered, repoPath)
 			}
 		}
 		repos = filtered
 	}
 
+	// Track repos we've seen to avoid duplicates when cascade adds more
+	seenRepoPaths := make(map[string]bool)
+	for _, repoPath := range repos {
+		seenRepoPaths[repoPath] = true
+	}
+
+	// When cascade is enabled, also add repos that are OUTSIDE scanDir
+	// but have worktrees IN scanDir
+	if c.Cascade {
+		for _, wt := range worktrees {
+			// Check if this worktree's repo is already in our list
+			if seenRepoPaths[wt.MainRepo] {
+				continue
+			}
+			// Check repo filter
+			if repoFilter != nil && !repoFilter[filepath.Base(wt.MainRepo)] {
+				continue
+			}
+			// Add this external repo to be moved
+			l.Printf("Cascade: including external repo %s\n", filepath.Base(wt.MainRepo))
+			repos = append(repos, wt.MainRepo)
+			seenRepoPaths[wt.MainRepo] = true
+		}
+	}
+
 	// Find nested worktrees (worktrees inside repo directories)
 	// These must be moved OUT before the repo moves, otherwise they move with the repo
 	// and git worktree repair can't find them
+	//
+	// When cascade is enabled, also collect EXTERNAL worktrees (outside scan directory)
+	// that belong to repos in the scan directory
 	var nestedWorktrees []git.Worktree
+	var cascadeWorktrees []git.Worktree // external worktrees found via cascade
+	seenWorktreePaths := make(map[string]bool)
+
+	// Track worktrees already in scan directory to avoid duplicates
+	for _, wt := range worktrees {
+		seenWorktreePaths[wt.Path] = true
+	}
+
 	for _, repoPath := range repos {
 		wtInfos, err := git.ListWorktreesFromRepo(ctx, repoPath)
 		if err != nil {
@@ -185,19 +231,37 @@ func (c *MvCmd) runMv(ctx context.Context) error {
 			if wti.Path == repoPath {
 				continue
 			}
+			// Skip if already in worktrees list
+			if seenWorktreePaths[wti.Path] {
+				continue
+			}
+
 			// Check if worktree is nested inside repo directory
-			if !isNestedPath(wti.Path, repoPath) {
-				continue
+			if isNestedPath(wti.Path, repoPath) {
+				// Build full Worktree struct for nested worktree
+				wtInfo, err := git.GetWorktreeInfo(ctx, wti.Path)
+				if err != nil {
+					l.Printf("⚠ Warning: failed to get info for nested worktree %s: %v\n", wti.Path, err)
+					continue
+				}
+				nestedWorktrees = append(nestedWorktrees, *wtInfo)
+				seenWorktreePaths[wti.Path] = true
+			} else if c.Cascade {
+				// External worktree (outside repo dir) - add if cascade enabled
+				wtInfo, err := git.GetWorktreeInfo(ctx, wti.Path)
+				if err != nil {
+					l.Printf("⚠ Warning: failed to get info for external worktree %s: %v\n", wti.Path, err)
+					continue
+				}
+				l.Printf("Cascade: including external worktree %s\n", filepath.Base(wti.Path))
+				cascadeWorktrees = append(cascadeWorktrees, *wtInfo)
+				seenWorktreePaths[wti.Path] = true
 			}
-			// Build full Worktree struct for nested worktree
-			wtInfo, err := git.GetWorktreeInfo(ctx, wti.Path)
-			if err != nil {
-				l.Printf("⚠ Warning: failed to get info for nested worktree %s: %v\n", wti.Path, err)
-				continue
-			}
-			nestedWorktrees = append(nestedWorktrees, *wtInfo)
 		}
 	}
+
+	// Add cascade worktrees to the main worktrees list (they'll be moved after repos)
+	worktrees = append(worktrees, cascadeWorktrees...)
 
 	// Move nested worktrees first (before repos move)
 	var nestedMoved, nestedFailed int
@@ -424,7 +488,7 @@ func (c *MvCmd) moveSingleWorktree(ctx context.Context, l *log.Logger, wt *git.W
 }
 
 // moveSingleRepo moves a repo and all its worktrees to the destination.
-func (c *MvCmd) moveSingleRepo(ctx context.Context, l *log.Logger, out *output.Printer, repoPath, destPath, repoDestPath string) error {
+func (c *MvCmd) moveSingleRepo(ctx context.Context, l *log.Logger, repoPath, destPath, repoDestPath string) error {
 	repoName := filepath.Base(repoPath)
 
 	// Get all worktrees for this repo

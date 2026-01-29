@@ -289,7 +289,13 @@ wt mv --format={repo}-{branch}
 
 # Force move even if worktrees have uncommitted changes
 wt mv -f
+
+# Cascade: also move linked repos/worktrees outside the target path
+wt mv --cascade
+wt mv ~/old-projects/my-worktree --cascade  # Also moves repo + siblings
 ```
+
+The `--cascade` flag follows references between repos and worktrees. When moving a worktree, it also moves the repo and sibling worktrees. When scanning a folder, it includes external worktrees from found repos.
 
 This updates git's worktree tracking automatically—no manual fixup needed.
 
