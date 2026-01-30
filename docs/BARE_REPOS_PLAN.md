@@ -267,7 +267,7 @@ type Registry struct {
     Repos []Repo `json:"repos"`
 }
 
-// Load reads registry from ~/.wt/repos.json
+// Load reads registry from ~/.wt/repos.json (creates ~/.wt/ if needed)
 func Load() (*Registry, error)
 
 // Save writes registry to ~/.wt/repos.json
@@ -651,10 +651,13 @@ func (c *ListCmd) Run(ctx context.Context) error {
 }
 ```
 
+**Sorting:** Worktrees sorted by creation date (most recent first). Uses the worktree directory's modification time (`os.Stat().ModTime()`).
+
 **Tasks:**
 - [ ] Update `wt list` to use registry
 - [ ] Add `-l` label filter
 - [ ] Show repo name from registry
+- [ ] Sort by worktree directory mtime (most recent first)
 - [ ] Update integration tests
 
 ---
@@ -937,6 +940,8 @@ run = "./scripts/lint.sh"
    - `repos.json` - registered repos
    - `prs.json` - PR metadata only (status, URL, merge state)
    - No worktree cache - always use `git worktree list` for fresh data
+   - Directory auto-created on first run (any command that needs it)
+   - **No XDG_CONFIG_HOME support** - folder contains mixed content (config + cache), and a single `~/.wt/` is simpler (common pattern: `~/.docker/`, `~/.npm/`, `~/.cargo/`)
 
 7. **Migration path provided**
    - `wt migrate` imports existing repos from old setup
@@ -955,6 +960,12 @@ run = "./scripts/lint.sh"
    - Completion logic in Go (testable, no separate bash/zsh/fish scripts to maintain)
    - Widely used patterns (kubectl, docker, gh, hugo)
    - `ValidArgsFunction` for positional args, `RegisterFlagCompletionFunc` for flags
+
+10. **Interactive mode uses repo/branch names**
+    - No numeric indices in selection menus
+    - Display repo names and branch names directly
+    - Example: `project-a/feature-x` instead of `[1] feature-x`
+    - More intuitive and matches the targeting flags (`-r`, `-b`)
 
    **Completion types:**
    | Flag/Arg | Completes | Source |
