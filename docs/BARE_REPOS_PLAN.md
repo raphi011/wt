@@ -444,62 +444,74 @@ type MigrateCmd struct {
 ```
 
 **Migration steps:**
-1. Scan for regular repos
+1. Scan for regular repos and their worktrees
 2. For each repo:
-   a. Move `.git` directory to become `<repo>.git` bare repo
-   b. Configure bare repo settings
-   c. Convert the original working directory into a worktree
-   d. Move any existing worktrees into the bare repo directory
-   e. Run `git worktree repair` to fix paths
+   a. Clone as bare: `git clone --bare`
+   b. Configure fetch refspec
+   c. Create fresh worktrees with `git worktree add`
+   d. Copy changed files from old worktrees to new (preserves uncommitted changes)
+   e. Re-stage any staged files
+   f. Delete old repo and worktrees
 
-**In-place conversion approach** (preserves existing checkout + uncommitted changes):
-
-Note: Git doesn't have a native command to adopt an existing directory as a worktree.
-The migration requires creating worktree metadata files manually, but uses git commands
-for everything else.
+**Clone-based migration** (uses only git commands + file copies):
 
 ```bash
-# Given: ~/Git/project/ (regular repo on branch "main" with uncommitted changes)
-# Result: ~/Git/project.git/ (bare repo)
-#         ~/Git/project.git/main/ (worktree - preserves dirty state)
+# Given:
+# ~/Git/project/                    (main repo on "main" branch)
+# ~/Git/worktrees/project-feature/  (worktree on "feature" branch)
+# Both have uncommitted changes
 
-# Step 1: Move .git to bare repo location
-mv ~/Git/project/.git ~/Git/project.git
-
-# Step 2: Configure as bare repo (git command)
-git -C ~/Git/project.git config core.bare true
-
-# Step 3: Set up fetch refspec - bare repos need this (git command)
-git -C ~/Git/project.git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
-
-# Step 4: Move working directory into bare repo
-mv ~/Git/project ~/Git/project.git/main
-
-# Step 5: Create worktree metadata (file writes - no git command for this)
-mkdir -p ~/Git/project.git/worktrees/main
-cp ~/Git/project.git/index ~/Git/project.git/worktrees/main/index
-echo "~/Git/project.git/main/.git" > ~/Git/project.git/worktrees/main/gitdir
-echo "ref: refs/heads/main" > ~/Git/project.git/worktrees/main/HEAD
-echo "../.." > ~/Git/project.git/worktrees/main/commondir
-
-# Step 6: Create .git file in worktree pointing to metadata
-echo "gitdir: ~/Git/project.git/worktrees/main" > ~/Git/project.git/main/.git
-
-# Step 7: Repair to ensure paths are consistent (git command)
-git -C ~/Git/project.git worktree repair
-
-# Verify: dirty changes should be preserved
-git -C ~/Git/project.git/main status
-```
-
-**Alternative: Fresh clone approach** (loses uncommitted changes, simpler):
-```bash
-# If you don't need to preserve uncommitted changes:
+# Step 1: Clone as bare
 git clone --bare ~/Git/project ~/Git/project.git
 git -C ~/Git/project.git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+
+# Step 2: Create fresh worktrees
 git -C ~/Git/project.git worktree add ./main main
-rm -rf ~/Git/project
+git -C ~/Git/project.git worktree add ./feature feature
+
+# Step 3: Transfer changes from old main repo
+cd ~/Git/project
+# Get changed files
+git diff --name-only > /tmp/unstaged.txt
+git diff --cached --name-only > /tmp/staged.txt
+git ls-files --others --exclude-standard > /tmp/untracked.txt
+
+# Copy all changed/untracked files
+for f in $(cat /tmp/unstaged.txt /tmp/staged.txt /tmp/untracked.txt | sort -u); do
+  cp "$f" ~/Git/project.git/main/"$f"
+done
+
+# Re-stage files that were staged
+for f in $(cat /tmp/staged.txt); do
+  git -C ~/Git/project.git/main add "$f"
+done
+
+# Step 4: Transfer changes from old worktrees (repeat for each)
+cd ~/Git/worktrees/project-feature
+git diff --name-only > /tmp/unstaged.txt
+git ls-files --others --exclude-standard > /tmp/untracked.txt
+
+for f in $(cat /tmp/unstaged.txt /tmp/untracked.txt | sort -u); do
+  cp "$f" ~/Git/project.git/feature/"$f"
+done
+
+# Step 5: Remove old structure
+rm -rf ~/Git/project ~/Git/worktrees/project-feature
 ```
+
+**What this preserves:**
+- ✅ Unstaged changes
+- ✅ Staged changes (re-staged after copy)
+- ✅ Untracked files
+- ✅ All branches and commits
+
+**What this uses:**
+- `git clone --bare` - standard git command
+- `git worktree add` - standard git command
+- `git diff --name-only` - to find changed files
+- `git ls-files --others` - to find untracked files
+- `cp` - file copy (no git internals modified)
+- `git add` - to re-stage files
 
 **Migration script logic:**
 ```go
@@ -507,7 +519,7 @@ func (c *MigrateCmd) Run(ctx context.Context) error {
     cfg := c.Config
     l := log.FromContext(ctx)
 
-    // Find all regular repos in base_dir
+    // Find all regular repos
     repos, err := git.FindAllRepos(cfg.BaseDir)
     if err != nil {
         return err
@@ -517,128 +529,82 @@ func (c *MigrateCmd) Run(ctx context.Context) error {
         repoName := filepath.Base(repo.Path)
         bareRepoPath := filepath.Join(cfg.BaseDir, repoName+".git")
 
-        l.Info("Migrating", "repo", repoName)
+        // Get all worktrees before migration (includes main repo)
+        worktrees, _ := git.ListWorktreesForRepo(repo.Path)
+
+        l.Info("Migrating", "repo", repoName, "worktrees", len(worktrees))
 
         if c.DryRun {
-            l.Info("Would convert to bare repo", "from", repo.Path, "to", bareRepoPath)
+            for _, wt := range worktrees {
+                l.Info("Would migrate worktree", "from", wt.Path, "branch", wt.Branch)
+            }
             continue
         }
 
-        // Get current branch before conversion
-        currentBranch, _ := git.CurrentBranch(ctx, repo.Path)
-        if currentBranch == "" {
-            currentBranch = "main"
+        // Step 1: Clone as bare
+        if err := git.CloneBare(ctx, repo.Path, bareRepoPath); err != nil {
+            return fmt.Errorf("clone bare %s: %w", repoName, err)
         }
+        git.ConfigureBareRemote(ctx, bareRepoPath)
 
-        // Step 1: Convert to bare in-place
-        if err := c.convertToBareInPlace(ctx, repo.Path, bareRepoPath, currentBranch); err != nil {
-            return fmt.Errorf("failed to convert %s: %w", repoName, err)
-        }
-
-        // Step 2: Move existing worktrees into bare repo
-        worktrees, _ := git.ListWorktreesForRepo(repo.Path)
+        // Step 2: Migrate each worktree
         for _, wt := range worktrees {
             newPath := filepath.Join(bareRepoPath, sanitizeBranchName(wt.Branch))
 
-            if err := c.moveWorktree(ctx, wt.Path, newPath, bareRepoPath); err != nil {
-                l.Warn("Failed to move worktree", "path", wt.Path, "error", err)
+            if err := c.migrateWorktree(ctx, wt, bareRepoPath, newPath); err != nil {
+                l.Warn("Failed to migrate worktree", "path", wt.Path, "error", err)
             }
         }
 
-        // Step 3: Repair worktree links
-        git.RepairWorktrees(ctx, bareRepoPath)
+        // Step 3: Remove old repo and worktrees
+        for _, wt := range worktrees {
+            os.RemoveAll(wt.Path)
+        }
     }
 
     return nil
 }
 
-func (c *MigrateCmd) convertToBareInPlace(ctx context.Context, repoPath, bareRepoPath, branch string) error {
-    gitDir := filepath.Join(repoPath, ".git")
-    sanitizedBranch := sanitizeBranchName(branch)
-    worktreePath := filepath.Join(bareRepoPath, sanitizedBranch)
-    wtMetadataDir := filepath.Join(bareRepoPath, "worktrees", sanitizedBranch)
-
-    // Step 1: Move .git to become bare repo
-    if err := os.Rename(gitDir, bareRepoPath); err != nil {
-        return fmt.Errorf("move .git: %w", err)
+func (c *MigrateCmd) migrateWorktree(ctx context.Context, oldWt git.Worktree, bareRepoPath, newPath string) error {
+    // Create fresh worktree
+    if err := git.AddWorktree(ctx, bareRepoPath, newPath, oldWt.Branch); err != nil {
+        return fmt.Errorf("create worktree: %w", err)
     }
 
-    // Step 2: Configure as bare (git command)
-    cmd := exec.CommandContext(ctx, "git", "-C", bareRepoPath, "config", "core.bare", "true")
-    if err := cmd.Run(); err != nil {
-        return fmt.Errorf("set core.bare: %w", err)
+    // Get list of changed files from old worktree
+    unstaged, _ := git.DiffFiles(ctx, oldWt.Path)           // git diff --name-only
+    staged, _ := git.DiffFilesCached(ctx, oldWt.Path)       // git diff --cached --name-only
+    untracked, _ := git.UntrackedFiles(ctx, oldWt.Path)     // git ls-files --others --exclude-standard
+
+    // Copy all changed files
+    allFiles := uniqueStrings(append(append(unstaged, staged...), untracked...))
+    for _, f := range allFiles {
+        src := filepath.Join(oldWt.Path, f)
+        dst := filepath.Join(newPath, f)
+
+        // Ensure parent directory exists
+        os.MkdirAll(filepath.Dir(dst), 0755)
+
+        if err := copyFile(src, dst); err != nil {
+            // Log but continue - file might have been deleted
+            continue
+        }
     }
 
-    // Step 3: Set up fetch refspec (git command)
-    cmd = exec.CommandContext(ctx, "git", "-C", bareRepoPath,
-        "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
-    cmd.Run() // Ignore error if no remote
-
-    // Step 4: Move working directory into bare repo
-    if err := os.Rename(repoPath, worktreePath); err != nil {
-        return fmt.Errorf("move working dir: %w", err)
+    // Re-stage files that were staged
+    for _, f := range staged {
+        git.Add(ctx, newPath, f)
     }
-
-    // Step 5: Create worktree metadata (git has no command for adopting existing dirs)
-    if err := os.MkdirAll(wtMetadataDir, 0755); err != nil {
-        return fmt.Errorf("create worktree metadata dir: %w", err)
-    }
-
-    // Copy index to preserve staging state
-    srcIndex := filepath.Join(bareRepoPath, "index")
-    dstIndex := filepath.Join(wtMetadataDir, "index")
-    if err := copyFile(srcIndex, dstIndex); err != nil {
-        return fmt.Errorf("copy index: %w", err)
-    }
-
-    // Write gitdir (points from metadata to worktree's .git file)
-    gitdirPath := filepath.Join(wtMetadataDir, "gitdir")
-    gitdirContent := filepath.Join(worktreePath, ".git") + "\n"
-    if err := os.WriteFile(gitdirPath, []byte(gitdirContent), 0644); err != nil {
-        return fmt.Errorf("write gitdir: %w", err)
-    }
-
-    // Write HEAD
-    headPath := filepath.Join(wtMetadataDir, "HEAD")
-    headContent := fmt.Sprintf("ref: refs/heads/%s\n", branch)
-    if err := os.WriteFile(headPath, []byte(headContent), 0644); err != nil {
-        return fmt.Errorf("write HEAD: %w", err)
-    }
-
-    // Write commondir (relative path back to bare repo)
-    commondirPath := filepath.Join(wtMetadataDir, "commondir")
-    if err := os.WriteFile(commondirPath, []byte("../..\n"), 0644); err != nil {
-        return fmt.Errorf("write commondir: %w", err)
-    }
-
-    // Step 6: Create .git file in worktree (points to metadata)
-    gitFile := filepath.Join(worktreePath, ".git")
-    gitFileContent := fmt.Sprintf("gitdir: %s\n", wtMetadataDir)
-    if err := os.WriteFile(gitFile, []byte(gitFileContent), 0644); err != nil {
-        return fmt.Errorf("write .git file: %w", err)
-    }
-
-    // Step 7: Repair to ensure paths are consistent (git command)
-    cmd = exec.CommandContext(ctx, "git", "-C", bareRepoPath, "worktree", "repair")
-    cmd.Run() // Best effort
 
     return nil
 }
 
-func (c *MigrateCmd) moveWorktree(ctx context.Context, oldPath, newPath, bareRepoPath string) error {
-    // Move the worktree directory
-    if err := os.Rename(oldPath, newPath); err != nil {
-        return err
-    }
-
-    // Update the .git file in the worktree to point to new bare repo
-    gitFile := filepath.Join(newPath, ".git")
-    worktreeName := filepath.Base(newPath)
-    newGitdir := filepath.Join(bareRepoPath, "worktrees", worktreeName)
-
-    content := fmt.Sprintf("gitdir: %s\n", newGitdir)
-    return os.WriteFile(gitFile, []byte(content), 0644)
-}
+// Helper functions needed:
+// git.DiffFiles(ctx, path) - runs: git diff --name-only
+// git.DiffFilesCached(ctx, path) - runs: git diff --cached --name-only
+// git.UntrackedFiles(ctx, path) - runs: git ls-files --others --exclude-standard
+// git.Add(ctx, path, file) - runs: git add <file>
+// copyFile(src, dst) - standard file copy
 ```
 
 **Tasks:**
