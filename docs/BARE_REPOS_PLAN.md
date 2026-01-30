@@ -707,7 +707,7 @@ wt exec -l work -- make test             # all worktrees in labeled repos
 |------|--------|
 | `WT_WORKTREE_DIR` env var | **Remove** - no longer used |
 | `WT_REPO_DIR` env var | **Remove** - no longer used |
-| `-g, --global` flag | **Remove** from most commands - registry is already global |
+| `-g, --global` flag | Keep - inside repo defaults to current repo, `--global` expands to all |
 | `wt note` storage | Keep in git config (`wt.note.<branch>`) - per-repo, survives registry changes |
 | Main worktree (regular repos) | Treated as implicit worktree, shown in `wt list` with branch name |
 
@@ -821,7 +821,6 @@ run = "./scripts/lint.sh"
 | Default worktree location | Nested in repo (was flat folder) | Update `worktree_format` if needed |
 | Worktree numbers | `-n` flag removed | Use `-r <repo> -b <branch>` or `-i` |
 | Environment variables | `WT_WORKTREE_DIR`, `WT_REPO_DIR` removed | Use registry instead |
-| `--global` flag | Removed from most commands | Registry is global by default |
 | `wt show` command | Removed | Use `wt list --json` or `wt repos --json` |
 | Labels storage | git config → registry | Labels auto-migrated by `wt migrate` |
 
