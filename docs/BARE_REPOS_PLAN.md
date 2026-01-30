@@ -832,31 +832,46 @@ run = "./scripts/lint.sh"
    - `wt add` registers individual repos
    - Existing worktrees remain on disk (git doesn't care where they are)
 
+8. **Migrate from Kong to Cobra**
+   - Built-in shell completion support with `__complete` command
+   - Context-aware completions (e.g., `-b` completes branches for repo specified by `-r`)
+   - Completion logic in Go (testable, no separate bash/zsh/fish scripts to maintain)
+   - Widely used patterns (kubectl, docker, gh, hugo)
+   - `ValidArgsFunction` for positional args, `RegisterFlagCompletionFunc` for flags
+
 ---
 
 ## Implementation Order
 
+### Sprint 0: CLI Framework Migration
+1. Migrate from Kong to Cobra
+2. Set up Cobra command structure (root + subcommands)
+3. Implement completion infrastructure (`__complete` helpers)
+4. Port existing commands to Cobra (minimal changes, same behavior)
+5. Update shell completion scripts to use Cobra's generated completions
+
 ### Sprint 1: Foundation
-1. Registry implementation (1.1)
-2. Config simplification (1.2)
-3. Repo type detection (1.3)
-4. Worktree path resolution (1.4)
+6. Registry implementation (1.1)
+7. Config simplification (1.2)
+8. Repo type detection (1.3)
+9. Worktree path resolution (1.4)
 
 ### Sprint 2: New Commands
-5. `wt add` command (2.1)
-6. `wt clone` updates (2.2)
-7. `wt remove` command (2.3)
-8. `wt repos` command (2.4)
+10. `wt add` command (2.1)
+11. `wt clone` updates (2.2)
+12. `wt remove` command (2.3)
+13. `wt repos` command (2.4)
 
 ### Sprint 3: Update Existing
-9. `wt list` updates (3.1)
-10. `wt checkout` updates (3.2)
-11. Other command updates (3.3)
+14. `wt list` updates (3.1)
+15. `wt checkout` updates (3.2)
+16. Other command updates (3.3)
 
 ### Sprint 4: Polish
-12. Migration command (4.1)
-13. Documentation
-14. Integration tests
+17. Migration command (4.1)
+18. Context-aware completions (branches for `-r` repo, etc.)
+19. Documentation
+20. Integration tests
 
 ---
 
