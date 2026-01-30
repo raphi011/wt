@@ -460,6 +460,25 @@ func (c *CompletionCmd) Run(ctx context.Context) error {
 	return c.runCompletion()
 }
 
+// InitCmd outputs shell wrapper functions for wt cd.
+type InitCmd struct {
+	Deps
+	Shell string `arg:"" required:"" placeholder:"SHELL" help:"shell type (fish, bash, zsh)" enum:"fish,bash,zsh"`
+}
+
+func (c *InitCmd) Help() string {
+	return `Output shell wrapper function that makes 'wt cd' change directories.
+
+Examples:
+  eval "$(wt init bash)"           # add to ~/.bashrc
+  eval "$(wt init zsh)"            # add to ~/.zshrc
+  wt init fish | source            # add to ~/.config/fish/config.fish`
+}
+
+func (c *InitCmd) Run(ctx context.Context) error {
+	return c.runInit()
+}
+
 // ConfigInitCmd creates the default config file.
 type ConfigInitCmd struct {
 	Deps
@@ -861,6 +880,7 @@ type CLI struct {
 	// Configuration commands
 	Config     ConfigCmd     `cmd:"" help:"Manage configuration" group:"config"`
 	Completion CompletionCmd `cmd:"" help:"Generate completion script" group:"config"`
+	Init       InitCmd       `cmd:"" help:"Output shell wrapper function" group:"config"`
 	Doctor     DoctorCmd     `cmd:"" help:"Diagnose and repair cache" group:"config"`
 
 	Verbose bool        `short:"v" name:"verbose" help:"Show external commands being executed"`
