@@ -666,6 +666,16 @@ func (c *CheckoutCmd) Run(ctx context.Context) error {
 | `wt prune` | Use registry, handle different worktree locations |
 | `wt pr checkout` | Clone and register if new repo |
 | `wt hook` | Use registry |
+| `wt note` | Use registry |
+| `wt mv` | **Remove** - no longer needed with registry model |
+
+**Why remove `wt mv`?**
+
+The old `wt mv` renamed worktrees when `worktree_format` changed. With the registry model:
+- To move a repo: `mv` the directory, then update registry with `wt remove` + `wt add`
+- Worktree locations are determined by `worktree_format` at creation time
+- Existing worktrees stay where they are (git tracks them by path)
+- Changing `worktree_format` only affects new worktrees
 
 ---
 
