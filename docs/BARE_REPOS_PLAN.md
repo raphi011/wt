@@ -118,39 +118,40 @@ The `worktree_format` config controls both **location** and **naming** of worktr
 
 | Format | Type | Example Output |
 |--------|------|----------------|
-| `./{branch}` | Nested | `project/main/`, `project/feature-x/` |
+| `{branch}` | Nested (default) | `project/main/`, `project/feature-x/` |
+| `./{branch}` | Nested (explicit) | `project/main/`, `project/feature-x/` |
 | `../{repo}-{branch}` | Sibling | `project-main/`, `project-feature-x/` |
 | `~/worktrees/{repo}-{branch}` | Centralized | `~/worktrees/project-main/` |
-| `{repo}-{branch}` | Legacy (uses worktree_dir) | `~/Git/worktrees/project-main/` |
 
 **Path resolution:**
-- Starts with `./` or `../` → relative to repo path
+- Starts with `../` → relative to repo's parent directory
 - Starts with `/` or `~/` → absolute path
-- No path prefix → relative to legacy `worktree_dir` (for backwards compatibility)
+- Everything else (including `./` prefix) → relative to repo path
 
 **Resolution logic:**
 ```go
 func ResolveWorktreePath(repo Repo, branch string, format string) string {
     // Apply placeholders
-    name := strings.ReplaceAll(format, "{repo}", repo.Name)
-    name = strings.ReplaceAll(name, "{branch}", sanitizeBranch(branch))
+    path := strings.ReplaceAll(format, "{repo}", repo.Name)
+    path = strings.ReplaceAll(path, "{branch}", sanitizeBranch(branch))
 
     switch {
-    case strings.HasPrefix(name, "./"):
-        // Relative to repo: ./branch → repo/branch
-        return filepath.Join(repo.Path, name[2:])
-
-    case strings.HasPrefix(name, "../"):
+    case strings.HasPrefix(path, "../"):
         // Sibling to repo: ../repo-branch → parent/repo-branch
-        return filepath.Join(filepath.Dir(repo.Path), name[3:])
+        return filepath.Join(filepath.Dir(repo.Path), path[3:])
 
-    case strings.HasPrefix(name, "/") || strings.HasPrefix(name, "~"):
+    case strings.HasPrefix(path, "~/"):
+        // Home-relative absolute path
+        return expandHome(path)
+
+    case strings.HasPrefix(path, "/"):
         // Absolute path
-        return expandHome(name)
+        return path
 
     default:
-        // Legacy: use worktree_dir from config (backwards compat)
-        return filepath.Join(cfg.WorktreeDir, name)
+        // Relative to repo (with or without ./ prefix)
+        path = strings.TrimPrefix(path, "./")
+        return filepath.Join(repo.Path, path)
     }
 }
 ```
@@ -160,7 +161,10 @@ func ResolveWorktreePath(repo Repo, branch string, format string) string {
 ```toml
 # ~/.wt/config.toml
 
-# Nested worktrees inside repo (new default)
+# Nested worktrees inside repo (default)
+worktree_format = "{branch}"
+
+# Also nested (explicit ./ prefix)
 worktree_format = "./{branch}"
 
 # Sibling worktrees next to repo
@@ -168,10 +172,6 @@ worktree_format = "../{repo}-{branch}"
 
 # Centralized folder (absolute path)
 worktree_format = "~/worktrees/{repo}-{branch}"
-
-# Legacy format (no path prefix, uses worktree_dir)
-worktree_format = "{repo}-{branch}"
-worktree_dir = "~/Git/worktrees"   # only needed for legacy format
 ```
 
 **Per-repo override:**
@@ -275,14 +275,10 @@ Update config to support path-aware format strings:
 # ~/.wt/config.toml
 
 # Default worktree format (supports relative and absolute paths)
-# "./{branch}" = nested inside repo
+# "{branch}" or "./{branch}" = nested inside repo
 # "../{repo}-{branch}" = sibling to repo
 # "~/worktrees/{repo}-{branch}" = centralized folder
-# "{repo}-{branch}" = legacy (uses worktree_dir)
-worktree_format = "./{branch}"
-
-# Legacy: only needed if worktree_format has no path prefix
-# worktree_dir = "~/Git/worktrees"
+worktree_format = "{branch}"
 
 # Default labels for new repos (optional)
 default_labels = []
@@ -296,24 +292,19 @@ run = "echo checked out"
 
 ```go
 type Config struct {
-    WorktreeFormat string   `toml:"worktree_format"` // e.g., "./{branch}", "~/worktrees/{repo}-{branch}"
-    WorktreeDir    string   `toml:"worktree_dir"`    // Legacy: used when format has no path prefix
+    WorktreeFormat string   `toml:"worktree_format"` // e.g., "{branch}", "~/worktrees/{repo}-{branch}"
     DefaultLabels  []string `toml:"default_labels"`
     Hooks          []Hook   `toml:"hooks"`
     // ... other existing fields
 }
 
-const DefaultWorktreeFormat = "./{branch}"  // New default: nested worktrees
+const DefaultWorktreeFormat = "{branch}"  // Default: nested worktrees
 ```
 
-**Backwards compatibility:**
-- Old config with `worktree_format = "{repo}-{branch}"` + `worktree_dir` continues to work
-- New format strings with path prefixes (`./`, `../`, `~/`, `/`) don't need `worktree_dir`
-
 **Tasks:**
-- [ ] Update `WorktreeFormat` default to `./{branch}`
+- [ ] Update `WorktreeFormat` default to `{branch}`
+- [ ] Remove `WorktreeDir` and `RepoDir` from config
 - [ ] Add path prefix detection to format resolution
-- [ ] Keep `WorktreeDir` for backwards compatibility
 - [ ] Move config to `~/.wt/config.toml`
 - [ ] Add `DefaultLabels`
 - [ ] Update config loading/validation
@@ -382,7 +373,7 @@ Update format resolution to support path-aware format strings:
 
 ```go
 // ResolveWorktreePath computes the path for a new worktree
-// format: e.g., "./{branch}", "../{repo}-{branch}", "~/worktrees/{repo}-{branch}"
+// format: e.g., "{branch}", "../{repo}-{branch}", "~/worktrees/{repo}-{branch}"
 func ResolveWorktreePath(repo registry.Repo, branch string, cfg *config.Config) string {
     // Use repo-specific format or fall back to config default
     format := repo.WorktreeFormat
@@ -395,10 +386,6 @@ func ResolveWorktreePath(repo registry.Repo, branch string, cfg *config.Config) 
     path = strings.ReplaceAll(path, "{branch}", sanitizeBranch(branch))
 
     switch {
-    case strings.HasPrefix(path, "./"):
-        // Relative to repo: ./main → repo/main
-        return filepath.Join(repo.Path, path[2:])
-
     case strings.HasPrefix(path, "../"):
         // Sibling to repo: ../repo-main → parent/repo-main
         return filepath.Join(filepath.Dir(repo.Path), path[3:])
@@ -412,8 +399,9 @@ func ResolveWorktreePath(repo registry.Repo, branch string, cfg *config.Config) 
         return path
 
     default:
-        // Legacy: no path prefix, use worktree_dir from config
-        return filepath.Join(cfg.WorktreeDir, path)
+        // Relative to repo (with or without ./ prefix)
+        path = strings.TrimPrefix(path, "./")
+        return filepath.Join(repo.Path, path)
     }
 }
 
@@ -728,14 +716,10 @@ This scans the old directories and registers found repos.
 # ~/.wt/config.toml
 
 # Default worktree format (supports path prefixes + placeholders)
-# "./{branch}" = nested inside repo
+# "{branch}" or "./{branch}" = nested inside repo
 # "../{repo}-{branch}" = sibling to repo
 # "~/worktrees/{repo}-{branch}" = centralized folder
-# "{repo}-{branch}" = legacy (requires worktree_dir)
-worktree_format = "./{branch}"
-
-# Legacy: only needed if worktree_format has no path prefix
-# worktree_dir = "~/Git/worktrees"
+worktree_format = "{branch}"
 
 # Default labels applied to new repos
 default_labels = []
@@ -758,10 +742,10 @@ run = "./scripts/lint.sh"
 
 | Change | Impact | Migration |
 |--------|--------|-----------|
-| Config format | `repo_dir`/`worktree_dir` removed | Run `wt migrate` |
+| Config format | `repo_dir`/`worktree_dir` removed | Update config, run `wt migrate` |
 | Config location | `~/.config/wt/` → `~/.wt/` | Auto-detected or manual move |
 | Repo tracking | Scan → Registry | Run `wt migrate` or `wt add` |
-| Worktree paths | May change based on `worktree_format` | Existing worktrees still work |
+| Default worktree location | Nested in repo (was flat folder) | Update `worktree_format` if needed |
 
 ---
 
@@ -779,10 +763,10 @@ run = "./scripts/lint.sh"
 
 3. **Unified worktree_format string**
    - Single config field for location + naming
-   - Path prefix determines resolution: `./`, `../`, `~/`, `/`
+   - Path prefix determines resolution: `../` (sibling), `~/` or `/` (absolute)
+   - No prefix or `./` = relative to repo (nested)
    - Placeholders: `{repo}`, `{branch}`
    - Per-repo override possible
-   - Backwards compatible with legacy `{repo}-{branch}` + `worktree_dir`
 
 4. **Labels for organization**
    - Optional grouping mechanism
@@ -794,11 +778,10 @@ run = "./scripts/lint.sh"
    - `repos.json` - registered repos
    - `cache.json` - derived worktree data
 
-6. **No forced migration**
-   - Existing repos continue to work
-   - `wt migrate` imports old setup
+6. **Migration path provided**
+   - `wt migrate` imports existing repos from old setup
    - `wt add` registers individual repos
-   - Legacy `worktree_format` + `worktree_dir` still works
+   - Existing worktrees remain on disk (git doesn't care where they are)
 
 ---
 
