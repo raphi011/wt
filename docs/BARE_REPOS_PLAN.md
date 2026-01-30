@@ -446,14 +446,15 @@ type MigrateCmd struct {
 **Migration steps:**
 1. Scan for regular repos and their worktrees
 2. For each repo:
-   a. Clone as bare: `git clone --bare`
-   b. Configure fetch refspec
-   c. Create fresh worktrees with `git worktree add`
-   d. Copy changed files from old worktrees to new (preserves uncommitted changes)
-   e. Re-stage any staged files
-   f. Delete old repo and worktrees
+   a. Create patches from all worktrees (captures staged, unstaged, untracked)
+   b. Clone as bare: `git clone --bare`
+   c. Configure fetch refspec
+   d. Create fresh worktrees with `git worktree add`
+   e. Apply patches with `git apply`
+   f. Re-stage files that were staged
+   g. Delete old repo and worktrees
 
-**Clone-based migration** (uses only git commands + file copies):
+**Clone-based migration** (uses only git commands):
 
 ```bash
 # Given:
@@ -461,39 +462,33 @@ type MigrateCmd struct {
 # ~/Git/worktrees/project-feature/  (worktree on "feature" branch)
 # Both have uncommitted changes
 
-# Step 1: Clone as bare
+# Step 1: Create patches from old worktrees (before cloning)
+cd ~/Git/project
+git diff --cached --name-only > /tmp/main-staged.txt     # Remember staged files
+git ls-files --others --exclude-standard | xargs -r git add -N  # Include untracked in diff
+git diff HEAD > /tmp/main.patch                          # Single patch with ALL changes
+
+cd ~/Git/worktrees/project-feature
+git diff --cached --name-only > /tmp/feature-staged.txt
+git ls-files --others --exclude-standard | xargs -r git add -N
+git diff HEAD > /tmp/feature.patch
+
+# Step 2: Clone as bare
 git clone --bare ~/Git/project ~/Git/project.git
 git -C ~/Git/project.git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 
-# Step 2: Create fresh worktrees
+# Step 3: Create fresh worktrees
 git -C ~/Git/project.git worktree add ./main main
 git -C ~/Git/project.git worktree add ./feature feature
 
-# Step 3: Transfer changes from old main repo
-cd ~/Git/project
-# Get changed files
-git diff --name-only > /tmp/unstaged.txt
-git diff --cached --name-only > /tmp/staged.txt
-git ls-files --others --exclude-standard > /tmp/untracked.txt
+# Step 4: Apply patches
+cd ~/Git/project.git/main
+git apply /tmp/main.patch
+for f in $(cat /tmp/main-staged.txt); do git add "$f"; done  # Re-stage
 
-# Copy all changed/untracked files
-for f in $(cat /tmp/unstaged.txt /tmp/staged.txt /tmp/untracked.txt | sort -u); do
-  cp "$f" ~/Git/project.git/main/"$f"
-done
-
-# Re-stage files that were staged
-for f in $(cat /tmp/staged.txt); do
-  git -C ~/Git/project.git/main add "$f"
-done
-
-# Step 4: Transfer changes from old worktrees (repeat for each)
-cd ~/Git/worktrees/project-feature
-git diff --name-only > /tmp/unstaged.txt
-git ls-files --others --exclude-standard > /tmp/untracked.txt
-
-for f in $(cat /tmp/unstaged.txt /tmp/untracked.txt | sort -u); do
-  cp "$f" ~/Git/project.git/feature/"$f"
-done
+cd ~/Git/project.git/feature
+git apply /tmp/feature.patch
+for f in $(cat /tmp/feature-staged.txt); do git add "$f"; done
 
 # Step 5: Remove old structure
 rm -rf ~/Git/project ~/Git/worktrees/project-feature
@@ -501,17 +496,19 @@ rm -rf ~/Git/project ~/Git/worktrees/project-feature
 
 **What this preserves:**
 - ✅ Unstaged changes
-- ✅ Staged changes (re-staged after copy)
-- ✅ Untracked files
+- ✅ Staged changes (re-staged after apply)
+- ✅ Untracked files (via `git add -N` trick)
 - ✅ All branches and commits
 
-**What this uses:**
-- `git clone --bare` - standard git command
-- `git worktree add` - standard git command
-- `git diff --name-only` - to find changed files
-- `git ls-files --others` - to find untracked files
-- `cp` - file copy (no git internals modified)
-- `git add` - to re-stage files
+**Git commands used:**
+- `git diff --cached --name-only` - list staged files
+- `git ls-files --others` - list untracked files
+- `git add -N` - mark untracked as "intent to add" (includes them in diff)
+- `git diff HEAD` - create patch with all changes
+- `git clone --bare` - clone as bare repo
+- `git worktree add` - create worktree
+- `git apply` - apply patch
+- `git add` - re-stage files
 
 **Migration script logic:**
 ```go
@@ -541,22 +538,40 @@ func (c *MigrateCmd) Run(ctx context.Context) error {
             continue
         }
 
-        // Step 1: Clone as bare
+        // Step 1: Create patches from all worktrees BEFORE cloning
+        patches := make(map[string]*WorktreePatch)
+        for _, wt := range worktrees {
+            patch, err := c.createPatch(ctx, wt)
+            if err != nil {
+                l.Warn("Failed to create patch", "path", wt.Path, "error", err)
+                continue
+            }
+            patches[wt.Branch] = patch
+        }
+
+        // Step 2: Clone as bare
         if err := git.CloneBare(ctx, repo.Path, bareRepoPath); err != nil {
             return fmt.Errorf("clone bare %s: %w", repoName, err)
         }
         git.ConfigureBareRemote(ctx, bareRepoPath)
 
-        // Step 2: Migrate each worktree
+        // Step 3: Create worktrees and apply patches
         for _, wt := range worktrees {
             newPath := filepath.Join(bareRepoPath, sanitizeBranchName(wt.Branch))
 
-            if err := c.migrateWorktree(ctx, wt, bareRepoPath, newPath); err != nil {
-                l.Warn("Failed to migrate worktree", "path", wt.Path, "error", err)
+            if err := git.AddWorktree(ctx, bareRepoPath, newPath, wt.Branch); err != nil {
+                l.Warn("Failed to create worktree", "branch", wt.Branch, "error", err)
+                continue
+            }
+
+            if patch, ok := patches[wt.Branch]; ok {
+                if err := c.applyPatch(ctx, newPath, patch); err != nil {
+                    l.Warn("Failed to apply patch", "branch", wt.Branch, "error", err)
+                }
             }
         }
 
-        // Step 3: Remove old repo and worktrees
+        // Step 4: Remove old repo and worktrees
         for _, wt := range worktrees {
             os.RemoveAll(wt.Path)
         }
@@ -565,56 +580,64 @@ func (c *MigrateCmd) Run(ctx context.Context) error {
     return nil
 }
 
-func (c *MigrateCmd) migrateWorktree(ctx context.Context, oldWt git.Worktree, bareRepoPath, newPath string) error {
-    // Create fresh worktree
-    if err := git.AddWorktree(ctx, bareRepoPath, newPath, oldWt.Branch); err != nil {
-        return fmt.Errorf("create worktree: %w", err)
+type WorktreePatch struct {
+    Patch       []byte   // Output of git diff HEAD
+    StagedFiles []string // Files that were staged
+}
+
+func (c *MigrateCmd) createPatch(ctx context.Context, wt git.Worktree) (*WorktreePatch, error) {
+    // Remember which files are staged
+    staged, _ := git.DiffFilesCached(ctx, wt.Path)  // git diff --cached --name-only
+
+    // Mark untracked files as intent-to-add so they appear in diff
+    untracked, _ := git.UntrackedFiles(ctx, wt.Path)
+    for _, f := range untracked {
+        git.AddIntentToAdd(ctx, wt.Path, f)  // git add -N <file>
     }
 
-    // Get list of changed files from old worktree
-    unstaged, _ := git.DiffFiles(ctx, oldWt.Path)           // git diff --name-only
-    staged, _ := git.DiffFilesCached(ctx, oldWt.Path)       // git diff --cached --name-only
-    untracked, _ := git.UntrackedFiles(ctx, oldWt.Path)     // git ls-files --others --exclude-standard
+    // Create single patch with all changes
+    patch, err := git.DiffHead(ctx, wt.Path)  // git diff HEAD
+    if err != nil {
+        return nil, err
+    }
 
-    // Copy all changed files
-    allFiles := uniqueStrings(append(append(unstaged, staged...), untracked...))
-    for _, f := range allFiles {
-        src := filepath.Join(oldWt.Path, f)
-        dst := filepath.Join(newPath, f)
+    return &WorktreePatch{
+        Patch:       patch,
+        StagedFiles: staged,
+    }, nil
+}
 
-        // Ensure parent directory exists
-        os.MkdirAll(filepath.Dir(dst), 0755)
-
-        if err := copyFile(src, dst); err != nil {
-            // Log but continue - file might have been deleted
-            continue
+func (c *MigrateCmd) applyPatch(ctx context.Context, worktreePath string, patch *WorktreePatch) error {
+    // Apply the patch
+    if len(patch.Patch) > 0 {
+        if err := git.ApplyPatch(ctx, worktreePath, patch.Patch); err != nil {
+            return err
         }
     }
 
-    // Re-stage files that were staged
-    for _, f := range staged {
-        git.Add(ctx, newPath, f)
+    // Re-stage files that were originally staged
+    for _, f := range patch.StagedFiles {
+        git.Add(ctx, worktreePath, f)
     }
 
     return nil
 }
 
 // Helper functions needed:
-// git.DiffFiles(ctx, path) - runs: git diff --name-only
 // git.DiffFilesCached(ctx, path) - runs: git diff --cached --name-only
 // git.UntrackedFiles(ctx, path) - runs: git ls-files --others --exclude-standard
+// git.AddIntentToAdd(ctx, path, file) - runs: git add -N <file>
+// git.DiffHead(ctx, path) - runs: git diff HEAD (returns patch bytes)
+// git.ApplyPatch(ctx, path, patch) - runs: git apply (with patch on stdin)
 // git.Add(ctx, path, file) - runs: git add <file>
-// copyFile(src, dst) - standard file copy
 ```
 
 **Tasks:**
 - [ ] Create `cmd/wt/migrate.go`
-- [ ] Implement `convertToBare()`
-- [ ] Implement `moveWorktree()`
-- [ ] Add `git.RepairWorktrees()` helper
+- [ ] Add git helpers: `DiffFilesCached`, `UntrackedFiles`, `AddIntentToAdd`, `DiffHead`, `ApplyPatch`
 - [ ] Add dry-run mode
 - [ ] Add progress output
-- [ ] Handle edge cases (dirty worktrees, conflicts)
+- [ ] Handle edge cases (binary files, patch conflicts)
 - [ ] Add integration tests
 - [ ] Update shell completions
 
