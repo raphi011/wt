@@ -1,7 +1,7 @@
 # wt v2 Architecture Plan
 
 This document outlines a reworked architecture for `wt` that:
-- Uses cache as source of truth for registered repos
+- Uses a registry as source of truth for repos (worktree data from git directly)
 - Supports both bare and regular repos
 - Allows flexible worktree placement (nested, sibling, or centralized)
 
@@ -28,12 +28,11 @@ This document outlines a reworked architecture for `wt` that:
 - No support for bare repos
 - Can't have repos in arbitrary locations
 
-### New Architecture (Cache-Centric)
+### New Architecture (Registry-Based)
 ```
 ~/.wt/                        # Global wt state
 ├── config.toml               # Minimal config (defaults, hooks)
-├── repos.json                # Registered repos (source of truth)
-└── cache.json                # Worktree cache (derived from repos)
+└── repos.json                # Registered repos (source of truth)
 
 # Repos can live ANYWHERE - just register them:
 
@@ -63,7 +62,7 @@ This document outlines a reworked architecture for `wt` that:
 - Repos can live anywhere - no directory restrictions
 - Support bare and regular repos equally
 - Flexible worktree placement per repo
-- Fast listing (read from cache, not filesystem scan)
+- Worktree data always fresh (from `git worktree list`, no stale cache)
 - Explicit control over what's tracked
 
 ---
@@ -798,7 +797,7 @@ run = "./scripts/lint.sh"
 5. **Global state in `~/.wt/`**
    - `config.toml` - user preferences
    - `repos.json` - registered repos
-   - `cache.json` - derived worktree data
+   - No worktree cache - always use `git worktree list` for fresh data
 
 6. **Migration path provided**
    - `wt migrate` imports existing repos from old setup
