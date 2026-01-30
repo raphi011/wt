@@ -663,7 +663,7 @@ func (c *CheckoutCmd) Run(ctx context.Context) error {
 | `wt cd` | Use registry, target by repo+branch instead of number |
 | `wt exec` | Use registry, target by repo+branch |
 | `wt prune` | Use registry, target by repo+branch, handle different worktree locations |
-| `wt pr checkout` | Clone and register if new repo |
+| `wt pr checkout` | Clone as bare repo and register if new repo |
 | `wt hook` | Use registry, target by repo+branch |
 | `wt note` | Use registry, target by repo+branch |
 | `wt mv` | **Remove** - no longer needed with registry model |
@@ -832,7 +832,13 @@ run = "./scripts/lint.sh"
    - `wt add` registers individual repos
    - Existing worktrees remain on disk (git doesn't care where they are)
 
-8. **Migrate from Kong to Cobra**
+8. **PR checkouts always clone as bare repos**
+   - `wt pr checkout` clones new repos as bare (no `--bare` flag needed)
+   - Bare repos are cleaner for worktree workflows (no "main" working directory)
+   - Worktrees are the only way to access code, which is the wt mental model
+   - Existing registered repos (regular or bare) work as-is
+
+9. **Migrate from Kong to Cobra**
    - Built-in shell completion support with `__complete` command
    - Context-aware completions (e.g., `-b` completes branches for repo specified by `-r`)
    - Completion logic in Go (testable, no separate bash/zsh/fish scripts to maintain)
