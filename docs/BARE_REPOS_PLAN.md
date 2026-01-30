@@ -446,13 +446,12 @@ type MigrateCmd struct {
 **Migration steps:**
 1. Scan for regular repos and their worktrees
 2. For each repo:
-   a. Create patches from all worktrees (captures staged, unstaged, untracked)
+   a. Create patches from all worktrees (3 patches each: staged, unstaged, untracked)
    b. Clone as bare: `git clone --bare`
    c. Configure fetch refspec
    d. Create fresh worktrees with `git worktree add`
-   e. Apply patches with `git apply`
-   f. Re-stage files that were staged
-   g. Delete old repo and worktrees
+   e. Apply patches: `git apply --index` for staged, `git apply` for unstaged/untracked
+   f. Delete old repo and worktrees
 
 **Clone-based migration** (uses only git commands):
 
@@ -464,14 +463,18 @@ type MigrateCmd struct {
 
 # Step 1: Create patches from old worktrees (before cloning)
 cd ~/Git/project
-git diff --cached --name-only > /tmp/main-staged.txt     # Remember staged files
-git ls-files --others --exclude-standard | xargs -r git add -N  # Include untracked in diff
-git diff HEAD > /tmp/main.patch                          # Single patch with ALL changes
+git diff > /tmp/main-unstaged.patch                      # Unstaged changes
+git diff --cached > /tmp/main-staged.patch               # Staged changes
+git ls-files --others --exclude-standard | xargs -r git add -N
+git diff > /tmp/main-untracked.patch                     # Untracked (after add -N)
+git reset HEAD                                           # Undo the add -N
 
 cd ~/Git/worktrees/project-feature
-git diff --cached --name-only > /tmp/feature-staged.txt
+git diff > /tmp/feature-unstaged.patch
+git diff --cached > /tmp/feature-staged.patch
 git ls-files --others --exclude-standard | xargs -r git add -N
-git diff HEAD > /tmp/feature.patch
+git diff > /tmp/feature-untracked.patch
+git reset HEAD
 
 # Step 2: Clone as bare
 git clone --bare ~/Git/project ~/Git/project.git
@@ -481,34 +484,36 @@ git -C ~/Git/project.git config remote.origin.fetch "+refs/heads/*:refs/remotes/
 git -C ~/Git/project.git worktree add ./main main
 git -C ~/Git/project.git worktree add ./feature feature
 
-# Step 4: Apply patches
+# Step 4: Apply patches (order matters!)
 cd ~/Git/project.git/main
-git apply /tmp/main.patch
-for f in $(cat /tmp/main-staged.txt); do git add "$f"; done  # Re-stage
+git apply --index /tmp/main-staged.patch      # Staged: apply to both index + working tree
+git apply /tmp/main-unstaged.patch            # Unstaged: apply to working tree only
+git apply /tmp/main-untracked.patch           # Untracked: creates new files
 
 cd ~/Git/project.git/feature
-git apply /tmp/feature.patch
-for f in $(cat /tmp/feature-staged.txt); do git add "$f"; done
+git apply --index /tmp/feature-staged.patch
+git apply /tmp/feature-unstaged.patch
+git apply /tmp/feature-untracked.patch
 
 # Step 5: Remove old structure
 rm -rf ~/Git/project ~/Git/worktrees/project-feature
 ```
 
 **What this preserves:**
-- ✅ Unstaged changes
-- ✅ Staged changes (re-staged after apply)
-- ✅ Untracked files (via `git add -N` trick)
+- ✅ Unstaged changes (via `git apply`)
+- ✅ Staged changes (via `git apply --index`)
+- ✅ Untracked files (via `git add -N` + `git diff`)
 - ✅ All branches and commits
 
 **Git commands used:**
-- `git diff --cached --name-only` - list staged files
+- `git diff` - create patch of unstaged changes
+- `git diff --cached` - create patch of staged changes
 - `git ls-files --others` - list untracked files
 - `git add -N` - mark untracked as "intent to add" (includes them in diff)
-- `git diff HEAD` - create patch with all changes
 - `git clone --bare` - clone as bare repo
 - `git worktree add` - create worktree
-- `git apply` - apply patch
-- `git add` - re-stage files
+- `git apply --index` - apply patch to both index and working tree (preserves staged)
+- `git apply` - apply patch to working tree only (preserves unstaged)
 
 **Migration script logic:**
 ```go
@@ -581,60 +586,71 @@ func (c *MigrateCmd) Run(ctx context.Context) error {
 }
 
 type WorktreePatch struct {
-    Patch       []byte   // Output of git diff HEAD
-    StagedFiles []string // Files that were staged
+    Staged    []byte // git diff --cached
+    Unstaged  []byte // git diff
+    Untracked []byte // git diff (after git add -N)
 }
 
 func (c *MigrateCmd) createPatch(ctx context.Context, wt git.Worktree) (*WorktreePatch, error) {
-    // Remember which files are staged
-    staged, _ := git.DiffFilesCached(ctx, wt.Path)  // git diff --cached --name-only
+    // Capture unstaged changes
+    unstaged, _ := git.Diff(ctx, wt.Path)  // git diff
 
-    // Mark untracked files as intent-to-add so they appear in diff
+    // Capture staged changes
+    staged, _ := git.DiffCached(ctx, wt.Path)  // git diff --cached
+
+    // Capture untracked files as a patch
     untracked, _ := git.UntrackedFiles(ctx, wt.Path)
     for _, f := range untracked {
-        git.AddIntentToAdd(ctx, wt.Path, f)  // git add -N <file>
+        git.AddIntentToAdd(ctx, wt.Path, f)  // git add -N
     }
-
-    // Create single patch with all changes
-    patch, err := git.DiffHead(ctx, wt.Path)  // git diff HEAD
-    if err != nil {
-        return nil, err
-    }
+    untrackedPatch, _ := git.Diff(ctx, wt.Path)  // Now includes untracked
+    git.Reset(ctx, wt.Path)  // Undo the add -N
 
     return &WorktreePatch{
-        Patch:       patch,
-        StagedFiles: staged,
+        Staged:    staged,
+        Unstaged:  unstaged,
+        Untracked: untrackedPatch,
     }, nil
 }
 
 func (c *MigrateCmd) applyPatch(ctx context.Context, worktreePath string, patch *WorktreePatch) error {
-    // Apply the patch
-    if len(patch.Patch) > 0 {
-        if err := git.ApplyPatch(ctx, worktreePath, patch.Patch); err != nil {
-            return err
+    // Apply staged changes to both index and working tree
+    if len(patch.Staged) > 0 {
+        if err := git.ApplyPatchIndex(ctx, worktreePath, patch.Staged); err != nil {
+            return fmt.Errorf("apply staged: %w", err)
         }
     }
 
-    // Re-stage files that were originally staged
-    for _, f := range patch.StagedFiles {
-        git.Add(ctx, worktreePath, f)
+    // Apply unstaged changes to working tree only
+    if len(patch.Unstaged) > 0 {
+        if err := git.ApplyPatch(ctx, worktreePath, patch.Unstaged); err != nil {
+            return fmt.Errorf("apply unstaged: %w", err)
+        }
+    }
+
+    // Apply untracked files
+    if len(patch.Untracked) > 0 {
+        if err := git.ApplyPatch(ctx, worktreePath, patch.Untracked); err != nil {
+            return fmt.Errorf("apply untracked: %w", err)
+        }
     }
 
     return nil
 }
 
 // Helper functions needed:
-// git.DiffFilesCached(ctx, path) - runs: git diff --cached --name-only
+// git.Diff(ctx, path) - runs: git diff (returns patch bytes)
+// git.DiffCached(ctx, path) - runs: git diff --cached (returns patch bytes)
 // git.UntrackedFiles(ctx, path) - runs: git ls-files --others --exclude-standard
 // git.AddIntentToAdd(ctx, path, file) - runs: git add -N <file>
-// git.DiffHead(ctx, path) - runs: git diff HEAD (returns patch bytes)
-// git.ApplyPatch(ctx, path, patch) - runs: git apply (with patch on stdin)
-// git.Add(ctx, path, file) - runs: git add <file>
+// git.Reset(ctx, path) - runs: git reset HEAD
+// git.ApplyPatch(ctx, path, patch) - runs: git apply (stdin)
+// git.ApplyPatchIndex(ctx, path, patch) - runs: git apply --index (stdin)
 ```
 
 **Tasks:**
 - [ ] Create `cmd/wt/migrate.go`
-- [ ] Add git helpers: `DiffFilesCached`, `UntrackedFiles`, `AddIntentToAdd`, `DiffHead`, `ApplyPatch`
+- [ ] Add git helpers: `Diff`, `DiffCached`, `UntrackedFiles`, `AddIntentToAdd`, `Reset`, `ApplyPatch`, `ApplyPatchIndex`
 - [ ] Add dry-run mode
 - [ ] Add progress output
 - [ ] Handle edge cases (binary files, patch conflicts)
