@@ -660,14 +660,34 @@ func (c *CheckoutCmd) Run(ctx context.Context) error {
 
 | Command | Changes |
 |---------|---------|
-| `wt cd` | Use registry to find repo/worktree |
-| `wt exec` | Use registry |
-| `wt prune` | Use registry, handle different worktree locations |
+| `wt cd` | Use registry, target by repo+branch instead of number |
+| `wt exec` | Use registry, target by repo+branch |
+| `wt prune` | Use registry, target by repo+branch, handle different worktree locations |
 | `wt pr checkout` | Clone and register if new repo |
-| `wt hook` | Use registry |
-| `wt note` | Use registry |
+| `wt hook` | Use registry, target by repo+branch |
+| `wt note` | Use registry, target by repo+branch |
 | `wt mv` | **Remove** - no longer needed with registry model |
 | `wt doctor` | Updated checks for registry model |
+
+**Removing worktree numbers (`-n` flag):**
+
+Without a persistent worktree cache, numbers would be unstable between runs. New targeting approach:
+- Inside a worktree: commands default to current worktree (no flag needed)
+- Outside: use `-r <repo>` + `-b <branch>` to target specific worktree
+- Use `-l <label>` to filter repos
+- Use `-i` for interactive selection
+
+Example migration:
+```bash
+# Old (number-based)
+wt cd -n 3
+wt exec -n 1,2,3 -- make test
+
+# New (repo+branch based)
+wt cd -r myproject -b feature-x
+wt exec -r myproject -- make test        # all worktrees in repo
+wt exec -l work -- make test             # all worktrees in labeled repos
+```
 
 **`wt doctor` updated checks:**
 - Registry file is valid JSON
@@ -766,6 +786,7 @@ run = "./scripts/lint.sh"
 | Config location | `~/.config/wt/` → `~/.wt/` | Auto-detected or manual move |
 | Repo tracking | Scan → Registry | Run `wt migrate` or `wt add` |
 | Default worktree location | Nested in repo (was flat folder) | Update `worktree_format` if needed |
+| Worktree numbers | `-n` flag removed | Use `-r <repo> -b <branch>` or `-i` |
 
 ---
 
@@ -794,12 +815,19 @@ run = "./scripts/lint.sh"
    - Filter commands by label
    - Helps with disambiguation
 
-5. **Global state in `~/.wt/`**
+5. **Target worktrees by repo+branch, not numbers**
+   - No persistent worktree cache means numbers would be unstable
+   - Use `-r <repo> -b <branch>` for explicit targeting
+   - Use `-l <label>` to filter/target repos by label
+   - Commands inside worktree default to current context
+   - Interactive mode (`-i`) for discovery
+
+6. **Global state in `~/.wt/`**
    - `config.toml` - user preferences
    - `repos.json` - registered repos
    - No worktree cache - always use `git worktree list` for fresh data
 
-6. **Migration path provided**
+7. **Migration path provided**
    - `wt migrate` imports existing repos from old setup
    - `wt add` registers individual repos
    - Existing worktrees remain on disk (git doesn't care where they are)
