@@ -668,6 +668,17 @@ func (c *CheckoutCmd) Run(ctx context.Context) error {
 | `wt hook` | Use registry |
 | `wt note` | Use registry |
 | `wt mv` | **Remove** - no longer needed with registry model |
+| `wt doctor` | Updated checks for registry model |
+
+**`wt doctor` updated checks:**
+- Registry file is valid JSON
+- Registered repos exist on disk
+- Registered repos are valid git repos (bare or regular)
+- Worktrees are valid (no broken/orphaned)
+- Config file is valid TOML
+- External tools installed (git, gh/glab)
+- No duplicate repo names without labels
+- Optionally: offer to remove stale registry entries
 
 **Why remove `wt mv`?**
 
@@ -779,6 +790,7 @@ run = "./scripts/lint.sh"
    - Per-repo override possible
 
 4. **Labels for organization**
+   - Stored in registry (`repos.json`), not in git config
    - Optional grouping mechanism
    - Filter commands by label
    - Helps with disambiguation
