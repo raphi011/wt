@@ -452,32 +452,53 @@ type MigrateCmd struct {
    d. Move any existing worktrees into the bare repo directory
    e. Run `git worktree repair` to fix paths
 
-**In-place conversion approach** (preserves existing checkout as worktree):
+**In-place conversion approach** (preserves existing checkout + uncommitted changes):
+
+Note: Git doesn't have a native command to adopt an existing directory as a worktree.
+The migration requires creating worktree metadata files manually, but uses git commands
+for everything else.
+
 ```bash
-# Given: ~/Git/project/ (regular repo on branch "main")
+# Given: ~/Git/project/ (regular repo on branch "main" with uncommitted changes)
 # Result: ~/Git/project.git/ (bare repo)
-#         ~/Git/project.git/main/ (worktree - former working dir)
+#         ~/Git/project.git/main/ (worktree - preserves dirty state)
 
 # Step 1: Move .git to bare repo location
 mv ~/Git/project/.git ~/Git/project.git
 
-# Step 2: Configure as bare repo
+# Step 2: Configure as bare repo (git command)
 git -C ~/Git/project.git config core.bare true
 
-# Step 3: Set up fetch refspec (bare repos need this)
+# Step 3: Set up fetch refspec - bare repos need this (git command)
 git -C ~/Git/project.git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
 
-# Step 4: Move working directory into bare repo as worktree
+# Step 4: Move working directory into bare repo
 mv ~/Git/project ~/Git/project.git/main
 
-# Step 5: Create .git file in worktree pointing to bare repo
-echo "gitdir: ~/Git/project.git" > ~/Git/project.git/main/.git
+# Step 5: Create worktree metadata (file writes - no git command for this)
+mkdir -p ~/Git/project.git/worktrees/main
+cp ~/Git/project.git/index ~/Git/project.git/worktrees/main/index
+echo "~/Git/project.git/main/.git" > ~/Git/project.git/worktrees/main/gitdir
+echo "ref: refs/heads/main" > ~/Git/project.git/worktrees/main/HEAD
+echo "../.." > ~/Git/project.git/worktrees/main/commondir
 
-# Step 6: Register worktree with git
-git -C ~/Git/project.git worktree add --existing ~/Git/project.git/main main
+# Step 6: Create .git file in worktree pointing to metadata
+echo "gitdir: ~/Git/project.git/worktrees/main" > ~/Git/project.git/main/.git
 
-# Step 7: Repair any path issues
+# Step 7: Repair to ensure paths are consistent (git command)
 git -C ~/Git/project.git worktree repair
+
+# Verify: dirty changes should be preserved
+git -C ~/Git/project.git/main status
+```
+
+**Alternative: Fresh clone approach** (loses uncommitted changes, simpler):
+```bash
+# If you don't need to preserve uncommitted changes:
+git clone --bare ~/Git/project ~/Git/project.git
+git -C ~/Git/project.git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+git -C ~/Git/project.git worktree add ./main main
+rm -rf ~/Git/project
 ```
 
 **Migration script logic:**
@@ -533,43 +554,73 @@ func (c *MigrateCmd) Run(ctx context.Context) error {
 
 func (c *MigrateCmd) convertToBareInPlace(ctx context.Context, repoPath, bareRepoPath, branch string) error {
     gitDir := filepath.Join(repoPath, ".git")
-    worktreePath := filepath.Join(bareRepoPath, sanitizeBranchName(branch))
+    sanitizedBranch := sanitizeBranchName(branch)
+    worktreePath := filepath.Join(bareRepoPath, sanitizedBranch)
+    wtMetadataDir := filepath.Join(bareRepoPath, "worktrees", sanitizedBranch)
 
-    // Move .git to become bare repo
+    // Step 1: Move .git to become bare repo
     if err := os.Rename(gitDir, bareRepoPath); err != nil {
         return fmt.Errorf("move .git: %w", err)
     }
 
-    // Configure as bare
+    // Step 2: Configure as bare (git command)
     cmd := exec.CommandContext(ctx, "git", "-C", bareRepoPath, "config", "core.bare", "true")
     if err := cmd.Run(); err != nil {
         return fmt.Errorf("set core.bare: %w", err)
     }
 
-    // Set up fetch refspec
+    // Step 3: Set up fetch refspec (git command)
     cmd = exec.CommandContext(ctx, "git", "-C", bareRepoPath,
         "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
     cmd.Run() // Ignore error if no remote
 
-    // Move working directory into bare repo
+    // Step 4: Move working directory into bare repo
     if err := os.Rename(repoPath, worktreePath); err != nil {
         return fmt.Errorf("move working dir: %w", err)
     }
 
-    // Create .git file in worktree
+    // Step 5: Create worktree metadata (git has no command for adopting existing dirs)
+    if err := os.MkdirAll(wtMetadataDir, 0755); err != nil {
+        return fmt.Errorf("create worktree metadata dir: %w", err)
+    }
+
+    // Copy index to preserve staging state
+    srcIndex := filepath.Join(bareRepoPath, "index")
+    dstIndex := filepath.Join(wtMetadataDir, "index")
+    if err := copyFile(srcIndex, dstIndex); err != nil {
+        return fmt.Errorf("copy index: %w", err)
+    }
+
+    // Write gitdir (points from metadata to worktree's .git file)
+    gitdirPath := filepath.Join(wtMetadataDir, "gitdir")
+    gitdirContent := filepath.Join(worktreePath, ".git") + "\n"
+    if err := os.WriteFile(gitdirPath, []byte(gitdirContent), 0644); err != nil {
+        return fmt.Errorf("write gitdir: %w", err)
+    }
+
+    // Write HEAD
+    headPath := filepath.Join(wtMetadataDir, "HEAD")
+    headContent := fmt.Sprintf("ref: refs/heads/%s\n", branch)
+    if err := os.WriteFile(headPath, []byte(headContent), 0644); err != nil {
+        return fmt.Errorf("write HEAD: %w", err)
+    }
+
+    // Write commondir (relative path back to bare repo)
+    commondirPath := filepath.Join(wtMetadataDir, "commondir")
+    if err := os.WriteFile(commondirPath, []byte("../..\n"), 0644); err != nil {
+        return fmt.Errorf("write commondir: %w", err)
+    }
+
+    // Step 6: Create .git file in worktree (points to metadata)
     gitFile := filepath.Join(worktreePath, ".git")
-    content := fmt.Sprintf("gitdir: %s\n", bareRepoPath)
-    if err := os.WriteFile(gitFile, []byte(content), 0644); err != nil {
+    gitFileContent := fmt.Sprintf("gitdir: %s\n", wtMetadataDir)
+    if err := os.WriteFile(gitFile, []byte(gitFileContent), 0644); err != nil {
         return fmt.Errorf("write .git file: %w", err)
     }
 
-    // Register worktree with git (creates worktrees/<name> metadata)
-    cmd = exec.CommandContext(ctx, "git", "-C", bareRepoPath,
-        "worktree", "add", "--existing", worktreePath, branch)
-    if err := cmd.Run(); err != nil {
-        // Fallback: manually create worktree metadata
-        return c.createWorktreeMetadata(bareRepoPath, worktreePath, branch)
-    }
+    // Step 7: Repair to ensure paths are consistent (git command)
+    cmd = exec.CommandContext(ctx, "git", "-C", bareRepoPath, "worktree", "repair")
+    cmd.Run() // Best effort
 
     return nil
 }
