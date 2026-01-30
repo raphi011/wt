@@ -176,7 +176,113 @@ func IsBareRepo(path string) (bool, error) {
 
 ---
 
-#### 1.3 Worktree Discovery Updates
+#### 1.3 Repo Name Disambiguation
+
+With multiple `base_dirs`, the same repo name can exist in different directories:
+```
+~/work/cmd.git/       # work project
+~/oss/cmd.git/        # open source project
+```
+
+**Naming strategy:**
+- If repo name is **unique** across all base_dirs: use short name (`cmd`)
+- If repo name has **duplicates**: use qualified name (`work/cmd`, `oss/cmd`)
+
+**Implementation:**
+
+```go
+// RepoRef represents a repository reference that may be qualified
+type RepoRef struct {
+    BaseDir  string  // e.g., "~/work" or "" if unique
+    Name     string  // e.g., "cmd"
+    FullPath string  // e.g., "~/work/cmd.git"
+}
+
+// DisplayName returns the name to show in UI and accept as input
+func (r RepoRef) DisplayName() string {
+    if r.BaseDir == "" {
+        return r.Name  // Unique, use short name
+    }
+    // Qualified: use base_dir basename + repo name
+    return filepath.Base(r.BaseDir) + "/" + r.Name
+}
+
+// BuildRepoIndex scans all base_dirs and determines qualified names
+func BuildRepoIndex(baseDirs []string) (map[string]RepoRef, error) {
+    // First pass: collect all repos
+    repos := make(map[string][]RepoRef)  // name -> list of refs
+
+    for _, baseDir := range baseDirs {
+        bareRepos, _ := git.FindAllBareRepos(baseDir)
+        for _, repoPath := range bareRepos {
+            name := git.GetBareRepoName(repoPath)
+            repos[name] = append(repos[name], RepoRef{
+                BaseDir:  baseDir,
+                Name:     name,
+                FullPath: repoPath,
+            })
+        }
+    }
+
+    // Second pass: determine display names
+    index := make(map[string]RepoRef)
+    for name, refs := range repos {
+        if len(refs) == 1 {
+            // Unique - use short name
+            refs[0].BaseDir = ""  // Clear to indicate unique
+            index[name] = refs[0]
+        } else {
+            // Duplicates - use qualified names
+            for _, ref := range refs {
+                displayName := ref.DisplayName()
+                index[displayName] = ref
+            }
+        }
+    }
+
+    return index, nil
+}
+```
+
+**Usage in commands:**
+```bash
+# If 'cmd' is unique across all base_dirs
+wt cd -r cmd
+wt checkout -r cmd feature-branch
+
+# If 'cmd' exists in multiple base_dirs
+wt cd -r work/cmd
+wt cd -r oss/cmd
+wt checkout -r work/cmd feature-branch
+
+# List shows qualified names only when needed
+wt list
+#  ID  REPO       BRANCH    STATUS
+#  1   project    main      clean     # unique
+#  2   work/cmd   main      1 ahead   # qualified (duplicate)
+#  3   oss/cmd    main      clean     # qualified (duplicate)
+```
+
+**Error handling:**
+```bash
+# Ambiguous reference
+wt cd -r cmd
+# Error: 'cmd' is ambiguous. Did you mean:
+#   work/cmd
+#   oss/cmd
+```
+
+**Tasks:**
+- [ ] Create `RepoRef` struct
+- [ ] Implement `BuildRepoIndex()`
+- [ ] Update `-r` flag handling to resolve qualified names
+- [ ] Update list output to show qualified names when needed
+- [ ] Add error message for ambiguous references
+- [ ] Add unit tests for disambiguation
+
+---
+
+#### 1.4 Worktree Discovery Updates
 
 **File:** `internal/git/worktree.go`
 
@@ -437,16 +543,28 @@ func (c *ListCmd) Run(ctx context.Context) error {
 ```go
 type Worktree struct {
     // ... existing fields ...
-    BaseDir string // Which base_dir this worktree's repo is in
+    BaseDir     string // Which base_dir this worktree's repo is in
+    RepoName    string // Short repo name (e.g., "cmd")
+    DisplayName string // Qualified name if needed (e.g., "work/cmd" or "cmd")
 }
 ```
 
-This allows the UI to show which base_dir a worktree belongs to if needed.
+The `DisplayName` is computed using `RepoRef.DisplayName()` logic - qualified only when duplicates exist.
+
+**List output example:**
+```
+ID  REPO       BRANCH    STATUS
+1   project    main      clean       # unique repo
+2   work/cmd   main      1 ahead     # qualified (cmd exists in both work/ and oss/)
+3   work/cmd   feature   2 behind
+4   oss/cmd    main      clean
+```
 
 **Tasks:**
 - [ ] Update `ListCmd.Run()` to scan all base_dirs
-- [ ] Add `BaseDir` field to `Worktree` struct
-- [ ] Update table rendering to optionally show base_dir
+- [ ] Add `BaseDir`, `RepoName`, `DisplayName` fields to `Worktree` struct
+- [ ] Use `BuildRepoIndex()` to determine display names
+- [ ] Update table rendering to use `DisplayName`
 - [ ] Update integration tests
 
 ---
@@ -837,16 +955,17 @@ func (c *MigrateCmd) updateWorktreePaths(bareRepoPath, worktreePath, branch stri
 ### Sprint 1: Foundation
 1. Config changes (1.1) - Replace `worktree_dir`/`repo_dir` with `base_dirs`, move to `~/.wt/`
 2. Bare repo detection (1.2)
-3. Worktree discovery updates (1.3)
+3. Repo name disambiguation (1.3) - RepoRef, BuildRepoIndex, qualified names
+4. Worktree discovery updates (1.4)
 
 ### Sprint 2: Core Commands
-4. Clone command (2.1, 2.2)
-5. Checkout updates (3.1)
-6. PR checkout updates (3.2)
+5. Clone command (2.1, 2.2)
+6. Checkout updates (3.1)
+7. PR checkout updates (3.2)
 
 ### Sprint 3: List & Discovery
-7. List command updates (4.1) - scan all base_dirs
-8. Other command updates (5.1)
+8. List command updates (4.1) - scan all base_dirs, use display names
+9. Other command updates (5.1) - update `-r` flag handling
 
 ### Sprint 4: Migration & Polish
 9. Move command rewrite (5.2)
@@ -876,12 +995,17 @@ func (c *MigrateCmd) updateWorktreePaths(bareRepoPath, worktreePath, branch stri
 - Path sanitization
 - Config parsing with `base_dirs` (list)
 - Multi-directory scanning
+- Repo name disambiguation (`BuildRepoIndex`)
+- Display name generation (unique vs qualified)
 
 ### Integration Tests
 - Clone bare repo to default base_dir
 - Clone bare repo to specific base_dir (`-b`)
 - Create worktree in bare repo
 - List worktrees across multiple base_dirs
+- Disambiguation: unique repo names use short form
+- Disambiguation: duplicate repo names use qualified form
+- Disambiguation: ambiguous `-r` reference shows error with suggestions
 - Migration from regular to bare (in-place conversion)
 
 ### Manual Testing Checklist
@@ -904,22 +1028,28 @@ func (c *MigrateCmd) updateWorktreePaths(bareRepoPath, worktreePath, branch stri
    - All directories scanned equally for `wt list`
    - Allows organizing by purpose (work, personal, oss)
 
-2. **Global config location**: `~/.wt/` directory
+2. **Repo name disambiguation**: Qualified names when duplicates exist
+   - Unique repos use short name: `cmd`
+   - Duplicate repos use qualified name: `work/cmd`, `oss/cmd`
+   - Ambiguous `-r` references show helpful error with suggestions
+   - Display names computed dynamically based on current repo index
+
+3. **Global config location**: `~/.wt/` directory
    - Single location for config, cache, and lock files
    - Not tied to any specific base_dir
    - Simpler than XDG paths for cross-platform support
 
-3. **Worktree naming**: Use sanitized branch name directly in bare repo root
+4. **Worktree naming**: Use sanitized branch name directly in bare repo root
    - `project.git/feature-x` (branch `feature/x` becomes `feature-x`)
    - Clean and simple, repo context is the parent `.git` directory
 
-4. **Default branch worktree**: Create by default on clone
+5. **Default branch worktree**: Create by default on clone
    - `--no-worktree` / `-N` flag to skip initial worktree creation
 
-5. **Bare repo suffix**: `.git` suffix required
+6. **Bare repo suffix**: `.git` suffix required
    - Standard convention, makes intent clear
    - Easy to distinguish from worktree directories
 
-6. **No backwards compatibility**: Clean break from old `worktree_dir`/`repo_dir` config
+7. **No backwards compatibility**: Clean break from old `worktree_dir`/`repo_dir` config
    - Users run `wt migrate` once to convert existing setup
    - Simpler codebase without legacy support
