@@ -150,5 +150,6 @@ func injectDeps(cli *CLI, cfg *config.Config, workDir string) {
 	cli.Config.Show.Deps = deps
 	cli.Config.Hooks.Deps = deps
 	cli.Completion.Deps = deps
+	cli.Init.Deps = deps
 	cli.Doctor.Deps = deps
 }

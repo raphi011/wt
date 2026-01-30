@@ -33,7 +33,7 @@ _wt_completions() {
         cword=$COMP_CWORD
     fi
 
-    local commands="checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor"
+    local commands="checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor"
 
     # Handle subcommand-specific completions
     case "${words[1]}" in
@@ -665,6 +665,11 @@ _wt_completions() {
                 COMPREPLY=($(compgen -W "fish bash zsh" -- "$cur"))
             fi
             ;;
+        init)
+            if [[ $cword -eq 2 ]]; then
+                COMPREPLY=($(compgen -W "fish bash zsh" -- "$cur"))
+            fi
+            ;;
         doctor)
             COMPREPLY=($(compgen -W "--fix --reset" -- "$cur"))
             ;;
@@ -715,6 +720,7 @@ _wt() {
                 'pr:Work with GitHub PRs'
                 'config:Manage configuration'
                 'completion:Generate completion script'
+                'init:Output shell wrapper function'
                 'doctor:Diagnose and repair cache'
             )
             _describe 'command' commands
@@ -1048,6 +1054,10 @@ _wt() {
                     _arguments \
                         '1:shell:(fish bash zsh)'
                     ;;
+                init)
+                    _arguments \
+                        '1:shell:(fish bash zsh)'
+                    ;;
                 doctor)
                     _arguments \
                         '--fix[auto-fix recoverable issues]' \
@@ -1139,27 +1149,28 @@ const fishCompletions = `# wt completions - supports fish autosuggestions and ta
 complete -c wt -f
 
 # Subcommands (shown in completions and autosuggestions)
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "checkout" -d "Checkout worktree for branch"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "co" -d "Checkout worktree (alias)"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "prune" -d "Prune merged worktrees"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "p" -d "Prune (alias)"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "list" -d "List worktrees with stable IDs"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "ls" -d "List worktrees (alias)"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "show" -d "Show worktree details"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "s" -d "Show (alias)"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "repos" -d "List repositories"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "r" -d "Repos (alias)"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "exec" -d "Run command in worktree by ID"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "x" -d "Exec (alias)"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "cd" -d "Print worktree path"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "mv" -d "Move worktrees to another directory"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "note" -d "Manage branch notes"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "label" -d "Manage repository labels"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "hook" -d "Run configured hook"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "pr" -d "Work with PRs"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "config" -d "Manage configuration"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "completion" -d "Generate completion script"
-complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion doctor" -a "doctor" -d "Diagnose and repair cache"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "checkout" -d "Checkout worktree for branch"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "co" -d "Checkout worktree (alias)"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "prune" -d "Prune merged worktrees"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "p" -d "Prune (alias)"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "list" -d "List worktrees with stable IDs"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "ls" -d "List worktrees (alias)"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "show" -d "Show worktree details"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "s" -d "Show (alias)"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "repos" -d "List repositories"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "r" -d "Repos (alias)"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "exec" -d "Run command in worktree by ID"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "x" -d "Exec (alias)"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "cd" -d "Print worktree path"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "mv" -d "Move worktrees to another directory"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "note" -d "Manage branch notes"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "label" -d "Manage repository labels"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "hook" -d "Run configured hook"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "pr" -d "Work with PRs"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "config" -d "Manage configuration"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "completion" -d "Generate completion script"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "init" -d "Output shell wrapper function"
+complete -c wt -n "not __fish_seen_subcommand_from checkout co prune p list ls show s repos r exec x cd mv note label hook pr config completion init doctor" -a "doctor" -d "Diagnose and repair cache"
 
 # checkout: branch name (positional), then flags
 complete -c wt -n "__fish_seen_subcommand_from checkout co; and not __fish_seen_argument" -a "(git branch --all --format='%(refname:short)' 2>/dev/null | string replace 'origin/' '' | sort -u)" -d "Branch name"
@@ -1361,6 +1372,11 @@ complete -c wt -n "__fish_seen_subcommand_from config; and __fish_seen_subcomman
 complete -c wt -n "__fish_seen_subcommand_from completion" -a "fish" -d "Fish shell"
 complete -c wt -n "__fish_seen_subcommand_from completion" -a "bash" -d "Bash shell"
 complete -c wt -n "__fish_seen_subcommand_from completion" -a "zsh" -d "Zsh shell"
+
+# init: output shell wrapper function
+complete -c wt -n "__fish_seen_subcommand_from init" -a "fish" -d "Fish shell"
+complete -c wt -n "__fish_seen_subcommand_from init" -a "bash" -d "Bash shell"
+complete -c wt -n "__fish_seen_subcommand_from init" -a "zsh" -d "Zsh shell"
 
 # doctor: diagnose and repair cache
 complete -c wt -n "__fish_seen_subcommand_from doctor" -l fix -d "Auto-fix recoverable issues"
