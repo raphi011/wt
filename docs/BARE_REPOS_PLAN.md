@@ -839,6 +839,28 @@ run = "./scripts/lint.sh"
    - Widely used patterns (kubectl, docker, gh, hugo)
    - `ValidArgsFunction` for positional args, `RegisterFlagCompletionFunc` for flags
 
+   **Completion types:**
+   | Flag/Arg | Completes | Source |
+   |----------|-----------|--------|
+   | `-r, --repository` | Registered repo names | `~/.wt/repos.json` |
+   | `-l, --label` | Labels from all repos | `~/.wt/repos.json` |
+   | `-b, --branch` | Branches (context-aware) | `git branch` in target repo |
+   | `<branch>` positional | All branches or existing worktrees | `git branch` or `git worktree list` |
+   | `--hook` | Configured hook names | `~/.wt/config.toml` |
+
+   **Context-aware branch completion:**
+   ```go
+   // When -r is specified, complete branches from that repo
+   checkoutCmd.RegisterFlagCompletionFunc("branch", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+       repoName, _ := cmd.Flags().GetString("repository")
+       repo := registry.Find(repoName)  // from ~/.wt/repos.json
+       if repo != nil {
+           return git.ListBranches(repo.Path), cobra.ShellCompDirectiveNoFileComp
+       }
+       return nil, cobra.ShellCompDirectiveNoFileComp
+   })
+   ```
+
 ---
 
 ## Implementation Order
