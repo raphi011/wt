@@ -667,6 +667,8 @@ func (c *CheckoutCmd) Run(ctx context.Context) error {
 | `wt hook` | Use registry, target by repo+branch |
 | `wt note` | Use registry, target by repo+branch |
 | `wt mv` | **Remove** - no longer needed with registry model |
+| `wt show` | **Remove** - info available via `wt list --json` or `wt repos --json` |
+| `wt label` | Modify registry instead of git config |
 | `wt doctor` | Updated checks for registry model |
 
 **Removing worktree numbers (`-n` flag):**
@@ -698,6 +700,37 @@ wt exec -l work -- make test             # all worktrees in labeled repos
 - External tools installed (git, gh/glab)
 - No duplicate repo names without labels
 - Optionally: offer to remove stale registry entries
+
+**Other changes:**
+
+| Item | Change |
+|------|--------|
+| `WT_WORKTREE_DIR` env var | **Remove** - no longer used |
+| `WT_REPO_DIR` env var | **Remove** - no longer used |
+| `-g, --global` flag | **Remove** from most commands - registry is already global |
+| `wt note` storage | Keep in git config (`wt.note.<branch>`) - per-repo, survives registry changes |
+| Main worktree (regular repos) | Treated as implicit worktree, shown in `wt list` with branch name |
+
+**Detecting repo from current worktree:**
+```go
+// FindRepoForPath finds the registered repo that owns a worktree path
+func (r *Registry) FindRepoForPath(path string) (*Repo, error) {
+    // Get git dir for the path
+    gitDir, err := git.GetGitDirForWorktree(path)
+    if err != nil {
+        return nil, err
+    }
+
+    // Match against registered repos
+    for _, repo := range r.Repos {
+        repoGitDir := git.GetGitDir(repo.Path, git.DetectRepoType(repo.Path))
+        if gitDir == repoGitDir {
+            return &repo, nil
+        }
+    }
+    return nil, fmt.Errorf("not in a registered repo")
+}
+```
 
 **Why remove `wt mv`?**
 
@@ -787,6 +820,10 @@ run = "./scripts/lint.sh"
 | Repo tracking | Scan → Registry | Run `wt migrate` or `wt add` |
 | Default worktree location | Nested in repo (was flat folder) | Update `worktree_format` if needed |
 | Worktree numbers | `-n` flag removed | Use `-r <repo> -b <branch>` or `-i` |
+| Environment variables | `WT_WORKTREE_DIR`, `WT_REPO_DIR` removed | Use registry instead |
+| `--global` flag | Removed from most commands | Registry is global by default |
+| `wt show` command | Removed | Use `wt list --json` or `wt repos --json` |
+| Labels storage | git config → registry | Labels auto-migrated by `wt migrate` |
 
 ---
 
