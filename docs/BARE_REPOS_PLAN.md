@@ -30,19 +30,17 @@ This document outlines the migration from the current dual-directory architectur
 ```
 ~/Git/                          # Single base_dir
 ├── project-a.git/              # Bare repo (no working dir)
-│   ├── HEAD
+│   ├── HEAD                    # Git internal files
 │   ├── config
 │   ├── objects/
 │   ├── refs/
 │   ├── worktrees/              # Git's internal worktree metadata
-│   └── trees/                  # Our worktree directories
-│       ├── main/               # Worktree for main branch
-│       ├── feature-x/          # Worktree for feature-x
-│       └── bugfix-y/
+│   ├── main/                   # Worktree for main branch (directly in repo root)
+│   ├── feature-x/              # Worktree for feature-x
+│   └── bugfix-y/
 ├── project-b.git/
-│   └── trees/
-│       ├── main/
-│       └── feature-z/
+│   ├── main/
+│   └── feature-z/
 ```
 
 **Benefits:**
@@ -63,22 +61,9 @@ This document outlines the migration from the current dual-directory architectur
 **File:** `internal/config/config.go`
 
 ```go
-// Old config
-type Config struct {
-    WorktreeDir    string  // DEPRECATED
-    RepoDir        string  // DEPRECATED
-    // ...
-}
-
-// New config
 type Config struct {
     BaseDir        string  // Single directory for all bare repos
-    WorktreeSubdir string  // Subdirectory name for worktrees (default: "trees")
-
-    // Deprecated (for migration)
-    WorktreeDir    string  `toml:"worktree_dir,omitempty"`
-    RepoDir        string  `toml:"repo_dir,omitempty"`
-    // ...
+    // ... other existing fields unchanged (WorktreeFormat, Hooks, etc.)
 }
 ```
 
@@ -86,24 +71,18 @@ type Config struct {
 ```toml
 # ~/.config/wt/config.toml
 base_dir = "~/Git"              # All bare repos live here
-worktree_subdir = "trees"       # Worktrees in {repo}.git/trees/
-
-# Legacy (still supported for migration period)
-# worktree_dir = "~/Git/worktrees"
-# repo_dir = "~/Git"
+                                # Worktrees are created directly in {repo}.git/{branch}
 ```
 
 **Environment variables:**
-- `WT_BASE_DIR` - New primary env var
-- `WT_WORKTREE_DIR` / `WT_REPO_DIR` - Deprecated, trigger migration warning
+- `WT_BASE_DIR` - Primary env var for base directory
 
 **Tasks:**
-- [ ] Add `BaseDir` and `WorktreeSubdir` to Config struct
+- [ ] Replace `WorktreeDir`/`RepoDir` with `BaseDir` in Config struct
 - [ ] Add `WT_BASE_DIR` env var support
-- [ ] Add migration detection (if old vars set, warn user)
-- [ ] Update `config.ValidatePath()` for new fields
+- [ ] Update `config.ValidatePath()` for new field
 - [ ] Add helper `Config.BareRepoPath(repoName)` → `{base_dir}/{repo}.git`
-- [ ] Add helper `Config.WorktreePath(repoName, branch)` → `{base_dir}/{repo}.git/trees/{branch}`
+- [ ] Add helper `Config.WorktreePath(repoName, branch)` → `{base_dir}/{repo}.git/{branch}`
 
 ---
 
@@ -169,7 +148,7 @@ func FindWorktreeInBareRepo(bareRepoPath, branch string) (*Worktree, error)
 ```
 
 **Updated `git worktree list` parsing:**
-- When run from bare repo, returns worktrees in `trees/` subdirectory
+- When run from bare repo, returns worktrees directly in the bare repo directory
 - Need to handle path resolution correctly
 
 **Tasks:**
@@ -202,7 +181,7 @@ type CloneCmd struct {
 wt clone github.com/user/project
 # Result:
 # ~/Git/project.git/           (bare repo)
-# ~/Git/project.git/trees/main/ (worktree on default branch)
+# ~/Git/project.git/main/      (worktree on default branch)
 
 # Clone with custom name
 wt clone github.com/user/project -n my-project
@@ -210,7 +189,7 @@ wt clone github.com/user/project -n my-project
 
 # Clone bare only (no worktree)
 wt clone github.com/user/project -N
-# Result: ~/Git/project.git/ (no trees/ yet)
+# Result: ~/Git/project.git/ (no worktrees yet)
 ```
 
 **Implementation:**
@@ -239,8 +218,7 @@ func (c *CloneCmd) Run(ctx context.Context) error {
     // Create initial worktree unless --no-worktree
     if !c.NoWorktree {
         defaultBranch := git.GetDefaultBranch(ctx, bareRepoPath)
-        treesDir := filepath.Join(bareRepoPath, cfg.WorktreeSubdir)
-        worktreePath := filepath.Join(treesDir, defaultBranch)
+        worktreePath := filepath.Join(bareRepoPath, defaultBranch)
 
         if err := git.AddWorktree(ctx, bareRepoPath, worktreePath, defaultBranch); err != nil {
             return err
@@ -299,18 +277,8 @@ Update `createWorktree()` to use bare repo structure:
 
 ```go
 func (c *CheckoutCmd) createWorktree(ctx context.Context, repo *git.Repo, branch string) error {
-    cfg := c.Config
-
-    // Determine paths based on repo type
-    var worktreePath string
-    if repo.IsBare {
-        // New style: worktree inside bare repo
-        treesDir := filepath.Join(repo.Path, cfg.WorktreeSubdir)
-        worktreePath = filepath.Join(treesDir, sanitizeBranchName(branch))
-    } else {
-        // Legacy style: worktree in worktree_dir
-        worktreePath = filepath.Join(cfg.WorktreeDir, fmt.Sprintf("%s-%s", repo.Name, branch))
-    }
+    // Worktree path is directly in the bare repo
+    worktreePath := filepath.Join(repo.Path, sanitizeBranchName(branch))
 
     // ... rest of creation logic
 }
@@ -330,7 +298,6 @@ func sanitizeBranchName(branch string) string {
 - [ ] Update `createWorktree()` for bare repo paths
 - [ ] Add `sanitizeBranchName()` helper
 - [ ] Update path detection logic
-- [ ] Handle mixed mode (some bare, some regular repos)
 - [ ] Update integration tests
 
 ---
@@ -341,7 +308,7 @@ func sanitizeBranchName(branch string) string {
 
 Update `PrCheckoutCmd` to:
 1. Clone as bare if repo doesn't exist
-2. Create worktree in bare repo's trees/ directory
+2. Create worktree directly in bare repo directory
 
 ```go
 func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
@@ -363,9 +330,8 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
         return err
     }
 
-    // Create worktree
-    treesDir := filepath.Join(bareRepoPath, cfg.WorktreeSubdir)
-    worktreePath := filepath.Join(treesDir, sanitizeBranchName(prInfo.Branch))
+    // Create worktree directly in bare repo
+    worktreePath := filepath.Join(bareRepoPath, sanitizeBranchName(prInfo.Branch))
 
     return git.AddWorktree(ctx, bareRepoPath, worktreePath, prInfo.Branch)
 }
@@ -407,19 +373,12 @@ func (c *ListCmd) Run(ctx context.Context) error {
         allWorktrees = append(allWorktrees, worktrees...)
     }
 
-    // Also check legacy locations if configured
-    if cfg.WorktreeDir != "" {
-        legacyWorktrees, _ := git.ListWorktrees(cfg.WorktreeDir)
-        allWorktrees = append(allWorktrees, legacyWorktrees...)
-    }
-
     // ... render table ...
 }
 ```
 
 **Tasks:**
 - [ ] Update `ListCmd.Run()` for bare repo discovery
-- [ ] Support mixed mode (bare + legacy)
 - [ ] Update table rendering if needed
 - [ ] Update integration tests
 
@@ -485,14 +444,41 @@ type MigrateCmd struct {
 ```
 
 **Migration steps:**
-1. Scan `repo_dir` for regular repos
+1. Scan for regular repos
 2. For each repo:
-   a. Create bare clone: `git clone --bare <repo> <repo>.git`
-   b. Configure remote fetch refspec
-   c. Find all worktrees for this repo in `worktree_dir`
-   d. Move worktrees to `<repo>.git/trees/`
+   a. Move `.git` directory to become `<repo>.git` bare repo
+   b. Configure bare repo settings
+   c. Convert the original working directory into a worktree
+   d. Move any existing worktrees into the bare repo directory
    e. Run `git worktree repair` to fix paths
-   f. Remove original repo (after confirmation)
+
+**In-place conversion approach** (preserves existing checkout as worktree):
+```bash
+# Given: ~/Git/project/ (regular repo on branch "main")
+# Result: ~/Git/project.git/ (bare repo)
+#         ~/Git/project.git/main/ (worktree - former working dir)
+
+# Step 1: Move .git to bare repo location
+mv ~/Git/project/.git ~/Git/project.git
+
+# Step 2: Configure as bare repo
+git -C ~/Git/project.git config core.bare true
+
+# Step 3: Set up fetch refspec (bare repos need this)
+git -C ~/Git/project.git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+
+# Step 4: Move working directory into bare repo as worktree
+mv ~/Git/project ~/Git/project.git/main
+
+# Step 5: Create .git file in worktree pointing to bare repo
+echo "gitdir: ~/Git/project.git" > ~/Git/project.git/main/.git
+
+# Step 6: Register worktree with git
+git -C ~/Git/project.git worktree add --existing ~/Git/project.git/main main
+
+# Step 7: Repair any path issues
+git -C ~/Git/project.git worktree repair
+```
 
 **Migration script logic:**
 ```go
@@ -500,8 +486,8 @@ func (c *MigrateCmd) Run(ctx context.Context) error {
     cfg := c.Config
     l := log.FromContext(ctx)
 
-    // Find all regular repos
-    repos, err := git.FindAllRepos(cfg.RepoDir)
+    // Find all regular repos in base_dir
+    repos, err := git.FindAllRepos(cfg.BaseDir)
     if err != nil {
         return err
     }
@@ -513,20 +499,25 @@ func (c *MigrateCmd) Run(ctx context.Context) error {
         l.Info("Migrating", "repo", repoName)
 
         if c.DryRun {
-            l.Info("Would create bare repo", "path", bareRepoPath)
+            l.Info("Would convert to bare repo", "from", repo.Path, "to", bareRepoPath)
             continue
         }
 
-        // Step 1: Create bare repo from existing
-        if err := c.convertToBare(ctx, repo.Path, bareRepoPath); err != nil {
+        // Get current branch before conversion
+        currentBranch, _ := git.CurrentBranch(ctx, repo.Path)
+        if currentBranch == "" {
+            currentBranch = "main"
+        }
+
+        // Step 1: Convert to bare in-place
+        if err := c.convertToBareInPlace(ctx, repo.Path, bareRepoPath, currentBranch); err != nil {
             return fmt.Errorf("failed to convert %s: %w", repoName, err)
         }
 
-        // Step 2: Move worktrees
+        // Step 2: Move existing worktrees into bare repo
         worktrees, _ := git.ListWorktreesForRepo(repo.Path)
         for _, wt := range worktrees {
-            newPath := filepath.Join(bareRepoPath, cfg.WorktreeSubdir,
-                sanitizeBranchName(wt.Branch))
+            newPath := filepath.Join(bareRepoPath, sanitizeBranchName(wt.Branch))
 
             if err := c.moveWorktree(ctx, wt.Path, newPath, bareRepoPath); err != nil {
                 l.Warn("Failed to move worktree", "path", wt.Path, "error", err)
@@ -535,39 +526,55 @@ func (c *MigrateCmd) Run(ctx context.Context) error {
 
         // Step 3: Repair worktree links
         git.RepairWorktrees(ctx, bareRepoPath)
-
-        // Step 4: Remove old repo (with confirmation)
-        if !c.Force {
-            if !ui.Confirm("Remove original repo at %s?", repo.Path) {
-                continue
-            }
-        }
-        os.RemoveAll(repo.Path)
     }
 
-    // Update config file
-    return c.updateConfig(ctx)
+    return nil
 }
 
-func (c *MigrateCmd) convertToBare(ctx context.Context, repoPath, bareRepoPath string) error {
-    // Option 1: Clone as bare from local repo
-    // git clone --bare <repo> <bare>
+func (c *MigrateCmd) convertToBareInPlace(ctx context.Context, repoPath, bareRepoPath, branch string) error {
+    gitDir := filepath.Join(repoPath, ".git")
+    worktreePath := filepath.Join(bareRepoPath, sanitizeBranchName(branch))
 
-    // Option 2: Convert in-place (more complex)
-    // - Move .git to new location
-    // - Convert to bare
-    // - Update config
+    // Move .git to become bare repo
+    if err := os.Rename(gitDir, bareRepoPath); err != nil {
+        return fmt.Errorf("move .git: %w", err)
+    }
 
-    // Using option 1 for simplicity
-    cmd := exec.CommandContext(ctx, "git", "clone", "--bare", repoPath, bareRepoPath)
-    return cmd.Run()
+    // Configure as bare
+    cmd := exec.CommandContext(ctx, "git", "-C", bareRepoPath, "config", "core.bare", "true")
+    if err := cmd.Run(); err != nil {
+        return fmt.Errorf("set core.bare: %w", err)
+    }
+
+    // Set up fetch refspec
+    cmd = exec.CommandContext(ctx, "git", "-C", bareRepoPath,
+        "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+    cmd.Run() // Ignore error if no remote
+
+    // Move working directory into bare repo
+    if err := os.Rename(repoPath, worktreePath); err != nil {
+        return fmt.Errorf("move working dir: %w", err)
+    }
+
+    // Create .git file in worktree
+    gitFile := filepath.Join(worktreePath, ".git")
+    content := fmt.Sprintf("gitdir: %s\n", bareRepoPath)
+    if err := os.WriteFile(gitFile, []byte(content), 0644); err != nil {
+        return fmt.Errorf("write .git file: %w", err)
+    }
+
+    // Register worktree with git (creates worktrees/<name> metadata)
+    cmd = exec.CommandContext(ctx, "git", "-C", bareRepoPath,
+        "worktree", "add", "--existing", worktreePath, branch)
+    if err := cmd.Run(); err != nil {
+        // Fallback: manually create worktree metadata
+        return c.createWorktreeMetadata(bareRepoPath, worktreePath, branch)
+    }
+
+    return nil
 }
 
 func (c *MigrateCmd) moveWorktree(ctx context.Context, oldPath, newPath, bareRepoPath string) error {
-    // Create trees directory if needed
-    treesDir := filepath.Dir(newPath)
-    os.MkdirAll(treesDir, 0755)
-
     // Move the worktree directory
     if err := os.Rename(oldPath, newPath); err != nil {
         return err
@@ -596,7 +603,7 @@ func (c *MigrateCmd) moveWorktree(ctx context.Context, oldPath, newPath, bareRep
 
 ---
 
-### Phase 7: Documentation & Deprecation
+### Phase 7: Documentation
 
 #### 7.1 Documentation Updates
 
@@ -606,24 +613,7 @@ func (c *MigrateCmd) moveWorktree(ctx context.Context, oldPath, newPath, bareRep
 - [ ] Document new `wt clone` command
 - [ ] Document `wt migrate` command
 
-#### 7.2 Deprecation Warnings
-
-Add warnings when using old config:
-
-```go
-func (c *Config) ValidateAndWarn(ctx context.Context) {
-    l := log.FromContext(ctx)
-
-    if c.WorktreeDir != "" || c.RepoDir != "" {
-        l.Warn("worktree_dir and repo_dir are deprecated")
-        l.Warn("Run 'wt migrate' to convert to bare repo structure")
-        l.Warn("See: https://github.com/user/wt/docs/MIGRATION.md")
-    }
-}
-```
-
 **Tasks:**
-- [ ] Add deprecation warnings
 - [ ] Create migration documentation
 - [ ] Update README.md
 - [ ] Update help text for affected commands
@@ -633,7 +623,7 @@ func (c *Config) ValidateAndWarn(ctx context.Context) {
 ## Implementation Order
 
 ### Sprint 1: Foundation
-1. Config changes (1.1)
+1. Config changes (1.1) - Replace `worktree_dir`/`repo_dir` with `base_dir`
 2. Bare repo detection (1.2)
 3. Worktree discovery updates (1.3)
 
@@ -646,14 +636,11 @@ func (c *Config) ValidateAndWarn(ctx context.Context) {
 7. List command updates (4.1)
 8. Other command updates (5.1)
 
-### Sprint 4: Migration
+### Sprint 4: Migration & Polish
 9. Move command rewrite (5.2)
 10. Migration tool (6.1)
-
-### Sprint 5: Polish
 11. Documentation (7.1)
-12. Deprecation warnings (7.2)
-13. Final testing & edge cases
+12. Final testing & edge cases
 
 ---
 
@@ -673,14 +660,13 @@ func (c *Config) ValidateAndWarn(ctx context.Context) {
 ### Unit Tests
 - Bare repo detection
 - Path sanitization
-- Config parsing (old + new format)
+- Config parsing with `base_dir`
 
 ### Integration Tests
 - Clone bare repo
 - Create worktree in bare repo
 - List worktrees from bare repo
-- Migration from regular to bare
-- Mixed mode (some bare, some regular)
+- Migration from regular to bare (in-place conversion)
 
 ### Manual Testing Checklist
 - [ ] Fresh install with new config
@@ -693,20 +679,19 @@ func (c *Config) ValidateAndWarn(ctx context.Context) {
 
 ---
 
-## Open Questions
+## Design Decisions
 
-1. **Worktree naming**: Use branch name directly or include repo prefix?
-   - `trees/feature-x` vs `trees/project-feature-x`
-   - Recommendation: Just branch name (cleaner, repo context is parent dir)
+1. **Worktree naming**: Use sanitized branch name directly in bare repo root
+   - `project.git/feature-x` (branch `feature/x` becomes `feature-x`)
+   - Clean and simple, repo context is the parent `.git` directory
 
-2. **Default branch worktree**: Always create on clone, or optional?
-   - Recommendation: Create by default, `--no-worktree` to skip
+2. **Default branch worktree**: Create by default on clone
+   - `--no-worktree` / `-N` flag to skip initial worktree creation
 
-3. **Mixed mode support**: How long to support both structures?
-   - Recommendation: Support indefinitely, but warn on old config
+3. **Bare repo suffix**: `.git` suffix required
+   - Standard convention, makes intent clear
+   - Easy to distinguish from worktree directories
 
-4. **Bare repo suffix**: `.git` required or optional?
-   - Recommendation: Required (standard convention, clearer intent)
-
-5. **Trees subdirectory name**: `trees/`, `worktrees/`, or configurable?
-   - Recommendation: `trees/` default, configurable via `worktree_subdir`
+4. **No backwards compatibility**: Clean break from old `worktree_dir`/`repo_dir` config
+   - Users run `wt migrate` once to convert existing setup
+   - Simpler codebase without legacy support
