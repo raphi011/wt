@@ -744,8 +744,8 @@ wt exec -l work -- make test             # all worktrees in labeled repos
 
 **Detecting repo from current worktree:**
 ```go
-// FindRepoForPath finds the registered repo that owns a worktree path
-func (r *Registry) FindRepoForPath(path string) (*Repo, error) {
+// FindOrRegisterRepoForPath finds the registered repo, or auto-registers if inside a git repo
+func (r *Registry) FindOrRegisterRepoForPath(path string) (*Repo, error) {
     // Get git dir for the path
     gitDir, err := git.GetGitDirForWorktree(path)
     if err != nil {
@@ -759,9 +759,29 @@ func (r *Registry) FindRepoForPath(path string) (*Repo, error) {
             return &repo, nil
         }
     }
-    return nil, fmt.Errorf("not in a registered repo")
+
+    // Auto-register if inside unregistered git repo
+    repoPath := git.GetRepoRoot(path)
+    if repoPath != "" {
+        newRepo := Repo{
+            Path:   repoPath,
+            Name:   filepath.Base(repoPath),
+            Labels: cfg.DefaultLabels,
+        }
+        r.Add(newRepo)
+        r.Save()
+        return &newRepo, nil
+    }
+
+    return nil, fmt.Errorf("not in a git repository")
 }
 ```
+
+**Auto-registration behavior:**
+- When inside an unregistered git repo, commands auto-register it
+- Uses directory name as repo name
+- Applies `default_labels` from config
+- Uses global `worktree_format` (can override later with `wt repos edit`)
 
 **Why remove `wt mv`?**
 
