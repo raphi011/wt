@@ -28,7 +28,12 @@ This document outlines the migration from the current dual-directory architectur
 
 ### New Architecture (Bare Repos)
 ```
-~/Git/                          # Single base_dir
+~/.wt/                          # Global config & cache
+├── config.toml                 # Configuration file
+├── cache.json                  # Worktree cache (all base_dirs)
+└── cache.lock                  # Cache lock file
+
+~/work/                         # First base_dir (default for new clones)
 ├── project-a.git/              # Bare repo (no working dir)
 │   ├── HEAD                    # Git internal files
 │   ├── config
@@ -41,11 +46,23 @@ This document outlines the migration from the current dual-directory architectur
 ├── project-b.git/
 │   ├── main/
 │   └── feature-z/
+
+~/personal/                     # Second base_dir
+├── side-project.git/
+│   ├── main/
+│   └── experiment/
+
+~/oss/                          # Third base_dir
+├── open-source-lib.git/
+│   └── main/
 ```
 
 **Benefits:**
-- Single directory to configure
-- Clear project grouping
+- Multiple directories supported (work, personal, oss, etc.)
+- First base_dir is default for new clones
+- All repos treated equally regardless of location
+- Global config/cache in `~/.wt/` - single source of truth
+- Clear project grouping within each base_dir
 - No unused working directory in main repo
 - Matches how many developers use worktrees
 - Cleaner mental model
@@ -62,27 +79,53 @@ This document outlines the migration from the current dual-directory architectur
 
 ```go
 type Config struct {
-    BaseDir        string  // Single directory for all bare repos
+    BaseDirs       []string  // List of directories containing bare repos
+                             // First entry is default for new clones
     // ... other existing fields unchanged (WorktreeFormat, Hooks, etc.)
 }
 ```
 
+**Global config location:** `~/.wt/config.toml`
+
+This replaces the previous `~/.config/wt/config.toml` location. All wt state lives in `~/.wt/`:
+- `~/.wt/config.toml` - Configuration file
+- `~/.wt/cache.json` - Worktree cache (spans all base_dirs)
+- `~/.wt/cache.lock` - Cache lock file
+
 **New config file format:**
 ```toml
-# ~/.config/wt/config.toml
-base_dir = "~/Git"              # All bare repos live here
-                                # Worktrees are created directly in {repo}.git/{branch}
+# ~/.wt/config.toml
+base_dirs = [
+    "~/work",      # First = default for new clones
+    "~/personal",
+    "~/oss",
+]
+
+# Worktrees are created directly in {base_dir}/{repo}.git/{branch}
 ```
 
 **Environment variables:**
-- `WT_BASE_DIR` - Primary env var for base directory
+- `WT_BASE_DIRS` - Comma-separated list of base directories (overrides config)
+- `WT_CONFIG_DIR` - Override config directory (default: `~/.wt`)
+
+**Behavior:**
+- `wt clone` uses first base_dir as destination
+- `wt clone --base-dir ~/oss` can override for specific clone
+- `wt list` scans all base_dirs
+- Cache stores worktrees from all base_dirs with unique IDs
+- All repos are treated equally regardless of which base_dir they're in
 
 **Tasks:**
-- [ ] Replace `WorktreeDir`/`RepoDir` with `BaseDir` in Config struct
-- [ ] Add `WT_BASE_DIR` env var support
-- [ ] Update `config.ValidatePath()` for new field
-- [ ] Add helper `Config.BareRepoPath(repoName)` → `{base_dir}/{repo}.git`
+- [ ] Replace `WorktreeDir`/`RepoDir` with `BaseDirs` in Config struct
+- [ ] Move config location to `~/.wt/config.toml`
+- [ ] Move cache to `~/.wt/cache.json`
+- [ ] Add `WT_BASE_DIRS` env var support (comma-separated)
+- [ ] Add `WT_CONFIG_DIR` env var support
+- [ ] Update `config.ValidatePath()` for new fields
+- [ ] Add helper `Config.DefaultBaseDir()` → first entry in BaseDirs
+- [ ] Add helper `Config.BareRepoPath(repoName)` → `{default_base_dir}/{repo}.git`
 - [ ] Add helper `Config.WorktreePath(repoName, branch)` → `{base_dir}/{repo}.git/{branch}`
+- [ ] Add helper `Config.FindRepo(repoName)` → searches all base_dirs
 
 ---
 
@@ -171,25 +214,30 @@ type CloneCmd struct {
 
     RepoURL     string `arg:"" help:"Repository URL or owner/repo shorthand"`
     Name        string `short:"n" help:"Override repo name (default: derived from URL)"`
+    BaseDir     string `short:"b" help:"Target base directory (default: first in base_dirs)"`
     NoWorktree  bool   `short:"N" help:"Clone bare repo only, don't create initial worktree"`
 }
 ```
 
 **Behavior:**
 ```bash
-# Clone as bare repo + create main worktree
+# Clone as bare repo + create main worktree (uses first base_dir)
 wt clone github.com/user/project
 # Result:
-# ~/Git/project.git/           (bare repo)
-# ~/Git/project.git/main/      (worktree on default branch)
+# ~/work/project.git/           (bare repo in default base_dir)
+# ~/work/project.git/main/      (worktree on default branch)
 
 # Clone with custom name
 wt clone github.com/user/project -n my-project
-# Result: ~/Git/my-project.git/
+# Result: ~/work/my-project.git/
+
+# Clone to specific base_dir
+wt clone github.com/user/project -b ~/oss
+# Result: ~/oss/project.git/
 
 # Clone bare only (no worktree)
 wt clone github.com/user/project -N
-# Result: ~/Git/project.git/ (no worktrees yet)
+# Result: ~/work/project.git/ (no worktrees yet)
 ```
 
 **Implementation:**
@@ -201,7 +249,13 @@ func (c *CloneCmd) Run(ctx context.Context) error {
         repoName = extractRepoName(c.RepoURL)
     }
 
-    bareRepoPath := filepath.Join(cfg.BaseDir, repoName+".git")
+    // Use specified base_dir or default (first in list)
+    baseDir := c.BaseDir
+    if baseDir == "" {
+        baseDir = cfg.DefaultBaseDir()
+    }
+
+    bareRepoPath := filepath.Join(baseDir, repoName+".git")
 
     // Clone as bare
     // git clone --bare <url> <path>
@@ -351,7 +405,7 @@ func (c *PrCheckoutCmd) runPrCheckout(ctx context.Context) error {
 
 **File:** `cmd/wt/list.go`
 
-Update `ListCmd` to discover bare repos and their worktrees:
+Update `ListCmd` to discover bare repos across all base_dirs:
 
 ```go
 func (c *ListCmd) Run(ctx context.Context) error {
@@ -359,27 +413,40 @@ func (c *ListCmd) Run(ctx context.Context) error {
 
     var allWorktrees []git.Worktree
 
-    // Find all bare repos
-    bareRepos, err := git.FindAllBareRepos(cfg.BaseDir)
-    if err != nil {
-        return err
-    }
-
-    for _, bareRepo := range bareRepos {
-        worktrees, err := git.ListWorktreesForBareRepo(bareRepo)
+    // Scan all base_dirs for bare repos
+    for _, baseDir := range cfg.BaseDirs {
+        bareRepos, err := git.FindAllBareRepos(baseDir)
         if err != nil {
-            continue
+            continue // Skip inaccessible directories
         }
-        allWorktrees = append(allWorktrees, worktrees...)
+
+        for _, bareRepo := range bareRepos {
+            worktrees, err := git.ListWorktreesForBareRepo(bareRepo)
+            if err != nil {
+                continue
+            }
+            allWorktrees = append(allWorktrees, worktrees...)
+        }
     }
 
     // ... render table ...
 }
 ```
 
+**Worktree struct update:**
+```go
+type Worktree struct {
+    // ... existing fields ...
+    BaseDir string // Which base_dir this worktree's repo is in
+}
+```
+
+This allows the UI to show which base_dir a worktree belongs to if needed.
+
 **Tasks:**
-- [ ] Update `ListCmd.Run()` for bare repo discovery
-- [ ] Update table rendering if needed
+- [ ] Update `ListCmd.Run()` to scan all base_dirs
+- [ ] Add `BaseDir` field to `Worktree` struct
+- [ ] Update table rendering to optionally show base_dir
 - [ ] Update integration tests
 
 ---
@@ -438,8 +505,22 @@ type MvCmd struct {
 type MigrateCmd struct {
     Deps
 
-    DryRun  bool `short:"d" help:"Show what would be migrated without making changes"`
+    Source  string `arg:"" help:"Source directory to migrate (repo_dir or worktree_dir)"`
+    Target  string `short:"t" help:"Target base_dir (default: first in base_dirs)"`
+    DryRun  bool   `short:"d" help:"Show what would be migrated without making changes"`
 }
+```
+
+**Usage:**
+```bash
+# Migrate repos from old repo_dir to first base_dir
+wt migrate ~/Git
+
+# Migrate to specific base_dir
+wt migrate ~/Git --target ~/work
+
+# Dry run to preview
+wt migrate ~/Git -d
 ```
 
 **Migration approach: In-place move**
@@ -754,7 +835,7 @@ func (c *MigrateCmd) updateWorktreePaths(bareRepoPath, worktreePath, branch stri
 ## Implementation Order
 
 ### Sprint 1: Foundation
-1. Config changes (1.1) - Replace `worktree_dir`/`repo_dir` with `base_dir`
+1. Config changes (1.1) - Replace `worktree_dir`/`repo_dir` with `base_dirs`, move to `~/.wt/`
 2. Bare repo detection (1.2)
 3. Worktree discovery updates (1.3)
 
@@ -764,7 +845,7 @@ func (c *MigrateCmd) updateWorktreePaths(bareRepoPath, worktreePath, branch stri
 6. PR checkout updates (3.2)
 
 ### Sprint 3: List & Discovery
-7. List command updates (4.1)
+7. List command updates (4.1) - scan all base_dirs
 8. Other command updates (5.1)
 
 ### Sprint 4: Migration & Polish
@@ -779,8 +860,10 @@ func (c *MigrateCmd) updateWorktreePaths(bareRepoPath, worktreePath, branch stri
 
 | Change | Impact | Migration |
 |--------|--------|-----------|
-| New directory structure | All worktrees move | `wt migrate` command |
-| Config format change | Config file update needed | Auto-detected, warns user |
+| New directory structure | All worktrees move into bare repos | `wt migrate` command |
+| Config location change | `~/.config/wt/` → `~/.wt/` | Manual move or recreate |
+| Config format change | `repo_dir`/`worktree_dir` → `base_dirs` | Update config file |
+| Cache location change | Per-directory → `~/.wt/cache.json` | Automatic rebuild |
 | Worktree paths change | Hardcoded paths break | Use `wt cd` instead |
 | Cache invalidation | IDs may change | Cache rebuilt automatically |
 
@@ -791,17 +874,21 @@ func (c *MigrateCmd) updateWorktreePaths(bareRepoPath, worktreePath, branch stri
 ### Unit Tests
 - Bare repo detection
 - Path sanitization
-- Config parsing with `base_dir`
+- Config parsing with `base_dirs` (list)
+- Multi-directory scanning
 
 ### Integration Tests
-- Clone bare repo
+- Clone bare repo to default base_dir
+- Clone bare repo to specific base_dir (`-b`)
 - Create worktree in bare repo
-- List worktrees from bare repo
+- List worktrees across multiple base_dirs
 - Migration from regular to bare (in-place conversion)
 
 ### Manual Testing Checklist
-- [ ] Fresh install with new config
+- [ ] Fresh install with new config at `~/.wt/`
 - [ ] Migration from existing setup
+- [ ] Multiple base_dirs scanning
+- [ ] Clone to non-default base_dir
 - [ ] GitHub workflow (clone, checkout PR, create PR, merge)
 - [ ] GitLab workflow (same)
 - [ ] Hooks work correctly
@@ -812,17 +899,27 @@ func (c *MigrateCmd) updateWorktreePaths(bareRepoPath, worktreePath, branch stri
 
 ## Design Decisions
 
-1. **Worktree naming**: Use sanitized branch name directly in bare repo root
+1. **Multiple base directories**: Support list of `base_dirs`
+   - First entry is default for new clones
+   - All directories scanned equally for `wt list`
+   - Allows organizing by purpose (work, personal, oss)
+
+2. **Global config location**: `~/.wt/` directory
+   - Single location for config, cache, and lock files
+   - Not tied to any specific base_dir
+   - Simpler than XDG paths for cross-platform support
+
+3. **Worktree naming**: Use sanitized branch name directly in bare repo root
    - `project.git/feature-x` (branch `feature/x` becomes `feature-x`)
    - Clean and simple, repo context is the parent `.git` directory
 
-2. **Default branch worktree**: Create by default on clone
+4. **Default branch worktree**: Create by default on clone
    - `--no-worktree` / `-N` flag to skip initial worktree creation
 
-3. **Bare repo suffix**: `.git` suffix required
+5. **Bare repo suffix**: `.git` suffix required
    - Standard convention, makes intent clear
    - Easy to distinguish from worktree directories
 
-4. **No backwards compatibility**: Clean break from old `worktree_dir`/`repo_dir` config
+6. **No backwards compatibility**: Clean break from old `worktree_dir`/`repo_dir` config
    - Users run `wt migrate` once to convert existing setup
    - Simpler codebase without legacy support
