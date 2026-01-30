@@ -80,63 +80,119 @@ The registry is the source of truth for repos `wt` manages:
     {
       "path": "/home/user/work/project-a",
       "name": "project-a",
-      "worktree_dir": ".",
+      "worktree_format": "./{branch}",
       "labels": ["work"]
     },
     {
       "path": "/home/user/work/project-b.git",
       "name": "project-b",
-      "worktree_dir": ".",
       "labels": ["work"]
     },
     {
       "path": "/home/user/oss/legacy",
       "name": "legacy",
-      "worktree_dir": "..",
+      "worktree_format": "../{repo}-{branch}",
       "labels": ["oss"]
     },
     {
       "path": "/home/user/random/repo",
       "name": "my-repo",
-      "worktree_dir": "/home/user/worktrees",
+      "worktree_format": "~/worktrees/{repo}-{branch}",
       "labels": []
     }
   ]
 }
 ```
 
-### Worktree Directory Modes
+Note: `worktree_format` is optional per-repo. If not set, uses the global `worktree_format` from config.
 
-The `worktree_dir` field controls where worktrees are created:
+### Worktree Format String
 
-| Mode | `worktree_dir` | Worktree Path | Example |
-|------|----------------|---------------|---------|
-| **Nested** | `"."` | `{repo}/{branch}/` | `project/main/`, `project/feature/` |
-| **Sibling** | `".."` | `{repo}-{branch}/` | `project-main/`, `project-feature/` |
-| **Centralized** | `"/abs/path"` | `{path}/{repo}-{branch}/` | `/worktrees/project-main/` |
+The `worktree_format` config controls both **location** and **naming** of worktrees. It supports placeholders and can include relative or absolute paths:
 
-**Resolution:**
+**Placeholders:**
+- `{repo}` - repository name
+- `{branch}` - branch name (sanitized: `/` → `-`)
+
+**Format Examples:**
+
+| Format | Type | Example Output |
+|--------|------|----------------|
+| `./{branch}` | Nested | `project/main/`, `project/feature-x/` |
+| `../{repo}-{branch}` | Sibling | `project-main/`, `project-feature-x/` |
+| `~/worktrees/{repo}-{branch}` | Centralized | `~/worktrees/project-main/` |
+| `{repo}-{branch}` | Legacy (uses worktree_dir) | `~/Git/worktrees/project-main/` |
+
+**Path resolution:**
+- Starts with `./` or `../` → relative to repo path
+- Starts with `/` or `~/` → absolute path
+- No path prefix → relative to legacy `worktree_dir` (for backwards compatibility)
+
+**Resolution logic:**
 ```go
-func ResolveWorktreePath(repo Repo, branch string) string {
-    sanitized := sanitizeBranch(branch)
+func ResolveWorktreePath(repo Repo, branch string, format string) string {
+    // Apply placeholders
+    name := strings.ReplaceAll(format, "{repo}", repo.Name)
+    name = strings.ReplaceAll(name, "{branch}", sanitizeBranch(branch))
 
     switch {
-    case repo.WorktreeDir == ".":
-        // Nested: worktree inside repo
-        return filepath.Join(repo.Path, sanitized)
+    case strings.HasPrefix(name, "./"):
+        // Relative to repo: ./branch → repo/branch
+        return filepath.Join(repo.Path, name[2:])
 
-    case repo.WorktreeDir == "..":
-        // Sibling: worktree next to repo
-        return filepath.Join(filepath.Dir(repo.Path), repo.Name+"-"+sanitized)
+    case strings.HasPrefix(name, "../"):
+        // Sibling to repo: ../repo-branch → parent/repo-branch
+        return filepath.Join(filepath.Dir(repo.Path), name[3:])
 
-    case filepath.IsAbs(repo.WorktreeDir):
-        // Centralized: all worktrees in one folder
-        return filepath.Join(repo.WorktreeDir, repo.Name+"-"+sanitized)
+    case strings.HasPrefix(name, "/") || strings.HasPrefix(name, "~"):
+        // Absolute path
+        return expandHome(name)
 
     default:
-        // Other relative path
-        return filepath.Join(repo.Path, repo.WorktreeDir, sanitized)
+        // Legacy: use worktree_dir from config (backwards compat)
+        return filepath.Join(cfg.WorktreeDir, name)
     }
+}
+```
+
+**Config examples:**
+
+```toml
+# ~/.wt/config.toml
+
+# Nested worktrees inside repo (new default)
+worktree_format = "./{branch}"
+
+# Sibling worktrees next to repo
+worktree_format = "../{repo}-{branch}"
+
+# Centralized folder (absolute path)
+worktree_format = "~/worktrees/{repo}-{branch}"
+
+# Legacy format (no path prefix, uses worktree_dir)
+worktree_format = "{repo}-{branch}"
+worktree_dir = "~/Git/worktrees"   # only needed for legacy format
+```
+
+**Per-repo override:**
+Each repo in the registry can override the global format:
+
+```json
+{
+  "repos": [
+    {
+      "path": "/home/user/work/project-a",
+      "name": "project-a",
+      "worktree_format": "./{branch}",
+      "labels": ["work"]
+    },
+    {
+      "path": "/home/user/oss/legacy",
+      "name": "legacy",
+      "worktree_format": "~/worktrees/{repo}-{branch}",
+      "labels": ["oss"]
+    }
+  ]
 }
 ```
 
@@ -171,10 +227,10 @@ wt list -l oss            # list only oss-labeled repos
 
 ```go
 type Repo struct {
-    Path        string   `json:"path"`         // Absolute path to repo
-    Name        string   `json:"name"`         // Display name
-    WorktreeDir string   `json:"worktree_dir"` // ".", "..", or absolute path
-    Labels      []string `json:"labels"`       // Optional labels for grouping
+    Path           string   `json:"path"`                      // Absolute path to repo
+    Name           string   `json:"name"`                      // Display name
+    WorktreeFormat string   `json:"worktree_format,omitempty"` // Optional override (e.g., "./{branch}")
+    Labels         []string `json:"labels,omitempty"`          // Optional labels for grouping
 }
 
 type Registry struct {
@@ -209,17 +265,24 @@ func (r *Registry) FindByLabel(label string) []Repo
 
 ---
 
-#### 1.2 Config Simplification
+#### 1.2 Config Updates
 
 **File:** `internal/config/config.go`
 
-Simplify config - no more `repo_dir`/`worktree_dir`:
+Update config to support path-aware format strings:
 
 ```toml
 # ~/.wt/config.toml
 
-# Default worktree placement for new repos
-default_worktree_dir = "."    # ".", "..", or absolute path
+# Default worktree format (supports relative and absolute paths)
+# "./{branch}" = nested inside repo
+# "../{repo}-{branch}" = sibling to repo
+# "~/worktrees/{repo}-{branch}" = centralized folder
+# "{repo}-{branch}" = legacy (uses worktree_dir)
+worktree_format = "./{branch}"
+
+# Legacy: only needed if worktree_format has no path prefix
+# worktree_dir = "~/Git/worktrees"
 
 # Default labels for new repos (optional)
 default_labels = []
@@ -233,17 +296,26 @@ run = "echo checked out"
 
 ```go
 type Config struct {
-    DefaultWorktreeDir string   `toml:"default_worktree_dir"`
-    DefaultLabels      []string `toml:"default_labels"`
-    Hooks              []Hook   `toml:"hooks"`
+    WorktreeFormat string   `toml:"worktree_format"` // e.g., "./{branch}", "~/worktrees/{repo}-{branch}"
+    WorktreeDir    string   `toml:"worktree_dir"`    // Legacy: used when format has no path prefix
+    DefaultLabels  []string `toml:"default_labels"`
+    Hooks          []Hook   `toml:"hooks"`
     // ... other existing fields
 }
+
+const DefaultWorktreeFormat = "./{branch}"  // New default: nested worktrees
 ```
 
+**Backwards compatibility:**
+- Old config with `worktree_format = "{repo}-{branch}"` + `worktree_dir` continues to work
+- New format strings with path prefixes (`./`, `../`, `~/`, `/`) don't need `worktree_dir`
+
 **Tasks:**
-- [ ] Remove `RepoDir`, `WorktreeDir` from Config
-- [ ] Add `DefaultWorktreeDir`, `DefaultLabels`
+- [ ] Update `WorktreeFormat` default to `./{branch}`
+- [ ] Add path prefix detection to format resolution
+- [ ] Keep `WorktreeDir` for backwards compatibility
 - [ ] Move config to `~/.wt/config.toml`
+- [ ] Add `DefaultLabels`
 - [ ] Update config loading/validation
 
 ---
@@ -304,32 +376,44 @@ func GetGitDir(repoPath string, repoType RepoType) string {
 
 #### 1.4 Worktree Path Resolution
 
-**File:** `internal/git/worktree.go`
+**File:** `internal/format/worktree.go`
 
-Update worktree operations to use registry:
+Update format resolution to support path-aware format strings:
 
 ```go
 // ResolveWorktreePath computes the path for a new worktree
-func ResolveWorktreePath(repo registry.Repo, branch string) string {
-    sanitized := sanitizeBranch(branch)
-    repoType, _ := DetectRepoType(repo.Path)
+// format: e.g., "./{branch}", "../{repo}-{branch}", "~/worktrees/{repo}-{branch}"
+func ResolveWorktreePath(repo registry.Repo, branch string, cfg *config.Config) string {
+    // Use repo-specific format or fall back to config default
+    format := repo.WorktreeFormat
+    if format == "" {
+        format = cfg.WorktreeFormat
+    }
+
+    // Apply placeholders
+    path := strings.ReplaceAll(format, "{repo}", repo.Name)
+    path = strings.ReplaceAll(path, "{branch}", sanitizeBranch(branch))
 
     switch {
-    case repo.WorktreeDir == ".":
-        // Nested inside repo
-        return filepath.Join(repo.Path, sanitized)
+    case strings.HasPrefix(path, "./"):
+        // Relative to repo: ./main → repo/main
+        return filepath.Join(repo.Path, path[2:])
 
-    case repo.WorktreeDir == "..":
-        // Sibling to repo
-        return filepath.Join(filepath.Dir(repo.Path), repo.Name+"-"+sanitized)
+    case strings.HasPrefix(path, "../"):
+        // Sibling to repo: ../repo-main → parent/repo-main
+        return filepath.Join(filepath.Dir(repo.Path), path[3:])
 
-    case filepath.IsAbs(repo.WorktreeDir):
-        // Centralized folder
-        return filepath.Join(repo.WorktreeDir, repo.Name+"-"+sanitized)
+    case strings.HasPrefix(path, "~/"):
+        // Home-relative absolute path
+        return expandHome(path)
+
+    case strings.HasPrefix(path, "/"):
+        // Absolute path
+        return path
 
     default:
-        // Other relative path
-        return filepath.Join(repo.Path, repo.WorktreeDir, sanitized)
+        // Legacy: no path prefix, use worktree_dir from config
+        return filepath.Join(cfg.WorktreeDir, path)
     }
 }
 
@@ -366,26 +450,29 @@ func ListWorktreesForRepo(repo registry.Repo) ([]Worktree, error) {
 type AddCmd struct {
     Deps
 
-    Path        string   `arg:"" help:"Path to git repository"`
-    Name        string   `short:"n" help:"Display name (default: directory name)"`
-    WorktreeDir string   `short:"w" help:"Worktree directory mode (default: from config)"`
-    Labels      []string `short:"l" help:"Labels for grouping"`
+    Path           string   `arg:"" help:"Path to git repository"`
+    Name           string   `short:"n" help:"Display name (default: directory name)"`
+    WorktreeFormat string   `short:"w" help:"Worktree format (default: from config)"`
+    Labels         []string `short:"l" help:"Labels for grouping"`
 }
 ```
 
 **Usage:**
 ```bash
-# Register existing repo with nested worktrees
+# Register existing repo (uses default format from config)
 wt add ~/work/my-project
 
 # Register with custom name and labels
 wt add ~/code/repo -n my-repo -l work -l important
 
+# Register with nested worktrees (branch-only names)
+wt add ~/work/project -w "./{branch}"
+
 # Register with sibling worktrees
-wt add ~/oss/lib -w ".."
+wt add ~/oss/lib -w "../{repo}-{branch}"
 
 # Register with centralized worktrees
-wt add ~/random/repo -w ~/worktrees
+wt add ~/random/repo -w "~/worktrees/{repo}-{branch}"
 ```
 
 **Tasks:**
@@ -405,19 +492,19 @@ wt add ~/random/repo -w ~/worktrees
 type CloneCmd struct {
     Deps
 
-    URL         string   `arg:"" help:"Repository URL"`
-    Dest        string   `arg:"" optional:"" help:"Destination path"`
-    Name        string   `short:"n" help:"Display name (default: from URL)"`
-    Bare        bool     `short:"B" help:"Clone as bare repository"`
-    WorktreeDir string   `short:"w" help:"Worktree directory mode (default: from config)"`
-    Labels      []string `short:"l" help:"Labels for grouping"`
-    NoWorktree  bool     `short:"N" help:"Don't create initial worktree"`
+    URL            string   `arg:"" help:"Repository URL"`
+    Dest           string   `arg:"" optional:"" help:"Destination path"`
+    Name           string   `short:"n" help:"Display name (default: from URL)"`
+    Bare           bool     `short:"B" help:"Clone as bare repository"`
+    WorktreeFormat string   `short:"w" help:"Worktree format (default: from config)"`
+    Labels         []string `short:"l" help:"Labels for grouping"`
+    NoWorktree     bool     `short:"N" help:"Don't create initial worktree"`
 }
 ```
 
 **Usage:**
 ```bash
-# Clone regular repo with nested worktrees (default)
+# Clone regular repo with nested worktrees (default: ./{branch})
 wt clone github.com/user/project ~/work/project
 # Result: ~/work/project/.git/ + ~/work/project/main/
 
@@ -426,11 +513,11 @@ wt clone github.com/user/project ~/work/project.git --bare
 # Result: ~/work/project.git/ (bare) + ~/work/project.git/main/
 
 # Clone with sibling worktrees
-wt clone github.com/user/project ~/work/project -w ".."
+wt clone github.com/user/project ~/work/project -w "../{repo}-{branch}"
 # Result: ~/work/project/.git/ + ~/work/project-main/
 
 # Clone with centralized worktrees
-wt clone github.com/user/project ~/work/project -w ~/worktrees
+wt clone github.com/user/project ~/work/project -w "~/worktrees/{repo}-{branch}"
 # Result: ~/work/project/.git/ + ~/worktrees/project-main/
 ```
 
@@ -438,7 +525,7 @@ wt clone github.com/user/project ~/work/project -w ~/worktrees
 - [ ] Update `cmd/wt/clone.go`
 - [ ] Support `--bare` flag
 - [ ] Register cloned repo in registry
-- [ ] Create initial worktree based on `worktree_dir`
+- [ ] Create initial worktree based on `worktree_format`
 - [ ] Update completions
 
 ---
@@ -640,11 +727,15 @@ This scans the old directories and registers found repos.
 ```toml
 # ~/.wt/config.toml
 
-# Default worktree placement for new repos
-# "." = nested inside repo
-# ".." = sibling to repo
-# "/absolute/path" = centralized folder
-default_worktree_dir = "."
+# Default worktree format (supports path prefixes + placeholders)
+# "./{branch}" = nested inside repo
+# "../{repo}-{branch}" = sibling to repo
+# "~/worktrees/{repo}-{branch}" = centralized folder
+# "{repo}-{branch}" = legacy (requires worktree_dir)
+worktree_format = "./{branch}"
+
+# Legacy: only needed if worktree_format has no path prefix
+# worktree_dir = "~/Git/worktrees"
 
 # Default labels applied to new repos
 default_labels = []
@@ -670,7 +761,7 @@ run = "./scripts/lint.sh"
 | Config format | `repo_dir`/`worktree_dir` removed | Run `wt migrate` |
 | Config location | `~/.config/wt/` → `~/.wt/` | Auto-detected or manual move |
 | Repo tracking | Scan → Registry | Run `wt migrate` or `wt add` |
-| Worktree paths | May change based on `worktree_dir` | Existing worktrees still work |
+| Worktree paths | May change based on `worktree_format` | Existing worktrees still work |
 
 ---
 
@@ -686,10 +777,12 @@ run = "./scripts/lint.sh"
    - Auto-detect repo type
    - Same commands work for both
 
-3. **Flexible worktree placement**
-   - Per-repo `worktree_dir` setting
-   - `"."` = nested, `".."` = sibling, absolute = centralized
-   - User chooses what works for them
+3. **Unified worktree_format string**
+   - Single config field for location + naming
+   - Path prefix determines resolution: `./`, `../`, `~/`, `/`
+   - Placeholders: `{repo}`, `{branch}`
+   - Per-repo override possible
+   - Backwards compatible with legacy `{repo}-{branch}` + `worktree_dir`
 
 4. **Labels for organization**
    - Optional grouping mechanism
@@ -705,6 +798,7 @@ run = "./scripts/lint.sh"
    - Existing repos continue to work
    - `wt migrate` imports old setup
    - `wt add` registers individual repos
+   - Legacy `worktree_format` + `worktree_dir` still works
 
 ---
 
