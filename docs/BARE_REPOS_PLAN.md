@@ -783,6 +783,29 @@ func (r *Registry) FindOrRegisterRepoForPath(path string) (*Repo, error) {
 - Applies `default_labels` from config
 - Uses global `worktree_format` (can override later with `wt repos edit`)
 
+**`wt clone` without destination:**
+- Clones into current directory (like `git clone`)
+- Repo name derived from URL (e.g., `github.com/user/project` → `./project` or `./project.git` for bare)
+
+**File persistence (atomic writes, no locking):**
+```go
+func (r *Registry) Save() error {
+    data, _ := json.MarshalIndent(r, "", "  ")
+
+    // Write to temp file first
+    tmp := registryPath + ".tmp"
+    if err := os.WriteFile(tmp, data, 0644); err != nil {
+        return err
+    }
+
+    // Atomic rename - readers see old or new, never partial
+    return os.Rename(tmp, registryPath)
+}
+```
+- Atomic rename prevents corruption from interrupted writes
+- No explicit locking needed - concurrent wt processes are rare
+- Same pattern for `prs.json`
+
 **Why remove `wt mv`?**
 
 The old `wt mv` renamed worktrees when `worktree_format` changed. With the registry model:
