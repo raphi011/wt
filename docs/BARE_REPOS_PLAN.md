@@ -32,7 +32,8 @@ This document outlines a reworked architecture for `wt` that:
 ```
 ~/.wt/                        # Global wt state
 ├── config.toml               # Minimal config (defaults, hooks)
-└── repos.json                # Registered repos (source of truth)
+├── repos.json                # Registered repos (source of truth)
+└── prs.json                # PR metadata cache (not worktrees)
 
 # Repos can live ANYWHERE - just register them:
 
@@ -104,6 +105,36 @@ The registry is the source of truth for repos `wt` manages:
 ```
 
 Note: `worktree_format` is optional per-repo. If not set, uses the global `worktree_format` from config.
+
+### PR Metadata (`~/.wt/prs.json`)
+
+PR metadata is expensive to fetch (API calls to GitHub/GitLab). Cache structure:
+
+```json
+{
+  "prs": {
+    "/home/user/work/project-a": {
+      "feature-x": {
+        "number": 123,
+        "url": "https://github.com/user/project-a/pull/123",
+        "state": "open",
+        "updated_at": "2024-01-15T10:30:00Z"
+      },
+      "bugfix-y": {
+        "number": 456,
+        "state": "merged",
+        "updated_at": "2024-01-14T08:00:00Z"
+      }
+    }
+  }
+}
+```
+
+**Cache behavior:**
+- Keyed by repo path + branch name
+- Updated on `wt pr checkout`, `wt pr create`, `wt pr merge`
+- Refreshed with `--refresh` flag or `wt list -R`
+- Stale entries cleaned up by `wt doctor`
 
 ### Worktree Format String
 
@@ -861,6 +892,7 @@ run = "./scripts/lint.sh"
 6. **Global state in `~/.wt/`**
    - `config.toml` - user preferences
    - `repos.json` - registered repos
+   - `prs.json` - PR metadata only (status, URL, merge state)
    - No worktree cache - always use `git worktree list` for fresh data
 
 7. **Migration path provided**
