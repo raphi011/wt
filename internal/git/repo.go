@@ -655,6 +655,91 @@ func ListRemoteBranches(ctx context.Context, repoPath string) ([]string, error) 
 	return branches, nil
 }
 
+// RepoType indicates whether a repo is bare or regular
+type RepoType int
+
+const (
+	RepoTypeRegular RepoType = iota
+	RepoTypeBare
+)
+
+// DetectRepoType determines if a path is a bare or regular git repository
+func DetectRepoType(path string) (RepoType, error) {
+	// Check for .git directory (regular repo)
+	gitDir := filepath.Join(path, ".git")
+	if info, err := os.Stat(gitDir); err == nil {
+		if info.IsDir() {
+			return RepoTypeRegular, nil
+		}
+		// .git file means it's a worktree, not a repo
+		return 0, fmt.Errorf("path is a worktree, not a repository: %s", path)
+	}
+
+	// Check for bare repo markers (HEAD file at root)
+	headFile := filepath.Join(path, "HEAD")
+	if _, err := os.Stat(headFile); err == nil {
+		// Also verify objects/ and refs/ directories exist
+		objectsDir := filepath.Join(path, "objects")
+		refsDir := filepath.Join(path, "refs")
+		if _, err := os.Stat(objectsDir); err == nil {
+			if _, err := os.Stat(refsDir); err == nil {
+				return RepoTypeBare, nil
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("not a git repository: %s", path)
+}
+
+// GetGitDir returns the git directory for a repo
+func GetGitDir(repoPath string, repoType RepoType) string {
+	if repoType == RepoTypeBare {
+		return repoPath
+	}
+	return filepath.Join(repoPath, ".git")
+}
+
+// GetGitDirForWorktree returns the .git directory that a worktree points to
+func GetGitDirForWorktree(worktreePath string) (string, error) {
+	gitFile := filepath.Join(worktreePath, ".git")
+	content, err := os.ReadFile(gitFile)
+	if err != nil {
+		// Maybe it's the main repo, check if .git is a directory
+		info, statErr := os.Stat(gitFile)
+		if statErr == nil && info.IsDir() {
+			return gitFile, nil
+		}
+		return "", fmt.Errorf("not a git worktree: %s", worktreePath)
+	}
+
+	// Parse: "gitdir: /path/to/repo/.git/worktrees/name"
+	line := strings.TrimSpace(string(content))
+	if idx := strings.Index(line, "\n"); idx != -1 {
+		line = strings.TrimSpace(line[:idx])
+	}
+	if !strings.HasPrefix(line, "gitdir: ") {
+		return "", fmt.Errorf("invalid .git file format")
+	}
+
+	gitdir := strings.TrimPrefix(line, "gitdir: ")
+	if !filepath.IsAbs(gitdir) {
+		gitdir = filepath.Join(worktreePath, gitdir)
+	}
+
+	// Walk up to find the main .git directory
+	dir := filepath.Clean(gitdir)
+	for {
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("could not find .git directory")
+		}
+		if filepath.Base(dir) == ".git" {
+			return dir, nil
+		}
+		dir = parent
+	}
+}
+
 // GetBranchCreatedTime returns when the branch was created (first commit on branch)
 // Falls back to first commit time if reflog is unavailable
 func GetBranchCreatedTime(ctx context.Context, repoPath, branch string) (time.Time, error) {

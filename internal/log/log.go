@@ -60,6 +60,21 @@ func (l *Logger) Command(name string, args ...string) {
 	}
 }
 
+// Debug logs a debug message with key-value pairs.
+// Only prints when verbose mode is enabled and quiet mode is disabled.
+func (l *Logger) Debug(msg string, keyvals ...any) {
+	if l.verbose && !l.quiet {
+		var sb strings.Builder
+		sb.WriteString(msg)
+		for i := 0; i < len(keyvals); i += 2 {
+			if i+1 < len(keyvals) {
+				sb.WriteString(fmt.Sprintf(" %v=%v", keyvals[i], keyvals[i+1]))
+			}
+		}
+		fmt.Fprintln(l.out, sb.String())
+	}
+}
+
 // Verbose returns true if verbose mode is enabled.
 func (l *Logger) Verbose() bool {
 	return l.verbose

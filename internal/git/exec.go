@@ -16,3 +16,9 @@ func runGit(ctx context.Context, dir string, args ...string) error {
 func outputGit(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	return cmd.OutputContext(ctx, dir, "git", args...)
 }
+
+// RunGitCommand executes a git command with context support and verbose logging.
+// This is the exported version of runGit for use by commands.
+func RunGitCommand(ctx context.Context, dir string, args ...string) error {
+	return runGit(ctx, dir, args...)
+}

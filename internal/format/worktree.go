@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 )
 
 // DefaultWorktreeFormat is the default format for worktree folder names
@@ -106,4 +107,49 @@ func UniqueWorktreePath(basePath string, exists PathExistsFunc) string {
 			return candidate
 		}
 	}
+}
+
+// RelativeTime formats a time as a human-readable relative string.
+// Returns "Xs ago", "Xm ago", "Xh ago", "yesterday", or date for older.
+func RelativeTime(t time.Time) string {
+	return RelativeTimeFrom(t, time.Now())
+}
+
+// RelativeTimeFrom formats a time relative to a reference time.
+// Useful for testing with a fixed "now".
+func RelativeTimeFrom(t, now time.Time) string {
+	diff := now.Sub(t)
+
+	if diff < time.Minute {
+		secs := int(diff.Seconds())
+		if secs <= 1 {
+			return "just now"
+		}
+		return fmt.Sprintf("%ds ago", secs)
+	}
+
+	if diff < time.Hour {
+		mins := int(diff.Minutes())
+		return fmt.Sprintf("%dm ago", mins)
+	}
+
+	if diff < 24*time.Hour {
+		hours := int(diff.Hours())
+		return fmt.Sprintf("%dh ago", hours)
+	}
+
+	// Check if yesterday (same calendar day - 1)
+	nowDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	tDate := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	daysDiff := int(nowDate.Sub(tDate).Hours() / 24)
+
+	if daysDiff == 1 {
+		return "yesterday"
+	}
+
+	if daysDiff < 7 {
+		return fmt.Sprintf("%dd ago", daysDiff)
+	}
+
+	return t.Format("2006-01-02")
 }

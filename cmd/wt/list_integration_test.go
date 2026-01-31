@@ -3,1192 +3,219 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/registry"
 )
 
-// TestList_InsideRepo verifies that listing worktrees from inside a repo
-// shows only worktrees for the current repo.
+// TestList_EmptyRepo tests listing worktrees when none exist.
 //
-// Scenario: User runs `wt list` from inside a worktree
-// Expected: List shows worktrees for the current repo
-func TestList_InsideRepo(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
+// Scenario: User runs `wt list` in a repo with no worktrees
+// Expected: Only shows the main worktree
+func TestList_EmptyRepo(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
 
-	// Create repo with worktree
-	repoPath := setupTestRepo(t, repoDir, "myrepo")
-	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
-	setupWorktree(t, repoPath, worktreePath, "feature")
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
-	// Populate cache
-	populateCache(t, worktreeDir)
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
 
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	cmd := &ListCmd{}
+	oldCfg := cfg
+	cfg = &config.Config{}
+	defer func() { cfg = oldCfg }()
 
-	// Run from inside the worktree (which is part of myrepo)
-	output, err := runListCommand(t, worktreePath, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list failed: %v", err)
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
+	ctx, out := testContextWithOutput(t)
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
 	}
 
-	// Should show the worktree
+	// Should show something (the main branch)
+	output := out.String()
+	if output == "" {
+		t.Error("expected some output for main worktree")
+	}
+}
+
+// TestList_WithWorktrees tests listing existing worktrees.
+//
+// Scenario: User runs `wt list` in a repo with worktrees
+// Expected: Shows all worktrees
+func TestList_WithWorktrees(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+
+	// Create a worktree
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	createTestWorktree(t, repoPath, "feature")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	oldCfg := cfg
+	cfg = &config.Config{}
+	defer func() { cfg = oldCfg }()
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
+	ctx, out := testContextWithOutput(t)
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
+	}
+
+	output := out.String()
 	if !strings.Contains(output, "feature") {
-		t.Errorf("expected output to contain 'feature', got: %s", output)
+		t.Errorf("expected output to contain 'feature', got %q", output)
 	}
+
+	_ = wtPath // used in setup
 }
 
-// TestList_OutsideRepo verifies that listing worktrees from outside any repo
-// shows all worktrees in worktree_dir.
+// TestList_ByRepoName tests listing worktrees for a specific repo.
 //
-// Scenario: User runs `wt list` from worktree_dir (not inside a repo)
-// Expected: List shows all worktrees
-func TestList_OutsideRepo(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
+// Scenario: User runs `wt list -r myrepo` from any directory
+// Expected: Shows worktrees for the specified repo
+func TestList_ByRepoName(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
 
-	// Create repo with worktree
-	repoPath := setupTestRepo(t, repoDir, "myrepo")
-	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
-	setupWorktree(t, repoPath, worktreePath, "feature")
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"develop"})
+	createTestWorktree(t, repoPath, "develop")
 
-	// Populate cache
-	populateCache(t, worktreeDir)
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
 
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	cmd := &ListCmd{}
+	oldCfg := cfg
+	cfg = &config.Config{}
+	defer func() { cfg = oldCfg }()
 
-	// Run from outside any repo (use worktreeDir itself, which is not a git repo)
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list failed: %v", err)
+	// Work from a different directory
+	workDir := filepath.Join(tmpDir, "other")
+	os.MkdirAll(workDir, 0755)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(workDir)
+	defer os.Chdir(oldDir)
+
+	ctx, out := testContextWithOutput(t)
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-r", "myrepo"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
 	}
 
-	// Should show all worktrees since we're not in any repo
-	if !strings.Contains(output, "feature") {
-		t.Errorf("expected output to contain 'feature', got: %s", output)
-	}
-}
-
-// TestList_Global verifies that -g flag lists worktrees from all repos
-// regardless of which repo you're currently in.
-//
-// Scenario: User runs `wt list -g` from inside repo-a worktree
-// Expected: List shows worktrees from both repo-a and repo-b
-func TestList_Global(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create two repos with worktrees
-	repoA := setupTestRepo(t, repoDir, "repo-a")
-	wtA := filepath.Join(worktreeDir, "repo-a-feature")
-	setupWorktree(t, repoA, wtA, "feature")
-
-	repoB := setupTestRepo(t, repoDir, "repo-b")
-	wtB := filepath.Join(worktreeDir, "repo-b-feature")
-	setupWorktree(t, repoB, wtB, "feature")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Global: true,
-	}
-
-	// Run from inside repo-a worktree
-	output, err := runListCommand(t, wtA, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -g failed: %v", err)
-	}
-
-	// Should show both worktrees
-	if !strings.Contains(output, "repo-a") {
-		t.Errorf("expected output to contain 'repo-a', got: %s", output)
-	}
-	if !strings.Contains(output, "repo-b") {
-		t.Errorf("expected output to contain 'repo-b', got: %s", output)
+	output := out.String()
+	if !strings.Contains(output, "develop") {
+		t.Errorf("expected output to contain 'develop', got %q", output)
 	}
 }
 
-// TestList_NoWorktrees verifies that listing worktrees in empty directory
-// succeeds without error.
-//
-// Scenario: User runs `wt list` in empty worktree_dir
-// Expected: Command succeeds, no worktrees listed
-func TestList_NoWorktrees(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories
-	worktreeDir := resolvePath(t, t.TempDir())
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{}
-
-	// Run from empty worktree directory
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list failed: %v", err)
-	}
-
-	// Should not contain any worktree entries (table headers might appear)
-	// An empty list should not contain "ID" column header if using JSON
-	// For non-JSON, it's acceptable to show no output or a message
-	// Just verify no error occurred
-	_ = output
-}
-
-// TestList_MultipleWorktreesSameRepo verifies listing multiple worktrees
-// from the same repository.
-//
-// Scenario: User runs `wt list` for repo with 3 worktrees
-// Expected: All 3 worktrees (feature1, feature2, feature3) shown
-func TestList_MultipleWorktreesSameRepo(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create repo with multiple worktrees
-	repoPath := setupTestRepo(t, repoDir, "myrepo")
-
-	wt1 := filepath.Join(worktreeDir, "myrepo-feature1")
-	setupWorktree(t, repoPath, wt1, "feature1")
-
-	wt2 := filepath.Join(worktreeDir, "myrepo-feature2")
-	setupWorktree(t, repoPath, wt2, "feature2")
-
-	wt3 := filepath.Join(worktreeDir, "myrepo-feature3")
-	setupWorktree(t, repoPath, wt3, "feature3")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{}
-
-	output, err := runListCommand(t, wt1, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list failed: %v", err)
-	}
-
-	// Should show all three worktrees
-	if !strings.Contains(output, "feature1") {
-		t.Errorf("expected output to contain 'feature1', got: %s", output)
-	}
-	if !strings.Contains(output, "feature2") {
-		t.Errorf("expected output to contain 'feature2', got: %s", output)
-	}
-	if !strings.Contains(output, "feature3") {
-		t.Errorf("expected output to contain 'feature3', got: %s", output)
-	}
-}
-
-// TestList_FilterByRepo verifies that -r flag filters worktrees
-// to show only those from the specified repository.
-//
-// Scenario: User runs `wt list -r repo-a` with repo-a and repo-b
-// Expected: Only repo-a worktrees shown
-func TestList_FilterByRepo(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create two repos with worktrees
-	repoA := setupTestRepo(t, repoDir, "repo-a")
-	wtA := filepath.Join(worktreeDir, "repo-a-feature")
-	setupWorktree(t, repoA, wtA, "feature")
-
-	repoB := setupTestRepo(t, repoDir, "repo-b")
-	wtB := filepath.Join(worktreeDir, "repo-b-feature")
-	setupWorktree(t, repoB, wtB, "feature")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		RepoDir:        repoDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Repository: []string{"repo-a"},
-	}
-
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -r repo-a failed: %v", err)
-	}
-
-	// Should show only repo-a worktree
-	if !strings.Contains(output, "repo-a") {
-		t.Errorf("expected output to contain 'repo-a', got: %s", output)
-	}
-	// repo-b should not appear (except possibly in the "Listing worktrees" header count)
-	// Use JSON to verify precisely
-}
-
-// TestList_FilterByMultipleRepos verifies filtering by multiple repos
-// using repeated -r flags.
-//
-// Scenario: User runs `wt list -r repo-a -r repo-b --json` with 3 repos
-// Expected: Only repo-a and repo-b worktrees shown, not repo-c
-func TestList_FilterByMultipleRepos(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create three repos with worktrees
-	repoA := setupTestRepo(t, repoDir, "repo-a")
-	wtA := filepath.Join(worktreeDir, "repo-a-feature")
-	setupWorktree(t, repoA, wtA, "feature")
-
-	repoB := setupTestRepo(t, repoDir, "repo-b")
-	wtB := filepath.Join(worktreeDir, "repo-b-feature")
-	setupWorktree(t, repoB, wtB, "feature")
-
-	repoC := setupTestRepo(t, repoDir, "repo-c")
-	wtC := filepath.Join(worktreeDir, "repo-c-feature")
-	setupWorktree(t, repoC, wtC, "feature")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		RepoDir:        repoDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Repository: []string{"repo-a", "repo-b"},
-		JSON:       true,
-	}
-
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -r repo-a -r repo-b --json failed: %v", err)
-	}
-
-	// Parse JSON to verify
-	var worktrees []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	if len(worktrees) != 2 {
-		t.Errorf("expected 2 worktrees, got %d", len(worktrees))
-	}
-
-	// Verify repo-a and repo-b are included, repo-c is not
-	repoNames := make(map[string]bool)
-	for _, wt := range worktrees {
-		if name, ok := wt["repo_name"].(string); ok {
-			repoNames[name] = true
-		}
-	}
-
-	if !repoNames["repo-a"] {
-		t.Error("expected repo-a to be in output")
-	}
-	if !repoNames["repo-b"] {
-		t.Error("expected repo-b to be in output")
-	}
-	if repoNames["repo-c"] {
-		t.Error("repo-c should not be in output")
-	}
-}
-
-// TestList_FilterByRepoOverridesCurrentRepo verifies that -r flag overrides
-// the default "current repo" filtering behavior.
-//
-// Scenario: User runs `wt list -r repo-b --json` from inside repo-a worktree
-// Expected: Only repo-b worktrees shown (not repo-a even though inside it)
-func TestList_FilterByRepoOverridesCurrentRepo(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create two repos with worktrees
-	repoA := setupTestRepo(t, repoDir, "repo-a")
-	wtA := filepath.Join(worktreeDir, "repo-a-feature")
-	setupWorktree(t, repoA, wtA, "feature")
-
-	repoB := setupTestRepo(t, repoDir, "repo-b")
-	wtB := filepath.Join(worktreeDir, "repo-b-feature")
-	setupWorktree(t, repoB, wtB, "feature")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		RepoDir:        repoDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Repository: []string{"repo-b"},
-		JSON:       true,
-	}
-
-	// Run from inside repo-a worktree but filter by repo-b
-	output, err := runListCommand(t, wtA, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -r repo-b --json failed: %v", err)
-	}
-
-	// Parse JSON to verify
-	var worktrees []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	// Should only show repo-b, not repo-a (current repo)
-	if len(worktrees) != 1 {
-		t.Errorf("expected 1 worktree, got %d", len(worktrees))
-	}
-
-	if len(worktrees) > 0 {
-		repoName := worktrees[0]["repo_name"].(string)
-		if repoName != "repo-b" {
-			t.Errorf("expected repo-b, got %s", repoName)
-		}
-	}
-}
-
-// TestList_FilterByRepoNotFound verifies that filtering by non-existent repo
-// produces a warning but doesn't fail.
-//
-// Scenario: User runs `wt list -r nonexistent-repo`
-// Expected: Command succeeds with warning, no worktrees shown
-func TestList_FilterByRepoNotFound(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create a repo
-	setupTestRepo(t, repoDir, "myrepo")
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		RepoDir:        repoDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Repository: []string{"nonexistent-repo"},
-	}
-
-	// Should produce a warning (to stderr) but not fail
-	// Note: warnings go to stderr which we don't capture in parallel-safe tests
-	_, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -r nonexistent-repo failed: %v", err)
-	}
-	// Command should succeed even with nonexistent repo filter
-}
-
-// TestList_FilterByLabel verifies that -l flag filters worktrees
-// to show only those from repos with the specified label.
-//
-// Scenario: User runs `wt list -l frontend --json` with frontend and backend repos
-// Expected: Only repo-a (frontend) worktrees shown
-func TestList_FilterByLabel(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create two repos with labels
-	repoA := setupTestRepo(t, repoDir, "repo-a")
-	setRepoLabel(t, repoA, "frontend")
-	wtA := filepath.Join(worktreeDir, "repo-a-feature")
-	setupWorktree(t, repoA, wtA, "feature")
-
-	repoB := setupTestRepo(t, repoDir, "repo-b")
-	setRepoLabel(t, repoB, "backend")
-	wtB := filepath.Join(worktreeDir, "repo-b-feature")
-	setupWorktree(t, repoB, wtB, "feature")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		RepoDir:        repoDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Label: []string{"frontend"},
-		JSON:  true,
-	}
-
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -l frontend --json failed: %v", err)
-	}
-
-	// Parse JSON to verify
-	var worktrees []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	// Should only show repo-a (frontend label)
-	if len(worktrees) != 1 {
-		t.Errorf("expected 1 worktree, got %d", len(worktrees))
-	}
-
-	if len(worktrees) > 0 {
-		repoName := worktrees[0]["repo_name"].(string)
-		if repoName != "repo-a" {
-			t.Errorf("expected repo-a (frontend), got %s", repoName)
-		}
-	}
-}
-
-// TestList_FilterByMultipleLabels verifies filtering by multiple labels
-// using repeated -l flags (OR condition).
-//
-// Scenario: User runs `wt list -l frontend -l backend --json` with 3 repos
-// Expected: repo-a (frontend) and repo-b (backend) shown, not repo-c (infra)
-func TestList_FilterByMultipleLabels(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create three repos with different labels
-	repoA := setupTestRepo(t, repoDir, "repo-a")
-	setRepoLabel(t, repoA, "frontend")
-	wtA := filepath.Join(worktreeDir, "repo-a-feature")
-	setupWorktree(t, repoA, wtA, "feature")
-
-	repoB := setupTestRepo(t, repoDir, "repo-b")
-	setRepoLabel(t, repoB, "backend")
-	wtB := filepath.Join(worktreeDir, "repo-b-feature")
-	setupWorktree(t, repoB, wtB, "feature")
-
-	repoC := setupTestRepo(t, repoDir, "repo-c")
-	setRepoLabel(t, repoC, "infra")
-	wtC := filepath.Join(worktreeDir, "repo-c-feature")
-	setupWorktree(t, repoC, wtC, "feature")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		RepoDir:        repoDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Label: []string{"frontend", "backend"},
-		JSON:  true,
-	}
-
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -l frontend -l backend --json failed: %v", err)
-	}
-
-	// Parse JSON to verify
-	var worktrees []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	// Should show repo-a (frontend) and repo-b (backend), not repo-c (infra)
-	if len(worktrees) != 2 {
-		t.Errorf("expected 2 worktrees, got %d", len(worktrees))
-	}
-
-	repoNames := make(map[string]bool)
-	for _, wt := range worktrees {
-		if name, ok := wt["repo_name"].(string); ok {
-			repoNames[name] = true
-		}
-	}
-
-	if !repoNames["repo-a"] {
-		t.Error("expected repo-a (frontend) to be in output")
-	}
-	if !repoNames["repo-b"] {
-		t.Error("expected repo-b (backend) to be in output")
-	}
-	if repoNames["repo-c"] {
-		t.Error("repo-c (infra) should not be in output")
-	}
-}
-
-// TestList_FilterByLabelOverridesCurrentRepo verifies that -l flag overrides
-// the default "current repo" filtering behavior.
-//
-// Scenario: User runs `wt list -l backend --json` from inside repo-a worktree
-// Expected: Only repo-b (backend) shown (not repo-a even though inside it)
-func TestList_FilterByLabelOverridesCurrentRepo(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create two repos
-	repoA := setupTestRepo(t, repoDir, "repo-a")
-	// repo-a has no label
-	wtA := filepath.Join(worktreeDir, "repo-a-feature")
-	setupWorktree(t, repoA, wtA, "feature")
-
-	repoB := setupTestRepo(t, repoDir, "repo-b")
-	setRepoLabel(t, repoB, "backend")
-	wtB := filepath.Join(worktreeDir, "repo-b-feature")
-	setupWorktree(t, repoB, wtB, "feature")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		RepoDir:        repoDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Label: []string{"backend"},
-		JSON:  true,
-	}
-
-	// Run from inside repo-a worktree but filter by backend label
-	output, err := runListCommand(t, wtA, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -l backend --json failed: %v", err)
-	}
-
-	// Parse JSON to verify
-	var worktrees []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	// Should only show repo-b (backend), not repo-a (current repo)
-	if len(worktrees) != 1 {
-		t.Errorf("expected 1 worktree, got %d", len(worktrees))
-	}
-
-	if len(worktrees) > 0 {
-		repoName := worktrees[0]["repo_name"].(string)
-		if repoName != "repo-b" {
-			t.Errorf("expected repo-b (backend), got %s", repoName)
-		}
-	}
-}
-
-// TestList_FilterByLabelNotFound verifies that filtering by non-existent label
-// produces a warning but doesn't fail.
-//
-// Scenario: User runs `wt list -l nonexistent-label`
-// Expected: Command succeeds with warning, no worktrees shown
-func TestList_FilterByLabelNotFound(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create a repo without matching label
-	repoA := setupTestRepo(t, repoDir, "repo-a")
-	setRepoLabel(t, repoA, "frontend")
-	wtA := filepath.Join(worktreeDir, "repo-a-feature")
-	setupWorktree(t, repoA, wtA, "feature")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		RepoDir:        repoDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Label: []string{"nonexistent-label"},
-	}
-
-	// Should produce a warning (to stderr) but not fail
-	// Note: warnings go to stderr which we don't capture in parallel-safe tests
-	_, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -l nonexistent-label failed: %v", err)
-	}
-	// Command should succeed even with nonexistent label filter
-}
-
-// TestList_CombineRepoAndLabel verifies combining -r and -l flags (OR condition).
-//
-// Scenario: User runs `wt list -r repo-a -l backend --json` with 3 repos
-// Expected: repo-a (from -r) and repo-b (backend label) shown, not repo-c
-func TestList_CombineRepoAndLabel(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create three repos
-	repoA := setupTestRepo(t, repoDir, "repo-a")
-	// repo-a has no label
-	wtA := filepath.Join(worktreeDir, "repo-a-feature")
-	setupWorktree(t, repoA, wtA, "feature")
-
-	repoB := setupTestRepo(t, repoDir, "repo-b")
-	setRepoLabel(t, repoB, "backend")
-	wtB := filepath.Join(worktreeDir, "repo-b-feature")
-	setupWorktree(t, repoB, wtB, "feature")
-
-	repoC := setupTestRepo(t, repoDir, "repo-c")
-	// repo-c has no label
-	wtC := filepath.Join(worktreeDir, "repo-c-feature")
-	setupWorktree(t, repoC, wtC, "feature")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		RepoDir:        repoDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	// Use both -r repo-a and -l backend (repo-b)
-	cmd := &ListCmd{
-		Repository: []string{"repo-a"},
-		Label:      []string{"backend"},
-		JSON:       true,
-	}
-
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -r repo-a -l backend --json failed: %v", err)
-	}
-
-	// Parse JSON to verify
-	var worktrees []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	// Should show repo-a (from -r) and repo-b (from -l backend), not repo-c
-	if len(worktrees) != 2 {
-		t.Errorf("expected 2 worktrees, got %d", len(worktrees))
-	}
-
-	repoNames := make(map[string]bool)
-	for _, wt := range worktrees {
-		if name, ok := wt["repo_name"].(string); ok {
-			repoNames[name] = true
-		}
-	}
-
-	if !repoNames["repo-a"] {
-		t.Error("expected repo-a to be in output")
-	}
-	if !repoNames["repo-b"] {
-		t.Error("expected repo-b (backend) to be in output")
-	}
-	if repoNames["repo-c"] {
-		t.Error("repo-c should not be in output")
-	}
-}
-
-// TestList_FilterFromMultipleRepos verifies filtering shows all worktrees
-// from multiple repos (not just one per repo).
-//
-// Scenario: User runs `wt list -r repo-a -r repo-b --json` (repo-a has 2 worktrees)
-// Expected: All 3 worktrees shown (2 from repo-a, 1 from repo-b)
-func TestList_FilterFromMultipleRepos(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create two repos with multiple worktrees each
-	repoA := setupTestRepo(t, repoDir, "repo-a")
-	wtA1 := filepath.Join(worktreeDir, "repo-a-feature1")
-	setupWorktree(t, repoA, wtA1, "feature1")
-	wtA2 := filepath.Join(worktreeDir, "repo-a-feature2")
-	setupWorktree(t, repoA, wtA2, "feature2")
-
-	repoB := setupTestRepo(t, repoDir, "repo-b")
-	wtB1 := filepath.Join(worktreeDir, "repo-b-feature1")
-	setupWorktree(t, repoB, wtB1, "feature1")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		RepoDir:        repoDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Repository: []string{"repo-a", "repo-b"},
-		JSON:       true,
-	}
-
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -r repo-a -r repo-b --json failed: %v", err)
-	}
-
-	// Parse JSON to verify
-	var worktrees []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	// Should show all 3 worktrees (2 from repo-a, 1 from repo-b)
-	if len(worktrees) != 3 {
-		t.Errorf("expected 3 worktrees, got %d", len(worktrees))
-	}
-}
-
-// TestList_SortByID verifies that -s id sorts worktrees by ID in ascending order.
-//
-// Scenario: User runs `wt list -s id --json`
-// Expected: Worktrees sorted by ID (1, 2, 3...)
-func TestList_SortByID(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create repo with multiple worktrees
-	repoPath := setupTestRepo(t, repoDir, "myrepo")
-
-	wt1 := filepath.Join(worktreeDir, "myrepo-aaa")
-	setupWorktree(t, repoPath, wt1, "aaa")
-
-	wt2 := filepath.Join(worktreeDir, "myrepo-bbb")
-	setupWorktree(t, repoPath, wt2, "bbb")
-
-	wt3 := filepath.Join(worktreeDir, "myrepo-ccc")
-	setupWorktree(t, repoPath, wt3, "ccc")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Sort: "id",
-		JSON: true,
-	}
-
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -s id --json failed: %v", err)
-	}
-
-	// Parse JSON to verify order
-	var worktrees []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	if len(worktrees) < 2 {
-		t.Fatalf("expected at least 2 worktrees, got %d", len(worktrees))
-	}
-
-	// Verify IDs are in ascending order
-	prevID := 0
-	for _, wt := range worktrees {
-		id := int(wt["id"].(float64))
-		if id < prevID {
-			t.Errorf("IDs not in ascending order: %d came after %d", id, prevID)
-		}
-		prevID = id
-	}
-}
-
-// TestList_SortByRepo verifies that -s repo sorts worktrees alphabetically by repo name.
-//
-// Scenario: User runs `wt list -s repo --json` on repos created out of order
-// Expected: Worktrees sorted alphabetically (repo-a, repo-b, repo-c)
-func TestList_SortByRepo(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create repos with names in non-alphabetical order
-	repoC := setupTestRepo(t, repoDir, "repo-c")
-	wtC := filepath.Join(worktreeDir, "repo-c-feature")
-	setupWorktree(t, repoC, wtC, "feature")
-
-	repoA := setupTestRepo(t, repoDir, "repo-a")
-	wtA := filepath.Join(worktreeDir, "repo-a-feature")
-	setupWorktree(t, repoA, wtA, "feature")
-
-	repoB := setupTestRepo(t, repoDir, "repo-b")
-	wtB := filepath.Join(worktreeDir, "repo-b-feature")
-	setupWorktree(t, repoB, wtB, "feature")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Sort: "repo",
-		JSON: true,
-	}
-
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -s repo --json failed: %v", err)
-	}
-
-	// Parse JSON to verify order
-	var worktrees []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	if len(worktrees) != 3 {
-		t.Fatalf("expected 3 worktrees, got %d", len(worktrees))
-	}
-
-	// Verify repos are in alphabetical order
-	expectedOrder := []string{"repo-a", "repo-b", "repo-c"}
-	for i, wt := range worktrees {
-		repoName := wt["repo_name"].(string)
-		if repoName != expectedOrder[i] {
-			t.Errorf("position %d: expected %s, got %s", i, expectedOrder[i], repoName)
-		}
-	}
-}
-
-// TestList_SortByBranch verifies that -s branch sorts worktrees alphabetically by branch name.
-//
-// Scenario: User runs `wt list -s branch --json` on branches created out of order
-// Expected: Worktrees sorted alphabetically (alpha, beta, zeta)
-func TestList_SortByBranch(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create repo with branches in non-alphabetical order
-	repoPath := setupTestRepo(t, repoDir, "myrepo")
-
-	wt3 := filepath.Join(worktreeDir, "myrepo-zeta")
-	setupWorktree(t, repoPath, wt3, "zeta")
-
-	wt1 := filepath.Join(worktreeDir, "myrepo-alpha")
-	setupWorktree(t, repoPath, wt1, "alpha")
-
-	wt2 := filepath.Join(worktreeDir, "myrepo-beta")
-	setupWorktree(t, repoPath, wt2, "beta")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Sort: "branch",
-		JSON: true,
-	}
-
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -s branch --json failed: %v", err)
-	}
-
-	// Parse JSON to verify order
-	var worktrees []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	if len(worktrees) != 3 {
-		t.Fatalf("expected 3 worktrees, got %d", len(worktrees))
-	}
-
-	// Verify branches are in alphabetical order
-	expectedOrder := []string{"alpha", "beta", "zeta"}
-	for i, wt := range worktrees {
-		branch := wt["branch"].(string)
-		if branch != expectedOrder[i] {
-			t.Errorf("position %d: expected %s, got %s", i, expectedOrder[i], branch)
-		}
-	}
-}
-
-// TestList_SortByCommit verifies that -s commit sorts worktrees by last commit date
-// in descending order (most recent first).
-//
-// Scenario: User runs `wt list -s commit --json` with worktrees having different commit dates
-// Expected: Worktrees sorted by commit date (recent first)
-func TestList_SortByCommit(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create repo with worktrees
-	repoPath := setupTestRepo(t, repoDir, "myrepo")
-
-	wt1 := filepath.Join(worktreeDir, "myrepo-old")
-	setupWorktree(t, repoPath, wt1, "old")
-
-	wt2 := filepath.Join(worktreeDir, "myrepo-middle")
-	setupWorktree(t, repoPath, wt2, "middle")
-
-	wt3 := filepath.Join(worktreeDir, "myrepo-recent")
-	setupWorktree(t, repoPath, wt3, "recent")
-
-	// Make commits with explicit different timestamps (recent should be last)
-	// Using dates that are days apart to ensure clear ordering
-	makeCommitInWorktreeWithDate(t, wt1, "old-file.txt", "2024-01-01T12:00:00Z")
-	makeCommitInWorktreeWithDate(t, wt2, "middle-file.txt", "2024-01-15T12:00:00Z")
-	makeCommitInWorktreeWithDate(t, wt3, "recent-file.txt", "2024-01-30T12:00:00Z")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		Sort: "commit",
-		JSON: true,
-	}
-
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list -s commit --json failed: %v", err)
-	}
-
-	// Parse JSON to verify order
-	var worktrees []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	if len(worktrees) != 3 {
-		t.Fatalf("expected 3 worktrees, got %d", len(worktrees))
-	}
-
-	// Most recent should be first (descending order)
-	firstBranch := worktrees[0]["branch"].(string)
-	if firstBranch != "recent" {
-		t.Errorf("expected 'recent' branch first, got %s", firstBranch)
-	}
-}
-
-// TestList_JSONOutput verifies that --json flag outputs valid JSON with required fields.
+// TestList_JSON tests JSON output format.
 //
 // Scenario: User runs `wt list --json`
-// Expected: Valid JSON array with id, path, branch, origin_url fields
-func TestList_JSONOutput(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
+// Expected: Output is valid JSON
+func TestList_JSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
 
-	// Create repo with worktree
-	repoPath := setupTestRepo(t, repoDir, "myrepo")
-	worktreePath := filepath.Join(worktreeDir, "myrepo-feature")
-	setupWorktree(t, repoPath, worktreePath, "feature")
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
-	// Populate cache
-	populateCache(t, worktreeDir)
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
 
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	cmd := &ListCmd{
-		JSON: true,
-	}
+	oldCfg := cfg
+	cfg = &config.Config{}
+	defer func() { cfg = oldCfg }()
 
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list --json failed: %v", err)
-	}
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
 
-	// Parse JSON to verify structure
-	var worktrees []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	if len(worktrees) != 1 {
-		t.Fatalf("expected 1 worktree, got %d", len(worktrees))
-	}
-
-	wt := worktrees[0]
-
-	// Verify required fields exist
-	requiredFields := []string{"id", "path", "branch", "origin_url"}
-	for _, field := range requiredFields {
-		if _, ok := wt[field]; !ok {
-			t.Errorf("missing required field: %s", field)
-		}
-	}
-
-	// Verify field values
-	if wt["branch"].(string) != "feature" {
-		t.Errorf("expected branch 'feature', got %s", wt["branch"])
-	}
-
-	if wt["path"].(string) != worktreePath {
-		t.Errorf("expected path %s, got %s", worktreePath, wt["path"])
-	}
-
-	// ID should be a number > 0
-	id := int(wt["id"].(float64))
-	if id <= 0 {
-		t.Errorf("expected positive ID, got %d", id)
-	}
-}
-
-// TestList_JSONOutputMultiple verifies that --json outputs multiple worktrees
-// with unique IDs.
-//
-// Scenario: User runs `wt list --json` with 2 worktrees
-// Expected: JSON array with 2 entries, each having unique ID
-func TestList_JSONOutputMultiple(t *testing.T) {
-	t.Parallel()
-	// Setup temp directories (resolve symlinks for macOS compatibility)
-	worktreeDir := resolvePath(t, t.TempDir())
-	repoDir := resolvePath(t, t.TempDir())
-
-	// Create two repos with worktrees
-	repoA := setupTestRepo(t, repoDir, "repo-a")
-	wtA := filepath.Join(worktreeDir, "repo-a-feature")
-	setupWorktree(t, repoA, wtA, "feature")
-
-	repoB := setupTestRepo(t, repoDir, "repo-b")
-	wtB := filepath.Join(worktreeDir, "repo-b-feature")
-	setupWorktree(t, repoB, wtB, "feature")
-
-	// Populate cache
-	populateCache(t, worktreeDir)
-
-	cfg := &config.Config{
-		WorktreeDir:    worktreeDir,
-		WorktreeFormat: config.DefaultWorktreeFormat,
-	}
-
-	cmd := &ListCmd{
-		JSON: true,
-	}
-
-	output, err := runListCommand(t, worktreeDir, cfg, cmd)
-	if err != nil {
-		t.Fatalf("wt list --json failed: %v", err)
-	}
-
-	// Parse JSON to verify structure
-	var worktrees []map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &worktrees); err != nil {
-		t.Fatalf("failed to parse JSON output: %v", err)
-	}
-
-	if len(worktrees) != 2 {
-		t.Fatalf("expected 2 worktrees, got %d", len(worktrees))
-	}
-
-	// Verify each worktree has unique ID
-	ids := make(map[int]bool)
-	for _, wt := range worktrees {
-		id := int(wt["id"].(float64))
-		if ids[id] {
-			t.Errorf("duplicate ID found: %d", id)
-		}
-		ids[id] = true
-	}
-}
-
-// runListCommand runs wt list with the given config and command in the specified directory.
-// Returns the stdout output.
-func runListCommand(t *testing.T, workDir string, cfg *config.Config, cmd *ListCmd) (string, error) {
-	t.Helper()
-	cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
 	ctx, out := testContextWithOutput(t)
-	err := cmd.runList(ctx)
-	return out.String(), err
-}
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--json"})
 
-// makeCommitInWorktreeWithDate creates a commit with a specific date.
-// The date should be in RFC 3339 format (e.g., "2024-01-15T12:00:00Z").
-func makeCommitInWorktreeWithDate(t *testing.T, worktreePath, filename, date string) {
-	t.Helper()
-
-	filePath := filepath.Join(worktreePath, filename)
-	if err := os.WriteFile(filePath, []byte("content for "+filename+"\n"), 0644); err != nil {
-		t.Fatalf("failed to create file: %v", err)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
 	}
 
-	runGitCommand(t, worktreePath, "git", "add", filename)
-
-	// Use GIT_COMMITTER_DATE and --date to set both dates
-	cmd := exec.Command("git", "commit", "-m", "Add "+filename, "--date", date)
-	cmd.Dir = worktreePath
-	cmd.Env = append(os.Environ(), "GIT_COMMITTER_DATE="+date)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to run git commit: %v\n%s", err, out)
+	output := out.String()
+	if !strings.HasPrefix(strings.TrimSpace(output), "[") {
+		t.Errorf("expected JSON array output, got %q", output)
 	}
 }

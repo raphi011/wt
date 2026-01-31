@@ -3,6 +3,7 @@ package format
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestValidateFormat(t *testing.T) {
@@ -224,6 +225,71 @@ func TestUniqueWorktreePath(t *testing.T) {
 			got := UniqueWorktreePath(tt.basePath, tt.existsFunc)
 			if got != tt.want {
 				t.Errorf("UniqueWorktreePath(%q) = %q, want %q", tt.basePath, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRelativeTimeFrom(t *testing.T) {
+	now := time.Date(2026, 1, 31, 14, 30, 0, 0, time.UTC)
+
+	tests := []struct {
+		name string
+		t    time.Time
+		want string
+	}{
+		{
+			name: "just now",
+			t:    now.Add(-1 * time.Second),
+			want: "just now",
+		},
+		{
+			name: "seconds ago",
+			t:    now.Add(-30 * time.Second),
+			want: "30s ago",
+		},
+		{
+			name: "minutes ago",
+			t:    now.Add(-5 * time.Minute),
+			want: "5m ago",
+		},
+		{
+			name: "hours ago",
+			t:    now.Add(-3 * time.Hour),
+			want: "3h ago",
+		},
+		{
+			name: "yesterday",
+			t:    now.Add(-24 * time.Hour),
+			want: "yesterday",
+		},
+		{
+			name: "2 days ago",
+			t:    now.Add(-48 * time.Hour),
+			want: "2d ago",
+		},
+		{
+			name: "6 days ago",
+			t:    now.Add(-6 * 24 * time.Hour),
+			want: "6d ago",
+		},
+		{
+			name: "week or more shows date",
+			t:    now.Add(-7 * 24 * time.Hour),
+			want: "2026-01-24",
+		},
+		{
+			name: "old date",
+			t:    time.Date(2025, 6, 15, 10, 0, 0, 0, time.UTC),
+			want: "2025-06-15",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := RelativeTimeFrom(tt.t, now)
+			if got != tt.want {
+				t.Errorf("RelativeTimeFrom() = %q, want %q", got, tt.want)
 			}
 		})
 	}

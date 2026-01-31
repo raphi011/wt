@@ -38,3 +38,5 @@ logo-*.png
 .wt-cache.lock
 RELEASE_CHECKLIST_GUIDE.md
 /testdoc
+
+website/

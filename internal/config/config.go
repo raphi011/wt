@@ -45,10 +45,11 @@ type Config struct {
 	WorktreeDir    string            `toml:"worktree_dir"`
 	RepoDir        string            `toml:"repo_dir"` // optional: where to find repos for -r/-l
 	WorktreeFormat string            `toml:"worktree_format"`
-	BaseRef        string            `toml:"base_ref"`     // "local" or "remote" (default: "remote")
-	AutoFetch      bool              `toml:"auto_fetch"`   // fetch before creating new branches (default: false)
-	DefaultSort    string            `toml:"default_sort"` // "id", "repo", "branch", "commit" (default: "id")
-	Hooks          HooksConfig       `toml:"-"`            // custom parsing needed
+	BaseRef        string            `toml:"base_ref"`       // "local" or "remote" (default: "remote")
+	AutoFetch      bool              `toml:"auto_fetch"`     // fetch before creating new branches (default: false)
+	DefaultSort    string            `toml:"default_sort"`   // "id", "repo", "branch", "commit" (default: "id")
+	DefaultLabels  []string          `toml:"default_labels"` // labels for newly registered repos
+	Hooks          HooksConfig       `toml:"-"`              // custom parsing needed
 	Forge          ForgeConfig       `toml:"forge"`
 	Merge          MergeConfig       `toml:"merge"`
 	Hosts          map[string]string `toml:"hosts"` // domain -> forge type mapping
@@ -128,7 +129,7 @@ func configPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "wt", "config.toml"), nil
+	return filepath.Join(home, ".wt", "config.toml"), nil
 }
 
 // rawConfig is used for initial TOML parsing before processing hooks
@@ -139,6 +140,7 @@ type rawConfig struct {
 	BaseRef        string                 `toml:"base_ref"`
 	AutoFetch      bool                   `toml:"auto_fetch"`
 	DefaultSort    string                 `toml:"default_sort"`
+	DefaultLabels  []string               `toml:"default_labels"`
 	Hooks          map[string]interface{} `toml:"hooks"`
 	Forge          ForgeConfig            `toml:"forge"`
 	Merge          MergeConfig            `toml:"merge"`
@@ -182,6 +184,7 @@ func Load() (Config, error) {
 		BaseRef:        raw.BaseRef,
 		AutoFetch:      raw.AutoFetch,
 		DefaultSort:    raw.DefaultSort,
+		DefaultLabels:  raw.DefaultLabels,
 		Hooks:          parseHooksConfig(raw.Hooks),
 		Forge:          raw.Forge,
 		Merge:          raw.Merge,

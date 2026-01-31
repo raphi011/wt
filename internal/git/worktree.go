@@ -635,3 +635,24 @@ func CanRepairWorktree(worktreePath string) bool {
 	// .git file exists but link is invalid - potentially repairable
 	return !IsWorktreeLinkValid(worktreePath)
 }
+
+// CreateWorktree creates a worktree for an existing branch.
+// gitDir is the .git directory (for regular repos) or the bare repo path.
+// wtPath is the target worktree path.
+// branch is the existing branch to checkout.
+func CreateWorktree(ctx context.Context, gitDir, wtPath, branch string) error {
+	return runGit(ctx, gitDir, "worktree", "add", wtPath, branch)
+}
+
+// CreateWorktreeNewBranch creates a worktree with a new branch.
+// gitDir is the .git directory (for regular repos) or the bare repo path.
+// wtPath is the target worktree path.
+// branch is the new branch name.
+// baseRef is the starting point (e.g., "origin/main").
+func CreateWorktreeNewBranch(ctx context.Context, gitDir, wtPath, branch, baseRef string) error {
+	args := []string{"worktree", "add", wtPath, "-b", branch}
+	if baseRef != "" {
+		args = append(args, baseRef)
+	}
+	return runGit(ctx, gitDir, args...)
+}
