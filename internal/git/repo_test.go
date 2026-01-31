@@ -2,47 +2,57 @@ package git
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestGetMainRepoPath(t *testing.T) {
-	// Create a temp directory to simulate a worktree
+	// Create a real git repo with a worktree to test
 	tmpDir := t.TempDir()
+	// Resolve symlinks for macOS (/var -> /private/var)
+	tmpDir, _ = filepath.EvalSymlinks(tmpDir)
+	repoPath := filepath.Join(tmpDir, "test-repo")
+	wtPath := filepath.Join(tmpDir, "test-worktree")
 
-	// Test valid .git file
-	gitContent := "gitdir: /path/to/repo/.git/worktrees/test-branch"
-	gitFile := filepath.Join(tmpDir, ".git")
-	if err := os.WriteFile(gitFile, []byte(gitContent), 0644); err != nil {
-		t.Fatal(err)
+	// Initialize a git repo
+	ctx := context.Background()
+	if err := runGit(ctx, "", "init", repoPath); err != nil {
+		t.Fatalf("failed to init repo: %v", err)
 	}
 
-	path, err := GetMainRepoPath(tmpDir)
+	// Create an initial commit (required for worktrees)
+	if err := runGit(ctx, repoPath, "commit", "--allow-empty", "-m", "Initial commit"); err != nil {
+		t.Fatalf("failed to create initial commit: %v", err)
+	}
+
+	// Create a worktree
+	if err := runGit(ctx, repoPath, "worktree", "add", "-b", "test-branch", wtPath); err != nil {
+		t.Fatalf("failed to create worktree: %v", err)
+	}
+
+	// Test from the worktree
+	mainPath, err := GetMainRepoPath(wtPath)
 	if err != nil {
-		t.Errorf("GetMainRepoPath failed: %v", err)
+		t.Errorf("GetMainRepoPath from worktree failed: %v", err)
 	}
-	if path != "/path/to/repo" {
-		t.Errorf("expected /path/to/repo, got %s", path)
-	}
-
-	// Test invalid .git file format
-	invalidDir := t.TempDir()
-	invalidGitFile := filepath.Join(invalidDir, ".git")
-	if err := os.WriteFile(invalidGitFile, []byte("invalid content"), 0644); err != nil {
-		t.Fatal(err)
+	if mainPath != repoPath {
+		t.Errorf("expected %s, got %s", repoPath, mainPath)
 	}
 
-	_, err = GetMainRepoPath(invalidDir)
-	if err == nil {
-		t.Error("expected error for invalid .git file format")
+	// Test from the main repo
+	mainPathFromRepo, err := GetMainRepoPath(repoPath)
+	if err != nil {
+		t.Errorf("GetMainRepoPath from main repo failed: %v", err)
+	}
+	if mainPathFromRepo != repoPath {
+		t.Errorf("expected %s, got %s", repoPath, mainPathFromRepo)
 	}
 
-	// Test missing .git file
+	// Test from non-git directory
 	emptyDir := t.TempDir()
 	_, err = GetMainRepoPath(emptyDir)
 	if err == nil {
-		t.Error("expected error for missing .git file")
+		t.Error("expected error for non-git directory")
 	}
 }
 

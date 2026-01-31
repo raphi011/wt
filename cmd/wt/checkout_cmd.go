@@ -10,6 +10,7 @@ import (
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/registry"
+	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
 
 func newCheckoutCmd() *cobra.Command {
@@ -56,6 +57,62 @@ Use -i for interactive mode to be prompted for options.`,
 			reg, err := registry.Load()
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
+			}
+
+			// Interactive mode
+			if interactive {
+				opts, err := runCheckoutWizard(ctx, reg, repository, labels, hookNames, noHook)
+				if err != nil {
+					return err
+				}
+				if opts.Cancelled {
+					return nil
+				}
+
+				// Apply wizard selections
+				branch = opts.Branch
+				newBranch = opts.NewBranch
+				fetch = opts.Fetch
+				hookNames = opts.SelectedHooks
+				noHook = opts.NoHook
+
+				// If already in worktree, just run hooks
+				if opts.IsWorktree {
+					wtPath, _ := git.GetBranchWorktree(ctx, branch)
+					if wtPath != "" {
+						fmt.Printf("Branch %s already checked out at: %s\n", branch, wtPath)
+						// Run hooks if any
+						if len(hookNames) > 0 {
+							repo, _ := findOrRegisterCurrentRepo(ctx, reg)
+							hookEnv, _ := hooks.ParseEnvWithStdin(env)
+							hookMatches, _ := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout)
+							if len(hookMatches) > 0 {
+								hookCtx := hooks.Context{
+									WorktreeDir: wtPath,
+									RepoDir:     repo.Path,
+									Branch:      branch,
+									Repo:        repo.Name,
+									Origin:      git.GetRepoDisplayName(repo.Path),
+									Trigger:     "checkout",
+									Env:         hookEnv,
+								}
+								hooks.RunAllNonFatal(hookMatches, hookCtx, wtPath)
+							}
+						}
+						return nil
+					}
+				}
+
+				// Use wizard-selected repos
+				if len(opts.SelectedRepos) > 0 {
+					repository = nil // Clear CLI repos
+					for _, path := range opts.SelectedRepos {
+						repo, err := reg.FindByPath(path)
+						if err == nil {
+							repository = append(repository, repo.Name)
+						}
+					}
+				}
 			}
 
 			// Resolve target repos
@@ -275,4 +332,82 @@ func completeHooks(cmd *cobra.Command, args []string, toComplete string) ([]stri
 		hooks = append(hooks, name)
 	}
 	return hooks, cobra.ShellCompDirectiveNoFileComp
+}
+
+// runCheckoutWizard runs the interactive checkout wizard
+func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliRepos, cliLabels, cliHooks []string, cliNoHook bool) (flows.CheckoutOptions, error) {
+	// Build available repos list
+	var repoPaths, repoNames []string
+	var preSelectedRepos []int
+
+	// Get current repo path if inside one
+	currentRepoPath := git.GetCurrentRepoMainPath(ctx)
+
+	for i, repo := range reg.Repos {
+		repoPaths = append(repoPaths, repo.Path)
+		repoNames = append(repoNames, repo.Name)
+		if repo.Path == currentRepoPath {
+			preSelectedRepos = append(preSelectedRepos, i)
+		}
+	}
+
+	// Build branch fetcher
+	fetchBranches := func(repoPath string) flows.BranchFetchResult {
+		// Get worktree branches to mark them
+		wtBranches := git.GetWorktreeBranches(ctx, repoPath)
+
+		// Get all local branches
+		branches, err := git.ListLocalBranches(ctx, repoPath)
+		if err != nil {
+			return flows.BranchFetchResult{}
+		}
+
+		var result []flows.BranchInfo
+		for _, b := range branches {
+			result = append(result, flows.BranchInfo{
+				Name:       b,
+				InWorktree: wtBranches[b],
+			})
+		}
+		return flows.BranchFetchResult{Branches: result}
+	}
+
+	// Build initial branches from first repo (or current repo)
+	var initialBranches []flows.BranchInfo
+	if len(preSelectedRepos) > 0 {
+		result := fetchBranches(repoPaths[preSelectedRepos[0]])
+		initialBranches = result.Branches
+	} else if len(repoPaths) > 0 {
+		result := fetchBranches(repoPaths[0])
+		initialBranches = result.Branches
+	}
+
+	// Build available hooks
+	var availableHooks []flows.HookInfo
+	for name, hook := range cfg.Hooks.Hooks {
+		isDefault := false
+		for _, trigger := range hook.On {
+			if trigger == "checkout" {
+				isDefault = true
+				break
+			}
+		}
+		availableHooks = append(availableHooks, flows.HookInfo{
+			Name:        name,
+			Description: hook.Description,
+			IsDefault:   isDefault,
+		})
+	}
+
+	params := flows.CheckoutWizardParams{
+		Branches:         initialBranches,
+		AvailableRepos:   repoPaths,
+		RepoNames:        repoNames,
+		PreSelectedRepos: preSelectedRepos,
+		FetchBranches:    fetchBranches,
+		AvailableHooks:   availableHooks,
+		HooksFromCLI:     len(cliHooks) > 0 || cliNoHook,
+	}
+
+	return flows.CheckoutInteractive(params)
 }
