@@ -665,13 +665,19 @@ const (
 
 // DetectRepoType determines if a path is a bare or regular git repository
 func DetectRepoType(path string) (RepoType, error) {
-	// Check for .git directory (regular repo)
+	// Check for .git directory (regular repo or bare-in-.git pattern)
 	gitDir := filepath.Join(path, ".git")
-	if info, err := os.Stat(gitDir); err == nil {
+	info, err := os.Stat(gitDir)
+	if err == nil {
 		if info.IsDir() {
+			// .git is a directory - check if it's a bare repo inside .git
+			// (bare-in-.git pattern: bare repo contents in .git, no working tree)
+			if isBareRepo(gitDir) {
+				return RepoTypeBare, nil
+			}
 			return RepoTypeRegular, nil
 		}
-		// .git file - could be a worktree or a pointer to a bare repo (grove pattern)
+		// .git file - could be a worktree or a pointer to a bare repo
 		// Read the gitdir to determine which
 		content, err := os.ReadFile(gitDir)
 		if err != nil {
@@ -721,10 +727,16 @@ func isBareRepo(path string) bool {
 
 // GetGitDir returns the git directory for a repo
 func GetGitDir(repoPath string, repoType RepoType) string {
+	// Check for bare-in-.git pattern first
+	gitDir := filepath.Join(repoPath, ".git")
+	if isBareRepo(gitDir) {
+		return gitDir
+	}
 	if repoType == RepoTypeBare {
+		// Traditional bare repo (the path itself is the git dir)
 		return repoPath
 	}
-	return filepath.Join(repoPath, ".git")
+	return gitDir
 }
 
 // GetGitDirForWorktree returns the .git directory that a worktree points to
@@ -766,6 +778,36 @@ func GetGitDirForWorktree(worktreePath string) (string, error) {
 		}
 		dir = parent
 	}
+}
+
+// CloneBareWithWorktreeSupport clones a repo as a bare repo inside the .git directory.
+// This allows worktrees to be created as siblings while git commands work normally.
+//
+// The directory structure will be:
+//
+//	destPath/
+//	└── .git/     # bare git repo contents (HEAD, objects/, refs/, etc.)
+func CloneBareWithWorktreeSupport(ctx context.Context, url, destPath string) error {
+	// Create the destination directory
+	if err := os.MkdirAll(destPath, 0o755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Clone as bare directly into .git subdirectory
+	gitDir := filepath.Join(destPath, ".git")
+	if err := runGit(ctx, "", "clone", "--bare", url, gitDir); err != nil {
+		// Clean up on failure
+		os.RemoveAll(destPath)
+		return fmt.Errorf("git clone failed: %w", err)
+	}
+
+	// Set fetch refspec to get all branches (bare clones don't set this up by default)
+	if err := runGit(ctx, gitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
+		os.RemoveAll(destPath)
+		return fmt.Errorf("failed to configure fetch refspec: %w", err)
+	}
+
+	return nil
 }
 
 // GetBranchCreatedTime returns when the branch was created (first commit on branch)

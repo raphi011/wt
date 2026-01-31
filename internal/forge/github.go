@@ -142,6 +142,52 @@ func (g *GitHub) CloneRepo(ctx context.Context, repoSpec, destPath string) (stri
 	return clonePath, nil
 }
 
+// CloneBareRepo clones a GitHub repo as a bare repo inside .git directory
+func (g *GitHub) CloneBareRepo(ctx context.Context, repoSpec, destPath string) (string, error) {
+	parts := strings.Split(repoSpec, "/")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid repo spec %q: expected org/repo format", repoSpec)
+	}
+	org, repoName := parts[0], parts[1]
+	if org == "" || repoName == "" {
+		return "", fmt.Errorf("invalid repo spec %q: org and repo must not be empty", repoSpec)
+	}
+
+	// Final repo directory
+	repoDir := filepath.Join(destPath, repoName)
+
+	// Create the repo directory
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Clone as bare directly into .git subdirectory
+	gitDir := filepath.Join(repoDir, ".git")
+	if err := g.runWithUser(ctx, repoSpec, "repo", "clone", repoSpec, gitDir, "--", "--bare"); err != nil {
+		os.RemoveAll(repoDir)
+		return "", fmt.Errorf("gh repo clone failed: %v", err)
+	}
+
+	// Configure the repo for worktree support
+	if err := g.configureBareRepo(ctx, gitDir); err != nil {
+		os.RemoveAll(repoDir)
+		return "", err
+	}
+
+	return repoDir, nil
+}
+
+// configureBareRepo configures a bare repo for worktree support
+func (g *GitHub) configureBareRepo(ctx context.Context, gitDir string) error {
+	// Set fetch refspec to get all branches (bare clones don't set this up by default)
+	c := exec.CommandContext(ctx, "git", "-C", gitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("failed to configure fetch refspec: %w", err)
+	}
+
+	return nil
+}
+
 // CreatePR creates a new PR using gh CLI
 func (g *GitHub) CreatePR(ctx context.Context, repoURL string, params CreatePRParams) (*CreatePRResult, error) {
 	repoPath := extractRepoPath(repoURL)

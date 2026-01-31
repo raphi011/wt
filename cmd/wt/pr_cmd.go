@@ -110,10 +110,10 @@ func newPrCheckoutCmd() *cobra.Command {
 					return err
 				}
 
-				// Clone the repo
+				// Clone the repo as bare into .git directory
 				cwd, _ := os.Getwd()
-				l.Printf("Cloning %s...\n", orgRepo)
-				repoPath, err = f.CloneRepo(ctx, orgRepo, cwd)
+				l.Printf("Cloning %s (bare)...\n", orgRepo)
+				repoPath, err = f.CloneBareRepo(ctx, orgRepo, cwd)
 				if err != nil {
 					return fmt.Errorf("failed to clone repo: %w", err)
 				}
