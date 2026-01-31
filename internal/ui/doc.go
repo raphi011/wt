@@ -5,36 +5,26 @@
 //
 // # Table Formatting
 //
-// The primary components are table formatters for list and prune output:
+// Use [RenderTable] to render aligned tables:
 //
-//   - [FormatListTable]: Renders worktree list with ID, repo, branch, status,
-//     last commit, notes, and PR info columns
-//   - [FormatPruneTable]: Simplified table for prune preview showing which
-//     worktrees will be removed and why
+//	headers := []string{"NAME", "VALUE"}
+//	rows := [][]string{{"foo", "bar"}, {"baz", "qux"}}
+//	output := ui.RenderTable(headers, rows)
 //
 // Tables use lipgloss styling with:
-//   - Normal borders in gray (color 240)
+//   - Auto-calculated column widths based on content
 //   - Bold headers
-//   - Cell padding for readability
+//   - No borders (clean output)
+//   - Right padding for column separation
 //
-// # PR Status Display
-//
-// The list table shows PR status with visual indicators:
-//
-//   - "-" : No upstream branch (can't have PR)
-//   - "?" : Not fetched yet
-//   - State + author + comments + reviews + URL for existing PRs
-//   - "✓" for approved, "◐" for pending reviews
-//
-// # Spinner (Experimental)
+// # Spinner
 //
 // The [Spinner] type wraps Bubbletea for simple non-interactive progress
-// indication. Currently unused but available for long-running operations.
+// indication during long-running operations.
 //
 // # Design Notes
 //
 // Output is designed for terminal display with:
 //   - Monospace font assumptions
 //   - ANSI color support
-//   - Truncation for long values (e.g., notes limited to 30 chars)
 package ui

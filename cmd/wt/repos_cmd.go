@@ -9,6 +9,7 @@ import (
 
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
+	"github.com/raphi011/wt/internal/ui"
 )
 
 func newReposCmd() *cobra.Command {
@@ -64,16 +65,18 @@ Examples:
 				return nil
 			}
 
-			// Simple table output
-			fmt.Printf("%-20s %-50s %s\n", "NAME", "PATH", "LABELS")
-			fmt.Printf("%-20s %-50s %s\n", "----", "----", "------")
+			// Build table rows
+			headers := []string{"NAME", "PATH", "LABELS"}
+			var rows [][]string
 			for _, repo := range repos {
 				labels := "-"
 				if len(repo.Labels) > 0 {
 					labels = strings.Join(repo.Labels, ", ")
 				}
-				fmt.Printf("%-20s %-50s %s\n", repo.Name, repo.Path, labels)
+				rows = append(rows, []string{repo.Name, repo.Path, labels})
 			}
+
+			out.Print(ui.RenderTable(headers, rows))
 
 			return nil
 		},

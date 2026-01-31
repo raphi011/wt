@@ -14,6 +14,7 @@ import (
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
+	"github.com/raphi011/wt/internal/ui"
 )
 
 // WorktreeDisplay holds worktree info for display
@@ -120,9 +121,9 @@ Examples:
 				return nil
 			}
 
-			// Simple table output
-			fmt.Printf("%-15s %-30s %-8s %-5s %s\n", "REPO", "BRANCH", "COMMIT", "DIRTY", "CREATED")
-			fmt.Printf("%-15s %-30s %-8s %-5s %s\n", "----", "------", "------", "-----", "-------")
+			// Build table rows
+			headers := []string{"REPO", "BRANCH", "COMMIT", "DIRTY", "CREATED"}
+			var rows [][]string
 			for _, wt := range allWorktrees {
 				dirty := ""
 				if wt.IsDirty {
@@ -133,8 +134,10 @@ Examples:
 				if len(commit) > 7 {
 					commit = commit[:7]
 				}
-				out.Printf("%-15s %-30s %-8s %-5s %s\n", wt.RepoName, wt.Branch, commit, dirty, created)
+				rows = append(rows, []string{wt.RepoName, wt.Branch, commit, dirty, created})
 			}
+
+			out.Print(ui.RenderTable(headers, rows))
 
 			return nil
 		},

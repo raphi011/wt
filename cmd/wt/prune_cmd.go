@@ -360,14 +360,20 @@ Examples:
 				} else {
 					fmt.Println("Removed:")
 				}
+				headers := []string{"REPO", "BRANCH", "REASON"}
+				var rows [][]string
 				for _, wt := range removed {
-					fmt.Printf("  %-20s %s (%s)\n", wt.RepoName, wt.Branch, reasonMap[wt.Path])
+					rows = append(rows, []string{wt.RepoName, wt.Branch, string(reasonMap[wt.Path])})
 				}
+				out.Print(ui.RenderTable(headers, rows))
+
 				if verbose && len(toSkip) > 0 {
-					fmt.Println("\nSkipped:")
+					fmt.Println("Skipped:")
+					rows = nil
 					for _, wt := range toSkip {
-						fmt.Printf("  %-20s %s (%s)\n", wt.RepoName, wt.Branch, reasonMap[wt.Path])
+						rows = append(rows, []string{wt.RepoName, wt.Branch, string(reasonMap[wt.Path])})
 					}
+					out.Print(ui.RenderTable(headers, rows))
 				}
 			}
 
