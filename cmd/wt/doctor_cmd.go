@@ -16,6 +16,7 @@ func newDoctorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "doctor",
 		Short:   "Diagnose and repair issues",
+		Aliases: []string{"doc"},
 		GroupID: GroupConfig,
 		Args:    cobra.NoArgs,
 		Long: `Diagnose and repair registry and worktree issues.

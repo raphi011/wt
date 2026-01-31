@@ -27,6 +27,7 @@ func newCloneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "clone <url> [destination]",
 		Short:   "Clone a repository",
+		Aliases: []string{"cl"},
 		GroupID: GroupRegistry,
 		Args:    cobra.RangeArgs(1, 2),
 		Long: `Clone a git repository and register it.

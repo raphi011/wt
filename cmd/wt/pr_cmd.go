@@ -50,10 +50,11 @@ func newPrCheckoutCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "checkout <number> [org/repo]",
-		Short: "Checkout PR (clones if needed)",
-		Args:  cobra.RangeArgs(1, 2),
-		Long:  `Checkout a PR, cloning the repo as a bare repo if it doesn't exist locally.`,
+		Use:     "checkout <number> [org/repo]",
+		Short:   "Checkout PR (clones if needed)",
+		Aliases: []string{"co"},
+		Args:    cobra.RangeArgs(1, 2),
+		Long:    `Checkout a PR, cloning the repo as a bare repo if it doesn't exist locally.`,
 		Example: `  wt pr checkout 123               # PR from current repo
   wt pr checkout 123 -r myrepo     # PR from local repo
   wt pr checkout 123 org/repo      # Clone repo and checkout PR`,
@@ -251,10 +252,11 @@ func newPrCreateCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "create",
-		Short: "Create PR for worktree",
-		Args:  cobra.NoArgs,
-		Long:  `Create a PR for the current branch.`,
+		Use:     "create",
+		Short:   "Create PR for worktree",
+		Aliases: []string{"c", "new"},
+		Args:    cobra.NoArgs,
+		Long:    `Create a PR for the current branch.`,
 		Example: `  wt pr create --title "Add feature"
   wt pr create --title "Add feature" --body "Details"
   wt pr create --title "Add feature" --draft
@@ -370,9 +372,10 @@ func newPrMergeCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "merge",
-		Short: "Merge PR and clean up worktree",
-		Args:  cobra.NoArgs,
+		Use:     "merge",
+		Short:   "Merge PR and clean up worktree",
+		Aliases: []string{"m"},
+		Args:    cobra.NoArgs,
 		Long: `Merge the PR for the current branch.
 
 Merges the PR, removes the worktree (if applicable), and deletes the local branch.`,
@@ -503,10 +506,11 @@ func newPrViewCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "view",
-		Short: "View PR details or open in browser",
-		Args:  cobra.NoArgs,
-		Long:  `View PR details for the current branch.`,
+		Use:     "view",
+		Short:   "View PR details or open in browser",
+		Aliases: []string{"v"},
+		Args:    cobra.NoArgs,
+		Long:    `View PR details for the current branch.`,
 		Example: `  wt pr view              # View PR details
   wt pr view -w           # Open PR in browser`,
 		RunE: func(cmd *cobra.Command, args []string) error {

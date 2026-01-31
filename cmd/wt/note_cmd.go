@@ -15,6 +15,7 @@ func newNoteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "note",
 		Short:   "Manage branch notes",
+		Aliases: []string{"n"},
 		GroupID: GroupUtility,
 		Long: `Manage notes on branches.
 

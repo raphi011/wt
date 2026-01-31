@@ -15,6 +15,7 @@ func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "config",
 		Short:   "Manage configuration",
+		Aliases: []string{"cfg"},
 		GroupID: GroupConfig,
 		Long: `Manage wt configuration.
 

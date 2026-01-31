@@ -27,6 +27,7 @@ func newHookCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "hook <name>...",
 		Short:             "Run configured hook",
+		Aliases:           []string{"h"},
 		GroupID:           GroupUtility,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: completeHooks,

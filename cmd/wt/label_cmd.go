@@ -16,6 +16,7 @@ func newLabelCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "label",
 		Short:   "Manage repository labels",
+		Aliases: []string{"lbl"},
 		GroupID: GroupUtility,
 		Long: `Manage labels on repositories.
 
