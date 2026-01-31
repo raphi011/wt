@@ -1,9 +1,6 @@
-// Package cache manages persistent storage for worktree IDs and PR information.
+// Package cache manages persistent storage for PR information and worktree metadata.
 //
-// The cache is stored in .wt-cache.json in the worktree directory and provides:
-//
-//   - Stable worktree IDs: Each worktree gets a unique numeric ID that persists
-//     across sessions, enabling commands like "wt exec -n 5" to work reliably.
+// The cache is stored in ~/.wt/ directory and provides:
 //
 //   - PR info caching: Stores fetched PR metadata (state, author, comments, etc.)
 //     to avoid repeated API calls. Cache entries expire after 24 hours.
@@ -19,15 +16,13 @@
 //	{
 //	  "worktrees": {
 //	    "repo-feature-branch": {
-//	      "id": 1,
 //	      "path": "/path/to/repo-feature-branch",
 //	      "repo_path": "/path/to/repo",
 //	      "branch": "feature-branch",
 //	      "origin_url": "git@github.com:user/repo.git",
 //	      "pr": { ... }
 //	    }
-//	  },
-//	  "next_id": 2
+//	  }
 //	}
 //
 // # Concurrency
@@ -38,11 +33,11 @@
 // # Entry Lifecycle
 //
 // Entries are never deleted, only marked as removed via RemovedAt timestamp.
-// This preserves ID history and enables the doctor command to detect issues.
+// This enables the doctor command to detect issues.
 // Use [Cache.SyncWorktrees] to update the cache with current disk state.
 //
 // # Related Commands
 //
 // The "wt doctor" command diagnoses and repairs cache issues including:
-// stale entries, path mismatches, missing metadata, and duplicate IDs.
+// stale entries, path mismatches, and missing metadata.
 package cache

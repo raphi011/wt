@@ -120,7 +120,7 @@ View PR details or open in browser:
 ```bash
 wt pr view               # Show PR details
 wt pr view -w            # Open PR in browser
-wt pr view -n 3          # By worktree number
+wt pr view -r myrepo     # View PR for specific repo
 ```
 
 After review, merge and clean up in one command:
@@ -149,8 +149,8 @@ wt pr create --title "WIP: Refactor auth" --draft
 # Create and open in browser
 wt pr create --title "Ready for review" -w
 
-# By worktree number (when outside worktree)
-wt pr create --title "Add feature" -n 3
+# By repo name (when outside worktree)
+wt pr create --title "Add feature" -r myrepo
 ```
 
 ### Cleaning Up
@@ -159,8 +159,8 @@ wt pr create --title "Add feature" -n 3
 # See what worktrees exist
 wt list
 
-# Show detailed status for a specific worktree
-wt show -n 3
+# Show detailed status for a specific repo
+wt show -r myrepo
 
 # Remove merged worktrees (uses cached PR status)
 wt prune
@@ -177,11 +177,8 @@ wt prune -d -v
 # Also remove worktrees with 0 commits (stale checkouts)
 wt prune -c
 
-# Remove specific worktree by number
-wt prune -n 3
-
-# Force remove even if not merged or dirty
-wt prune -n 3 -f
+# Remove specific branch worktree
+wt prune --branch feature-login -f
 ```
 
 ### Working Across Multiple Repos
@@ -212,18 +209,18 @@ wt repos -l backend
 ### Quick Navigation
 
 ```bash
-# Jump to worktree by number
-cd $(wt cd -n 3)
-
 # Jump to repo by name
 cd $(wt cd -r backend-api)
 
-# Jump to main repo (not worktree)
-cd $(wt cd -n 3 -p)
+# Jump to repo by label (must match exactly one)
+cd $(wt cd -l backend)
 
-# Run command in worktree without switching
-wt exec -n 3 -- git status
-wt exec -n 3 -- code .
+# Interactive fuzzy search
+cd $(wt cd -i)
+
+# Run command in repo
+wt exec -r myrepo -- git status
+wt exec -r myrepo -- code .
 ```
 
 ### Running Hooks Manually
@@ -232,8 +229,8 @@ wt exec -n 3 -- code .
 # Run a hook on current worktree
 wt hook vscode
 
-# Run on specific worktree
-wt hook vscode -n 3
+# Run on specific repo
+wt hook vscode -r myrepo
 
 # Run multiple hooks
 wt hook vscode kitty
@@ -260,8 +257,8 @@ wt note get
 # Clear note
 wt note clear
 
-# Set note by worktree number
-wt note set "Ready for review" -n 3
+# Set note in specific repo
+wt note set "Ready for review" -r myrepo
 ```
 
 ### Moving Worktrees / Migrating to wt

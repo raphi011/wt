@@ -21,15 +21,14 @@ Manual testing reference for pre-release verification. Test each command and fla
 | ❌ | `wt checkout --hook=myhook <branch>` | Runs specific hook | Hook found, executes |
 | ❌ | `wt checkout --no-hook <branch>` | Skips all hooks | No hook runs |
 | ❌ | `wt checkout -i` | Interactive wizard | All prompts work |
-| ❌ | `wt list` | Shows worktrees with stable IDs | Inside repo: filters to current |
+| ❌ | `wt list` | Shows worktrees | Inside repo: filters to current |
 | ❌ | `wt list --json` | Valid JSON output | Parseable JSON |
 | ❌ | `wt list -g` | Shows all repos' worktrees | Global scope |
-| ❌ | `wt list -s {id\|repo\|branch\|commit}` | Sorts by column | Correct ordering |
+| ❌ | `wt list -s {repo\|branch\|commit}` | Sorts by column | Correct ordering |
 | ❌ | `wt list -R` | Fetches origin + PR status | Network errors, cache update |
 | ❌ | `wt list -r repo1,repo2` | Filters by repo name | Multiple filters |
 | ❌ | `wt list -l backend` | Filters by label | Label matching |
 | ❌ | `wt show` | Shows current worktree details | Inside worktree only |
-| ❌ | `wt show -n <id>` | Shows specific worktree | ID resolution |
 | ❌ | `wt show -r myrepo` | Shows repo's current branch | Repo resolution |
 | ❌ | `wt show -R` | Refreshes PR status | API call |
 | ❌ | `wt show --json` | Valid JSON output | Parseable JSON |
@@ -37,10 +36,10 @@ Manual testing reference for pre-release verification. Test each command and fla
 | ❌ | `wt prune -R` | Refreshes PR status first | Network, then prune |
 | ❌ | `wt prune -d` | Dry-run preview | No actual removal |
 | ❌ | `wt prune -d -v` | Dry-run with skip reasons | Shows why not pruned |
-| ❌ | `wt prune -n 1 -f` | Force removes by ID | Requires -f |
-| ❌ | `wt prune -n 1 -n 2 -f` | Multiple IDs | All removed |
+| ❌ | `wt prune --branch feature -f` | Force removes by branch | Requires -f |
+| ❌ | `wt prune -r myrepo` | Prunes specific repo | Repo resolution |
 | ❌ | `wt prune -g` | Prunes all repos | Global scope |
-| ❌ | `wt prune --reset-cache` | Clears cache, resets IDs | IDs renumbered from 1 |
+| ❌ | `wt prune --reset-cache` | Clears cache | Cache cleared |
 | ❌ | `wt prune --hook=cleanup` | Runs specific hook | Hook after each removal |
 | ❌ | `wt prune --no-hook` | Skips all hooks | No hook runs |
 | ❌ | `wt prune -i` | Interactive selection | Multi-select works |
@@ -65,11 +64,9 @@ Manual testing reference for pre-release verification. Test each command and fla
 | ❌ | `wt pr checkout -i` | Interactive PR selection | List loads |
 | ❌ | `wt pr checkout -i -r myrepo` | Interactive from repo | Scoped to repo |
 | ❌ | `wt pr view` | Shows PR details | Inside worktree |
-| ❌ | `wt pr view -n <id>` | Shows by worktree ID | ID resolution |
 | ❌ | `wt pr view -r myrepo` | Shows by repo name | Repo resolution |
 | ❌ | `wt pr view -w` | Opens in browser | Browser opens |
 | ❌ | `wt pr merge` | Merges, removes worktree+branch | Full cleanup |
-| ❌ | `wt pr merge -n <id>` | Merges by worktree ID | ID resolution |
 | ❌ | `wt pr merge -r myrepo` | Merges by repo name | Repo resolution |
 | ❌ | `wt pr merge -s squash` | Uses squash strategy | Strategy applied |
 | ❌ | `wt pr merge -s rebase` | Uses rebase strategy | **GitLab: not supported** |
@@ -82,7 +79,6 @@ Manual testing reference for pre-release verification. Test each command and fla
 | ❌ | `wt pr create -t "Title" --base develop` | Custom base branch | Base used |
 | ❌ | `wt pr create -t "Title" --draft` | Creates draft PR | Draft status |
 | ❌ | `wt pr create -t "Title" -w` | Opens in browser | Browser opens |
-| ❌ | `wt pr create -t "Title" -n <id>` | By worktree ID | ID resolution |
 | ❌ | `wt pr create -t "Title" -r myrepo` | By repo name | Repo resolution |
 
 ---
@@ -91,15 +87,14 @@ Manual testing reference for pre-release verification. Test each command and fla
 
 | | Command | Expected Behavior | Watch For |
 |-|---------|-------------------|-----------|
-| ❌ | `wt exec -n <id> -- <cmd>` | Runs cmd in worktree | Correct working dir |
-| ❌ | `wt exec -n 1 -n 2 -- git status` | Multiple worktrees | All executed |
+| ❌ | `wt exec -r myrepo -- <cmd>` | Runs cmd in repo | Correct working dir |
+| ❌ | `wt exec -r repo1 -r repo2 -- git status` | Multiple repos | All executed |
 | ❌ | `wt exec -r repo1,repo2 -- make` | By repo names | Runs in main repos |
 | ❌ | `wt exec -l backend -- make` | By label | Runs in labeled repos |
-| ❌ | `wt cd -n <id>` | Prints worktree path | Path to stdout |
-| ❌ | `wt cd -n <id> -p` | Prints main repo path | Project path |
-| ❌ | `wt cd -r myrepo` | Prints repo path | Repo found |
+| ❌ | `wt cd -r myrepo` | Prints repo path | Path to stdout |
 | ❌ | `wt cd -l backend` | Prints by label | Exactly one match required |
-| ❌ | `cd $(wt cd -n 1)` | Shell integration | Logs to stderr only |
+| ❌ | `wt cd -i` | Interactive fuzzy search | Selection works |
+| ❌ | `cd $(wt cd -r myrepo)` | Shell integration | Logs to stderr only |
 | ❌ | `wt mv` | Moves worktrees to config dir | Scans cwd |
 | ❌ | `wt mv ~/old-folder` | Moves from specified path | Path scanned |
 | ❌ | `wt mv --format={branch}` | Renames during move | Format applied |
@@ -107,11 +102,11 @@ Manual testing reference for pre-release verification. Test each command and fla
 | ❌ | `wt mv -f` | Force move locked | Locked worktrees moved |
 | ❌ | `wt mv -r myrepo` | Filters by repo | Only matching moved |
 | ❌ | `wt note set "text"` | Sets note on current branch | Inside worktree |
-| ❌ | `wt note set "text" -n <id>` | Sets by worktree ID | ID resolution |
+| ❌ | `wt note set "text" -r myrepo` | Sets by repo name | Repo resolution |
 | ❌ | `wt note get` | Gets current branch note | Prints or empty |
-| ❌ | `wt note get -n <id>` | Gets by worktree ID | ID resolution |
+| ❌ | `wt note get -r myrepo` | Gets by repo name | Repo resolution |
 | ❌ | `wt note clear` | Clears current branch note | Removed |
-| ❌ | `wt note clear -n <id>` | Clears by worktree ID | ID resolution |
+| ❌ | `wt note clear -r myrepo` | Clears by repo name | Repo resolution |
 | ❌ | `wt label add backend` | Adds label to current repo | Stored in git config |
 | ❌ | `wt label add backend -r api,web` | Adds to multiple repos | All updated |
 | ❌ | `wt label remove backend` | Removes label | Removed |
@@ -120,8 +115,8 @@ Manual testing reference for pre-release verification. Test each command and fla
 | ❌ | `wt label list -g` | Lists all labels globally | All repos scanned |
 | ❌ | `wt label clear` | Clears all labels | All removed |
 | ❌ | `wt hook myhook` | Runs named hook | Inside worktree |
-| ❌ | `wt hook myhook -n <id>` | By worktree ID | ID resolution |
-| ❌ | `wt hook myhook -n 1 -n 2` | Multiple worktrees | All executed |
+| ❌ | `wt hook myhook --branch feat` | By branch name | Branch resolution |
+| ❌ | `wt hook myhook -r repo1 -r repo2` | Multiple repos | All executed |
 | ❌ | `wt hook myhook -r repo1,repo2` | By repo names | Runs in main repos |
 | ❌ | `wt hook myhook -l backend` | By label | Runs in labeled repos |
 | ❌ | `wt hook myhook -a KEY=VALUE` | Passes variable | Placeholder substituted |
@@ -145,7 +140,7 @@ Manual testing reference for pre-release verification. Test each command and fla
 | ❌ | `wt completion zsh` | Zsh completion script | Valid syntax |
 | ❌ | `wt doctor` | Checks for issues | Reports problems |
 | ❌ | `wt doctor --fix` | Auto-fixes issues | Repairs what's possible |
-| ❌ | `wt doctor --reset` | Rebuilds cache | New IDs assigned |
+| ❌ | `wt doctor --reset` | Rebuilds cache | Cache rebuilt |
 
 ---
 
@@ -158,9 +153,9 @@ When testing commands, verify these behaviors:
 | ❌ | **Hook execution** | `--hook=name` runs specific hook; `--no-hook` skips all; default `on=[]` hooks run automatically |
 | ❌ | **GitHub vs GitLab** | Commands work with both `gh` and `glab` CLI; GitLab lacks rebase merge |
 | ❌ | **Inside vs outside repo** | Some flags optional inside repo/worktree, required outside |
-| ❌ | **Multi-repo targeting** | `-r repo1,repo2` and `-l label` work; mutual exclusion with `-n` |
+| ❌ | **Multi-repo targeting** | `-r repo1,repo2` and `-l label` work for repo targeting |
 | ❌ | **Interactive mode (`-i`)** | Respects explicit flags, pre-selects defaults, skips irrelevant steps |
 | ❌ | **JSON output** | `--json` produces valid, parseable JSON for scripting |
 | ❌ | **Stdout vs stderr** | Primary data to stdout; logs/progress to stderr (enables `$(...)` patterns) |
-| ❌ | **Cache persistence** | IDs stable across runs; `--reset-cache` renumbers from 1 |
+| ❌ | **Cache persistence** | PR cache persists across runs; `--reset-cache` clears it |
 | ❌ | **Error messages** | Clear, actionable errors for invalid flags, missing args, missing repos |
