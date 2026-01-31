@@ -413,6 +413,7 @@ Use --interactive to select worktrees to prune.`,
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.RegisterFlagCompletionFunc("branch", completeWorktrees)
 
 	return cmd
 }

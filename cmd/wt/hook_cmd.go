@@ -117,6 +117,7 @@ By default runs in current repo/worktree; use -r/-l to target other repos.`,
 	// Completions
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.RegisterFlagCompletionFunc("branch", completeWorktrees)
 
 	return cmd
 }
