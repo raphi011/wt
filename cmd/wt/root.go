@@ -132,6 +132,7 @@ func init() {
 	rootCmd.AddCommand(newAddCmd())
 	rootCmd.AddCommand(newRemoveCmd())
 	rootCmd.AddCommand(newCloneCmd())
+	rootCmd.AddCommand(newMigrateCmd())
 
 	// PR commands
 	rootCmd.AddCommand(newPrCmd())
