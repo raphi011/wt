@@ -14,7 +14,7 @@ type optionSource []Option
 func (s optionSource) String(i int) string { return s[i].Label }
 func (s optionSource) Len() int            { return len(s) }
 
-// FilterableListStep allows selecting one option from a filterable list
+// FilterableListStep allows selecting one or more options from a filterable list
 // with support for disabled items (cursor skips them).
 // Uses fuzzy matching for filtering.
 // Optionally supports a "create from filter" option that appears when the filter
@@ -26,7 +26,7 @@ type FilterableListStep struct {
 	options  []Option
 	filtered []fuzzy.Match // fuzzy matches with indices and matched positions
 	cursor   int           // position in filtered list (0 = create option if shown)
-	selected int           // selected index in filtered list, -1 if none
+	selected int           // selected index in filtered list, -1 if none (single-select mode)
 	filter   string
 
 	// Create-from-filter functionality
@@ -34,6 +34,13 @@ type FilterableListStep struct {
 	createLabelFn func(filter string) string                        // Format create label
 	valueLabelFn  func(value string, isNew bool, opt Option) string // Format summary label
 	selectedIsNew bool                                              // True if "Create" was selected
+
+	// Multi-select mode
+	multiSelect     bool         // Enable multi-select mode
+	multiSelected   map[int]bool // Selected indices in multi-select mode
+	minSelect       int          // Minimum required selections (0 = no min)
+	maxSelect       int          // Maximum allowed selections (0 = no max)
+	sortSelectedTop bool         // Sort selected items to top (default true for multi-select)
 
 	// Input filtering
 	runeFilter RuneFilter // nil = allow all printable
@@ -96,6 +103,53 @@ func (s *FilterableListStep) WithRuneFilter(f RuneFilter) *FilterableListStep {
 	return s
 }
 
+// WithMultiSelect enables multi-select mode where users can select multiple options.
+// In this mode, space toggles selection and enter confirms when constraints are met.
+func (s *FilterableListStep) WithMultiSelect() *FilterableListStep {
+	s.multiSelect = true
+	s.multiSelected = make(map[int]bool)
+	s.sortSelectedTop = true
+	return s
+}
+
+// SetMinMax sets the minimum and maximum selection constraints for multi-select mode.
+func (s *FilterableListStep) SetMinMax(minSel, maxSel int) *FilterableListStep {
+	s.minSelect = minSel
+	s.maxSelect = maxSel
+	return s
+}
+
+// SetSelected sets the selected indices for multi-select mode.
+func (s *FilterableListStep) SetSelected(indices []int) *FilterableListStep {
+	if s.multiSelected == nil {
+		s.multiSelected = make(map[int]bool)
+	}
+	for _, idx := range indices {
+		if idx >= 0 && idx < len(s.options) {
+			s.multiSelected[idx] = true
+		}
+	}
+	// Re-sort to keep selected items at top
+	s.applyFilter()
+	return s
+}
+
+// GetSelectedIndices returns the selected option indices in original order (multi-select mode).
+func (s *FilterableListStep) GetSelectedIndices() []int {
+	var indices []int
+	for idx := 0; idx < len(s.options); idx++ {
+		if s.multiSelected[idx] {
+			indices = append(indices, idx)
+		}
+	}
+	return indices
+}
+
+// SelectedCount returns the number of selected items (multi-select mode).
+func (s *FilterableListStep) SelectedCount() int {
+	return len(s.multiSelected)
+}
+
 // IsCreateSelected returns true if the user selected the "Create {filter}" option.
 func (s *FilterableListStep) IsCreateSelected() bool {
 	return s.selectedIsNew
@@ -134,7 +188,31 @@ func (s *FilterableListStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) 
 		s.cursor = s.findFirstEnabled()
 	case "end", "pgdown":
 		s.cursor = s.findLastEnabled()
+	case " ": // Space toggles selection in multi-select mode
+		if s.multiSelect && len(s.filtered) > 0 {
+			idx := s.filtered[s.cursor].Index
+			if s.multiSelected[idx] {
+				delete(s.multiSelected, idx)
+			} else {
+				// Check max selection constraint
+				if s.maxSelect == 0 || len(s.multiSelected) < s.maxSelect {
+					s.multiSelected[idx] = true
+				}
+			}
+			// Re-sort to keep selected items at top
+			if s.sortSelectedTop {
+				s.applyFilter()
+			}
+		}
 	case "enter", "right":
+		// Multi-select mode: advance if constraints are met
+		if s.multiSelect {
+			if s.canAdvanceMulti() {
+				return s, nil, StepAdvance
+			}
+			return s, nil, StepContinue
+		}
+		// Single-select mode
 		// Check if selecting create option (cursor 0 when create is shown)
 		if showCreate && s.cursor == 0 {
 			s.selected = 0
@@ -179,9 +257,21 @@ func (s *FilterableListStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) 
 	return s, nil, StepContinue
 }
 
+// canAdvanceMulti returns true if multi-select constraints are met.
+func (s *FilterableListStep) canAdvanceMulti() bool {
+	if s.minSelect > 0 && len(s.multiSelected) < s.minSelect {
+		return false
+	}
+	return len(s.multiSelected) > 0 || s.minSelect == 0
+}
+
 func (s *FilterableListStep) View() string {
 	var b strings.Builder
-	b.WriteString(s.prompt + ":\n")
+	if s.multiSelect {
+		b.WriteString(fmt.Sprintf("%s (%d selected):\n", s.prompt, len(s.multiSelected)))
+	} else {
+		b.WriteString(s.prompt + ":\n")
+	}
 	b.WriteString(FilterLabelStyle.Render("Filter: ") + FilterStyle.Render(s.filter) + "\n\n")
 
 	showCreate := s.shouldShowCreate()
@@ -249,6 +339,16 @@ func (s *FilterableListStep) View() string {
 			style = OptionSelectedStyle
 		}
 
+		// Show checkbox in multi-select mode
+		checkbox := ""
+		if s.multiSelect {
+			if s.multiSelected[match.Index] {
+				checkbox = "[✓] "
+			} else {
+				checkbox = "[ ] "
+			}
+		}
+
 		// Highlight matched characters if filtering
 		label := opt.Label
 		if s.filter != "" && len(match.MatchedIndexes) > 0 {
@@ -257,9 +357,13 @@ func (s *FilterableListStep) View() string {
 			label = style.Render(opt.Label)
 		}
 
-		b.WriteString(cursor + label + "\n")
+		b.WriteString(cursor + checkbox + label + "\n")
 		if opt.Description != "" {
-			b.WriteString("    " + OptionDescriptionStyle.Render(opt.Description) + "\n")
+			descIndent := "    "
+			if s.multiSelect {
+				descIndent = "      " // Extra indent for checkbox
+			}
+			b.WriteString(descIndent + OptionDescriptionStyle.Render(opt.Description) + "\n")
 		}
 	}
 
@@ -275,10 +379,32 @@ func (s *FilterableListStep) View() string {
 }
 
 func (s *FilterableListStep) Help() string {
+	if s.multiSelect {
+		return "↑/↓ move • space toggle • pgup/pgdn jump • type to filter • enter confirm • esc cancel"
+	}
 	return "↑/↓ select • pgup/pgdn jump • type to filter • ← back • enter confirm • esc cancel"
 }
 
 func (s *FilterableListStep) Value() StepValue {
+	// Multi-select mode
+	if s.multiSelect {
+		var labels []string
+		var values []interface{}
+		// Iterate in original option order for consistent display
+		for idx := 0; idx < len(s.options); idx++ {
+			if s.multiSelected[idx] {
+				labels = append(labels, s.options[idx].Label)
+				values = append(values, s.options[idx].Value)
+			}
+		}
+		return StepValue{
+			Key:   s.id,
+			Label: strings.Join(labels, ", "),
+			Raw:   values,
+		}
+	}
+
+	// Single-select mode
 	if s.selected < 0 {
 		return StepValue{Key: s.id}
 	}
@@ -328,12 +454,18 @@ func (s *FilterableListStep) Value() StepValue {
 }
 
 func (s *FilterableListStep) IsComplete() bool {
+	if s.multiSelect {
+		return s.canAdvanceMulti()
+	}
 	return s.selected >= 0
 }
 
 func (s *FilterableListStep) Reset() {
 	s.selected = -1
 	s.selectedIsNew = false
+	if s.multiSelect {
+		s.multiSelected = make(map[int]bool)
+	}
 	// Note: filter is intentionally NOT reset to preserve user input when navigating back
 }
 
@@ -437,18 +569,36 @@ func (s *FilterableListStep) highlightMatches(label string, matchedIndexes []int
 }
 
 func (s *FilterableListStep) applyFilter() {
+	var matching []fuzzy.Match
+
 	if s.filter == "" {
 		// No filter - show all options in original order
-		s.filtered = make([]fuzzy.Match, len(s.options))
+		matching = make([]fuzzy.Match, len(s.options))
 		for i := range s.options {
-			s.filtered[i] = fuzzy.Match{
+			matching[i] = fuzzy.Match{
 				Str:   s.options[i].Label,
 				Index: i,
 			}
 		}
 	} else {
 		// Apply fuzzy search - results are sorted by score (best first)
-		s.filtered = fuzzy.FindFrom(s.filter, optionSource(s.options))
+		matching = fuzzy.FindFrom(s.filter, optionSource(s.options))
+	}
+
+	// In multi-select mode with sortSelectedTop, sort selected items to the top
+	if s.multiSelect && s.sortSelectedTop && len(s.multiSelected) > 0 {
+		var selectedItems []fuzzy.Match
+		var unselectedItems []fuzzy.Match
+		for _, match := range matching {
+			if s.multiSelected[match.Index] {
+				selectedItems = append(selectedItems, match)
+			} else {
+				unselectedItems = append(unselectedItems, match)
+			}
+		}
+		s.filtered = append(selectedItems, unselectedItems...)
+	} else {
+		s.filtered = matching
 	}
 
 	// Calculate total items (including create option if shown)
