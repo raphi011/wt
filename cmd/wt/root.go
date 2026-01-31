@@ -126,11 +126,9 @@ func init() {
 	rootCmd.AddCommand(newCheckoutCmd())
 	rootCmd.AddCommand(newListCmd())
 	rootCmd.AddCommand(newPruneCmd())
-	rootCmd.AddCommand(newReposCmd())
 
 	// Registry commands
-	rootCmd.AddCommand(newAddCmd())
-	rootCmd.AddCommand(newRemoveCmd())
+	rootCmd.AddCommand(newReposCmd())
 	rootCmd.AddCommand(newCloneCmd())
 
 	// PR commands
