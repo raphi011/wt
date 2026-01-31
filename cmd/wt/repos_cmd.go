@@ -26,15 +26,17 @@ func newReposCmd() *cobra.Command {
 		GroupID: GroupRegistry,
 		Long: `Manage registered repositories.
 
-Use subcommands to list, add, or remove repositories from the registry.`,
+Use subcommands to list, add, clone, or remove repositories from the registry.`,
 		Example: `  wt repos list                  # List all repos
   wt repos add ~/work/my-project # Register a repo
+  wt repos clone <url>           # Clone and register a repo
   wt repos remove my-project     # Unregister a repo`,
 	}
 
 	// Add subcommands
 	cmd.AddCommand(newReposListCmd())
 	cmd.AddCommand(newReposAddCmd())
+	cmd.AddCommand(newReposCloneCmd())
 	cmd.AddCommand(newReposRemoveCmd())
 
 	return cmd
@@ -331,6 +333,152 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 
 	return cmd
+}
+
+func newReposCloneCmd() *cobra.Command {
+	var (
+		name           string
+		labels         []string
+		worktreeFormat string
+		destination    string
+		branch         string
+	)
+
+	cmd := &cobra.Command{
+		Use:     "clone <url> [destination]",
+		Short:   "Clone a repository as bare",
+		Aliases: []string{"cl"},
+		Args:    cobra.RangeArgs(1, 2),
+		Long: `Clone a git repository as bare and register it.
+
+Clones directly into .git (no working tree):
+  repo/
+  └── .git/    # bare git repo contents (HEAD, objects/, refs/, etc.)
+
+This allows worktrees to be created as siblings to .git.
+Use -b to create an initial worktree for a branch.
+
+If destination is not specified, clones into the current directory.`,
+		Example: `  wt repos clone https://github.com/org/repo           # Clone to ./repo
+  wt repos clone https://github.com/org/repo myrepo    # Clone to ./myrepo
+  wt repos clone https://github.com/org/repo -b main   # Clone and create worktree for main
+  wt repos clone git@github.com:org/repo.git -l work   # Clone with label`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			l := log.FromContext(ctx)
+
+			url := args[0]
+
+			// Determine destination
+			dest := destination
+			if len(args) > 1 {
+				dest = args[1]
+			}
+			if dest == "" {
+				// Extract repo name from URL
+				dest = extractRepoNameFromURL(url)
+			}
+
+			// Resolve to absolute path
+			absPath, err := filepath.Abs(dest)
+			if err != nil {
+				return fmt.Errorf("resolve path: %w", err)
+			}
+
+			// Check if directory already exists
+			if _, err := os.Stat(absPath); err == nil {
+				return fmt.Errorf("destination already exists: %s", absPath)
+			}
+
+			l.Debug("cloning repo", "url", url, "dest", absPath)
+
+			// Clone the repository as bare
+			if err := git.CloneBareWithWorktreeSupport(ctx, url, absPath); err != nil {
+				return fmt.Errorf("clone failed: %w", err)
+			}
+
+			// Determine display name
+			repoName := name
+			if repoName == "" {
+				repoName = filepath.Base(absPath)
+			}
+
+			// Load registry
+			reg, err := registry.Load()
+			if err != nil {
+				return fmt.Errorf("load registry: %w", err)
+			}
+
+			// Register the repo
+			repo := registry.Repo{
+				Path:           absPath,
+				Name:           repoName,
+				WorktreeFormat: worktreeFormat,
+				Labels:         labels,
+			}
+
+			if err := reg.Add(repo); err != nil {
+				// Clean up on failure
+				os.RemoveAll(absPath)
+				return fmt.Errorf("register repo: %w", err)
+			}
+
+			if err := reg.Save(); err != nil {
+				return fmt.Errorf("save registry: %w", err)
+			}
+
+			fmt.Printf("Cloned repo: %s (%s)\n", repoName, absPath)
+
+			// Create an initial worktree if branch specified
+			if branch != "" {
+				format := worktreeFormat
+				if format == "" {
+					format = cfg.WorktreeFormat
+				}
+				wtPath := resolveWorktreePathWithConfig(absPath, repoName, branch, format)
+
+				l.Debug("creating initial worktree", "path", wtPath, "branch", branch)
+
+				gitDir := filepath.Join(absPath, ".git")
+				if err := git.CreateWorktree(ctx, gitDir, wtPath, branch); err != nil {
+					l.Printf("Warning: failed to create initial worktree: %v\n", err)
+				} else {
+					fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
+				}
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&name, "name", "n", "", "Display name (default: directory name)")
+	cmd.Flags().StringSliceVarP(&labels, "label", "l", nil, "Labels for grouping (repeatable)")
+	cmd.Flags().StringVarP(&worktreeFormat, "worktree-format", "w", "", "Worktree format override")
+	cmd.Flags().StringVarP(&destination, "destination", "d", "", "Destination directory")
+	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Create initial worktree for branch")
+
+	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.MarkFlagDirname("destination")
+
+	return cmd
+}
+
+// extractRepoNameFromURL extracts the repository name from a git URL
+func extractRepoNameFromURL(url string) string {
+	// Remove trailing .git
+	url = strings.TrimSuffix(url, ".git")
+
+	// Handle SSH URLs (git@github.com:org/repo)
+	if strings.Contains(url, ":") && !strings.Contains(url, "://") {
+		parts := strings.Split(url, ":")
+		if len(parts) == 2 {
+			pathParts := strings.Split(parts[1], "/")
+			return pathParts[len(pathParts)-1]
+		}
+	}
+
+	// Handle HTTPS URLs
+	parts := strings.Split(url, "/")
+	return parts[len(parts)-1]
 }
 
 // completeLabels provides completion for label flags

@@ -10,11 +10,11 @@ import (
 	"github.com/raphi011/wt/internal/registry"
 )
 
-// TestClone_BareRepo tests cloning a repository as bare (default behavior).
+// TestReposClone_BareRepo tests cloning a repository as bare (default behavior).
 //
-// Scenario: User runs `wt clone file:///path/to/repo`
+// Scenario: User runs `wt repos clone file:///path/to/repo`
 // Expected: Bare repo is cloned into .git directory and registered in registry
-func TestClone_BareRepo(t *testing.T) {
+func TestReposClone_BareRepo(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -36,7 +36,7 @@ func TestClone_BareRepo(t *testing.T) {
 	defer os.Chdir(oldDir)
 
 	ctx := testContext(t)
-	cmd := newCloneCmd()
+	cmd := newReposCloneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"file://" + sourceRepo, "cloned-repo"})
 
@@ -76,11 +76,11 @@ func TestClone_BareRepo(t *testing.T) {
 	}
 }
 
-// TestClone_WithLabels tests cloning with labels.
+// TestReposClone_WithLabels tests cloning with labels.
 //
-// Scenario: User runs `wt clone file:///repo -l backend -l api`
+// Scenario: User runs `wt repos clone file:///repo -l backend -l api`
 // Expected: Repo is cloned and registered with labels
-func TestClone_WithLabels(t *testing.T) {
+func TestReposClone_WithLabels(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -100,7 +100,7 @@ func TestClone_WithLabels(t *testing.T) {
 	defer os.Chdir(oldDir)
 
 	ctx := testContext(t)
-	cmd := newCloneCmd()
+	cmd := newReposCloneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"file://" + sourceRepo, "labeled-repo", "-l", "backend", "-l", "api"})
 
@@ -133,11 +133,11 @@ func TestClone_WithLabels(t *testing.T) {
 	}
 }
 
-// TestClone_WithCustomName tests cloning with a custom display name.
+// TestReposClone_WithCustomName tests cloning with a custom display name.
 //
-// Scenario: User runs `wt clone file:///repo --name my-app`
+// Scenario: User runs `wt repos clone file:///repo --name my-app`
 // Expected: Repo is cloned and registered with custom name
-func TestClone_WithCustomName(t *testing.T) {
+func TestReposClone_WithCustomName(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -157,7 +157,7 @@ func TestClone_WithCustomName(t *testing.T) {
 	defer os.Chdir(oldDir)
 
 	ctx := testContext(t)
-	cmd := newCloneCmd()
+	cmd := newReposCloneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"file://" + sourceRepo, "actual-dir", "--name", "my-app"})
 
@@ -181,11 +181,11 @@ func TestClone_WithCustomName(t *testing.T) {
 	}
 }
 
-// TestClone_DestinationExists tests that cloning to an existing path fails.
+// TestReposClone_DestinationExists tests that cloning to an existing path fails.
 //
-// Scenario: User runs `wt clone file:///repo existing-dir`
+// Scenario: User runs `wt repos clone file:///repo existing-dir`
 // Expected: Command fails with error
-func TestClone_DestinationExists(t *testing.T) {
+func TestReposClone_DestinationExists(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -209,7 +209,7 @@ func TestClone_DestinationExists(t *testing.T) {
 	defer os.Chdir(oldDir)
 
 	ctx := testContext(t)
-	cmd := newCloneCmd()
+	cmd := newReposCloneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"file://" + sourceRepo, "existing-dir"})
 
@@ -218,11 +218,11 @@ func TestClone_DestinationExists(t *testing.T) {
 	}
 }
 
-// TestClone_AutoName tests cloning without destination extracts name from URL.
+// TestReposClone_AutoName tests cloning without destination extracts name from URL.
 //
-// Scenario: User runs `wt clone file:///path/to/myrepo`
+// Scenario: User runs `wt repos clone file:///path/to/myrepo`
 // Expected: Clones to ./myrepo
-func TestClone_AutoName(t *testing.T) {
+func TestReposClone_AutoName(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -247,7 +247,7 @@ func TestClone_AutoName(t *testing.T) {
 	defer os.Chdir(oldDir)
 
 	ctx := testContext(t)
-	cmd := newCloneCmd()
+	cmd := newReposCloneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"file://" + sourceRepo})
 
