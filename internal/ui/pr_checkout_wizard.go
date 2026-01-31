@@ -84,8 +84,9 @@ func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, er
 				preSelectedHooks = append(preSelectedHooks, i)
 			}
 		}
-		hookStep := wizard.NewMultiSelect("hooks", "Hooks", "Select hooks to run after checkout", hookOptions)
-		hookStep.SetMinMax(0, 0) // No minimum required (can select none)
+		hookStep := wizard.NewFilterableList("hooks", "Hooks", "Select hooks to run after checkout", hookOptions).
+			WithMultiSelect().
+			SetMinMax(0, 0)
 		if len(preSelectedHooks) > 0 {
 			hookStep.SetSelected(preSelectedHooks)
 		}

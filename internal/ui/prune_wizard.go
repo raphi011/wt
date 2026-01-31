@@ -62,8 +62,9 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 	}
 
 	// Create multi-select step
-	selectStep := wizard.NewMultiSelect("worktrees", "Worktrees", "Select worktrees to prune", options)
-	selectStep.SetMinMax(0, 0) // No minimum required (user can cancel)
+	selectStep := wizard.NewFilterableList("worktrees", "Worktrees", "Select worktrees to prune", options).
+		WithMultiSelect().
+		SetMinMax(0, 0) // No minimum required (user can cancel)
 
 	// Pre-select prunable worktrees
 	if len(preSelected) > 0 {
@@ -81,14 +82,14 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 		if step == nil {
 			return ""
 		}
-		ms := step.(*wizard.MultiSelectStep)
-		count := ms.SelectedCount()
+		fl := step.(*wizard.FilterableListStep)
+		count := fl.SelectedCount()
 		if count == 0 {
 			return "No worktrees selected"
 		}
 
 		// Check if any dirty worktrees are selected
-		indices := ms.GetSelectedIndices()
+		indices := fl.GetSelectedIndices()
 		dirtyCount := 0
 		for _, idx := range indices {
 			if params.Worktrees[idx].IsDirty {
@@ -116,8 +117,8 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 	opts := PruneOptions{}
 	step := result.GetStep("worktrees")
 	if step != nil {
-		ms := step.(*wizard.MultiSelectStep)
-		indices := ms.GetSelectedIndices()
+		fl := step.(*wizard.FilterableListStep)
+		indices := fl.GetSelectedIndices()
 		for _, idx := range indices {
 			opts.SelectedIDs = append(opts.SelectedIDs, params.Worktrees[idx].ID)
 		}

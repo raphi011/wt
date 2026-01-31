@@ -77,4 +77,10 @@ var (
 	// OptionDescriptionStyle for two-row option descriptions
 	OptionDescriptionStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("240"))
+
+	// MatchHighlightStyle for highlighting fuzzy matched characters
+	MatchHighlightStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("212")).
+				Bold(true).
+				Underline(true)
 )

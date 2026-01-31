@@ -72,8 +72,9 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 				Value: repoPaths[i],
 			}
 		}
-		repoStep := wizard.NewMultiSelect("repos", "Repos", "Select repositories", repoOptions)
-		repoStep.SetMinMax(1, 0) // At least one repo required
+		repoStep := wizard.NewFilterableList("repos", "Repos", "Select repositories", repoOptions).
+			WithMultiSelect().
+			SetMinMax(1, 0) // At least one repo required
 
 		// Pre-select repos if provided
 		if len(params.PreSelectedRepos) > 0 {
@@ -128,8 +129,9 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 				preSelectedHooks = append(preSelectedHooks, i)
 			}
 		}
-		hookStep := wizard.NewMultiSelect("hooks", "Hooks", "Select hooks to run after checkout", hookOptions)
-		hookStep.SetMinMax(0, 0) // No minimum required (can select none)
+		hookStep := wizard.NewFilterableList("hooks", "Hooks", "Select hooks to run after checkout", hookOptions).
+			WithMultiSelect().
+			SetMinMax(0, 0) // No minimum required (can select none)
 		if len(preSelectedHooks) > 0 {
 			hookStep.SetSelected(preSelectedHooks)
 		}
@@ -147,7 +149,7 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	// When repos selection completes, fetch branches from first selected repo
 	if hasRepos && params.FetchBranches != nil {
 		w.OnComplete("repos", func(wiz *wizard.Wizard) {
-			repoStep := wiz.GetStep("repos").(*wizard.MultiSelectStep)
+			repoStep := wiz.GetStep("repos").(*wizard.FilterableListStep)
 			indices := repoStep.GetSelectedIndices()
 			if len(indices) == 0 {
 				return

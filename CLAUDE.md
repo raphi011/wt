@@ -30,25 +30,29 @@ make clean
 ### Package Structure
 
 ```
-cmd/wt/main.go           - CLI entry point with kong subcommands
-internal/git/            - Git operations via exec.Command
-  ├── worktree.go        - Create/list/remove worktrees
-  └── repo.go            - Branch info, merge status, diff stats
+cmd/wt/                  - CLI commands and entry point (cobra)
+  ├── main.go            - Entry point
+  ├── root.go            - Root command setup and context injection
+  └── *_cmd.go           - Individual command implementations
+internal/cache/          - Disk caching with file locking
+internal/config/         - Configuration loading (TOML)
 internal/forge/          - Git hosting service abstraction (GitHub/GitLab)
-  ├── forge.go           - Forge interface and MR cache
+  ├── forge.go           - Forge interface
   ├── detect.go          - Auto-detect forge from remote URL
   ├── github.go          - GitHub implementation (gh CLI)
   └── gitlab.go          - GitLab implementation (glab CLI)
-internal/resolve/        - Target resolution for commands
-  └── resolve.go         - ByID resolver (numeric ID lookup)
+internal/git/            - Git operations via exec.Command
+  ├── worktree.go        - Create/list/remove worktrees
+  └── repo.go            - Branch info, merge status, diff stats
+internal/hooks/          - Hook execution system
 internal/log/            - Context-aware logging (stderr)
-  └── log.go             - Logger with verbose mode
 internal/output/         - Context-aware output (stdout)
-  └── output.go          - Printer for primary data output
+internal/registry/       - Repository registry (tracks managed repos)
+internal/resolve/        - Target resolution for commands
 internal/ui/             - Terminal UI components
-  ├── table.go           - Lipgloss table formatting with colors
+  ├── table.go           - Lipgloss table formatting
   ├── spinner.go         - Bubbletea spinner
-  └── interactive.go     - Interactive prompts (confirm, text input, list select)
+  └── wizard/            - Interactive wizard framework
 ```
 
 ### Key Design Decisions
@@ -70,7 +74,7 @@ internal/ui/             - Terminal UI components
 
 ### Dependencies
 
-- **CLI parsing**: `github.com/alecthomas/kong` - Struct-based arg parsing with subcommands and auto-dispatch
+- **CLI parsing**: `github.com/spf13/cobra` - CLI framework with subcommands and flag parsing
 - **UI**: `github.com/charmbracelet/lipgloss` - Terminal styling
 - **UI**: `github.com/charmbracelet/lipgloss/table` - Table component
 - **UI**: `github.com/charmbracelet/bubbles/spinner` - Spinner component
@@ -135,17 +139,12 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 
 ### Dependency Injection Pattern
 
-**Deps struct** - Stable configuration embedded in command structs:
+**Global variables** - Shared state initialized in `root.go`:
 ```go
-type Deps struct {
-    Config  *config.Config `kong:"-"`
-    WorkDir string         `kong:"-"`
-}
-
-type CheckoutCmd struct {
-    Deps  // embedded
-    Branch string `arg:""`
-}
+var (
+    cfg     *config.Config  // Loaded configuration
+    workDir string          // Current working directory
+)
 ```
 
 **context.Context** - Request-scoped values passed to functions:
@@ -154,7 +153,7 @@ type CheckoutCmd struct {
 
 **Convention**: Always name the logger variable `l`:
 ```go
-func (c *CheckoutCmd) runCheckout(ctx context.Context) error {
+func runCheckout(ctx context.Context) error {
     l := log.FromContext(ctx)
     out := output.FromContext(ctx)
     l.Debug("creating worktree")
@@ -172,13 +171,14 @@ This allows piping: `cd $(wt cd -n 1)` works because logs go to stderr.
 
 Integration tests are in `cmd/wt/*_integration_test.go` with build tag `//go:build integration`.
 
-**Dependency Injection in Tests** - Tests inject dependencies using the `Deps` struct and create a context with `testContext(t)` or `testContextWithOutput(t)`:
+**Test Setup** - Tests set the global `cfg` variable and use Cobra's `SetContext`/`SetArgs`:
 ```go
-func runCheckoutCommand(t *testing.T, workDir string, cfg *config.Config, cmd *CheckoutCmd) error {
-    cmd.Deps = Deps{Config: cfg, WorkDir: workDir}
-    ctx := testContext(t)
-    return cmd.runCheckout(ctx)
-}
+cfg = &config.Config{WorktreeFormat: "../{repo}-{branch}"}
+ctx := testContext(t)
+cmd := newCheckoutCmd()
+cmd.SetContext(ctx)
+cmd.SetArgs([]string{"feature"})
+err := cmd.Execute()
 ```
 
 **macOS Symlink Resolution** - On macOS, `t.TempDir()` returns paths like `/var/folders/...` but git commands may return `/private/var/folders/...` (the resolved symlink). Always use `resolvePath(t, t.TempDir())` helper to resolve symlinks before path comparisons. This helper is defined in `integration_test_helpers.go`.

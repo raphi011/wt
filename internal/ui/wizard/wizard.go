@@ -17,6 +17,7 @@ type Wizard struct {
 	onComplete     map[string]func(*Wizard)      // step id -> callback
 	infoLine       func(*Wizard) string          // dynamic info line
 	summaryTitle   string
+	skipSummary    bool // if true, skip summary and finish after last step
 	done           bool
 	cancelled      bool
 	width          int
@@ -67,6 +68,13 @@ func (w *Wizard) WithSummary(title string) *Wizard {
 // WithInfoLine sets a dynamic info line function.
 func (w *Wizard) WithInfoLine(fn func(*Wizard) string) *Wizard {
 	w.infoLine = fn
+	return w
+}
+
+// WithSkipSummary sets whether to skip the summary step and finish after the last step.
+// Useful for single-step wizards where a confirmation summary is unnecessary.
+func (w *Wizard) WithSkipSummary(skip bool) *Wizard {
+	w.skipSummary = skip
 	return w
 }
 
@@ -208,7 +216,13 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Move to next step
 			next := w.findNextStep(w.currentStep)
 			if next < 0 {
-				// No more steps, go to summary
+				// No more steps
+				if w.skipSummary {
+					// Skip summary, finish immediately
+					w.done = true
+					return w, tea.Quit
+				}
+				// Go to summary
 				w.currentStep = len(w.steps)
 			} else {
 				w.currentStep = next
@@ -315,13 +329,15 @@ func (w *Wizard) renderStepTabs() string {
 		tabs = append(tabs, tabText)
 	}
 
-	// Add summary tab
-	summaryLabel := fmt.Sprintf("%d. Summary", displayNum)
-	isSummaryActive := w.currentStep >= len(w.steps)
-	if isSummaryActive {
-		tabs = append(tabs, "  "+StepActiveStyle.Render(summaryLabel))
-	} else {
-		tabs = append(tabs, "  "+StepInactiveStyle.Render(summaryLabel))
+	// Add summary tab (unless skipSummary is set)
+	if !w.skipSummary {
+		summaryLabel := fmt.Sprintf("%d. Summary", displayNum)
+		isSummaryActive := w.currentStep >= len(w.steps)
+		if isSummaryActive {
+			tabs = append(tabs, "  "+StepActiveStyle.Render(summaryLabel))
+		} else {
+			tabs = append(tabs, "  "+StepInactiveStyle.Render(summaryLabel))
+		}
 	}
 
 	return strings.Join(tabs, StepArrowStyle.Render(" → "))
