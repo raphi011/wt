@@ -18,7 +18,7 @@ But worktrees can pile up fast. You end up with a dozen directories, can't remem
 This project may include breaking command & configuration changes until v1.0 is released. Once v1 is released, backwards compatibility will be maintained.
 
 If something breaks:
-- Delete `wt-cache.*` files in your worktree directory
+- Delete `.wt-cache.json` files in your worktree directory
 - Compare your config with `wt config init -s` and update to match newer config format
 
 ## Install
@@ -300,7 +300,7 @@ This updates git's worktree tracking automatically—no manual fixup needed.
 
 ### Diagnosing Issues
 
-If worktrees get into a bad state (broken links, stale cache entries):
+If worktrees get into a bad state (broken links, missing repos):
 
 ```bash
 # Check for issues
@@ -308,9 +308,6 @@ wt doctor
 
 # Auto-fix recoverable issues
 wt doctor --fix
-
-# Rebuild cache from scratch (worktrees get new IDs)
-wt doctor --reset
 ```
 
 ## Configuration
@@ -456,7 +453,7 @@ Common commands have short aliases (shown in `wt --help`): `co`, `ls`, `s`, `p`,
 | `wt label` | Manage repo labels |
 | `wt hook` | Run configured hook |
 | `wt config` | Manage configuration |
-| `wt doctor` | Diagnose and repair cache |
+| `wt doctor` | Diagnose and repair issues |
 | `wt completion` | Generate shell completions |
 
 Run `wt <command> --help` for detailed usage.
