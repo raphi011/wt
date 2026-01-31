@@ -11,10 +11,7 @@ import (
 )
 
 func newDoctorCmd() *cobra.Command {
-	var (
-		fix   bool
-		reset bool
-	)
+	var fix bool
 
 	cmd := &cobra.Command{
 		Use:   "doctor",
@@ -29,9 +26,8 @@ Checks:
 - External tools installed (git, gh/glab)
 
 Examples:
-  wt doctor              # Check for issues
-  wt doctor --fix        # Auto-fix recoverable issues
-  wt doctor --reset      # Rebuild registry from scratch`,
+  wt doctor          # Check for issues
+  wt doctor --fix    # Auto-fix recoverable issues`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			var issues int
@@ -119,13 +115,11 @@ Examples:
 			}
 
 			fmt.Println("All checks passed")
-			_ = reset
 			return nil
 		},
 	}
 
 	cmd.Flags().BoolVar(&fix, "fix", false, "Auto-fix recoverable issues")
-	cmd.Flags().BoolVar(&reset, "reset", false, "Rebuild registry from scratch")
 
 	return cmd
 }

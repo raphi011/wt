@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/registry"
 )
@@ -20,7 +21,7 @@ func newCheckoutCmd() *cobra.Command {
 		fetch       bool
 		autoStash   bool
 		note        string
-		hooks       []string
+		hookNames   []string
 		noHook      bool
 		env         []string
 		interactive bool
@@ -71,7 +72,7 @@ Examples:
 			l.Debug("checkout", "branch", branch, "repos", len(repos), "new", newBranch)
 
 			for _, repo := range repos {
-				if err := checkoutInRepo(ctx, repo, branch, newBranch, base, fetch, autoStash, note, hooks, noHook, env); err != nil {
+				if err := checkoutInRepo(ctx, repo, branch, newBranch, base, fetch, autoStash, note, hookNames, noHook, env); err != nil {
 					return fmt.Errorf("%s: %w", repo.Name, err)
 				}
 			}
@@ -87,7 +88,7 @@ Examples:
 	cmd.Flags().BoolVarP(&fetch, "fetch", "f", false, "Fetch base branch first")
 	cmd.Flags().BoolVarP(&autoStash, "autostash", "s", false, "Stash changes and apply to new worktree")
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
-	cmd.Flags().StringSliceVar(&hooks, "hook", nil, "Run named hook(s)")
+	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
 	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-checkout hook")
 	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable KEY=VALUE")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode")
@@ -177,7 +178,7 @@ func findOrRegisterCurrentRepo(ctx context.Context, reg *registry.Registry) (*re
 	return reg.FindByPath(repoPath)
 }
 
-func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, newBranch bool, base string, fetch, autoStash bool, note string, hooks []string, noHook bool, env []string) error {
+func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, newBranch bool, base string, fetch, autoStash bool, note string, hookNames []string, noHook bool, env []string) error {
 	l := log.FromContext(ctx)
 
 	// Get effective worktree format
@@ -235,10 +236,29 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 		}
 	}
 
-	// Run hooks (TODO: implement hook execution)
-	_ = hooks
-	_ = noHook
-	_ = env
+	// Run hooks
+	hookEnv, err := hooks.ParseEnvWithStdin(env)
+	if err != nil {
+		return err
+	}
+
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout)
+	if err != nil {
+		return err
+	}
+
+	if len(hookMatches) > 0 {
+		hookCtx := hooks.Context{
+			WorktreeDir: wtPath,
+			RepoDir:     repo.Path,
+			Branch:      branch,
+			Repo:        repo.Name,
+			Origin:      git.GetRepoDisplayName(repo.Path),
+			Trigger:     "checkout",
+			Env:         hookEnv,
+		}
+		hooks.RunAllNonFatal(hookMatches, hookCtx, wtPath)
+	}
 
 	return nil
 }

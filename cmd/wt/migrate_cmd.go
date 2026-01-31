@@ -13,10 +13,7 @@ import (
 )
 
 func newMigrateCmd() *cobra.Command {
-	var (
-		worktreeDir string
-		dryRun      bool
-	)
+	var dryRun bool
 
 	cmd := &cobra.Command{
 		Use:   "migrate <repo-dir>",
@@ -27,9 +24,8 @@ func newMigrateCmd() *cobra.Command {
 Scans the given directory for git repos and registers them.
 
 Examples:
-  wt migrate ~/Git                      # Import repos from directory
-  wt migrate ~/Git -d                   # Preview without importing
-  wt migrate ~/Git --worktree-dir ~/Git/worktrees  # With separate worktree dir`,
+  wt migrate ~/Git      # Import repos from directory
+  wt migrate ~/Git -d   # Preview without importing`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
@@ -107,12 +103,10 @@ Examples:
 				fmt.Printf("\nImported %d repos\n", imported)
 			}
 
-			_ = worktreeDir
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&worktreeDir, "worktree-dir", "", "Current worktree directory (optional)")
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Preview without importing")
 
 	return cmd
