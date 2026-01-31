@@ -214,53 +214,30 @@ func HasRemote(ctx context.Context, repoPath, remoteName string) bool {
 	return runGit(ctx, repoPath, "remote", "get-url", remoteName) == nil
 }
 
-// GetMainRepoPath extracts main repo path from .git file in worktree
+// GetMainRepoPath returns the main repository path from a worktree path.
+// Uses git commands rather than reading .git files directly.
 func GetMainRepoPath(worktreePath string) (string, error) {
-	gitFile := filepath.Join(worktreePath, ".git")
-	content, err := os.ReadFile(gitFile)
+	return GetMainRepoPathWithContext(context.Background(), worktreePath)
+}
+
+// GetMainRepoPathWithContext returns the main repository path from a worktree path.
+// Uses git rev-parse --git-common-dir to find the shared git directory.
+func GetMainRepoPathWithContext(ctx context.Context, worktreePath string) (string, error) {
+	output, err := outputGit(ctx, worktreePath, "rev-parse", "--git-common-dir")
 	if err != nil {
-		return "", fmt.Errorf("failed to read .git file: %w", err)
+		return "", fmt.Errorf("not a git repository: %w", err)
 	}
 
-	// Parse: "gitdir: /path/to/repo/.git/worktrees/name"
-	// Only the first line matters; any additional lines are ignored
-	line := strings.TrimSpace(string(content))
-	if idx := strings.Index(line, "\n"); idx != -1 {
-		line = strings.TrimSpace(line[:idx])
-	}
-	if !strings.HasPrefix(line, "gitdir: ") {
-		return "", fmt.Errorf("invalid .git file format: expected 'gitdir: <path>'")
-	}
+	gitCommonDir := strings.TrimSpace(string(output))
 
-	gitdir := strings.TrimPrefix(line, "gitdir: ")
-	if gitdir == "" {
-		return "", fmt.Errorf("invalid .git file format: empty gitdir path")
+	// Handle relative paths
+	if !filepath.IsAbs(gitCommonDir) {
+		gitCommonDir = filepath.Join(worktreePath, gitCommonDir)
 	}
+	gitCommonDir = filepath.Clean(gitCommonDir)
 
-	// Handle relative paths (gitdir can be relative to the worktree)
-	if !filepath.IsAbs(gitdir) {
-		gitdir = filepath.Join(worktreePath, gitdir)
-	}
-
-	// Clean the path to resolve any .. or . components
-	gitdir = filepath.Clean(gitdir)
-
-	// Walk up from gitdir to find the .git directory, then get its parent
-	// gitdir is like: /path/to/repo/.git/worktrees/name
-	// We want: /path/to/repo
-	dir := gitdir
-	for {
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			// Reached root without finding .git
-			return "", fmt.Errorf("could not find main repo path from gitdir: %s", gitdir)
-		}
-		if filepath.Base(dir) == ".git" {
-			// Found .git directory, parent is the repo path
-			return parent, nil
-		}
-		dir = parent
-	}
+	// The main repo is the parent of the git common directory
+	return filepath.Dir(gitCommonDir), nil
 }
 
 // GetUpstreamBranch returns the remote branch name for a local branch.
@@ -305,31 +282,29 @@ func GetCurrentRepoMainPath(ctx context.Context) string {
 // Works whether you're in the main repo or a worktree
 // Returns empty string if not in a git repo
 func GetCurrentRepoMainPathFrom(ctx context.Context, path string) string {
-	// First check if we're in a git repo at all
-	output, err := outputGit(ctx, path, "rev-parse", "--show-toplevel")
+	// Get the shared git directory (works for both worktrees and main repos)
+	output, err := outputGit(ctx, path, "rev-parse", "--git-common-dir")
 	if err != nil {
 		return ""
 	}
-	toplevel := strings.TrimSpace(string(output))
+	gitCommonDir := strings.TrimSpace(string(output))
 
-	// Check if we're in a worktree by seeing if .git is a file (not dir)
-	gitPath := filepath.Join(toplevel, ".git")
-	info, err := os.Stat(gitPath)
-	if err != nil {
-		return ""
+	// Handle relative paths (git may return relative path like ".git")
+	if !filepath.IsAbs(gitCommonDir) {
+		if path == "" {
+			// Use current working directory
+			gitCommonDir = filepath.Join(".", gitCommonDir)
+		} else {
+			gitCommonDir = filepath.Join(path, gitCommonDir)
+		}
 	}
+	gitCommonDir = filepath.Clean(gitCommonDir)
 
-	if info.IsDir() {
-		// Main repo - toplevel is the main repo path
-		return toplevel
-	}
-
-	// Worktree - need to resolve main repo from .git file
-	mainRepo, err := GetMainRepoPath(toplevel)
-	if err != nil {
-		return ""
-	}
-	return mainRepo
+	// The main repo is the parent of the git common directory
+	// For regular repos: /path/to/repo/.git -> /path/to/repo
+	// For bare-in-.git: /path/to/repo/.git -> /path/to/repo
+	// For bare-in-.bare: /path/to/repo/.bare -> /path/to/repo
+	return filepath.Dir(gitCommonDir)
 }
 
 // GetOriginURL gets the origin URL for a repository
@@ -570,47 +545,14 @@ func FindRepoInDirs(repoName string, searchDirs ...string) string {
 	return ""
 }
 
-// GetRepoNameFromWorktree extracts the expected repo name from a worktree's .git file.
-// Parses: gitdir: /path/to/repo/.git/worktrees/name
-// Extracts: repo name from the path (parent of .git directory)
+// GetRepoNameFromWorktree extracts the expected repo name from a worktree.
+// Returns the folder name of the main repository.
 func GetRepoNameFromWorktree(worktreePath string) string {
-	gitFile := filepath.Join(worktreePath, ".git")
-	content, err := os.ReadFile(gitFile)
+	mainRepo, err := GetMainRepoPath(worktreePath)
 	if err != nil {
 		return ""
 	}
-
-	// Parse: "gitdir: /path/to/repo/.git/worktrees/name"
-	line := strings.TrimSpace(string(content))
-	if idx := strings.Index(line, "\n"); idx != -1 {
-		line = strings.TrimSpace(line[:idx])
-	}
-	if !strings.HasPrefix(line, "gitdir: ") {
-		return ""
-	}
-
-	gitdir := strings.TrimPrefix(line, "gitdir: ")
-	if !filepath.IsAbs(gitdir) {
-		gitdir = filepath.Join(worktreePath, gitdir)
-	}
-	gitdir = filepath.Clean(gitdir)
-
-	// Walk up from gitdir to find the .git directory, then get repo name
-	// gitdir is like: /path/to/repo/.git/worktrees/name
-	// We want: "repo" (the folder name)
-	dir := gitdir
-	for {
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			// Reached root without finding .git
-			return ""
-		}
-		if filepath.Base(dir) == ".git" {
-			// Found .git directory, parent is the repo path
-			return filepath.Base(parent)
-		}
-		dir = parent
-	}
+	return filepath.Base(mainRepo)
 }
 
 // ListLocalBranches returns all local branch names for a repository.
@@ -739,45 +681,27 @@ func GetGitDir(repoPath string, repoType RepoType) string {
 	return gitDir
 }
 
-// GetGitDirForWorktree returns the .git directory that a worktree points to
+// GetGitDirForWorktree returns the shared git directory for a worktree or repo.
+// Uses git rev-parse --git-common-dir instead of reading .git files directly.
 func GetGitDirForWorktree(worktreePath string) (string, error) {
-	gitFile := filepath.Join(worktreePath, ".git")
-	content, err := os.ReadFile(gitFile)
+	return GetGitDirForWorktreeWithContext(context.Background(), worktreePath)
+}
+
+// GetGitDirForWorktreeWithContext returns the shared git directory for a worktree or repo.
+func GetGitDirForWorktreeWithContext(ctx context.Context, worktreePath string) (string, error) {
+	output, err := outputGit(ctx, worktreePath, "rev-parse", "--git-common-dir")
 	if err != nil {
-		// Maybe it's the main repo, check if .git is a directory
-		info, statErr := os.Stat(gitFile)
-		if statErr == nil && info.IsDir() {
-			return gitFile, nil
-		}
-		return "", fmt.Errorf("not a git worktree: %s", worktreePath)
+		return "", fmt.Errorf("not a git repository: %w", err)
 	}
 
-	// Parse: "gitdir: /path/to/repo/.git/worktrees/name"
-	line := strings.TrimSpace(string(content))
-	if idx := strings.Index(line, "\n"); idx != -1 {
-		line = strings.TrimSpace(line[:idx])
-	}
-	if !strings.HasPrefix(line, "gitdir: ") {
-		return "", fmt.Errorf("invalid .git file format")
+	gitCommonDir := strings.TrimSpace(string(output))
+
+	// Handle relative paths
+	if !filepath.IsAbs(gitCommonDir) {
+		gitCommonDir = filepath.Join(worktreePath, gitCommonDir)
 	}
 
-	gitdir := strings.TrimPrefix(line, "gitdir: ")
-	if !filepath.IsAbs(gitdir) {
-		gitdir = filepath.Join(worktreePath, gitdir)
-	}
-
-	// Walk up to find the main .git directory
-	dir := filepath.Clean(gitdir)
-	for {
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("could not find .git directory")
-		}
-		if filepath.Base(dir) == ".git" {
-			return dir, nil
-		}
-		dir = parent
-	}
+	return filepath.Clean(gitCommonDir), nil
 }
 
 // CloneBareWithWorktreeSupport clones a repo as a bare repo inside the .git directory.
