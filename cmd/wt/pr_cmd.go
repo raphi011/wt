@@ -361,6 +361,7 @@ func newPrCreateCmd() *cobra.Command {
 	cmd.MarkFlagFilename("body-file") // Enable file completion for body-file flag
 	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
+	cmd.RegisterFlagCompletionFunc("base", completeBranches)
 
 	return cmd
 }
