@@ -113,7 +113,7 @@ func extractCommand(testName string) string {
 		"NoteGet":         "wt note",
 		"NoteClear":       "wt note",
 		"Prune":           "wt prune",
-		"Repos":           "wt repos",
+		"Repo":            "wt repo",
 		"Forge":           "forge",
 		"GitHub":          "forge",
 		"MRCache":         "forge",

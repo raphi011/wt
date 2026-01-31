@@ -18,33 +18,33 @@ import (
 	"github.com/raphi011/wt/internal/ui/static"
 )
 
-func newReposCmd() *cobra.Command {
+func newRepoCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "repos",
+		Use:     "repo",
 		Short:   "Manage registered repositories",
 		Aliases: []string{"r"},
 		GroupID: GroupRegistry,
 		Long: `Manage registered repositories.
 
 Use subcommands to list, add, clone, or remove repositories from the registry.`,
-		Example: `  wt repos list                  # List all repos
-  wt repos add ~/work/my-project # Register a repo
-  wt repos clone <url>           # Clone and register a repo
-  wt repos remove my-project     # Unregister a repo
-  wt repos mv ./myrepo           # Migrate to bare structure`,
+		Example: `  wt repo list                  # List all repos
+  wt repo add ~/work/my-project # Register a repo
+  wt repo clone <url>           # Clone and register a repo
+  wt repo remove my-project     # Unregister a repo
+  wt repo mv ./myrepo           # Migrate to bare structure`,
 	}
 
 	// Add subcommands
-	cmd.AddCommand(newReposListCmd())
-	cmd.AddCommand(newReposAddCmd())
-	cmd.AddCommand(newReposCloneCmd())
-	cmd.AddCommand(newReposRemoveCmd())
-	cmd.AddCommand(newReposMvCmd())
+	cmd.AddCommand(newRepoListCmd())
+	cmd.AddCommand(newRepoAddCmd())
+	cmd.AddCommand(newRepoCloneCmd())
+	cmd.AddCommand(newRepoRemoveCmd())
+	cmd.AddCommand(newRepoMvCmd())
 
 	return cmd
 }
 
-func newReposListCmd() *cobra.Command {
+func newRepoListCmd() *cobra.Command {
 	var (
 		label      string
 		sortBy     string
@@ -59,9 +59,9 @@ func newReposListCmd() *cobra.Command {
 		Long: `List all registered repositories.
 
 Shows name, path, type (bare/regular), worktree format, and labels.`,
-		Example: `  wt repos list                  # List all repos
-  wt repos list -l backend       # Filter by label
-  wt repos list --json           # Output as JSON`,
+		Example: `  wt repo list                  # List all repos
+  wt repo list -l backend       # Filter by label
+  wt repo list --json           # Output as JSON`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := output.FromContext(cmd.Context())
 
@@ -115,7 +115,7 @@ Shows name, path, type (bare/regular), worktree format, and labels.`,
 
 			// Table output
 			if len(repos) == 0 {
-				fmt.Println("No repos registered. Use 'wt repos add <path>' to register a repo.")
+				fmt.Println("No repos registered. Use 'wt repo add <path>' to register a repo.")
 				return nil
 			}
 
@@ -149,7 +149,7 @@ Shows name, path, type (bare/regular), worktree format, and labels.`,
 	return cmd
 }
 
-func newReposAddCmd() *cobra.Command {
+func newRepoAddCmd() *cobra.Command {
 	var (
 		name           string
 		worktreeFormat string
@@ -165,11 +165,11 @@ func newReposAddCmd() *cobra.Command {
 
 Repositories will be added to the registry (~/.wt/repos.json) and can then
 be managed with other wt commands. Non-git directories are silently skipped.`,
-		Example: `  wt repos add ~/work/my-project                    # Register single repo
-  wt repos add ~/work/*                             # Register all repos in directory
-  wt repos add ~/work/my-project -n myproj          # Custom display name (single repo only)
-  wt repos add ~/work/my-project -l work -l api     # Add labels
-  wt repos add ~/work/my-project -w "./{branch}"    # Custom worktree format`,
+		Example: `  wt repo add ~/work/my-project                    # Register single repo
+  wt repo add ~/work/*                             # Register all repos in directory
+  wt repo add ~/work/my-project -n myproj          # Custom display name (single repo only)
+  wt repo add ~/work/my-project -l work -l api     # Add labels
+  wt repo add ~/work/my-project -w "./{branch}"    # Custom worktree format`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
@@ -253,7 +253,7 @@ be managed with other wt commands. Non-git directories are silently skipped.`,
 	return cmd
 }
 
-func newReposRemoveCmd() *cobra.Command {
+func newRepoRemoveCmd() *cobra.Command {
 	var (
 		deleteFiles bool
 		force       bool
@@ -269,9 +269,9 @@ func newReposRemoveCmd() *cobra.Command {
 
 The repository will be removed from the registry (~/.wt/repos.json).
 By default, files are kept on disk. Use --delete to also remove files.`,
-		Example: `  wt repos remove my-project           # Unregister, keep files
-  wt repos remove my-project --delete  # Unregister and delete from disk
-  wt repos remove my-project -D -f     # Delete without confirmation`,
+		Example: `  wt repo remove my-project           # Unregister, keep files
+  wt repo remove my-project --delete  # Unregister and delete from disk
+  wt repo remove my-project -D -f     # Delete without confirmation`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
@@ -337,7 +337,7 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 	return cmd
 }
 
-func newReposCloneCmd() *cobra.Command {
+func newRepoCloneCmd() *cobra.Command {
 	var (
 		name           string
 		labels         []string
@@ -361,10 +361,10 @@ This allows worktrees to be created as siblings to .git.
 Use -b to create an initial worktree for a branch.
 
 If destination is not specified, clones into the current directory.`,
-		Example: `  wt repos clone https://github.com/org/repo           # Clone to ./repo
-  wt repos clone https://github.com/org/repo myrepo    # Clone to ./myrepo
-  wt repos clone https://github.com/org/repo -b main   # Clone and create worktree for main
-  wt repos clone git@github.com:org/repo.git -l work   # Clone with label`,
+		Example: `  wt repo clone https://github.com/org/repo           # Clone to ./repo
+  wt repo clone https://github.com/org/repo myrepo    # Clone to ./myrepo
+  wt repo clone https://github.com/org/repo -b main   # Clone and create worktree for main
+  wt repo clone git@github.com:org/repo.git -l work   # Clone with label`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
@@ -483,7 +483,7 @@ func extractRepoNameFromURL(url string) string {
 	return parts[len(parts)-1]
 }
 
-func newReposMvCmd() *cobra.Command {
+func newRepoMvCmd() *cobra.Command {
 	var (
 		name           string
 		labels         []string
@@ -496,7 +496,7 @@ func newReposMvCmd() *cobra.Command {
 		Short:   "Migrate a regular repo to bare-in-.git structure",
 		Aliases: []string{"migrate"},
 		Args:    cobra.MaximumNArgs(1),
-		Long: `Migrate an existing normal git repository into the bare repo structure used by 'wt repos clone'.
+		Long: `Migrate an existing normal git repository into the bare repo structure used by 'wt repo clone'.
 
 Before migration:
   myrepo/
@@ -519,11 +519,11 @@ The migration:
 - Moves all working tree files into a subdirectory named after the current branch
 - Updates any existing worktrees to work with the new structure
 - Registers the repository in the wt registry`,
-		Example: `  wt repos mv                  # Migrate repo in current directory
-  wt repos mv ./myrepo         # Migrate repo at path
-  wt repos mv -n myapp         # Migrate with custom display name
-  wt repos mv -l backend       # Migrate with labels
-  wt repos mv --dry-run        # Preview migration without making changes`,
+		Example: `  wt repo mv                  # Migrate repo in current directory
+  wt repo mv ./myrepo         # Migrate repo at path
+  wt repo mv -n myapp         # Migrate with custom display name
+  wt repo mv -l backend       # Migrate with labels
+  wt repo mv --dry-run        # Preview migration without making changes`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)

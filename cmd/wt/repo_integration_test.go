@@ -11,11 +11,11 @@ import (
 	"github.com/raphi011/wt/internal/registry"
 )
 
-// TestReposList_ListEmpty tests listing repos when none are registered.
+// TestRepoList_ListEmpty tests listing repos when none are registered.
 //
-// Scenario: User runs `wt repos list` with no registered repos
+// Scenario: User runs `wt repo list` with no registered repos
 // Expected: Shows "No repos registered" message
-func TestReposList_ListEmpty(t *testing.T) {
+func TestRepoList_ListEmpty(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir, err := os.MkdirTemp("", "wt-test-*")
@@ -33,20 +33,20 @@ func TestReposList_ListEmpty(t *testing.T) {
 	defer os.Setenv("HOME", oldHome)
 
 	ctx := testContext(t)
-	cmd := newReposListCmd()
+	cmd := newRepoListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("repos list command failed: %v", err)
+		t.Fatalf("repo list command failed: %v", err)
 	}
 }
 
-// TestReposList_ListRepos tests listing registered repos.
+// TestRepoList_ListRepos tests listing registered repos.
 //
-// Scenario: User runs `wt repos list` with registered repos
+// Scenario: User runs `wt repo list` with registered repos
 // Expected: Shows all registered repos
-func TestReposList_ListRepos(t *testing.T) {
+func TestRepoList_ListRepos(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -71,20 +71,20 @@ func TestReposList_ListRepos(t *testing.T) {
 	}
 
 	ctx := testContext(t)
-	cmd := newReposListCmd()
+	cmd := newRepoListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("repos list command failed: %v", err)
+		t.Fatalf("repo list command failed: %v", err)
 	}
 }
 
-// TestReposList_FilterByLabel tests filtering repos by label.
+// TestRepoList_FilterByLabel tests filtering repos by label.
 //
-// Scenario: User runs `wt repos list -l backend`
+// Scenario: User runs `wt repo list -l backend`
 // Expected: Shows only repos with the backend label
-func TestReposList_FilterByLabel(t *testing.T) {
+func TestRepoList_FilterByLabel(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -109,20 +109,20 @@ func TestReposList_FilterByLabel(t *testing.T) {
 	}
 
 	ctx := testContext(t)
-	cmd := newReposListCmd()
+	cmd := newRepoListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"-l", "backend"})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("repos list command failed: %v", err)
+		t.Fatalf("repo list command failed: %v", err)
 	}
 }
 
-// TestReposList_JSON tests JSON output.
+// TestRepoList_JSON tests JSON output.
 //
-// Scenario: User runs `wt repos list --json`
+// Scenario: User runs `wt repo list --json`
 // Expected: Outputs repos in JSON format
-func TestReposList_JSON(t *testing.T) {
+func TestRepoList_JSON(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -147,12 +147,12 @@ func TestReposList_JSON(t *testing.T) {
 
 	// The JSON output goes through the output.Printer, so use testContextWithOutput
 	ctx, out := testContextWithOutput(t)
-	cmd := newReposListCmd()
+	cmd := newRepoListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"--json"})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("repos list command failed: %v", err)
+		t.Fatalf("repo list command failed: %v", err)
 	}
 
 	output := out.String()
@@ -161,11 +161,11 @@ func TestReposList_JSON(t *testing.T) {
 	}
 }
 
-// TestReposAdd_RegisterRepo tests registering an existing git repo.
+// TestRepoAdd_RegisterRepo tests registering an existing git repo.
 //
-// Scenario: User runs `wt repos add /path/to/repo`
+// Scenario: User runs `wt repo add /path/to/repo`
 // Expected: Repo is registered in the registry
-func TestReposAdd_RegisterRepo(t *testing.T) {
+func TestRepoAdd_RegisterRepo(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	// Setup temp dir
@@ -186,12 +186,12 @@ func TestReposAdd_RegisterRepo(t *testing.T) {
 
 	// Run add command
 	ctx := testContext(t)
-	cmd := newReposAddCmd()
+	cmd := newRepoAddCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("repos add command failed: %v", err)
+		t.Fatalf("repo add command failed: %v", err)
 	}
 
 	// Verify repo was registered
@@ -213,11 +213,11 @@ func TestReposAdd_RegisterRepo(t *testing.T) {
 	}
 }
 
-// TestReposAdd_WithLabels tests registering a repo with labels.
+// TestRepoAdd_WithLabels tests registering a repo with labels.
 //
-// Scenario: User runs `wt repos add /path/to/repo -l backend -l api`
+// Scenario: User runs `wt repo add /path/to/repo -l backend -l api`
 // Expected: Repo is registered with labels
-func TestReposAdd_WithLabels(t *testing.T) {
+func TestRepoAdd_WithLabels(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -233,12 +233,12 @@ func TestReposAdd_WithLabels(t *testing.T) {
 	defer os.Setenv("HOME", oldHome)
 
 	ctx := testContext(t)
-	cmd := newReposAddCmd()
+	cmd := newRepoAddCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath, "-l", "backend", "-l", "api"})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("repos add command failed: %v", err)
+		t.Fatalf("repo add command failed: %v", err)
 	}
 
 	reg, err := registry.Load()
@@ -266,11 +266,11 @@ func TestReposAdd_WithLabels(t *testing.T) {
 	}
 }
 
-// TestReposAdd_DuplicatePath tests that adding the same path twice fails.
+// TestRepoAdd_DuplicatePath tests that adding the same path twice fails.
 //
-// Scenario: User runs `wt repos add /path/to/repo` twice
+// Scenario: User runs `wt repo add /path/to/repo` twice
 // Expected: Second add fails with error
-func TestReposAdd_DuplicatePath(t *testing.T) {
+func TestRepoAdd_DuplicatePath(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -288,7 +288,7 @@ func TestReposAdd_DuplicatePath(t *testing.T) {
 	ctx := testContext(t)
 
 	// First add
-	cmd1 := newReposAddCmd()
+	cmd1 := newRepoAddCmd()
 	cmd1.SetContext(ctx)
 	cmd1.SetArgs([]string{repoPath})
 	if err := cmd1.Execute(); err != nil {
@@ -296,7 +296,7 @@ func TestReposAdd_DuplicatePath(t *testing.T) {
 	}
 
 	// Second add should fail
-	cmd2 := newReposAddCmd()
+	cmd2 := newRepoAddCmd()
 	cmd2.SetContext(ctx)
 	cmd2.SetArgs([]string{repoPath})
 	if err := cmd2.Execute(); err == nil {
@@ -304,11 +304,11 @@ func TestReposAdd_DuplicatePath(t *testing.T) {
 	}
 }
 
-// TestReposAdd_NotAGitRepo tests that adding a non-git directory fails.
+// TestRepoAdd_NotAGitRepo tests that adding a non-git directory fails.
 //
-// Scenario: User runs `wt repos add /path/to/non-git-dir`
+// Scenario: User runs `wt repo add /path/to/non-git-dir`
 // Expected: Command fails with error
-func TestReposAdd_NotAGitRepo(t *testing.T) {
+func TestRepoAdd_NotAGitRepo(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -325,7 +325,7 @@ func TestReposAdd_NotAGitRepo(t *testing.T) {
 	defer os.Setenv("HOME", oldHome)
 
 	ctx := testContext(t)
-	cmd := newReposAddCmd()
+	cmd := newRepoAddCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{notGitPath})
 
@@ -334,11 +334,11 @@ func TestReposAdd_NotAGitRepo(t *testing.T) {
 	}
 }
 
-// TestReposAdd_MultiplePaths tests adding multiple repos at once.
+// TestRepoAdd_MultiplePaths tests adding multiple repos at once.
 //
-// Scenario: User runs `wt repos add repo1 repo2`
+// Scenario: User runs `wt repo add repo1 repo2`
 // Expected: Both repos are registered
-func TestReposAdd_MultiplePaths(t *testing.T) {
+func TestRepoAdd_MultiplePaths(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -356,12 +356,12 @@ func TestReposAdd_MultiplePaths(t *testing.T) {
 	defer os.Setenv("HOME", oldHome)
 
 	ctx := testContext(t)
-	cmd := newReposAddCmd()
+	cmd := newRepoAddCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repo1, repo2})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("repos add command failed: %v", err)
+		t.Fatalf("repo add command failed: %v", err)
 	}
 
 	// Verify both repos were registered
@@ -384,11 +384,11 @@ func TestReposAdd_MultiplePaths(t *testing.T) {
 	}
 }
 
-// TestReposAdd_SkipsNonGitDirs tests that non-git directories are skipped.
+// TestRepoAdd_SkipsNonGitDirs tests that non-git directories are skipped.
 //
-// Scenario: User runs `wt repos add repo1 notgit repo2`
+// Scenario: User runs `wt repo add repo1 notgit repo2`
 // Expected: Only git repos are registered, non-git dirs are skipped
-func TestReposAdd_SkipsNonGitDirs(t *testing.T) {
+func TestRepoAdd_SkipsNonGitDirs(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -408,12 +408,12 @@ func TestReposAdd_SkipsNonGitDirs(t *testing.T) {
 	defer os.Setenv("HOME", oldHome)
 
 	ctx := testContext(t)
-	cmd := newReposAddCmd()
+	cmd := newRepoAddCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repo1, notGit, repo2})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("repos add command failed: %v", err)
+		t.Fatalf("repo add command failed: %v", err)
 	}
 
 	// Verify only git repos were registered
@@ -436,11 +436,11 @@ func TestReposAdd_SkipsNonGitDirs(t *testing.T) {
 	}
 }
 
-// TestReposRemove_UnregisterRepo tests unregistering a repo.
+// TestRepoRemove_UnregisterRepo tests unregistering a repo.
 //
-// Scenario: User runs `wt repos remove testrepo`
+// Scenario: User runs `wt repo remove testrepo`
 // Expected: Repo is removed from registry
-func TestReposRemove_UnregisterRepo(t *testing.T) {
+func TestRepoRemove_UnregisterRepo(t *testing.T) {
 	// Don't run in parallel - modifies HOME env var
 
 	tmpDir := t.TempDir()
@@ -468,12 +468,12 @@ func TestReposRemove_UnregisterRepo(t *testing.T) {
 
 	// Now remove it
 	ctx := testContext(t)
-	cmd := newReposRemoveCmd()
+	cmd := newRepoRemoveCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"remove-test"})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("repos remove command failed: %v", err)
+		t.Fatalf("repo remove command failed: %v", err)
 	}
 
 	// Verify repo was removed
@@ -492,11 +492,11 @@ func TestReposRemove_UnregisterRepo(t *testing.T) {
 	}
 }
 
-// TestReposRemove_NonExistent tests removing a non-existent repo.
+// TestRepoRemove_NonExistent tests removing a non-existent repo.
 //
-// Scenario: User runs `wt repos remove nonexistent`
+// Scenario: User runs `wt repo remove nonexistent`
 // Expected: Command fails with error
-func TestReposRemove_NonExistent(t *testing.T) {
+func TestRepoRemove_NonExistent(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -510,7 +510,7 @@ func TestReposRemove_NonExistent(t *testing.T) {
 	defer os.Setenv("HOME", oldHome)
 
 	ctx := testContext(t)
-	cmd := newReposRemoveCmd()
+	cmd := newRepoRemoveCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"nonexistent"})
 
