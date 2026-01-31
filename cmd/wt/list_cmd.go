@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
@@ -129,7 +130,7 @@ Examples:
 				if wt.IsDirty {
 					dirty = "*"
 				}
-				created := wt.CreatedAt.Format("2006-01-02")
+				created := format.RelativeTime(wt.CreatedAt)
 				commit := wt.CommitHash
 				if len(commit) > 7 {
 					commit = commit[:7]
