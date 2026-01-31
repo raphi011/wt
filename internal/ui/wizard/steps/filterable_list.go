@@ -1,4 +1,8 @@
-package wizard
+// Package steps provides reusable step components for wizards.
+//
+// This package contains implementations of the Step interface that
+// can be composed to build interactive wizard flows.
+package steps
 
 import (
 	"fmt"
@@ -6,10 +10,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sahilm/fuzzy"
+
+	"github.com/raphi011/wt/internal/ui/wizard/framework"
 )
 
 // optionSource implements fuzzy.Source for options.
-type optionSource []Option
+type optionSource []framework.Option
 
 func (s optionSource) String(i int) string { return s[i].Label }
 func (s optionSource) Len() int            { return len(s) }
@@ -23,17 +29,17 @@ type FilterableListStep struct {
 	id       string
 	title    string
 	prompt   string
-	options  []Option
+	options  []framework.Option
 	filtered []fuzzy.Match // fuzzy matches with indices and matched positions
 	cursor   int           // position in filtered list (0 = create option if shown)
 	selected int           // selected index in filtered list, -1 if none (single-select mode)
 	filter   string
 
 	// Create-from-filter functionality
-	allowCreate   bool                                              // Enable "Create {filter}" option
-	createLabelFn func(filter string) string                        // Format create label
-	valueLabelFn  func(value string, isNew bool, opt Option) string // Format summary label
-	selectedIsNew bool                                              // True if "Create" was selected
+	allowCreate   bool                                                        // Enable "Create {filter}" option
+	createLabelFn func(filter string) string                                  // Format create label
+	valueLabelFn  func(value string, isNew bool, opt framework.Option) string // Format summary label
+	selectedIsNew bool                                                        // True if "Create" was selected
 
 	// Multi-select mode
 	multiSelect     bool         // Enable multi-select mode
@@ -43,11 +49,11 @@ type FilterableListStep struct {
 	sortSelectedTop bool         // Sort selected items to top (default true for multi-select)
 
 	// Input filtering
-	runeFilter RuneFilter // nil = allow all printable
+	runeFilter framework.RuneFilter // nil = allow all printable
 }
 
 // NewFilterableList creates a new filterable single-select step.
-func NewFilterableList(id, title, prompt string, options []Option) *FilterableListStep {
+func NewFilterableList(id, title, prompt string, options []framework.Option) *FilterableListStep {
 	// Build initial filtered list (all options)
 	filtered := make([]fuzzy.Match, len(options))
 	for i := range options {
@@ -91,14 +97,14 @@ func (s *FilterableListStep) WithCreateFromFilter(labelFn func(filter string) st
 
 // WithValueLabel sets a custom function for formatting the selected value in the summary.
 // The function receives the value, whether it's a new/created item, and the original option (if not new).
-func (s *FilterableListStep) WithValueLabel(fn func(value string, isNew bool, opt Option) string) *FilterableListStep {
+func (s *FilterableListStep) WithValueLabel(fn func(value string, isNew bool, opt framework.Option) string) *FilterableListStep {
 	s.valueLabelFn = fn
 	return s
 }
 
 // WithRuneFilter sets a filter for allowed input characters.
 // Use RuneFilterNoSpaces for branch names or identifiers.
-func (s *FilterableListStep) WithRuneFilter(f RuneFilter) *FilterableListStep {
+func (s *FilterableListStep) WithRuneFilter(f framework.RuneFilter) *FilterableListStep {
 	s.runeFilter = f
 	return s
 }
@@ -175,7 +181,7 @@ func (s *FilterableListStep) Init() tea.Cmd {
 	return nil
 }
 
-func (s *FilterableListStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) {
+func (s *FilterableListStep) Update(msg tea.KeyMsg) (framework.Step, tea.Cmd, framework.StepResult) {
 	key := msg.String()
 	showCreate := s.shouldShowCreate()
 
@@ -208,16 +214,16 @@ func (s *FilterableListStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) 
 		// Multi-select mode: advance if constraints are met
 		if s.multiSelect {
 			if s.canAdvanceMulti() {
-				return s, nil, StepAdvance
+				return s, nil, framework.StepAdvance
 			}
-			return s, nil, StepContinue
+			return s, nil, framework.StepContinue
 		}
 		// Single-select mode
 		// Check if selecting create option (cursor 0 when create is shown)
 		if showCreate && s.cursor == 0 {
 			s.selected = 0
 			s.selectedIsNew = true
-			return s, nil, StepAdvance
+			return s, nil, framework.StepAdvance
 		}
 		// Adjust cursor for option selection when create is shown
 		optionCursor := s.cursor
@@ -229,11 +235,11 @@ func (s *FilterableListStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) 
 			if !s.options[idx].Disabled {
 				s.selected = s.cursor
 				s.selectedIsNew = false
-				return s, nil, StepAdvance
+				return s, nil, framework.StepAdvance
 			}
 		}
 	case "left":
-		return s, nil, StepBack
+		return s, nil, framework.StepBack
 	case "backspace":
 		if len(s.filter) > 0 {
 			s.filter = s.filter[:len(s.filter)-1]
@@ -241,20 +247,20 @@ func (s *FilterableListStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) 
 		}
 	case "alt+backspace":
 		if len(s.filter) > 0 {
-			s.filter = DeleteLastWord(s.filter)
+			s.filter = framework.DeleteLastWord(s.filter)
 			s.applyFilter()
 		}
 	default:
 		// Handle typing/pasting for filter
 		if msg.Type == tea.KeyRunes {
-			if text := FilterRunes(msg.Runes, s.runeFilter); text != "" {
+			if text := framework.FilterRunes(msg.Runes, s.runeFilter); text != "" {
 				s.filter += text
 				s.applyFilter()
 			}
 		}
 	}
 
-	return s, nil, StepContinue
+	return s, nil, framework.StepContinue
 }
 
 // canAdvanceMulti returns true if multi-select constraints are met.
@@ -272,7 +278,7 @@ func (s *FilterableListStep) View() string {
 	} else {
 		b.WriteString(s.prompt + ":\n")
 	}
-	b.WriteString(FilterLabelStyle.Render("Filter: ") + FilterStyle.Render(s.filter) + "\n\n")
+	b.WriteString(framework.FilterLabelStyle.Render("Filter: ") + framework.FilterStyle.Render(s.filter) + "\n\n")
 
 	showCreate := s.shouldShowCreate()
 
@@ -291,17 +297,17 @@ func (s *FilterableListStep) View() string {
 	end := min(start+maxVisible, totalItems)
 
 	if start > 0 {
-		b.WriteString(OptionNormalStyle.Render("  ↑ more above") + "\n")
+		b.WriteString(framework.OptionNormalStyle.Render("  ↑ more above") + "\n")
 	}
 
 	for i := start; i < end; i++ {
 		// Handle create option at position 0 when shown
 		if showCreate && i == 0 {
 			cursor := "  "
-			style := OptionNormalStyle
+			style := framework.OptionNormalStyle
 			if s.cursor == 0 {
 				cursor = "> "
-				style = OptionSelectedStyle
+				style = framework.OptionSelectedStyle
 			}
 			createLabel := s.createLabelFn(s.filter)
 			b.WriteString(cursor + style.Render(createLabel) + "\n")
@@ -322,10 +328,10 @@ func (s *FilterableListStep) View() string {
 		opt := s.options[match.Index]
 
 		cursor := "  "
-		style := OptionNormalStyle
+		style := framework.OptionNormalStyle
 
 		if opt.Disabled {
-			style = OptionDisabledStyle
+			style = framework.OptionDisabledStyle
 			label := opt.Label
 			if opt.Description != "" {
 				label += " (" + opt.Description + ")"
@@ -336,7 +342,7 @@ func (s *FilterableListStep) View() string {
 
 		if i == s.cursor {
 			cursor = "> "
-			style = OptionSelectedStyle
+			style = framework.OptionSelectedStyle
 		}
 
 		// Show checkbox in multi-select mode
@@ -363,16 +369,16 @@ func (s *FilterableListStep) View() string {
 			if s.multiSelect {
 				descIndent = "      " // Extra indent for checkbox
 			}
-			b.WriteString(descIndent + OptionDescriptionStyle.Render(opt.Description) + "\n")
+			b.WriteString(descIndent + framework.OptionDescriptionStyle.Render(opt.Description) + "\n")
 		}
 	}
 
 	if end < totalItems {
-		b.WriteString(OptionNormalStyle.Render("  ↓ more below") + "\n")
+		b.WriteString(framework.OptionNormalStyle.Render("  ↓ more below") + "\n")
 	}
 
 	if totalItems == 0 {
-		b.WriteString(OptionNormalStyle.Render("  No matching items") + "\n")
+		b.WriteString(framework.OptionNormalStyle.Render("  No matching items") + "\n")
 	}
 
 	return b.String()
@@ -385,7 +391,7 @@ func (s *FilterableListStep) Help() string {
 	return "↑/↓ select • pgup/pgdn jump • type to filter • ← back • enter confirm • esc cancel"
 }
 
-func (s *FilterableListStep) Value() StepValue {
+func (s *FilterableListStep) Value() framework.StepValue {
 	// Multi-select mode
 	if s.multiSelect {
 		var labels []string
@@ -397,7 +403,7 @@ func (s *FilterableListStep) Value() StepValue {
 				values = append(values, s.options[idx].Value)
 			}
 		}
-		return StepValue{
+		return framework.StepValue{
 			Key:   s.id,
 			Label: strings.Join(labels, ", "),
 			Raw:   values,
@@ -406,7 +412,7 @@ func (s *FilterableListStep) Value() StepValue {
 
 	// Single-select mode
 	if s.selected < 0 {
-		return StepValue{Key: s.id}
+		return framework.StepValue{Key: s.id}
 	}
 
 	// Handle create selection
@@ -414,9 +420,9 @@ func (s *FilterableListStep) Value() StepValue {
 		value := s.filter
 		label := value
 		if s.valueLabelFn != nil {
-			label = s.valueLabelFn(value, true, Option{})
+			label = s.valueLabelFn(value, true, framework.Option{})
 		}
-		return StepValue{
+		return framework.StepValue{
 			Key:   s.id,
 			Label: label,
 			Raw:   value,
@@ -431,7 +437,7 @@ func (s *FilterableListStep) Value() StepValue {
 	}
 
 	if optionIdx < 0 || optionIdx >= len(s.filtered) {
-		return StepValue{Key: s.id}
+		return framework.StepValue{Key: s.id}
 	}
 
 	idx := s.filtered[optionIdx].Index
@@ -446,7 +452,7 @@ func (s *FilterableListStep) Value() StepValue {
 		}
 	}
 
-	return StepValue{
+	return framework.StepValue{
 		Key:   s.id,
 		Label: label,
 		Raw:   opt.Value,
@@ -470,7 +476,7 @@ func (s *FilterableListStep) Reset() {
 }
 
 // SetOptions updates the options list.
-func (s *FilterableListStep) SetOptions(options []Option) {
+func (s *FilterableListStep) SetOptions(options []framework.Option) {
 	s.options = options
 	s.applyFilter()
 }
@@ -528,9 +534,9 @@ func (s *FilterableListStep) GetSelectedLabel() string {
 }
 
 // GetSelectedOption returns the selected option, or empty Option if none or if "Create" was selected.
-func (s *FilterableListStep) GetSelectedOption() Option {
+func (s *FilterableListStep) GetSelectedOption() framework.Option {
 	if s.selected < 0 || s.selectedIsNew {
-		return Option{}
+		return framework.Option{}
 	}
 	// Adjust for create option offset
 	optionIdx := s.selected
@@ -538,7 +544,7 @@ func (s *FilterableListStep) GetSelectedOption() Option {
 		optionIdx = s.selected - 1
 	}
 	if optionIdx < 0 || optionIdx >= len(s.filtered) {
-		return Option{}
+		return framework.Option{}
 	}
 	idx := s.filtered[optionIdx].Index
 	return s.options[idx]
@@ -558,11 +564,11 @@ func (s *FilterableListStep) highlightMatches(label string, matchedIndexes []int
 		char := string(r)
 		if matchSet[i] {
 			// Highlight matched character
-			result.WriteString(MatchHighlightStyle.Render(char))
+			result.WriteString(framework.MatchHighlightStyle.Render(char))
 		} else if isSelected {
-			result.WriteString(OptionSelectedStyle.Render(char))
+			result.WriteString(framework.OptionSelectedStyle.Render(char))
 		} else {
-			result.WriteString(OptionNormalStyle.Render(char))
+			result.WriteString(framework.OptionNormalStyle.Render(char))
 		}
 	}
 	return result.String()

@@ -1,9 +1,10 @@
-package ui
+package flows
 
 import (
 	"fmt"
 
-	"github.com/raphi011/wt/internal/ui/wizard"
+	"github.com/raphi011/wt/internal/ui/wizard/framework"
+	"github.com/raphi011/wt/internal/ui/wizard/steps"
 )
 
 // CdOptions holds the options gathered from interactive mode.
@@ -34,10 +35,10 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 		return CdOptions{Cancelled: true}, nil
 	}
 
-	w := wizard.NewWizard("cd")
+	w := framework.NewWizard("cd")
 
 	// Build options from worktrees
-	options := make([]wizard.Option, len(params.Worktrees))
+	options := make([]framework.Option, len(params.Worktrees))
 
 	for i, wt := range params.Worktrees {
 		// Format: "repo/branch" with optional dirty marker
@@ -51,7 +52,7 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 			description = wt.Note
 		}
 
-		options[i] = wizard.Option{
+		options[i] = framework.Option{
 			Label:       label,
 			Value:       i, // Store index to retrieve full info later
 			Description: description,
@@ -60,7 +61,7 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 	}
 
 	// Create filterable list step (uses fuzzy search)
-	selectStep := wizard.NewFilterableList("worktree", "Worktree", "Select worktree", options)
+	selectStep := steps.NewFilterableList("worktree", "Worktree", "Select worktree", options)
 
 	w.AddStep(selectStep)
 
@@ -83,7 +84,7 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 		return CdOptions{Cancelled: true}, nil
 	}
 
-	fl := step.(*wizard.FilterableListStep)
+	fl := step.(*steps.FilterableListStep)
 	val := fl.GetSelectedValue()
 	if val == nil {
 		return CdOptions{Cancelled: true}, nil

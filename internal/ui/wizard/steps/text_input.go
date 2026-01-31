@@ -1,4 +1,4 @@
-package wizard
+package steps
 
 import (
 	"fmt"
@@ -6,6 +6,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/raphi011/wt/internal/ui/wizard/framework"
 )
 
 // TextInputStep allows entering free-form text.
@@ -42,30 +44,30 @@ func (s *TextInputStep) Init() tea.Cmd {
 	return textinput.Blink
 }
 
-func (s *TextInputStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) {
+func (s *TextInputStep) Update(msg tea.KeyMsg) (framework.Step, tea.Cmd, framework.StepResult) {
 	switch msg.String() {
 	case "enter", "right":
 		value := strings.TrimSpace(s.input.Value())
 		if value == "" {
-			return s, nil, StepContinue
+			return s, nil, framework.StepContinue
 		}
 		if s.validate != nil {
 			if err := s.validate(value); err != nil {
 				// Could show error, for now just don't advance
-				return s, nil, StepContinue
+				return s, nil, framework.StepContinue
 			}
 		}
 		s.submitted = true
 		s.submitValue = value
-		return s, nil, StepAdvance
+		return s, nil, framework.StepAdvance
 	case "left":
-		return s, nil, StepBack
+		return s, nil, framework.StepBack
 	}
 
 	// Let textinput handle other keys
 	var cmd tea.Cmd
 	s.input, cmd = s.input.Update(msg)
-	return s, cmd, StepContinue
+	return s, cmd, framework.StepContinue
 }
 
 func (s *TextInputStep) View() string {
@@ -79,8 +81,8 @@ func (s *TextInputStep) Help() string {
 	return "type text • ← back • enter confirm • esc cancel"
 }
 
-func (s *TextInputStep) Value() StepValue {
-	return StepValue{
+func (s *TextInputStep) Value() framework.StepValue {
+	return framework.StepValue{
 		Key:   s.id,
 		Label: s.submitValue,
 		Raw:   s.submitValue,

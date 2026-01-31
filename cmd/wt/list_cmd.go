@@ -15,7 +15,7 @@ import (
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
-	"github.com/raphi011/wt/internal/ui"
+	"github.com/raphi011/wt/internal/ui/static"
 )
 
 // WorktreeDisplay holds worktree info for display
@@ -152,7 +152,7 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 				rows = append(rows, []string{wt.RepoName, wt.Branch, commit, dirty, created})
 			}
 
-			out.Print(ui.RenderTable(headers, rows))
+			out.Print(static.RenderTable(headers, rows))
 
 			return nil
 		},

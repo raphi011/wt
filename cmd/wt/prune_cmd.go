@@ -18,7 +18,9 @@ import (
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
-	"github.com/raphi011/wt/internal/ui"
+	"github.com/raphi011/wt/internal/ui/progress"
+	"github.com/raphi011/wt/internal/ui/static"
+	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
 
 // maxConcurrentPRFetches limits parallel gh API calls to avoid rate limiting
@@ -163,7 +165,7 @@ Use --interactive to select worktrees to prune.`,
 			}
 
 			// Start spinner
-			sp := ui.NewSpinner("Scanning worktrees...")
+			sp := progress.NewSpinner("Scanning worktrees...")
 			sp.Start()
 
 			// Load cache
@@ -243,9 +245,9 @@ Use --interactive to select worktrees to prune.`,
 
 			// Handle interactive mode
 			if interactive {
-				wizardInfos := make([]ui.PruneWorktreeInfo, 0, len(allWorktrees))
+				wizardInfos := make([]flows.PruneWorktreeInfo, 0, len(allWorktrees))
 				for i, wt := range allWorktrees {
-					wizardInfos = append(wizardInfos, ui.PruneWorktreeInfo{
+					wizardInfos = append(wizardInfos, flows.PruneWorktreeInfo{
 						ID:       i + 1, // Use index as ID
 						RepoName: wt.RepoName,
 						Branch:   wt.Branch,
@@ -254,7 +256,7 @@ Use --interactive to select worktrees to prune.`,
 					})
 				}
 
-				opts, err := ui.PruneInteractive(ui.PruneWizardParams{
+				opts, err := flows.PruneInteractive(flows.PruneWizardParams{
 					Worktrees: wizardInfos,
 				})
 				if err != nil {
@@ -365,7 +367,7 @@ Use --interactive to select worktrees to prune.`,
 				for _, wt := range removed {
 					rows = append(rows, []string{wt.RepoName, wt.Branch, string(reasonMap[wt.Path])})
 				}
-				out.Print(ui.RenderTable(headers, rows))
+				out.Print(static.RenderTable(headers, rows))
 
 				if verbose && len(toSkip) > 0 {
 					fmt.Println("Skipped:")
@@ -373,7 +375,7 @@ Use --interactive to select worktrees to prune.`,
 					for _, wt := range toSkip {
 						rows = append(rows, []string{wt.RepoName, wt.Branch, string(reasonMap[wt.Path])})
 					}
-					out.Print(ui.RenderTable(headers, rows))
+					out.Print(static.RenderTable(headers, rows))
 				}
 			}
 
@@ -505,7 +507,7 @@ func getCacheDir() string {
 }
 
 // refreshPRStatusForPrune fetches PR status for worktrees in parallel
-func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, wtCache *cache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig, sp *ui.Spinner) {
+func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, wtCache *cache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig, sp *progress.Spinner) {
 	// Filter to worktrees that need PR status fetched
 	var toFetch []pruneWorktree
 	for _, wt := range worktrees {

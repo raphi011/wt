@@ -1,4 +1,8 @@
-package ui
+// Package progress provides progress indication components.
+//
+// This package contains components for showing progress during
+// long-running operations, such as spinners and progress bars.
+package progress
 
 import (
 	"fmt"

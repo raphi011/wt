@@ -1,10 +1,12 @@
-package wizard
+package steps
 
 import (
 	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/raphi011/wt/internal/ui/wizard/framework"
 )
 
 // SingleSelectStep allows selecting one option from a list.
@@ -12,13 +14,13 @@ type SingleSelectStep struct {
 	id       string
 	title    string
 	prompt   string
-	options  []Option
+	options  []framework.Option
 	cursor   int
 	selected int // -1 if nothing selected yet
 }
 
 // NewSingleSelect creates a new single-select step.
-func NewSingleSelect(id, title, prompt string, options []Option) *SingleSelectStep {
+func NewSingleSelect(id, title, prompt string, options []framework.Option) *SingleSelectStep {
 	// Find first non-disabled option for initial cursor
 	cursor := 0
 	for i, opt := range options {
@@ -45,7 +47,7 @@ func (s *SingleSelectStep) Init() tea.Cmd {
 	return nil
 }
 
-func (s *SingleSelectStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) {
+func (s *SingleSelectStep) Update(msg tea.KeyMsg) (framework.Step, tea.Cmd, framework.StepResult) {
 	switch msg.String() {
 	case "up", "k":
 		s.moveCursorUp()
@@ -58,12 +60,12 @@ func (s *SingleSelectStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) {
 	case "enter", "right":
 		if len(s.options) > 0 && !s.options[s.cursor].Disabled {
 			s.selected = s.cursor
-			return s, nil, StepAdvance
+			return s, nil, framework.StepAdvance
 		}
 	case "left":
-		return s, nil, StepBack
+		return s, nil, framework.StepBack
 	}
-	return s, nil, StepContinue
+	return s, nil, framework.StepContinue
 }
 
 func (s *SingleSelectStep) View() string {
@@ -73,10 +75,10 @@ func (s *SingleSelectStep) View() string {
 
 	for i, opt := range s.options {
 		cursor := "  "
-		style := OptionNormalStyle
+		style := framework.OptionNormalStyle
 
 		if opt.Disabled {
-			style = OptionDisabledStyle
+			style = framework.OptionDisabledStyle
 			label := opt.Label
 			if opt.Description != "" {
 				label += " (" + opt.Description + ")"
@@ -87,12 +89,12 @@ func (s *SingleSelectStep) View() string {
 
 		if i == s.cursor {
 			cursor = "> "
-			style = OptionSelectedStyle
+			style = framework.OptionSelectedStyle
 		}
 
 		b.WriteString(cursor + style.Render(opt.Label) + "\n")
 		if opt.Description != "" {
-			b.WriteString("    " + OptionDescriptionStyle.Render(opt.Description) + "\n")
+			b.WriteString("    " + framework.OptionDescriptionStyle.Render(opt.Description) + "\n")
 		}
 	}
 
@@ -103,12 +105,12 @@ func (s *SingleSelectStep) Help() string {
 	return "↑/↓ select • ←/→ steps • enter confirm • esc cancel"
 }
 
-func (s *SingleSelectStep) Value() StepValue {
+func (s *SingleSelectStep) Value() framework.StepValue {
 	if s.selected < 0 || s.selected >= len(s.options) {
-		return StepValue{Key: s.id}
+		return framework.StepValue{Key: s.id}
 	}
 	opt := s.options[s.selected]
-	return StepValue{
+	return framework.StepValue{
 		Key:   s.id,
 		Label: opt.Label,
 		Raw:   opt.Value,
@@ -125,7 +127,7 @@ func (s *SingleSelectStep) Reset() {
 }
 
 // SetOptions updates the options list (useful for dynamic content).
-func (s *SingleSelectStep) SetOptions(options []Option) {
+func (s *SingleSelectStep) SetOptions(options []framework.Option) {
 	s.options = options
 	// Reset cursor to first non-disabled option
 	s.cursor = s.findFirstEnabled()
@@ -208,7 +210,7 @@ func (s *SingleSelectStep) EnableAllOptions() {
 	}
 }
 
-// Render displays the step with optional scrolling for long lists.
+// RenderWithScroll displays the step with optional scrolling for long lists.
 func (s *SingleSelectStep) RenderWithScroll(maxVisible int) string {
 	var b strings.Builder
 	b.WriteString(s.prompt)
@@ -221,16 +223,16 @@ func (s *SingleSelectStep) RenderWithScroll(maxVisible int) string {
 	end := min(start+maxVisible, len(s.options))
 
 	if start > 0 {
-		b.WriteString(OptionNormalStyle.Render("  ↑ more above") + "\n")
+		b.WriteString(framework.OptionNormalStyle.Render("  ↑ more above") + "\n")
 	}
 
 	for i := start; i < end; i++ {
 		opt := s.options[i]
 		cursor := "  "
-		style := OptionNormalStyle
+		style := framework.OptionNormalStyle
 
 		if opt.Disabled {
-			style = OptionDisabledStyle
+			style = framework.OptionDisabledStyle
 			label := opt.Label
 			if opt.Description != "" {
 				label += " (" + opt.Description + ")"
@@ -241,21 +243,21 @@ func (s *SingleSelectStep) RenderWithScroll(maxVisible int) string {
 
 		if i == s.cursor {
 			cursor = "> "
-			style = OptionSelectedStyle
+			style = framework.OptionSelectedStyle
 		}
 
 		b.WriteString(cursor + style.Render(opt.Label) + "\n")
 		if opt.Description != "" {
-			b.WriteString("    " + OptionDescriptionStyle.Render(opt.Description) + "\n")
+			b.WriteString("    " + framework.OptionDescriptionStyle.Render(opt.Description) + "\n")
 		}
 	}
 
 	if end < len(s.options) {
-		b.WriteString(OptionNormalStyle.Render("  ↓ more below") + "\n")
+		b.WriteString(framework.OptionNormalStyle.Render("  ↓ more below") + "\n")
 	}
 
 	if len(s.options) == 0 {
-		b.WriteString(OptionNormalStyle.Render("  No options available") + "\n")
+		b.WriteString(framework.OptionNormalStyle.Render("  No options available") + "\n")
 	}
 
 	return b.String()
@@ -267,9 +269,9 @@ func (s *SingleSelectStep) OptionsCount() int {
 }
 
 // GetOption returns the option at index.
-func (s *SingleSelectStep) GetOption(index int) (Option, bool) {
+func (s *SingleSelectStep) GetOption(index int) (framework.Option, bool) {
 	if index < 0 || index >= len(s.options) {
-		return Option{}, false
+		return framework.Option{}, false
 	}
 	return s.options[index], true
 }
