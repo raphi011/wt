@@ -24,10 +24,8 @@ func newExecCmd() *cobra.Command {
 		GroupID: GroupUtility,
 		Long: `Run a command in one or more worktrees or repos.
 
-Use -r to target repos by name, -l to target repos by label.
-
-Examples:
-  wt exec -r myrepo -- git status        # In specific repo
+Use -r to target repos by name, -l to target repos by label.`,
+		Example: `  wt exec -r myrepo -- git status        # In specific repo
   wt exec -l backend -- make test        # In repos with label
   wt exec -r repo1 -r repo2 -- npm install`,
 		RunE: func(cmd *cobra.Command, args []string) error {

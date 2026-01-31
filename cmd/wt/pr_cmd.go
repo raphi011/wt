@@ -23,10 +23,8 @@ func newPrCmd() *cobra.Command {
 		Use:     "pr",
 		Short:   "Work with PRs",
 		GroupID: GroupPR,
-		Long: `Work with pull requests.
-
-Examples:
-  wt pr checkout 123                # Checkout PR from current repo
+		Long:    `Work with pull requests.`,
+		Example: `  wt pr checkout 123                # Checkout PR from current repo
   wt pr checkout 123 org/repo       # Clone repo and checkout PR
   wt pr create --title "Add feature"
   wt pr merge
@@ -55,10 +53,8 @@ func newPrCheckoutCmd() *cobra.Command {
 		Use:   "checkout <number> [org/repo]",
 		Short: "Checkout PR (clones if needed)",
 		Args:  cobra.RangeArgs(1, 2),
-		Long: `Checkout a PR, cloning the repo as a bare repo if it doesn't exist locally.
-
-Examples:
-  wt pr checkout 123               # PR from current repo
+		Long:  `Checkout a PR, cloning the repo as a bare repo if it doesn't exist locally.`,
+		Example: `  wt pr checkout 123               # PR from current repo
   wt pr checkout 123 -r myrepo     # PR from local repo
   wt pr checkout 123 org/repo      # Clone repo and checkout PR`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -258,10 +254,8 @@ func newPrCreateCmd() *cobra.Command {
 		Use:   "create",
 		Short: "Create PR for worktree",
 		Args:  cobra.NoArgs,
-		Long: `Create a PR for the current branch.
-
-Examples:
-  wt pr create --title "Add feature"
+		Long:  `Create a PR for the current branch.`,
+		Example: `  wt pr create --title "Add feature"
   wt pr create --title "Add feature" --body "Details"
   wt pr create --title "Add feature" --draft
   wt pr create --title "Add feature" -w    # Open in browser`,
@@ -359,6 +353,7 @@ Examples:
 	cmd.Flags().BoolVarP(&web, "web", "w", false, "Open in browser after creation")
 
 	cmd.MarkFlagRequired("title")
+	cmd.MarkFlagFilename("body-file") // Enable file completion for body-file flag
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 
 	return cmd
@@ -380,10 +375,8 @@ func newPrMergeCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		Long: `Merge the PR for the current branch.
 
-Merges the PR, removes the worktree (if applicable), and deletes the local branch.
-
-Examples:
-  wt pr merge                  # Merge current branch's PR
+Merges the PR, removes the worktree (if applicable), and deletes the local branch.`,
+		Example: `  wt pr merge                  # Merge current branch's PR
   wt pr merge --keep           # Keep worktree after merge
   wt pr merge -s rebase        # Use rebase strategy`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -513,10 +506,8 @@ func newPrViewCmd() *cobra.Command {
 		Use:   "view",
 		Short: "View PR details or open in browser",
 		Args:  cobra.NoArgs,
-		Long: `View PR details for the current branch.
-
-Examples:
-  wt pr view              # View PR details
+		Long:  `View PR details for the current branch.`,
+		Example: `  wt pr view              # View PR details
   wt pr view -w           # Open PR in browser`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

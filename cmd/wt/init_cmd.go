@@ -17,10 +17,8 @@ func newInitCmd() *cobra.Command {
 
 Without this wrapper, 'wt cd' only prints the path (since subprocesses
 cannot change the parent shell's directory). The wrapper intercepts
-'wt cd' and performs the actual directory change.
-
-Examples:
-  eval "$(wt init bash)"           # add to ~/.bashrc
+'wt cd' and performs the actual directory change.`,
+		Example: `  eval "$(wt init bash)"           # add to ~/.bashrc
   eval "$(wt init zsh)"            # add to ~/.zshrc
   wt init fish | source            # add to ~/.config/fish/config.fish`,
 		RunE: func(cmd *cobra.Command, args []string) error {

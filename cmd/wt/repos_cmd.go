@@ -27,10 +27,8 @@ func newReposCmd() *cobra.Command {
 		Args:    cobra.NoArgs,
 		Long: `List all registered repositories.
 
-Shows name, path, type (bare/regular), worktree format, and labels.
-
-Examples:
-  wt repos                     # List all repos
+Shows name, path, type (bare/regular), worktree format, and labels.`,
+		Example: `  wt repos                     # List all repos
   wt repos -l backend          # Filter by label
   wt repos --json              # Output as JSON`,
 		RunE: func(cmd *cobra.Command, args []string) error {

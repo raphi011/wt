@@ -19,10 +19,8 @@ func newLabelCmd() *cobra.Command {
 		GroupID: GroupUtility,
 		Long: `Manage labels on repositories.
 
-Labels are stored in the registry and can be used to target repos with -l flag.
-
-Examples:
-  wt label add backend           # Add label to current repo
+Labels are stored in the registry and can be used to target repos with -l flag.`,
+		Example: `  wt label add backend           # Add label to current repo
   wt label add backend -r api    # Add label to specific repo
   wt label remove backend        # Remove label
   wt label list                  # List labels`,

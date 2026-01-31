@@ -101,6 +101,9 @@ func Execute() {
 }
 
 func init() {
+	// Disable alphabetical sorting to preserve logical command order within groups
+	cobra.EnableCommandSorting = false
+
 	// Global flags
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Show external commands being executed")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "Suppress all log output")

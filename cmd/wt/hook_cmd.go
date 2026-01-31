@@ -32,10 +32,8 @@ func newHookCmd() *cobra.Command {
 		Long: `Run one or more configured hooks.
 
 Hooks are defined in config.toml and can use placeholders.
-By default runs in current repo/worktree; use -r/-l to target other repos.
-
-Examples:
-  wt hook code                # Run 'code' hook in current repo
+By default runs in current repo/worktree; use -r/-l to target other repos.`,
+		Example: `  wt hook code                # Run 'code' hook in current repo
   wt hook code -r myrepo      # Run in specific repo
   wt hook code idea           # Run multiple hooks
   wt hook code -d             # Dry-run: print command without executing

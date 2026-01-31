@@ -31,10 +31,8 @@ func newCdCmd() *cobra.Command {
 		Args:    cobra.NoArgs,
 		Long: `Print the path of a repo or worktree for shell scripting.
 
-Use with shell command substitution: cd $(wt cd -r myrepo)
-
-Examples:
-  cd $(wt cd -r myrepo)   # cd to repo
+Use with shell command substitution: cd $(wt cd -r myrepo)`,
+		Example: `  cd $(wt cd -r myrepo)   # cd to repo
   cd $(wt cd -l backend)  # cd to repo with label (must match one)
   cd $(wt cd -i)          # interactive fuzzy search for worktree`,
 		RunE: func(cmd *cobra.Command, args []string) error {

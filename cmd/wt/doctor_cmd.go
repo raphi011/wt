@@ -25,10 +25,8 @@ Checks:
 - Registered repos exist on disk
 - Registered repos are valid git repos
 - Worktrees are valid (no broken/orphaned)
-- External tools installed (git, gh/glab)
-
-Examples:
-  wt doctor          # Check for issues
+- External tools installed (git, gh/glab)`,
+		Example: `  wt doctor          # Check for issues
   wt doctor --fix    # Auto-fix recoverable issues`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

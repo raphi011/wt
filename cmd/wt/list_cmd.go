@@ -50,10 +50,8 @@ func newListCmd() *cobra.Command {
 Inside a repo: shows only that repo's worktrees. Use --global for all.
 Use -r to filter by repo name(s), -l to filter by label(s).
 
-Worktrees are sorted by creation date (most recent first) by default.
-
-Examples:
-  wt list                      # List worktrees for current repo
+Worktrees are sorted by creation date (most recent first) by default.`,
+		Example: `  wt list                      # List worktrees for current repo
   wt list --global             # List all worktrees (all repos)
   wt list -r myrepo            # Filter by repository name
   wt list -l backend           # Filter by label

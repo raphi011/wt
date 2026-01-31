@@ -19,18 +19,17 @@ func newRemoveCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:     "remove <repo>",
-		Short:   "Unregister a repository",
-		Aliases: []string{"rm"},
-		GroupID: GroupRegistry,
-		Args:    cobra.ExactArgs(1),
+		Use:               "remove <repo>",
+		Short:             "Unregister a repository",
+		Aliases:           []string{"rm"},
+		GroupID:           GroupRegistry,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeRepoNames,
 		Long: `Unregister a repository from wt.
 
 The repository will be removed from the registry (~/.wt/repos.json).
-By default, files are kept on disk. Use --delete to also remove files.
-
-Examples:
-  wt remove my-project           # Unregister, keep files
+By default, files are kept on disk. Use --delete to also remove files.`,
+		Example: `  wt remove my-project           # Unregister, keep files
   wt remove my-project --delete  # Unregister and delete from disk
   wt remove my-project -D -f     # Delete without confirmation`,
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -18,10 +18,8 @@ func newNoteCmd() *cobra.Command {
 		GroupID: GroupUtility,
 		Long: `Manage notes on branches.
 
-Notes are stored in git config and displayed in list output.
-
-Examples:
-  wt note set "Working on login"    # Set note on current branch
+Notes are stored in git config and displayed in list output.`,
+		Example: `  wt note set "Working on login"    # Set note on current branch
   wt note get                       # Get note for current branch
   wt note clear                     # Clear note from current branch`,
 	}
