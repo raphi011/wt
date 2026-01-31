@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -50,6 +51,29 @@ Shows name, path, type (bare/regular), worktree format, and labels.`,
 				}
 			} else {
 				repos = reg.Repos
+			}
+
+			// Sort repos
+			switch sortBy {
+			case "label":
+				sort.Slice(repos, func(i, j int) bool {
+					li := ""
+					if len(repos[i].Labels) > 0 {
+						li = repos[i].Labels[0]
+					}
+					lj := ""
+					if len(repos[j].Labels) > 0 {
+						lj = repos[j].Labels[0]
+					}
+					if li != lj {
+						return li < lj
+					}
+					return repos[i].Name < repos[j].Name
+				})
+			default: // "name"
+				sort.Slice(repos, func(i, j int) bool {
+					return repos[i].Name < repos[j].Name
+				})
 			}
 
 			// Output

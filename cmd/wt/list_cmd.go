@@ -104,10 +104,24 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 				allWorktrees = append(allWorktrees, worktrees...)
 			}
 
-			// Sort by creation date (most recent first)
-			sort.Slice(allWorktrees, func(i, j int) bool {
-				return allWorktrees[i].CreatedAt.After(allWorktrees[j].CreatedAt)
-			})
+			// Sort worktrees
+			switch sortBy {
+			case "repo":
+				sort.Slice(allWorktrees, func(i, j int) bool {
+					if allWorktrees[i].RepoName != allWorktrees[j].RepoName {
+						return allWorktrees[i].RepoName < allWorktrees[j].RepoName
+					}
+					return allWorktrees[i].Branch < allWorktrees[j].Branch
+				})
+			case "branch":
+				sort.Slice(allWorktrees, func(i, j int) bool {
+					return allWorktrees[i].Branch < allWorktrees[j].Branch
+				})
+			default: // "created" or empty
+				sort.Slice(allWorktrees, func(i, j int) bool {
+					return allWorktrees[i].CreatedAt.After(allWorktrees[j].CreatedAt)
+				})
+			}
 
 			// Output
 			if jsonOutput {
