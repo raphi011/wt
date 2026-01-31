@@ -25,10 +25,11 @@ func newHookCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:     "hook <name>...",
-		Short:   "Run configured hook",
-		GroupID: GroupUtility,
-		Args:    cobra.MinimumNArgs(1),
+		Use:               "hook <name>...",
+		Short:             "Run configured hook",
+		GroupID:           GroupUtility,
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: completeHooks,
 		Long: `Run one or more configured hooks.
 
 Hooks are defined in config.toml and can use placeholders.

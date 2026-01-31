@@ -38,9 +38,10 @@ func newLabelAddCmd() *cobra.Command {
 	var repository []string
 
 	cmd := &cobra.Command{
-		Use:   "add <label>",
-		Short: "Add a label to a repository",
-		Args:  cobra.ExactArgs(1),
+		Use:               "add <label>",
+		Short:             "Add a label to a repository",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeLabels,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			label := args[0]
@@ -78,9 +79,10 @@ func newLabelRemoveCmd() *cobra.Command {
 	var repository []string
 
 	cmd := &cobra.Command{
-		Use:   "remove <label>",
-		Short: "Remove a label from a repository",
-		Args:  cobra.ExactArgs(1),
+		Use:               "remove <label>",
+		Short:             "Remove a label from a repository",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeLabels,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			label := args[0]
