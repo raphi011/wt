@@ -59,8 +59,8 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 		}
 	}
 
-	// Create fuzzy list step
-	selectStep := wizard.NewFuzzyList("worktree", "Worktree", "Select worktree", options)
+	// Create filterable list step (uses fuzzy search)
+	selectStep := wizard.NewFilterableList("worktree", "Worktree", "Select worktree", options)
 
 	w.AddStep(selectStep)
 
@@ -83,7 +83,7 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 		return CdOptions{Cancelled: true}, nil
 	}
 
-	fl := step.(*wizard.FuzzyListStep)
+	fl := step.(*wizard.FilterableListStep)
 	val := fl.GetSelectedValue()
 	if val == nil {
 		return CdOptions{Cancelled: true}, nil

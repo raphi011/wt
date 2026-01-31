@@ -5,10 +5,18 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sahilm/fuzzy"
 )
+
+// optionSource implements fuzzy.Source for options.
+type optionSource []Option
+
+func (s optionSource) String(i int) string { return s[i].Label }
+func (s optionSource) Len() int            { return len(s) }
 
 // FilterableListStep allows selecting one option from a filterable list
 // with support for disabled items (cursor skips them).
+// Uses fuzzy matching for filtering.
 // Optionally supports a "create from filter" option that appears when the filter
 // doesn't match any existing option exactly.
 type FilterableListStep struct {
@@ -16,9 +24,9 @@ type FilterableListStep struct {
 	title    string
 	prompt   string
 	options  []Option
-	filtered []int // indices into options
-	cursor   int   // position in filtered list (0 = create option if shown)
-	selected int   // selected index in filtered list, -1 if none
+	filtered []fuzzy.Match // fuzzy matches with indices and matched positions
+	cursor   int           // position in filtered list (0 = create option if shown)
+	selected int           // selected index in filtered list, -1 if none
 	filter   string
 
 	// Create-from-filter functionality
@@ -33,10 +41,13 @@ type FilterableListStep struct {
 
 // NewFilterableList creates a new filterable single-select step.
 func NewFilterableList(id, title, prompt string, options []Option) *FilterableListStep {
-	// Build initial filtered list (all indices)
-	filtered := make([]int, len(options))
+	// Build initial filtered list (all options)
+	filtered := make([]fuzzy.Match, len(options))
 	for i := range options {
-		filtered[i] = i
+		filtered[i] = fuzzy.Match{
+			Str:   options[i].Label,
+			Index: i,
+		}
 	}
 
 	// Find first non-disabled option
@@ -136,7 +147,7 @@ func (s *FilterableListStep) Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult) 
 			optionCursor = s.cursor - 1
 		}
 		if len(s.filtered) > 0 && optionCursor >= 0 && optionCursor < len(s.filtered) {
-			idx := s.filtered[optionCursor]
+			idx := s.filtered[optionCursor].Index
 			if !s.options[idx].Disabled {
 				s.selected = s.cursor
 				s.selectedIsNew = false
@@ -217,8 +228,8 @@ func (s *FilterableListStep) View() string {
 			continue
 		}
 
-		idx := s.filtered[filteredIdx]
-		opt := s.options[idx]
+		match := s.filtered[filteredIdx]
+		opt := s.options[match.Index]
 
 		cursor := "  "
 		style := OptionNormalStyle
@@ -238,7 +249,15 @@ func (s *FilterableListStep) View() string {
 			style = OptionSelectedStyle
 		}
 
-		b.WriteString(cursor + style.Render(opt.Label) + "\n")
+		// Highlight matched characters if filtering
+		label := opt.Label
+		if s.filter != "" && len(match.MatchedIndexes) > 0 {
+			label = s.highlightMatches(opt.Label, match.MatchedIndexes, i == s.cursor)
+		} else {
+			label = style.Render(opt.Label)
+		}
+
+		b.WriteString(cursor + label + "\n")
 		if opt.Description != "" {
 			b.WriteString("    " + OptionDescriptionStyle.Render(opt.Description) + "\n")
 		}
@@ -289,7 +308,7 @@ func (s *FilterableListStep) Value() StepValue {
 		return StepValue{Key: s.id}
 	}
 
-	idx := s.filtered[optionIdx]
+	idx := s.filtered[optionIdx].Index
 	opt := s.options[idx]
 
 	label := opt.Label
@@ -351,7 +370,7 @@ func (s *FilterableListStep) GetSelectedValue() interface{} {
 	if optionIdx < 0 || optionIdx >= len(s.filtered) {
 		return nil
 	}
-	idx := s.filtered[optionIdx]
+	idx := s.filtered[optionIdx].Index
 	return s.options[idx].Value
 }
 
@@ -372,7 +391,7 @@ func (s *FilterableListStep) GetSelectedLabel() string {
 	if optionIdx < 0 || optionIdx >= len(s.filtered) {
 		return ""
 	}
-	idx := s.filtered[optionIdx]
+	idx := s.filtered[optionIdx].Index
 	return s.options[idx].Label
 }
 
@@ -389,24 +408,47 @@ func (s *FilterableListStep) GetSelectedOption() Option {
 	if optionIdx < 0 || optionIdx >= len(s.filtered) {
 		return Option{}
 	}
-	idx := s.filtered[optionIdx]
+	idx := s.filtered[optionIdx].Index
 	return s.options[idx]
+}
+
+// highlightMatches renders the label with matched characters highlighted.
+func (s *FilterableListStep) highlightMatches(label string, matchedIndexes []int, isSelected bool) string {
+	// Create a set of matched indices for quick lookup
+	matchSet := make(map[int]bool)
+	for _, idx := range matchedIndexes {
+		matchSet[idx] = true
+	}
+
+	var result strings.Builder
+	runes := []rune(label)
+	for i, r := range runes {
+		char := string(r)
+		if matchSet[i] {
+			// Highlight matched character
+			result.WriteString(MatchHighlightStyle.Render(char))
+		} else if isSelected {
+			result.WriteString(OptionSelectedStyle.Render(char))
+		} else {
+			result.WriteString(OptionNormalStyle.Render(char))
+		}
+	}
+	return result.String()
 }
 
 func (s *FilterableListStep) applyFilter() {
 	if s.filter == "" {
-		s.filtered = make([]int, len(s.options))
+		// No filter - show all options in original order
+		s.filtered = make([]fuzzy.Match, len(s.options))
 		for i := range s.options {
-			s.filtered[i] = i
-		}
-	} else {
-		filter := strings.ToLower(s.filter)
-		s.filtered = nil
-		for i, opt := range s.options {
-			if strings.Contains(strings.ToLower(opt.Label), filter) {
-				s.filtered = append(s.filtered, i)
+			s.filtered[i] = fuzzy.Match{
+				Str:   s.options[i].Label,
+				Index: i,
 			}
 		}
+	} else {
+		// Apply fuzzy search - results are sorted by score (best first)
+		s.filtered = fuzzy.FindFrom(s.filter, optionSource(s.options))
 	}
 
 	// Calculate total items (including create option if shown)
@@ -434,7 +476,7 @@ func (s *FilterableListStep) applyFilter() {
 	}
 
 	if filteredIdx >= 0 && filteredIdx < len(s.filtered) {
-		idx := s.filtered[filteredIdx]
+		idx := s.filtered[filteredIdx].Index
 		if s.options[idx].Disabled {
 			// Try to find next non-disabled
 			if next := s.findNextEnabled(s.cursor); next >= 0 {
@@ -464,7 +506,7 @@ func (s *FilterableListStep) findFirstEnabled() int {
 		return 0
 	}
 	for i := 0; i < len(s.filtered); i++ {
-		idx := s.filtered[i]
+		idx := s.filtered[i].Index
 		if !s.options[idx].Disabled {
 			return i
 		}
@@ -479,7 +521,7 @@ func (s *FilterableListStep) findLastEnabled() int {
 		offset = 1
 	}
 	for i := len(s.filtered) - 1; i >= 0; i-- {
-		idx := s.filtered[i]
+		idx := s.filtered[i].Index
 		if !s.options[idx].Disabled {
 			return i + offset
 		}
@@ -517,7 +559,7 @@ func (s *FilterableListStep) findNextEnabled(from int) int {
 		}
 
 		if filteredIdx >= 0 && filteredIdx < len(s.filtered) {
-			idx := s.filtered[filteredIdx]
+			idx := s.filtered[filteredIdx].Index
 			if !s.options[idx].Disabled {
 				return i
 			}
@@ -542,7 +584,7 @@ func (s *FilterableListStep) findPrevEnabled(from int) int {
 		}
 
 		if filteredIdx >= 0 && filteredIdx < len(s.filtered) {
-			idx := s.filtered[filteredIdx]
+			idx := s.filtered[filteredIdx].Index
 			if !s.options[idx].Disabled {
 				return i
 			}
