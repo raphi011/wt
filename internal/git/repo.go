@@ -665,36 +665,19 @@ const (
 
 // DetectRepoType determines if a path is a bare or regular git repository
 func DetectRepoType(path string) (RepoType, error) {
-	// Check for .git directory or symlink (regular repo)
+	// Check for .git directory (regular repo or bare-in-.git pattern)
 	gitDir := filepath.Join(path, ".git")
-
-	// Use Lstat to check if .git is a symlink (without following it)
-	linfo, err := os.Lstat(gitDir)
+	info, err := os.Stat(gitDir)
 	if err == nil {
-		// Check if .git is a symlink (bare repo with .bare/.git pattern)
-		if linfo.Mode()&os.ModeSymlink != 0 {
-			// .git is a symlink - check where it points
-			target, err := os.Readlink(gitDir)
-			if err != nil {
-				return 0, fmt.Errorf("failed to read .git symlink: %w", err)
-			}
-			// Resolve relative paths
-			if !filepath.IsAbs(target) {
-				target = filepath.Join(path, target)
-			}
-			// Check if target is a bare repo
-			if isBareRepo(target) {
+		if info.IsDir() {
+			// .git is a directory - check if it's a bare repo inside .git
+			// (bare-in-.git pattern has core.bare=false but no working tree)
+			if isBareRepo(gitDir) {
 				return RepoTypeBare, nil
 			}
-			return 0, fmt.Errorf("invalid .git symlink target: %s", target)
-		}
-
-		// .git exists and is not a symlink - check if directory or file
-		if linfo.IsDir() {
 			return RepoTypeRegular, nil
 		}
-
-		// .git file - could be a worktree or a pointer to a bare repo (grove pattern)
+		// .git file - could be a worktree or a pointer to a bare repo
 		// Read the gitdir to determine which
 		content, err := os.ReadFile(gitDir)
 		if err != nil {
@@ -744,16 +727,16 @@ func isBareRepo(path string) bool {
 
 // GetGitDir returns the git directory for a repo
 func GetGitDir(repoPath string, repoType RepoType) string {
+	// Check for bare-in-.git pattern first
+	gitDir := filepath.Join(repoPath, ".git")
+	if isBareRepo(gitDir) {
+		return gitDir
+	}
 	if repoType == RepoTypeBare {
-		// Check for .bare/.git symlink pattern
-		bareDir := filepath.Join(repoPath, ".bare")
-		if isBareRepo(bareDir) {
-			return bareDir
-		}
 		// Traditional bare repo (the path itself is the git dir)
 		return repoPath
 	}
-	return filepath.Join(repoPath, ".git")
+	return gitDir
 }
 
 // GetGitDirForWorktree returns the .git directory that a worktree points to
@@ -797,46 +780,36 @@ func GetGitDirForWorktree(worktreePath string) (string, error) {
 	}
 }
 
-// CloneBareWithWorktreeSupport clones a repo as a bare repo inside a .bare directory
-// and creates a .git symlink pointing to it. This allows worktrees to be created as
-// siblings to .bare while still having git commands work via the symlink.
+// CloneBareWithWorktreeSupport clones a repo as a bare repo inside the .git directory.
+// This allows worktrees to be created as siblings while git commands work normally.
 //
 // The directory structure will be:
 //
 //	destPath/
-//	├── .bare/     # actual bare git repo
-//	└── .git       # symlink -> .bare
+//	└── .git/     # bare git repo contents (HEAD, objects/, refs/, etc.)
 func CloneBareWithWorktreeSupport(ctx context.Context, url, destPath string) error {
 	// Create the destination directory
 	if err := os.MkdirAll(destPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Clone as bare into .bare subdirectory
-	bareDir := filepath.Join(destPath, ".bare")
-	if err := runGit(ctx, "", "clone", "--bare", url, bareDir); err != nil {
+	// Clone as bare directly into .git subdirectory
+	gitDir := filepath.Join(destPath, ".git")
+	if err := runGit(ctx, "", "clone", "--bare", url, gitDir); err != nil {
 		// Clean up on failure
 		os.RemoveAll(destPath)
 		return fmt.Errorf("git clone failed: %w", err)
 	}
 
-	// Create .git symlink pointing to .bare
-	gitSymlink := filepath.Join(destPath, ".git")
-	if err := os.Symlink(".bare", gitSymlink); err != nil {
-		// Clean up on failure
-		os.RemoveAll(destPath)
-		return fmt.Errorf("failed to create .git symlink: %w", err)
-	}
-
-	// Configure the bare repo to know about worktrees
+	// Configure the repo for worktree support
 	// Set core.bare=false so worktree commands work properly
-	if err := runGit(ctx, bareDir, "config", "core.bare", "false"); err != nil {
+	if err := runGit(ctx, gitDir, "config", "core.bare", "false"); err != nil {
 		os.RemoveAll(destPath)
 		return fmt.Errorf("failed to configure repo: %w", err)
 	}
 
 	// Set fetch refspec to get all branches
-	if err := runGit(ctx, bareDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
+	if err := runGit(ctx, gitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
 		os.RemoveAll(destPath)
 		return fmt.Errorf("failed to configure fetch refspec: %w", err)
 	}
@@ -844,41 +817,32 @@ func CloneBareWithWorktreeSupport(ctx context.Context, url, destPath string) err
 	return nil
 }
 
-// SetupBareWorktreeSupport converts an existing bare repo into the .bare/.git symlink pattern.
-// This is useful when a forge CLI clones a bare repo and we need to add the symlink structure.
+// SetupBareWorktreeSupport converts an existing bare repo into the .git directory pattern.
+// This is useful when a forge CLI clones a bare repo and we need to restructure it.
 //
 // The directory structure after setup will be:
 //
 //	destPath/
-//	├── .bare/     # actual bare git repo (moved from original location)
-//	└── .git       # symlink -> .bare
+//	└── .git/     # bare git repo contents (moved from original location)
 func SetupBareWorktreeSupport(ctx context.Context, bareRepoPath, destPath string) error {
 	// Create the destination directory
 	if err := os.MkdirAll(destPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Move the bare repo to .bare subdirectory
-	bareDir := filepath.Join(destPath, ".bare")
-	if err := os.Rename(bareRepoPath, bareDir); err != nil {
+	// Move the bare repo to .git subdirectory
+	gitDir := filepath.Join(destPath, ".git")
+	if err := os.Rename(bareRepoPath, gitDir); err != nil {
 		return fmt.Errorf("failed to move bare repo: %w", err)
 	}
 
-	// Create .git symlink pointing to .bare
-	gitSymlink := filepath.Join(destPath, ".git")
-	if err := os.Symlink(".bare", gitSymlink); err != nil {
-		// Try to restore on failure
-		os.Rename(bareDir, bareRepoPath)
-		return fmt.Errorf("failed to create .git symlink: %w", err)
-	}
-
-	// Configure the bare repo to know about worktrees
-	if err := runGit(ctx, bareDir, "config", "core.bare", "false"); err != nil {
+	// Configure the repo for worktree support
+	if err := runGit(ctx, gitDir, "config", "core.bare", "false"); err != nil {
 		return fmt.Errorf("failed to configure repo: %w", err)
 	}
 
 	// Set fetch refspec to get all branches
-	if err := runGit(ctx, bareDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
+	if err := runGit(ctx, gitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
 		return fmt.Errorf("failed to configure fetch refspec: %w", err)
 	}
 

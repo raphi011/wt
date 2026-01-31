@@ -35,12 +35,11 @@ func newCloneCmd() *cobra.Command {
 By default, clones as a regular repo. Use --bare for a bare repo.
 Bare repos are recommended for worktree-centric workflows.
 
-Bare repos use a special layout with .bare directory and .git symlink:
+Bare repos clone directly into .git (no working tree):
   repo/
-  ├── .bare/   # actual bare git repo
-  └── .git     # symlink -> .bare
+  └── .git/    # bare git repo contents (HEAD, objects/, refs/, etc.)
 
-This allows worktrees to be created as siblings to .bare.
+This allows worktrees to be created as siblings to .git.
 
 If destination is not specified, clones into the current directory.`,
 		Example: `  wt clone https://github.com/org/repo           # Clone to ./repo
@@ -127,8 +126,8 @@ If destination is not specified, clones into the current directory.`,
 
 				l.Debug("creating initial worktree", "path", wtPath, "branch", branch)
 
-				// For bare repos with .bare/.git layout, the git dir is .bare
-				gitDir := filepath.Join(absPath, ".bare")
+				// For bare repos, the git dir is .git (contains bare repo contents)
+				gitDir := filepath.Join(absPath, ".git")
 				if err := git.CreateWorktree(ctx, gitDir, wtPath, branch); err != nil {
 					l.Printf("Warning: failed to create initial worktree: %v\n", err)
 				} else {
