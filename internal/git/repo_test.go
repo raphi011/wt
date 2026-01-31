@@ -20,6 +20,14 @@ func TestGetMainRepoPath(t *testing.T) {
 		t.Fatalf("failed to init repo: %v", err)
 	}
 
+	// Configure git user for CI environment
+	if err := runGit(ctx, repoPath, "config", "user.email", "test@test.com"); err != nil {
+		t.Fatalf("failed to set git email: %v", err)
+	}
+	if err := runGit(ctx, repoPath, "config", "user.name", "Test User"); err != nil {
+		t.Fatalf("failed to set git name: %v", err)
+	}
+
 	// Create an initial commit (required for worktrees)
 	if err := runGit(ctx, repoPath, "commit", "--allow-empty", "-m", "Initial commit"); err != nil {
 		t.Fatalf("failed to create initial commit: %v", err)
