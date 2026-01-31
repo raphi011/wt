@@ -84,7 +84,7 @@ stale_threshold = "30d"  # Default for --stale flag
 **CLI:**
 ```bash
 wt mv feat/old feat/new            # Rename branch AND directory
-wt mv -n 3 feat/new                # Target by worktree number
+wt mv --branch feat/old feat/new   # Target by branch name
 ```
 
 **Implementation:**
@@ -136,9 +136,9 @@ wt doctor --repair     # Attempt to fix found issues
 
 **CLI:**
 ```bash
-wt lock -n 3                       # Lock worktree by number
-wt lock feat/important             # Lock by branch name
-wt unlock -n 3                     # Remove lock
+wt lock --branch feat/important    # Lock worktree by branch
+wt lock -r myrepo                  # Lock repo's current worktree
+wt unlock --branch feat/important  # Remove lock
 wt list                            # Shows 🔒 indicator for locked
 ```
 

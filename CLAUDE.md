@@ -82,11 +82,12 @@ internal/ui/             - Terminal UI components
 
 ### Development Guidelines
 
-**Target Resolution Pattern** - Commands that operate on worktrees use `--number` (`-n`) flag with `internal/resolve.ByID()`:
+**Target Resolution Pattern** - Commands target repos/worktrees via `-r` (repository), `-l` (label), `--branch`, or `-i` (interactive):
 
-- **ID or repo/label**: `wt exec`, `wt hook` - require `-n <id>`, or `-r <repo>`/`-l <label>` (exec/hook support multiple); these flags are mutually exclusive
-- **ID or repo or label**: `wt cd` - require `-n <id>`, `-r <repo>`, or `-l <label>` (mutually exclusive)
-- **Optional ID**: `wt note`, `wt pr create`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current branch; outside requires `-n` (prune supports multiple)
+- **Repo targeting**: `wt exec`, `wt hook` - use `-r <repo>` or `-l <label>` to target repos
+- **Repo or interactive**: `wt cd` - use `-r <repo>`, `-l <label>`, or `-i` (mutually exclusive)
+- **Branch targeting**: `wt prune`, `wt hook` - use `--branch <name>` to target specific worktree
+- **Context-aware**: `wt note`, `wt pr create`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current; outside uses `-r`/`-l`
 - **Special case**: `wt checkout` - inside repo uses branch name; outside repo requires `-r <repo>` or `-l <label>` to specify target repos; use `-i` for interactive mode
 
 Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt hook`, `wt pr create`, `wt pr merge`, `wt prune`
@@ -94,8 +95,7 @@ Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt ho
 **Keep completions in sync** - **IMPORTANT**: When adding or modifying CLI flags, you MUST update the shell completion scripts in `cmd/wt/completions.go`. This file contains completions for fish, bash, and zsh. Search for existing flags of the same command to find where to add the new flag in each shell format.
 
 **Reuse flags consistently** - When adding flags that serve the same purpose across commands, use identical names/shortcuts. Standard flags:
-- `-n, --number` - worktree number for targeting
-- `-i, --interactive` - interactive mode (wt checkout)
+- `-i, --interactive` - interactive mode (wt checkout, wt cd, wt prune)
 - `-r, --repository` - repository name for targeting (wt checkout, list, exec, cd, hook)
 - `-l, --label` - target repos by label (wt checkout, list, exec, hook)
 - `-d, --dry-run` - preview without making changes
@@ -165,7 +165,7 @@ func runCheckout(ctx context.Context) error {
 - stdout: Primary output (data, tables, paths, JSON)
 - stderr: Diagnostics (logs, progress, errors)
 
-This allows piping: `cd $(wt cd -n 1)` works because logs go to stderr.
+This allows piping: `cd $(wt cd --number 1)` works because logs go to stderr.
 
 ### Integration Tests
 
