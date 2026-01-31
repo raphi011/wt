@@ -11,7 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
-	"github.com/raphi011/wt/internal/ui"
+	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
 
 func newCdCmd() *cobra.Command {
@@ -50,7 +50,7 @@ Use with shell command substitution: cd $(wt cd -r myrepo)`,
 
 			if interactive {
 				// Interactive mode: show fuzzy list of all worktrees
-				var allWorktrees []ui.CdWorktreeInfo
+				var allWorktrees []flows.CdWorktreeInfo
 
 				for i := range reg.Repos {
 					repo := &reg.Repos[i]
@@ -60,7 +60,7 @@ Use with shell command substitution: cd $(wt cd -r myrepo)`,
 					}
 					notes, _ := git.GetAllBranchConfig(ctx, repo.Path)
 					for _, wt := range worktrees {
-						allWorktrees = append(allWorktrees, ui.CdWorktreeInfo{
+						allWorktrees = append(allWorktrees, flows.CdWorktreeInfo{
 							RepoName: repo.Name,
 							Branch:   wt.Branch,
 							Path:     wt.Path,
@@ -82,7 +82,7 @@ Use with shell command substitution: cd $(wt cd -r myrepo)`,
 					return allWorktrees[i].Branch < allWorktrees[j].Branch
 				})
 
-				result, err := ui.CdInteractive(ui.CdWizardParams{
+				result, err := flows.CdInteractive(flows.CdWizardParams{
 					Worktrees: allWorktrees,
 				})
 				if err != nil {

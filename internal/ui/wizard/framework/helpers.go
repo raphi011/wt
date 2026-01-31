@@ -1,4 +1,4 @@
-package wizard
+package framework
 
 import (
 	"strings"

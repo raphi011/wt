@@ -1,10 +1,11 @@
-package ui
+package flows
 
 import (
 	"fmt"
 
 	"github.com/raphi011/wt/internal/forge"
-	"github.com/raphi011/wt/internal/ui/wizard"
+	"github.com/raphi011/wt/internal/ui/wizard/framework"
+	"github.com/raphi011/wt/internal/ui/wizard/steps"
 )
 
 // PrCheckoutOptions holds the options gathered from interactive mode.
@@ -31,7 +32,7 @@ type PrCheckoutWizardParams struct {
 
 // PrCheckoutInteractive runs the interactive PR checkout wizard.
 func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, error) {
-	w := wizard.NewWizard("PR Checkout")
+	w := framework.NewWizard("PR Checkout")
 
 	// Track repo paths/names for the wizard
 	repoPaths := params.AvailableRepos
@@ -45,14 +46,14 @@ func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, er
 
 	// Step 1: Repo selection (single-select) - skip if only one repo
 	if showRepoStep {
-		repoOptions := make([]wizard.Option, len(repoNames))
+		repoOptions := make([]framework.Option, len(repoNames))
 		for i, name := range repoNames {
-			repoOptions[i] = wizard.Option{
+			repoOptions[i] = framework.Option{
 				Label: name,
 				Value: repoPaths[i],
 			}
 		}
-		repoStep := wizard.NewSingleSelect("repo", "Repository", "Select a repository", repoOptions)
+		repoStep := steps.NewSingleSelect("repo", "Repository", "Select a repository", repoOptions)
 
 		// Pre-select repo if provided
 		if params.PreSelectedRepo >= 0 && params.PreSelectedRepo < len(repoPaths) {
@@ -63,20 +64,20 @@ func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, er
 	}
 
 	// Step 2: PR selection (single-select with two-row display)
-	prStep := wizard.NewSingleSelect("pr", "PR", "Select a PR to checkout", nil)
+	prStep := steps.NewSingleSelect("pr", "PR", "Select a PR to checkout", nil)
 	w.AddStep(prStep)
 
 	// Step 3: Hooks (only when available and not set via CLI)
 	hasHooks := len(params.AvailableHooks) > 0 && !params.HooksFromCLI
 	if hasHooks {
-		hookOptions := make([]wizard.Option, len(params.AvailableHooks))
+		hookOptions := make([]framework.Option, len(params.AvailableHooks))
 		var preSelectedHooks []int
 		for i, hook := range params.AvailableHooks {
 			label := hook.Name
 			if hook.Description != "" {
 				label = hook.Name + " - " + hook.Description
 			}
-			hookOptions[i] = wizard.Option{
+			hookOptions[i] = framework.Option{
 				Label: label,
 				Value: hook.Name,
 			}
@@ -84,7 +85,7 @@ func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, er
 				preSelectedHooks = append(preSelectedHooks, i)
 			}
 		}
-		hookStep := wizard.NewFilterableList("hooks", "Hooks", "Select hooks to run after checkout", hookOptions).
+		hookStep := steps.NewFilterableList("hooks", "Hooks", "Select hooks to run after checkout", hookOptions).
 			WithMultiSelect().
 			SetMinMax(0, 0)
 		if len(preSelectedHooks) > 0 {
@@ -96,8 +97,8 @@ func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, er
 	// Callbacks
 	// When repo selection completes, fetch PRs
 	if showRepoStep && params.FetchPRs != nil {
-		w.OnComplete("repo", func(wiz *wizard.Wizard) {
-			repoStep := wiz.GetStep("repo").(*wizard.SingleSelectStep)
+		w.OnComplete("repo", func(wiz *framework.Wizard) {
+			repoStep := wiz.GetStep("repo").(*steps.SingleSelectStep)
 			selectedIdx := repoStep.GetSelectedIndex()
 			if selectedIdx < 0 || selectedIdx >= len(repoPaths) {
 				return
@@ -107,36 +108,36 @@ func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, er
 			prs, err := params.FetchPRs(selectedRepoPath)
 			if err != nil {
 				// Show error in options
-				prStepUpdate := wiz.GetStep("pr").(*wizard.SingleSelectStep)
-				prStepUpdate.SetOptions([]wizard.Option{
+				prStepUpdate := wiz.GetStep("pr").(*steps.SingleSelectStep)
+				prStepUpdate.SetOptions([]framework.Option{
 					{Label: fmt.Sprintf("Error: %v", err), Disabled: true},
 				})
 				return
 			}
 
 			if len(prs) == 0 {
-				prStepUpdate := wiz.GetStep("pr").(*wizard.SingleSelectStep)
-				prStepUpdate.SetOptions([]wizard.Option{
+				prStepUpdate := wiz.GetStep("pr").(*steps.SingleSelectStep)
+				prStepUpdate.SetOptions([]framework.Option{
 					{Label: "No open PRs found", Disabled: true},
 				})
 				return
 			}
 
 			// Build PR options with two-row display
-			prOptions := make([]wizard.Option, len(prs))
+			prOptions := make([]framework.Option, len(prs))
 			for i, pr := range prs {
 				desc := fmt.Sprintf("@%s (%s)", pr.Author, pr.Branch)
 				if pr.IsDraft {
 					desc += " [draft]"
 				}
-				prOptions[i] = wizard.Option{
+				prOptions[i] = framework.Option{
 					Label:       pr.Title,
 					Description: desc,
 					Value:       pr.Number,
 				}
 			}
 
-			prStepUpdate := wiz.GetStep("pr").(*wizard.SingleSelectStep)
+			prStepUpdate := wiz.GetStep("pr").(*steps.SingleSelectStep)
 			prStepUpdate.SetOptions(prOptions)
 		})
 	}
@@ -154,13 +155,13 @@ func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, er
 		}
 
 		// Build PR options with two-row display
-		prOptions := make([]wizard.Option, len(prs))
+		prOptions := make([]framework.Option, len(prs))
 		for i, pr := range prs {
 			desc := fmt.Sprintf("@%s (%s)", pr.Author, pr.Branch)
 			if pr.IsDraft {
 				desc += " [draft]"
 			}
-			prOptions[i] = wizard.Option{
+			prOptions[i] = framework.Option{
 				Label:       pr.Title,
 				Description: desc,
 				Value:       pr.Number,
@@ -171,7 +172,7 @@ func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, er
 
 	// Info line showing selected repo
 	if showRepoStep {
-		w.WithInfoLine(func(wiz *wizard.Wizard) string {
+		w.WithInfoLine(func(wiz *framework.Wizard) string {
 			repoStep := wiz.GetStep("repo")
 			if repoStep == nil || !repoStep.IsComplete() {
 				return ""

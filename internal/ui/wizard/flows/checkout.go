@@ -1,10 +1,11 @@
-package ui
+package flows
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/raphi011/wt/internal/ui/wizard"
+	"github.com/raphi011/wt/internal/ui/wizard/framework"
+	"github.com/raphi011/wt/internal/ui/wizard/steps"
 )
 
 // CheckoutOptions holds the options gathered from interactive mode.
@@ -42,18 +43,18 @@ type HookInfo struct {
 
 // CheckoutWizardParams contains parameters for the checkout wizard.
 type CheckoutWizardParams struct {
-	Branches         []BranchInfo // Existing branches with worktree status
-	AvailableRepos   []string     // All available repo paths
-	RepoNames        []string     // Display names for repos
-	PreSelectedRepos []int        // Indices of pre-selected repos (e.g., current repo when inside one)
-	FetchBranches    BranchFetcher
+	Branches         []BranchInfo  // Existing branches with worktree status
+	AvailableRepos   []string      // All available repo paths
+	RepoNames        []string      // Display names for repos
+	PreSelectedRepos []int         // Indices of pre-selected repos (e.g., current repo when inside one)
+	FetchBranches    BranchFetcher // Function to fetch branches for a repo
 	AvailableHooks   []HookInfo
 	HooksFromCLI     bool // True if --hook or --no-hook was passed (skip hooks step)
 }
 
 // CheckoutInteractive runs the interactive checkout wizard.
 func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
-	w := wizard.NewWizard("Checkout")
+	w := framework.NewWizard("Checkout")
 
 	// Track repo paths/names for the wizard
 	repoPaths := params.AvailableRepos
@@ -65,14 +66,14 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 
 	// Step 1: Repos (only when available)
 	if hasRepos {
-		repoOptions := make([]wizard.Option, len(repoNames))
+		repoOptions := make([]framework.Option, len(repoNames))
 		for i, name := range repoNames {
-			repoOptions[i] = wizard.Option{
+			repoOptions[i] = framework.Option{
 				Label: name,
 				Value: repoPaths[i],
 			}
 		}
-		repoStep := wizard.NewFilterableList("repos", "Repos", "Select repositories", repoOptions).
+		repoStep := steps.NewFilterableList("repos", "Repos", "Select repositories", repoOptions).
 			WithMultiSelect().
 			SetMinMax(1, 0) // At least one repo required
 
@@ -87,11 +88,11 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	// Step 2: Branch (combined mode + branch selection)
 	// Supports creating new branch via filter or selecting existing
 	branchOptions := buildBranchOptions(params.Branches)
-	branchStep := wizard.NewFilterableList("branch", "Branch", "Select or create a branch", branchOptions).
+	branchStep := steps.NewFilterableList("branch", "Branch", "Select or create a branch", branchOptions).
 		WithCreateFromFilter(func(filter string) string {
 			return fmt.Sprintf("+ Create %q", filter)
 		}).
-		WithValueLabel(func(value string, isNew bool, opt wizard.Option) string {
+		WithValueLabel(func(value string, isNew bool, opt framework.Option) string {
 			if isNew {
 				return value + " (new)"
 			}
@@ -100,28 +101,28 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 			}
 			return value
 		}).
-		WithRuneFilter(wizard.RuneFilterNoSpaces)
+		WithRuneFilter(framework.RuneFilterNoSpaces)
 	w.AddStep(branchStep)
 
 	// Step 3: Options (fetch) - only for new branches
-	fetchOptions := []wizard.Option{
+	fetchOptions := []framework.Option{
 		{Label: "Yes", Value: true},
 		{Label: "No", Value: false},
 	}
-	fetchStep := wizard.NewSingleSelect("fetch", "Fetch", "Fetch from origin first?", fetchOptions)
+	fetchStep := steps.NewSingleSelect("fetch", "Fetch", "Fetch from origin first?", fetchOptions)
 	w.AddStep(fetchStep)
 
 	// Step 4: Hooks (only when available and not set via CLI)
 	hasHooks := len(params.AvailableHooks) > 0 && !params.HooksFromCLI
 	if hasHooks {
-		hookOptions := make([]wizard.Option, len(params.AvailableHooks))
+		hookOptions := make([]framework.Option, len(params.AvailableHooks))
 		var preSelectedHooks []int
 		for i, hook := range params.AvailableHooks {
 			label := hook.Name
 			if hook.Description != "" {
 				label = hook.Name + " - " + hook.Description
 			}
-			hookOptions[i] = wizard.Option{
+			hookOptions[i] = framework.Option{
 				Label: label,
 				Value: hook.Name,
 			}
@@ -129,7 +130,7 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 				preSelectedHooks = append(preSelectedHooks, i)
 			}
 		}
-		hookStep := wizard.NewFilterableList("hooks", "Hooks", "Select hooks to run after checkout", hookOptions).
+		hookStep := steps.NewFilterableList("hooks", "Hooks", "Select hooks to run after checkout", hookOptions).
 			WithMultiSelect().
 			SetMinMax(0, 0) // No minimum required (can select none)
 		if len(preSelectedHooks) > 0 {
@@ -140,16 +141,16 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 
 	// Skip conditions
 	// Skip "fetch" step when checking out existing branch (not creating new)
-	w.SkipWhen("fetch", func(wiz *wizard.Wizard) bool {
-		step := wiz.GetStep("branch").(*wizard.FilterableListStep)
+	w.SkipWhen("fetch", func(wiz *framework.Wizard) bool {
+		step := wiz.GetStep("branch").(*steps.FilterableListStep)
 		return !step.IsCreateSelected()
 	})
 
 	// Callbacks
 	// When repos selection completes, fetch branches from first selected repo
 	if hasRepos && params.FetchBranches != nil {
-		w.OnComplete("repos", func(wiz *wizard.Wizard) {
-			repoStep := wiz.GetStep("repos").(*wizard.FilterableListStep)
+		w.OnComplete("repos", func(wiz *framework.Wizard) {
+			repoStep := wiz.GetStep("repos").(*steps.FilterableListStep)
 			indices := repoStep.GetSelectedIndices()
 			if len(indices) == 0 {
 				return
@@ -163,15 +164,15 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 			currentBranches = result.Branches
 
 			// Update branch step with fetched branches
-			branchStep := wiz.GetStep("branch").(*wizard.FilterableListStep)
+			branchStepUpdate := wiz.GetStep("branch").(*steps.FilterableListStep)
 			branchOpts := buildBranchOptions(result.Branches)
-			branchStep.SetOptions(branchOpts)
+			branchStepUpdate.SetOptions(branchOpts)
 		})
 	}
 
 	// Info line showing selected repos
 	if hasRepos {
-		w.WithInfoLine(func(wiz *wizard.Wizard) string {
+		w.WithInfoLine(func(wiz *framework.Wizard) string {
 			repoStep := wiz.GetStep("repos")
 			if repoStep == nil || !repoStep.IsComplete() {
 				return ""
@@ -203,7 +204,7 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	}
 
 	// Branch - get from the combined branch step
-	branchStepResult := result.GetStep("branch").(*wizard.FilterableListStep)
+	branchStepResult := result.GetStep("branch").(*steps.FilterableListStep)
 	opts.Branch = result.GetString("branch")
 	opts.NewBranch = branchStepResult.IsCreateSelected()
 
@@ -232,14 +233,14 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 }
 
 // buildBranchOptions creates Option slice from branches with worktree info.
-func buildBranchOptions(branches []BranchInfo) []wizard.Option {
-	opts := make([]wizard.Option, len(branches))
+func buildBranchOptions(branches []BranchInfo) []framework.Option {
+	opts := make([]framework.Option, len(branches))
 	for i, branch := range branches {
 		label := branch.Name
 		if branch.InWorktree {
 			label += " (checked out)"
 		}
-		opts[i] = wizard.Option{
+		opts[i] = framework.Option{
 			Label: label,
 			Value: branch.Name,
 		}

@@ -1,4 +1,9 @@
-package wizard
+// Package framework provides the core wizard orchestration system.
+//
+// A wizard is a multi-step interactive flow that guides users through
+// complex operations. It manages step navigation, skip conditions,
+// callbacks, and summary display.
+package framework
 
 import (
 	"fmt"

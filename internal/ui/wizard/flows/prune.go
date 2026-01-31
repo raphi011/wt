@@ -1,11 +1,12 @@
-package ui
+package flows
 
 import (
 	"fmt"
 	"strings"
 
 	"github.com/raphi011/wt/internal/git"
-	"github.com/raphi011/wt/internal/ui/wizard"
+	"github.com/raphi011/wt/internal/ui/wizard/framework"
+	"github.com/raphi011/wt/internal/ui/wizard/steps"
 )
 
 // PruneOptions holds the options gathered from interactive mode.
@@ -35,10 +36,10 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 		return PruneOptions{Cancelled: true}, nil
 	}
 
-	w := wizard.NewWizard("Prune")
+	w := framework.NewWizard("Prune")
 
 	// Build options from worktrees
-	options := make([]wizard.Option, len(params.Worktrees))
+	options := make([]framework.Option, len(params.Worktrees))
 	var preSelected []int
 
 	for i, wt := range params.Worktrees {
@@ -49,7 +50,7 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 		// Determine if this should be pre-selected (auto-prunable)
 		isPrunable := isPrunableReason(wt.Reason)
 
-		options[i] = wizard.Option{
+		options[i] = framework.Option{
 			Label:       label,
 			Value:       wt.ID,
 			Description: description,
@@ -62,7 +63,7 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 	}
 
 	// Create multi-select step
-	selectStep := wizard.NewFilterableList("worktrees", "Worktrees", "Select worktrees to prune", options).
+	selectStep := steps.NewFilterableList("worktrees", "Worktrees", "Select worktrees to prune", options).
 		WithMultiSelect().
 		SetMinMax(0, 0) // No minimum required (user can cancel)
 
@@ -77,12 +78,12 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 	w.WithSummary("Confirm removal")
 
 	// Add info line showing count and any warnings
-	w.WithInfoLine(func(wiz *wizard.Wizard) string {
+	w.WithInfoLine(func(wiz *framework.Wizard) string {
 		step := wiz.GetStep("worktrees")
 		if step == nil {
 			return ""
 		}
-		fl := step.(*wizard.FilterableListStep)
+		fl := step.(*steps.FilterableListStep)
 		count := fl.SelectedCount()
 		if count == 0 {
 			return "No worktrees selected"
@@ -117,7 +118,7 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 	opts := PruneOptions{}
 	step := result.GetStep("worktrees")
 	if step != nil {
-		fl := step.(*wizard.FilterableListStep)
+		fl := step.(*steps.FilterableListStep)
 		indices := fl.GetSelectedIndices()
 		for _, idx := range indices {
 			opts.SelectedIDs = append(opts.SelectedIDs, params.Worktrees[idx].ID)

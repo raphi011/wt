@@ -1,4 +1,9 @@
-package ui
+// Package static provides non-interactive terminal output components.
+//
+// This package contains components for rendering formatted output
+// that does not require user interaction, such as tables and
+// formatted text displays.
+package static
 
 import (
 	"strings"

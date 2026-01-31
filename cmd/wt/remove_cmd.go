@@ -9,7 +9,7 @@ import (
 
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/registry"
-	"github.com/raphi011/wt/internal/ui"
+	"github.com/raphi011/wt/internal/ui/prompt"
 )
 
 func newRemoveCmd() *cobra.Command {
@@ -54,7 +54,7 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 
 			// Confirm deletion if --delete and not --force
 			if deleteFiles && !force {
-				result, err := ui.Confirm(fmt.Sprintf("Delete %s and all its worktrees from disk?", repo.Path))
+				result, err := prompt.Confirm(fmt.Sprintf("Delete %s and all its worktrees from disk?", repo.Path))
 				if err != nil {
 					return err
 				}

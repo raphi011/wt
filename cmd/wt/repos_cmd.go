@@ -10,7 +10,7 @@ import (
 
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
-	"github.com/raphi011/wt/internal/ui"
+	"github.com/raphi011/wt/internal/ui/static"
 )
 
 func newReposCmd() *cobra.Command {
@@ -100,7 +100,7 @@ Shows name, path, type (bare/regular), worktree format, and labels.`,
 				rows = append(rows, []string{repo.Name, repo.Path, labels})
 			}
 
-			out.Print(ui.RenderTable(headers, rows))
+			out.Print(static.RenderTable(headers, rows))
 
 			return nil
 		},
