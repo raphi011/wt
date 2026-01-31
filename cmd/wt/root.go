@@ -25,6 +25,15 @@ var (
 	workDir string
 )
 
+// Command group IDs for organizing help output
+const (
+	GroupCore     = "core"
+	GroupRegistry = "registry"
+	GroupPR       = "pr"
+	GroupUtility  = "utility"
+	GroupConfig   = "config"
+)
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "wt",
@@ -33,8 +42,9 @@ var rootCmd = &cobra.Command{
 
 It helps you manage multiple worktrees across repositories, create PRs,
 and streamline your development workflow.`,
-	SilenceUsage:  true,
-	SilenceErrors: true,
+	SilenceUsage:               true,
+	SilenceErrors:              true,
+	SuggestionsMinimumDistance: 2, // Enable typo suggestions
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip git check for completion and help commands
 		if cmd.Name() == "completion" || cmd.Name() == "__complete" || cmd.Name() == "help" {
@@ -91,6 +101,9 @@ func Execute() {
 }
 
 func init() {
+	// Disable alphabetical sorting to preserve logical command order within groups
+	cobra.EnableCommandSorting = false
+
 	// Global flags
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Show external commands being executed")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "Suppress all log output")
@@ -100,14 +113,22 @@ func init() {
 	rootCmd.Version = versionString()
 	rootCmd.SetVersionTemplate("{{.Version}}\n")
 
-	// Add subcommands - grouped by category
-	// Core commands (shown first)
+	// Add command groups for organized help output
+	rootCmd.AddGroup(
+		&cobra.Group{ID: GroupCore, Title: "Core Commands:"},
+		&cobra.Group{ID: GroupRegistry, Title: "Registry Commands:"},
+		&cobra.Group{ID: GroupPR, Title: "Pull Request Commands:"},
+		&cobra.Group{ID: GroupUtility, Title: "Utility Commands:"},
+		&cobra.Group{ID: GroupConfig, Title: "Configuration Commands:"},
+	)
+
+	// Core commands
 	rootCmd.AddCommand(newCheckoutCmd())
 	rootCmd.AddCommand(newListCmd())
 	rootCmd.AddCommand(newPruneCmd())
 	rootCmd.AddCommand(newReposCmd())
 
-	// New registry commands
+	// Registry commands
 	rootCmd.AddCommand(newAddCmd())
 	rootCmd.AddCommand(newRemoveCmd())
 	rootCmd.AddCommand(newCloneCmd())

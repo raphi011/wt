@@ -31,14 +31,13 @@ func newCheckoutCmd() *cobra.Command {
 		Use:     "checkout [branch]",
 		Short:   "Create worktree for branch",
 		Aliases: []string{"co"},
+		GroupID: GroupCore,
 		Long: `Create a worktree for an existing or new branch.
 
 Use -b to create a new branch, or omit for an existing branch.
 Use -r to target repos by name, -l to target repos by label.
-Use -i for interactive mode to be prompted for options.
-
-Examples:
-  wt checkout feature-branch              # Existing branch in current repo
+Use -i for interactive mode to be prompted for options.`,
+		Example: `  wt checkout feature-branch              # Existing branch in current repo
   wt checkout -b feature-branch           # Create new branch from origin/main
   wt checkout -b feature-branch -f        # Fetch main first, then create branch
   wt checkout -b feature-branch -r repo1  # In specific repo
@@ -99,6 +98,7 @@ Examples:
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
+	registerCheckoutCompletions(cmd)
 
 	return cmd
 }

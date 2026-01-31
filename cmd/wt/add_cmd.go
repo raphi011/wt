@@ -22,14 +22,13 @@ func newAddCmd() *cobra.Command {
 		Use:     "add <path>...",
 		Short:   "Register existing repositories",
 		Aliases: []string{"a"},
+		GroupID: GroupRegistry,
 		Args:    cobra.MinimumNArgs(1),
 		Long: `Register existing git repositories with wt.
 
 Repositories will be added to the registry (~/.wt/repos.json) and can then
-be managed with other wt commands. Non-git directories are silently skipped.
-
-Examples:
-  wt add ~/work/my-project                    # Register single repo
+be managed with other wt commands. Non-git directories are silently skipped.`,
+		Example: `  wt add ~/work/my-project                    # Register single repo
   wt add ~/work/*                             # Register all repos in directory
   wt add ~/work/my-project -n myproj          # Custom display name (single repo only)
   wt add ~/work/my-project -l work -l api     # Add labels

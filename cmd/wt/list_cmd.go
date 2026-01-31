@@ -43,15 +43,15 @@ func newListCmd() *cobra.Command {
 		Use:     "list",
 		Short:   "List worktrees",
 		Aliases: []string{"ls"},
+		GroupID: GroupCore,
+		Args:    cobra.NoArgs,
 		Long: `List worktrees for registered repos.
 
 Inside a repo: shows only that repo's worktrees. Use --global for all.
 Use -r to filter by repo name(s), -l to filter by label(s).
 
-Worktrees are sorted by creation date (most recent first) by default.
-
-Examples:
-  wt list                      # List worktrees for current repo
+Worktrees are sorted by creation date (most recent first) by default.`,
+		Example: `  wt list                      # List worktrees for current repo
   wt list --global             # List all worktrees (all repos)
   wt list -r myrepo            # Filter by repository name
   wt list -l backend           # Filter by label
@@ -104,10 +104,24 @@ Examples:
 				allWorktrees = append(allWorktrees, worktrees...)
 			}
 
-			// Sort by creation date (most recent first)
-			sort.Slice(allWorktrees, func(i, j int) bool {
-				return allWorktrees[i].CreatedAt.After(allWorktrees[j].CreatedAt)
-			})
+			// Sort worktrees
+			switch sortBy {
+			case "repo":
+				sort.Slice(allWorktrees, func(i, j int) bool {
+					if allWorktrees[i].RepoName != allWorktrees[j].RepoName {
+						return allWorktrees[i].RepoName < allWorktrees[j].RepoName
+					}
+					return allWorktrees[i].Branch < allWorktrees[j].Branch
+				})
+			case "branch":
+				sort.Slice(allWorktrees, func(i, j int) bool {
+					return allWorktrees[i].Branch < allWorktrees[j].Branch
+				})
+			default: // "created" or empty
+				sort.Slice(allWorktrees, func(i, j int) bool {
+					return allWorktrees[i].CreatedAt.After(allWorktrees[j].CreatedAt)
+				})
+			}
 
 			// Output
 			if jsonOutput {
@@ -154,6 +168,9 @@ Examples:
 	// Completions
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.RegisterFlagCompletionFunc("sort", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"created", "repo", "branch"}, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	return cmd
 }

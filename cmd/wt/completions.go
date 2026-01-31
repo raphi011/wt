@@ -217,8 +217,3 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 		return all, cobra.ShellCompDirectiveNoFileComp
 	}
 }
-
-// Register completions for remove command
-func registerRemoveCompletions(cmd *cobra.Command) {
-	cmd.ValidArgsFunction = completeRepoNamesArg
-}

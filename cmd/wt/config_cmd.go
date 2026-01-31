@@ -13,14 +13,14 @@ import (
 
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "config",
-		Short: "Manage configuration",
+		Use:     "config",
+		Short:   "Manage configuration",
+		Aliases: []string{"cfg"},
+		GroupID: GroupConfig,
 		Long: `Manage wt configuration.
 
-Config file: ~/.wt/config.toml
-
-Examples:
-  wt config init          # Create default config
+Config file: ~/.wt/config.toml`,
+		Example: `  wt config init          # Create default config
   wt config show          # Show effective config
   wt config hooks         # List available hooks`,
 	}
@@ -41,10 +41,9 @@ func newConfigInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create default config file",
-		Long: `Create default config file at ~/.wt/config.toml
-
-Examples:
-  wt config init           # Create config
+		Args:  cobra.NoArgs,
+		Long:  `Create default config file at ~/.wt/config.toml`,
+		Example: `  wt config init           # Create config
   wt config init -f        # Overwrite existing config
   wt config init -s        # Print config to stdout`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -96,6 +95,7 @@ func newConfigShowCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show",
 		Short: "Show effective configuration",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := output.FromContext(cmd.Context())
 
@@ -129,6 +129,7 @@ func newConfigHooksCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "hooks",
 		Short: "List available hooks",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := output.FromContext(cmd.Context())
 

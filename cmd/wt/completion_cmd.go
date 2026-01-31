@@ -8,12 +8,13 @@ import (
 
 func newCompletionCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "completion <shell>",
-		Short: "Generate completion script",
-		Long: `Generate shell completion script.
-
-Examples:
-  # Fish
+		Use:       "completion <shell>",
+		Short:     "Generate completion script",
+		GroupID:   GroupConfig,
+		Long:      `Generate shell completion script.`,
+		ValidArgs: []string{"bash", "zsh", "fish", "powershell"},
+		Args:      cobra.ExactArgs(1),
+		Example: `  # Fish
   wt completion fish > ~/.config/fish/completions/wt.fish
 
   # Bash
@@ -22,8 +23,6 @@ Examples:
   # Zsh
   wt completion zsh > ~/.zfunc/_wt
   # Then add ~/.zfunc to fpath in .zshrc`,
-		ValidArgs: []string{"bash", "zsh", "fish", "powershell"},
-		Args:      cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			switch args[0] {
 			case "bash":

@@ -25,16 +25,17 @@ func newHookCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "hook <name>...",
-		Short: "Run configured hook",
-		Args:  cobra.MinimumNArgs(1),
+		Use:               "hook <name>...",
+		Short:             "Run configured hook",
+		Aliases:           []string{"h"},
+		GroupID:           GroupUtility,
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: completeHooks,
 		Long: `Run one or more configured hooks.
 
 Hooks are defined in config.toml and can use placeholders.
-By default runs in current repo/worktree; use -r/-l to target other repos.
-
-Examples:
-  wt hook code                # Run 'code' hook in current repo
+By default runs in current repo/worktree; use -r/-l to target other repos.`,
+		Example: `  wt hook code                # Run 'code' hook in current repo
   wt hook code -r myrepo      # Run in specific repo
   wt hook code idea           # Run multiple hooks
   wt hook code -d             # Dry-run: print command without executing
@@ -116,6 +117,7 @@ Examples:
 	// Completions
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.RegisterFlagCompletionFunc("branch", completeWorktrees)
 
 	return cmd
 }

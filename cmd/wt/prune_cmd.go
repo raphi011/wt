@@ -69,14 +69,14 @@ func newPruneCmd() *cobra.Command {
 		Use:     "prune",
 		Short:   "Prune merged worktrees",
 		Aliases: []string{"p"},
+		GroupID: GroupCore,
+		Args:    cobra.NoArgs,
 		Long: `Remove worktrees with merged PRs.
 
 Without flags, removes all worktrees with merged PRs in current repo.
 Use --global to prune all registered repos.
-Use --interactive to select worktrees to prune.
-
-Examples:
-  wt prune                    # Remove worktrees with merged PRs
+Use --interactive to select worktrees to prune.`,
+		Example: `  wt prune                    # Remove worktrees with merged PRs
   wt prune --global           # Prune all repos
   wt prune -d                 # Dry-run: preview without removing
   wt prune -i                 # Interactive mode
@@ -413,6 +413,7 @@ Examples:
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.RegisterFlagCompletionFunc("branch", completeWorktrees)
 
 	return cmd
 }

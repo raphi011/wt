@@ -14,8 +14,11 @@ func newDoctorCmd() *cobra.Command {
 	var fix bool
 
 	cmd := &cobra.Command{
-		Use:   "doctor",
-		Short: "Diagnose and repair issues",
+		Use:     "doctor",
+		Short:   "Diagnose and repair issues",
+		Aliases: []string{"doc"},
+		GroupID: GroupConfig,
+		Args:    cobra.NoArgs,
 		Long: `Diagnose and repair registry and worktree issues.
 
 Checks:
@@ -23,10 +26,8 @@ Checks:
 - Registered repos exist on disk
 - Registered repos are valid git repos
 - Worktrees are valid (no broken/orphaned)
-- External tools installed (git, gh/glab)
-
-Examples:
-  wt doctor          # Check for issues
+- External tools installed (git, gh/glab)`,
+		Example: `  wt doctor          # Check for issues
   wt doctor --fix    # Auto-fix recoverable issues`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

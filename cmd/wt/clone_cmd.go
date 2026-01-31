@@ -25,18 +25,18 @@ func newCloneCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "clone <url> [destination]",
-		Short: "Clone a repository",
-		Args:  cobra.RangeArgs(1, 2),
+		Use:     "clone <url> [destination]",
+		Short:   "Clone a repository",
+		Aliases: []string{"cl"},
+		GroupID: GroupRegistry,
+		Args:    cobra.RangeArgs(1, 2),
 		Long: `Clone a git repository and register it.
 
 By default, clones as a regular repo. Use --bare for a bare repo.
 Bare repos are recommended for worktree-centric workflows.
 
-If destination is not specified, clones into the current directory.
-
-Examples:
-  wt clone https://github.com/org/repo           # Clone to ./repo
+If destination is not specified, clones into the current directory.`,
+		Example: `  wt clone https://github.com/org/repo           # Clone to ./repo
   wt clone https://github.com/org/repo myrepo    # Clone to ./myrepo
   wt clone https://github.com/org/repo --bare    # Clone as bare repo
   wt clone git@github.com:org/repo.git -l work   # Clone with label`,
@@ -144,6 +144,7 @@ Examples:
 	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch to checkout (creates worktree for bare repos)")
 
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.MarkFlagDirname("destination")
 
 	return cmd
 }
@@ -184,4 +185,3 @@ func cloneRepo(ctx context.Context, url, dest string, bare bool, branch string) 
 
 	return git.RunGitCommand(ctx, "", args...)
 }
-

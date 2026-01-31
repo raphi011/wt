@@ -13,14 +13,14 @@ import (
 
 func newNoteCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "note",
-		Short: "Manage branch notes",
+		Use:     "note",
+		Short:   "Manage branch notes",
+		Aliases: []string{"n"},
+		GroupID: GroupUtility,
 		Long: `Manage notes on branches.
 
-Notes are stored in git config and displayed in list output.
-
-Examples:
-  wt note set "Working on login"    # Set note on current branch
+Notes are stored in git config and displayed in list output.`,
+		Example: `  wt note set "Working on login"    # Set note on current branch
   wt note get                       # Get note for current branch
   wt note clear                     # Clear note from current branch`,
 	}
@@ -77,6 +77,7 @@ func newNoteGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get",
 		Short: "Get the note for a branch",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			out := output.FromContext(ctx)
@@ -118,6 +119,7 @@ func newNoteClearCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clear",
 		Short: "Clear the note from a branch",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 

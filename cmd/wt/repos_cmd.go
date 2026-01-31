@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -23,12 +24,12 @@ func newReposCmd() *cobra.Command {
 		Use:     "repos",
 		Short:   "List registered repositories",
 		Aliases: []string{"r"},
+		GroupID: GroupCore,
+		Args:    cobra.NoArgs,
 		Long: `List all registered repositories.
 
-Shows name, path, type (bare/regular), worktree format, and labels.
-
-Examples:
-  wt repos                     # List all repos
+Shows name, path, type (bare/regular), worktree format, and labels.`,
+		Example: `  wt repos                     # List all repos
   wt repos -l backend          # Filter by label
   wt repos --json              # Output as JSON`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -50,6 +51,29 @@ Examples:
 				}
 			} else {
 				repos = reg.Repos
+			}
+
+			// Sort repos
+			switch sortBy {
+			case "label":
+				sort.Slice(repos, func(i, j int) bool {
+					li := ""
+					if len(repos[i].Labels) > 0 {
+						li = repos[i].Labels[0]
+					}
+					lj := ""
+					if len(repos[j].Labels) > 0 {
+						lj = repos[j].Labels[0]
+					}
+					if li != lj {
+						return li < lj
+					}
+					return repos[i].Name < repos[j].Name
+				})
+			default: // "name"
+				sort.Slice(repos, func(i, j int) bool {
+					return repos[i].Name < repos[j].Name
+				})
 			}
 
 			// Output
@@ -88,6 +112,9 @@ Examples:
 
 	// Completions
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.RegisterFlagCompletionFunc("sort", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"name", "label"}, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	return cmd
 }

@@ -14,14 +14,14 @@ import (
 
 func newLabelCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "label",
-		Short: "Manage repository labels",
+		Use:     "label",
+		Short:   "Manage repository labels",
+		Aliases: []string{"lbl"},
+		GroupID: GroupUtility,
 		Long: `Manage labels on repositories.
 
-Labels are stored in the registry and can be used to target repos with -l flag.
-
-Examples:
-  wt label add backend           # Add label to current repo
+Labels are stored in the registry and can be used to target repos with -l flag.`,
+		Example: `  wt label add backend           # Add label to current repo
   wt label add backend -r api    # Add label to specific repo
   wt label remove backend        # Remove label
   wt label list                  # List labels`,
@@ -39,9 +39,10 @@ func newLabelAddCmd() *cobra.Command {
 	var repository []string
 
 	cmd := &cobra.Command{
-		Use:   "add <label>",
-		Short: "Add a label to a repository",
-		Args:  cobra.ExactArgs(1),
+		Use:               "add <label>",
+		Short:             "Add a label to a repository",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeLabels,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			label := args[0]
@@ -79,9 +80,10 @@ func newLabelRemoveCmd() *cobra.Command {
 	var repository []string
 
 	cmd := &cobra.Command{
-		Use:   "remove <label>",
-		Short: "Remove a label from a repository",
-		Args:  cobra.ExactArgs(1),
+		Use:               "remove <label>",
+		Short:             "Remove a label from a repository",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeLabels,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			label := args[0]
@@ -124,6 +126,7 @@ func newLabelListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List labels",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			out := output.FromContext(ctx)
@@ -181,6 +184,7 @@ func newLabelClearCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clear",
 		Short: "Clear all labels from a repository",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
