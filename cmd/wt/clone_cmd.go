@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,7 +15,6 @@ import (
 
 func newCloneCmd() *cobra.Command {
 	var (
-		bare           bool
 		name           string
 		labels         []string
 		worktreeFormat string
@@ -26,25 +24,23 @@ func newCloneCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "clone <url> [destination]",
-		Short:   "Clone a repository",
+		Short:   "Clone a repository as bare",
 		Aliases: []string{"cl"},
 		GroupID: GroupRegistry,
 		Args:    cobra.RangeArgs(1, 2),
-		Long: `Clone a git repository and register it.
+		Long: `Clone a git repository as bare and register it.
 
-By default, clones as a regular repo. Use --bare for a bare repo.
-Bare repos are recommended for worktree-centric workflows.
-
-Bare repos clone directly into .git (no working tree):
+Clones directly into .git (no working tree):
   repo/
   └── .git/    # bare git repo contents (HEAD, objects/, refs/, etc.)
 
 This allows worktrees to be created as siblings to .git.
+Use -b to create an initial worktree for a branch.
 
 If destination is not specified, clones into the current directory.`,
 		Example: `  wt clone https://github.com/org/repo           # Clone to ./repo
   wt clone https://github.com/org/repo myrepo    # Clone to ./myrepo
-  wt clone https://github.com/org/repo --bare    # Clone as bare repo to ./repo
+  wt clone https://github.com/org/repo -b main   # Clone and create worktree for main
   wt clone git@github.com:org/repo.git -l work   # Clone with label`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -73,10 +69,10 @@ If destination is not specified, clones into the current directory.`,
 				return fmt.Errorf("destination already exists: %s", absPath)
 			}
 
-			l.Debug("cloning repo", "url", url, "dest", absPath, "bare", bare)
+			l.Debug("cloning repo", "url", url, "dest", absPath)
 
-			// Clone the repository
-			if err := cloneRepo(ctx, url, absPath, bare, branch); err != nil {
+			// Clone the repository as bare
+			if err := git.CloneBareWithWorktreeSupport(ctx, url, absPath); err != nil {
 				return fmt.Errorf("clone failed: %w", err)
 			}
 
@@ -110,14 +106,10 @@ If destination is not specified, clones into the current directory.`,
 				return fmt.Errorf("save registry: %w", err)
 			}
 
-			typeStr := "regular"
-			if bare {
-				typeStr = "bare"
-			}
-			fmt.Printf("Cloned %s repo: %s (%s)\n", typeStr, repoName, absPath)
+			fmt.Printf("Cloned repo: %s (%s)\n", repoName, absPath)
 
-			// For bare repos, create an initial worktree
-			if bare && branch != "" {
+			// Create an initial worktree if branch specified
+			if branch != "" {
 				format := worktreeFormat
 				if format == "" {
 					format = cfg.WorktreeFormat
@@ -126,7 +118,6 @@ If destination is not specified, clones into the current directory.`,
 
 				l.Debug("creating initial worktree", "path", wtPath, "branch", branch)
 
-				// For bare repos, the git dir is .git (contains bare repo contents)
 				gitDir := filepath.Join(absPath, ".git")
 				if err := git.CreateWorktree(ctx, gitDir, wtPath, branch); err != nil {
 					l.Printf("Warning: failed to create initial worktree: %v\n", err)
@@ -138,13 +129,11 @@ If destination is not specified, clones into the current directory.`,
 			return nil
 		},
 	}
-
-	cmd.Flags().BoolVar(&bare, "bare", false, "Clone as a bare repository")
 	cmd.Flags().StringVarP(&name, "name", "n", "", "Display name (default: directory name)")
 	cmd.Flags().StringSliceVarP(&labels, "label", "l", nil, "Labels for grouping (repeatable)")
 	cmd.Flags().StringVarP(&worktreeFormat, "worktree-format", "w", "", "Worktree format override")
 	cmd.Flags().StringVarP(&destination, "destination", "d", "", "Destination directory")
-	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch to checkout (creates worktree for bare repos)")
+	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Create initial worktree for branch")
 
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
 	cmd.MarkFlagDirname("destination")
@@ -169,26 +158,4 @@ func extractRepoNameFromURL(url string) string {
 	// Handle HTTPS URLs
 	parts := strings.Split(url, "/")
 	return parts[len(parts)-1]
-}
-
-// cloneRepo clones a git repository
-func cloneRepo(ctx context.Context, url, dest string, bare bool, branch string) error {
-	l := log.FromContext(ctx)
-
-	if bare {
-		// Use the bare clone pattern with .bare/.git symlink
-		l.Command("git", "clone", "--bare", url, dest+"/.bare")
-		return git.CloneBareWithWorktreeSupport(ctx, url, dest)
-	}
-
-	// Regular clone
-	args := []string{"clone"}
-	if branch != "" {
-		args = append(args, "-b", branch)
-	}
-	args = append(args, url, dest)
-
-	l.Command("git", args...)
-
-	return git.RunGitCommand(ctx, "", args...)
 }
