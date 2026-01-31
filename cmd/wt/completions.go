@@ -160,29 +160,6 @@ func completeWorktrees(cmd *cobra.Command, args []string, toComplete string) ([]
 	return matches, cobra.ShellCompDirectiveNoFileComp
 }
 
-// completeRepoNamesArg provides repo name completion for positional arguments
-func completeRepoNamesArg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	// Don't complete if we already have an arg
-	if len(args) > 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	reg, err := registry.Load()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	names := reg.AllRepoNames()
-	var matches []string
-	for _, n := range names {
-		if strings.HasPrefix(n, toComplete) {
-			matches = append(matches, n)
-		}
-	}
-
-	return matches, cobra.ShellCompDirectiveNoFileComp
-}
-
 // Register completions for checkout command
 func registerCheckoutCompletions(cmd *cobra.Command) {
 	// Branch argument completion
