@@ -125,5 +125,6 @@ func init() {
 	// Config commands
 	rootCmd.AddCommand(newConfigCmd())
 	rootCmd.AddCommand(newCompletionCmd())
+	rootCmd.AddCommand(newInitCmd())
 	rootCmd.AddCommand(newDoctorCmd())
 }
