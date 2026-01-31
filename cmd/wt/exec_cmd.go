@@ -21,6 +21,7 @@ func newExecCmd() *cobra.Command {
 		Use:     "exec [flags] -- <command>",
 		Short:   "Run command in worktree(s) or repo(s)",
 		Aliases: []string{"x"},
+		GroupID: GroupUtility,
 		Long: `Run a command in one or more worktrees or repos.
 
 Use -r to target repos by name, -l to target repos by label.

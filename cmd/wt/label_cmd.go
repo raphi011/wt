@@ -14,8 +14,9 @@ import (
 
 func newLabelCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "label",
-		Short: "Manage repository labels",
+		Use:     "label",
+		Short:   "Manage repository labels",
+		GroupID: GroupUtility,
 		Long: `Manage labels on repositories.
 
 Labels are stored in the registry and can be used to target repos with -l flag.
@@ -124,6 +125,7 @@ func newLabelListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List labels",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			out := output.FromContext(ctx)
@@ -181,6 +183,7 @@ func newLabelClearCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clear",
 		Short: "Clear all labels from a repository",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 

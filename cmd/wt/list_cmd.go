@@ -43,6 +43,8 @@ func newListCmd() *cobra.Command {
 		Use:     "list",
 		Short:   "List worktrees",
 		Aliases: []string{"ls"},
+		GroupID: GroupCore,
+		Args:    cobra.NoArgs,
 		Long: `List worktrees for registered repos.
 
 Inside a repo: shows only that repo's worktrees. Use --global for all.

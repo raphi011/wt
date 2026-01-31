@@ -23,6 +23,8 @@ func newReposCmd() *cobra.Command {
 		Use:     "repos",
 		Short:   "List registered repositories",
 		Aliases: []string{"r"},
+		GroupID: GroupCore,
+		Args:    cobra.NoArgs,
 		Long: `List all registered repositories.
 
 Shows name, path, type (bare/regular), worktree format, and labels.

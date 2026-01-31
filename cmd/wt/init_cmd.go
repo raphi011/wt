@@ -10,6 +10,7 @@ func newInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:       "init <shell>",
 		Short:     "Output shell wrapper function",
+		GroupID:   GroupConfig,
 		ValidArgs: []string{"bash", "zsh", "fish"},
 		Args:      cobra.ExactArgs(1),
 		Long: `Output shell wrapper function that makes 'wt cd' change directories.

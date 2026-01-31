@@ -22,6 +22,7 @@ func newAddCmd() *cobra.Command {
 		Use:     "add <path>...",
 		Short:   "Register existing repositories",
 		Aliases: []string{"a"},
+		GroupID: GroupRegistry,
 		Args:    cobra.MinimumNArgs(1),
 		Long: `Register existing git repositories with wt.
 

@@ -69,6 +69,8 @@ func newPruneCmd() *cobra.Command {
 		Use:     "prune",
 		Short:   "Prune merged worktrees",
 		Aliases: []string{"p"},
+		GroupID: GroupCore,
+		Args:    cobra.NoArgs,
 		Long: `Remove worktrees with merged PRs.
 
 Without flags, removes all worktrees with merged PRs in current repo.

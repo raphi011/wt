@@ -25,8 +25,10 @@ func newCdCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "cd",
-		Short: "Print repo/worktree path for shell scripting",
+		Use:     "cd",
+		Short:   "Print repo/worktree path for shell scripting",
+		GroupID: GroupUtility,
+		Args:    cobra.NoArgs,
 		Long: `Print the path of a repo or worktree for shell scripting.
 
 Use with shell command substitution: cd $(wt cd -r myrepo)

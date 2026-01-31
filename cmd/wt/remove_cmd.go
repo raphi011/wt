@@ -22,6 +22,7 @@ func newRemoveCmd() *cobra.Command {
 		Use:     "remove <repo>",
 		Short:   "Unregister a repository",
 		Aliases: []string{"rm"},
+		GroupID: GroupRegistry,
 		Args:    cobra.ExactArgs(1),
 		Long: `Unregister a repository from wt.
 

@@ -31,6 +31,7 @@ func newCheckoutCmd() *cobra.Command {
 		Use:     "checkout [branch]",
 		Short:   "Create worktree for branch",
 		Aliases: []string{"co"},
+		GroupID: GroupCore,
 		Long: `Create a worktree for an existing or new branch.
 
 Use -b to create a new branch, or omit for an existing branch.

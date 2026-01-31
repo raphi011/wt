@@ -20,8 +20,9 @@ import (
 
 func newPrCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "pr",
-		Short: "Work with PRs",
+		Use:     "pr",
+		Short:   "Work with PRs",
+		GroupID: GroupPR,
 		Long: `Work with pull requests.
 
 Examples:
@@ -256,6 +257,7 @@ func newPrCreateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create PR for worktree",
+		Args:  cobra.NoArgs,
 		Long: `Create a PR for the current branch.
 
 Examples:
@@ -375,6 +377,7 @@ func newPrMergeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "merge",
 		Short: "Merge PR and clean up worktree",
+		Args:  cobra.NoArgs,
 		Long: `Merge the PR for the current branch.
 
 Merges the PR, removes the worktree (if applicable), and deletes the local branch.
@@ -509,6 +512,7 @@ func newPrViewCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "view",
 		Short: "View PR details or open in browser",
+		Args:  cobra.NoArgs,
 		Long: `View PR details for the current branch.
 
 Examples:

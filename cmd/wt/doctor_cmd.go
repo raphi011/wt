@@ -14,8 +14,10 @@ func newDoctorCmd() *cobra.Command {
 	var fix bool
 
 	cmd := &cobra.Command{
-		Use:   "doctor",
-		Short: "Diagnose and repair issues",
+		Use:     "doctor",
+		Short:   "Diagnose and repair issues",
+		GroupID: GroupConfig,
+		Args:    cobra.NoArgs,
 		Long: `Diagnose and repair registry and worktree issues.
 
 Checks:

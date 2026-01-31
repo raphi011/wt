@@ -25,9 +25,10 @@ func newCloneCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "clone <url> [destination]",
-		Short: "Clone a repository",
-		Args:  cobra.RangeArgs(1, 2),
+		Use:     "clone <url> [destination]",
+		Short:   "Clone a repository",
+		GroupID: GroupRegistry,
+		Args:    cobra.RangeArgs(1, 2),
 		Long: `Clone a git repository and register it.
 
 By default, clones as a regular repo. Use --bare for a bare repo.
@@ -184,4 +185,3 @@ func cloneRepo(ctx context.Context, url, dest string, bare bool, branch string) 
 
 	return git.RunGitCommand(ctx, "", args...)
 }
-

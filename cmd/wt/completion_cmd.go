@@ -8,8 +8,9 @@ import (
 
 func newCompletionCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "completion <shell>",
-		Short: "Generate completion script",
+		Use:     "completion <shell>",
+		Short:   "Generate completion script",
+		GroupID: GroupConfig,
 		Long: `Generate shell completion script.
 
 Examples:
