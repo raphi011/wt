@@ -142,6 +142,65 @@ func (g *GitHub) CloneRepo(ctx context.Context, repoSpec, destPath string) (stri
 	return clonePath, nil
 }
 
+// CloneBareRepo clones a GitHub repo as a bare repo with .bare/.git symlink pattern
+func (g *GitHub) CloneBareRepo(ctx context.Context, repoSpec, destPath string) (string, error) {
+	parts := strings.Split(repoSpec, "/")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid repo spec %q: expected org/repo format", repoSpec)
+	}
+	org, repoName := parts[0], parts[1]
+	if org == "" || repoName == "" {
+		return "", fmt.Errorf("invalid repo spec %q: org and repo must not be empty", repoSpec)
+	}
+
+	// Final repo directory (contains .bare and .git symlink)
+	repoDir := filepath.Join(destPath, repoName)
+
+	// Create the repo directory
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Clone as bare into .bare subdirectory
+	bareDir := filepath.Join(repoDir, ".bare")
+	if err := g.runWithUser(ctx, repoSpec, "repo", "clone", repoSpec, bareDir, "--", "--bare"); err != nil {
+		os.RemoveAll(repoDir)
+		return "", fmt.Errorf("gh repo clone failed: %v", err)
+	}
+
+	// Create .git symlink pointing to .bare
+	gitSymlink := filepath.Join(repoDir, ".git")
+	if err := os.Symlink(".bare", gitSymlink); err != nil {
+		os.RemoveAll(repoDir)
+		return "", fmt.Errorf("failed to create .git symlink: %w", err)
+	}
+
+	// Configure the bare repo to know about worktrees
+	if err := g.configureBarerepo(ctx, bareDir); err != nil {
+		os.RemoveAll(repoDir)
+		return "", err
+	}
+
+	return repoDir, nil
+}
+
+// configureBarerepo configures a bare repo for worktree support
+func (g *GitHub) configureBarerepo(ctx context.Context, bareDir string) error {
+	// Set core.bare=false so worktree commands work properly
+	c := exec.CommandContext(ctx, "git", "-C", bareDir, "config", "core.bare", "false")
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("failed to configure core.bare: %w", err)
+	}
+
+	// Set fetch refspec to get all branches
+	c = exec.CommandContext(ctx, "git", "-C", bareDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("failed to configure fetch refspec: %w", err)
+	}
+
+	return nil
+}
+
 // CreatePR creates a new PR using gh CLI
 func (g *GitHub) CreatePR(ctx context.Context, repoURL string, params CreatePRParams) (*CreatePRResult, error) {
 	repoPath := extractRepoPath(repoURL)

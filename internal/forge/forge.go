@@ -50,6 +50,14 @@ type Forge interface {
 	// CloneRepo clones a repository to destPath, returns the full clone path
 	CloneRepo(ctx context.Context, repoSpec, destPath string) (string, error)
 
+	// CloneBareRepo clones a repository as a bare repo with .bare/.git symlink pattern.
+	// This creates:
+	//   destPath/<repo>/
+	//   ├── .bare/   # actual bare git repo
+	//   └── .git     # symlink -> .bare
+	// Returns the full path to the repo directory (parent of .bare).
+	CloneBareRepo(ctx context.Context, repoSpec, destPath string) (string, error)
+
 	// CreatePR creates a new PR/MR
 	CreatePR(ctx context.Context, repoURL string, params CreatePRParams) (*CreatePRResult, error)
 
