@@ -182,3 +182,105 @@ func TestAdd_NotAGitRepo(t *testing.T) {
 		t.Error("expected error for non-git directory")
 	}
 }
+
+// TestAdd_MultiplePaths tests adding multiple repos at once.
+//
+// Scenario: User runs `wt add repo1 repo2`
+// Expected: Both repos are registered
+func TestAdd_MultiplePaths(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Create two repos
+	repo1 := setupTestRepo(t, tmpDir, "repo1")
+	repo2 := setupTestRepo(t, tmpDir, "repo2")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd := newAddCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repo1, repo2})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("add command failed: %v", err)
+	}
+
+	// Verify both repos were registered
+	reg, err := registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	if len(reg.Repos) != 2 {
+		t.Fatalf("expected 2 repos, got %d", len(reg.Repos))
+	}
+
+	names := make(map[string]bool)
+	for _, r := range reg.Repos {
+		names[r.Name] = true
+	}
+
+	if !names["repo1"] || !names["repo2"] {
+		t.Errorf("expected repos [repo1, repo2], got %v", reg.Repos)
+	}
+}
+
+// TestAdd_SkipsNonGitDirs tests that non-git directories are skipped.
+//
+// Scenario: User runs `wt add repo1 notgit repo2`
+// Expected: Only git repos are registered, non-git dirs are skipped
+func TestAdd_SkipsNonGitDirs(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Create one repo and one non-git directory
+	repo1 := setupTestRepo(t, tmpDir, "repo1")
+	notGit := filepath.Join(tmpDir, "notgit")
+	os.MkdirAll(notGit, 0755)
+	repo2 := setupTestRepo(t, tmpDir, "repo2")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd := newAddCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repo1, notGit, repo2})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("add command failed: %v", err)
+	}
+
+	// Verify only git repos were registered
+	reg, err := registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	if len(reg.Repos) != 2 {
+		t.Fatalf("expected 2 repos, got %d", len(reg.Repos))
+	}
+
+	names := make(map[string]bool)
+	for _, r := range reg.Repos {
+		names[r.Name] = true
+	}
+
+	if names["notgit"] {
+		t.Error("non-git directory should not be registered")
+	}
+}

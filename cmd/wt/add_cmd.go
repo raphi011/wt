@@ -19,61 +19,83 @@ func newAddCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:     "add <path>",
-		Short:   "Register an existing repository",
+		Use:     "add <path>...",
+		Short:   "Register existing repositories",
 		Aliases: []string{"a"},
-		Args:    cobra.ExactArgs(1),
-		Long: `Register an existing git repository with wt.
+		Args:    cobra.MinimumNArgs(1),
+		Long: `Register existing git repositories with wt.
 
-The repository will be added to the registry (~/.wt/repos.json) and can then
-be managed with other wt commands.
+Repositories will be added to the registry (~/.wt/repos.json) and can then
+be managed with other wt commands. Non-git directories are silently skipped.
 
 Examples:
-  wt add ~/work/my-project                    # Register with default name
-  wt add ~/work/my-project -n myproj          # Custom display name
+  wt add ~/work/my-project                    # Register single repo
+  wt add ~/work/*                             # Register all repos in directory
+  wt add ~/work/my-project -n myproj          # Custom display name (single repo only)
   wt add ~/work/my-project -l work -l api     # Add labels
   wt add ~/work/my-project -w "./{branch}"    # Custom worktree format`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
 
-			path := args[0]
-
-			// Resolve to absolute path
-			absPath, err := filepath.Abs(path)
-			if err != nil {
-				return fmt.Errorf("resolve path: %w", err)
+			// Custom name only works with single path
+			if name != "" && len(args) > 1 {
+				return fmt.Errorf("--name can only be used with a single path")
 			}
 
-			// Verify it's a git repo
-			repoType, err := git.DetectRepoType(absPath)
-			if err != nil {
-				return fmt.Errorf("not a git repository: %s", absPath)
-			}
-
-			// Use directory name as default name
-			if name == "" {
-				name = filepath.Base(absPath)
-			}
-
-			l.Debug("registering repo", "path", absPath, "name", name, "type", repoType)
-
-			// Load registry
+			// Load registry once
 			reg, err := registry.Load()
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
 
-			// Add repo
-			repo := registry.Repo{
-				Path:           absPath,
-				Name:           name,
-				WorktreeFormat: worktreeFormat,
-				Labels:         labels,
+			var added int
+			for _, path := range args {
+				// Resolve to absolute path
+				absPath, err := filepath.Abs(path)
+				if err != nil {
+					l.Printf("skipping %s: %v\n", path, err)
+					continue
+				}
+
+				// Verify it's a git repo - skip if not
+				repoType, err := git.DetectRepoType(absPath)
+				if err != nil {
+					l.Debug("skipping non-git directory", "path", absPath)
+					continue
+				}
+
+				// Use directory name as default name
+				repoName := name
+				if repoName == "" {
+					repoName = filepath.Base(absPath)
+				}
+
+				l.Debug("registering repo", "path", absPath, "name", repoName, "type", repoType)
+
+				// Add repo
+				repo := registry.Repo{
+					Path:           absPath,
+					Name:           repoName,
+					WorktreeFormat: worktreeFormat,
+					Labels:         labels,
+				}
+
+				if err := reg.Add(repo); err != nil {
+					l.Printf("skipping %s: %v\n", absPath, err)
+					continue
+				}
+
+				typeStr := "regular"
+				if repoType == git.RepoTypeBare {
+					typeStr = "bare"
+				}
+				fmt.Printf("Registered %s repo: %s (%s)\n", typeStr, repoName, absPath)
+				added++
 			}
 
-			if err := reg.Add(repo); err != nil {
-				return err
+			if added == 0 {
+				return fmt.Errorf("no repositories added")
 			}
 
 			// Save registry
@@ -81,11 +103,6 @@ Examples:
 				return fmt.Errorf("save registry: %w", err)
 			}
 
-			typeStr := "regular"
-			if repoType == git.RepoTypeBare {
-				typeStr = "bare"
-			}
-			fmt.Printf("Registered %s repo: %s (%s)\n", typeStr, name, absPath)
 			return nil
 		},
 	}

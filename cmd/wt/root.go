@@ -126,5 +126,4 @@ func init() {
 	rootCmd.AddCommand(newConfigCmd())
 	rootCmd.AddCommand(newCompletionCmd())
 	rootCmd.AddCommand(newDoctorCmd())
-	rootCmd.AddCommand(newMigrateCmd())
 }

@@ -6,18 +6,17 @@ Generated: 2026-01-31
 
 | Command | Tests |
 |---------|-------|
-| [add](#add) | 4 |
+| [add](#add) | 6 |
 | [clone](#clone) | 6 |
 | [forge](#forge) | 6 |
 | [hook](#hook) | 4 |
-| [migrate](#migrate) | 4 |
 | [remove](#remove) | 2 |
 | [wt checkout](#wt-checkout) | 6 |
 | [wt label](#wt-label) | 4 |
 | [wt list](#wt-list) | 4 |
 | [wt prune](#wt-prune) | 4 |
 | [wt repos](#wt-repos) | 4 |
-| **Total** | **48** |
+| **Total** | **46** |
 
 ## add
 
@@ -27,6 +26,8 @@ Generated: 2026-01-31
 | `TestAdd_WithLabels` | Tests registering a repo with labels. |
 | `TestAdd_DuplicatePath` | Tests that adding the same path twice fails. |
 | `TestAdd_NotAGitRepo` | Tests that adding a non-git directory fails. |
+| `TestAdd_MultiplePaths` | Tests adding multiple repos at once. |
+| `TestAdd_SkipsNonGitDirs` | Tests that non-git directories are skipped. |
 
 ## clone
 
@@ -58,15 +59,6 @@ Generated: 2026-01-31
 | `TestHook_UnknownHook` | Tests running an unknown hook. |
 | `TestHook_DryRun` | Tests dry-run mode. |
 | `TestHook_WithEnvVar` | Tests hook with environment variable. |
-
-## migrate
-
-| Test | Description |
-|------|-------------|
-| `TestMigrate_ImportRepos` | Tests importing repos from a directory. |
-| `TestMigrate_SkipsExisting` | Tests that migrate skips already registered repos. |
-| `TestMigrate_DryRun` | Tests dry-run mode. |
-| `TestMigrate_NonExistentDir` | Tests migrating from non-existent directory. |
 
 ## remove
 
