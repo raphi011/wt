@@ -671,7 +671,7 @@ func DetectRepoType(path string) (RepoType, error) {
 	if err == nil {
 		if info.IsDir() {
 			// .git is a directory - check if it's a bare repo inside .git
-			// (bare-in-.git pattern has core.bare=false but no working tree)
+			// (bare-in-.git pattern: bare repo contents in .git, no working tree)
 			if isBareRepo(gitDir) {
 				return RepoTypeBare, nil
 			}
@@ -801,14 +801,7 @@ func CloneBareWithWorktreeSupport(ctx context.Context, url, destPath string) err
 		return fmt.Errorf("git clone failed: %w", err)
 	}
 
-	// Configure the repo for worktree support
-	// Set core.bare=false so worktree commands work properly
-	if err := runGit(ctx, gitDir, "config", "core.bare", "false"); err != nil {
-		os.RemoveAll(destPath)
-		return fmt.Errorf("failed to configure repo: %w", err)
-	}
-
-	// Set fetch refspec to get all branches
+	// Set fetch refspec to get all branches (bare clones don't set this up by default)
 	if err := runGit(ctx, gitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
 		os.RemoveAll(destPath)
 		return fmt.Errorf("failed to configure fetch refspec: %w", err)
@@ -834,11 +827,6 @@ func SetupBareWorktreeSupport(ctx context.Context, bareRepoPath, destPath string
 	gitDir := filepath.Join(destPath, ".git")
 	if err := os.Rename(bareRepoPath, gitDir); err != nil {
 		return fmt.Errorf("failed to move bare repo: %w", err)
-	}
-
-	// Configure the repo for worktree support
-	if err := runGit(ctx, gitDir, "config", "core.bare", "false"); err != nil {
-		return fmt.Errorf("failed to configure repo: %w", err)
 	}
 
 	// Set fetch refspec to get all branches

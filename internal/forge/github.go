@@ -179,14 +179,8 @@ func (g *GitHub) CloneBareRepo(ctx context.Context, repoSpec, destPath string) (
 
 // configureBareRepo configures a bare repo for worktree support
 func (g *GitHub) configureBareRepo(ctx context.Context, gitDir string) error {
-	// Set core.bare=false so worktree commands work properly
-	c := exec.CommandContext(ctx, "git", "-C", gitDir, "config", "core.bare", "false")
-	if err := c.Run(); err != nil {
-		return fmt.Errorf("failed to configure core.bare: %w", err)
-	}
-
-	// Set fetch refspec to get all branches
-	c = exec.CommandContext(ctx, "git", "-C", gitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+	// Set fetch refspec to get all branches (bare clones don't set this up by default)
+	c := exec.CommandContext(ctx, "git", "-C", gitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
 	if err := c.Run(); err != nil {
 		return fmt.Errorf("failed to configure fetch refspec: %w", err)
 	}
