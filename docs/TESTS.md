@@ -1,3 +1,4 @@
+
 # Test Documentation
 
 Generated: 2026-01-31
@@ -15,7 +16,7 @@ Generated: 2026-01-31
 | [wt label](#wt-label) | 4 |
 | [wt list](#wt-list) | 4 |
 | [wt prune](#wt-prune) | 4 |
-| [wt repos](#wt-repos) | 4 |
+| [wt repo](#wt-repo) | 4 |
 | **Total** | **46** |
 
 ## add
@@ -105,12 +106,12 @@ Generated: 2026-01-31
 | `TestPrune_DryRun` | Tests dry-run mode. |
 | `TestPrune_ByRepoName` | Tests pruning in a specific repo. |
 
-## wt repos
+## wt repo
 
 | Test | Description |
 |------|-------------|
-| `TestRepos_ListEmpty` | Tests listing repos when none are registered. |
-| `TestRepos_ListRepos` | Tests listing registered repos. |
-| `TestRepos_FilterByLabel` | Tests filtering repos by label. |
-| `TestRepos_JSON` | Tests JSON output. |
+| `TestRepoList_ListEmpty` | Tests listing repos when none are registered. |
+| `TestRepoList_ListRepos` | Tests listing registered repos. |
+| `TestRepoList_FilterByLabel` | Tests filtering repos by label. |
+| `TestRepoList_JSON` | Tests JSON output. |
 

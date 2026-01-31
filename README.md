@@ -202,8 +202,8 @@ wt exec -l backend -- git status
 wt exec -r backend-api -r auth-service -- make test
 
 # List repos and their labels
-wt repos
-wt repos -l backend
+wt repo
+wt repo -l backend
 ```
 
 ### Quick Navigation
@@ -444,7 +444,7 @@ Common commands have short aliases (shown in `wt --help`): `co`, `ls`, `s`, `p`,
 | `wt list` | List worktrees |
 | `wt show` | Show worktree details |
 | `wt prune` | Remove merged worktrees |
-| `wt repos` | List repositories |
+| `wt repo` | List repositories |
 | `wt pr checkout` | Checkout PR (clones if needed) |
 | `wt pr create` | Create PR for current branch |
 | `wt pr view` | View PR details or open in browser |

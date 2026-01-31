@@ -128,7 +128,7 @@ func init() {
 	rootCmd.AddCommand(newPruneCmd())
 
 	// Registry commands
-	rootCmd.AddCommand(newReposCmd())
+	rootCmd.AddCommand(newRepoCmd())
 
 	// PR commands
 	rootCmd.AddCommand(newPrCmd())

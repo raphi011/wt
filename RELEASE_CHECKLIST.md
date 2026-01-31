@@ -43,10 +43,10 @@ Manual testing reference for pre-release verification. Test each command and fla
 | ❌ | `wt prune --hook=cleanup` | Runs specific hook | Hook after each removal |
 | ❌ | `wt prune --no-hook` | Skips all hooks | No hook runs |
 | ❌ | `wt prune -i` | Interactive selection | Multi-select works |
-| ❌ | `wt repos` | Lists repos in directory | Correct dir scanned |
-| ❌ | `wt repos -l backend` | Filters by label | Label matching |
-| ❌ | `wt repos -s {name\|branch\|worktrees\|label}` | Sorts by column | Correct ordering |
-| ❌ | `wt repos --json` | Valid JSON output | Parseable JSON |
+| ❌ | `wt repo` | Lists repos in directory | Correct dir scanned |
+| ❌ | `wt repo -l backend` | Filters by label | Label matching |
+| ❌ | `wt repo -s {name\|branch\|worktrees\|label}` | Sorts by column | Correct ordering |
+| ❌ | `wt repo --json` | Valid JSON output | Parseable JSON |
 
 ---
 
