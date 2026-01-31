@@ -88,6 +88,9 @@ Shows name, path, type (bare/regular), worktree format, and labels.`,
 
 	// Completions
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.RegisterFlagCompletionFunc("sort", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"name", "label"}, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	return cmd
 }

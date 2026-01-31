@@ -154,6 +154,9 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 	// Completions
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.RegisterFlagCompletionFunc("sort", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"created", "repo", "branch"}, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	return cmd
 }

@@ -98,6 +98,7 @@ Use -i for interactive mode to be prompted for options.`,
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
+	registerCheckoutCompletions(cmd)
 
 	return cmd
 }

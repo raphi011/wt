@@ -144,6 +144,7 @@ If destination is not specified, clones into the current directory.`,
 	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Branch to checkout (creates worktree for bare repos)")
 
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.MarkFlagDirname("destination")
 
 	return cmd
 }

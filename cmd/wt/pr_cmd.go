@@ -236,6 +236,9 @@ func newPrCheckoutCmd() *cobra.Command {
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
+	cmd.RegisterFlagCompletionFunc("forge", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"github", "gitlab"}, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	return cmd
 }
@@ -356,6 +359,7 @@ func newPrCreateCmd() *cobra.Command {
 
 	cmd.MarkFlagRequired("title")
 	cmd.MarkFlagFilename("body-file") // Enable file completion for body-file flag
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 
 	return cmd
@@ -495,6 +499,9 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
+	cmd.RegisterFlagCompletionFunc("strategy", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"squash", "rebase", "merge"}, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	return cmd
 }
