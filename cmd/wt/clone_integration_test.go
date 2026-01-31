@@ -10,11 +10,11 @@ import (
 	"github.com/raphi011/wt/internal/registry"
 )
 
-// TestClone_RegularRepo tests cloning a regular repository.
+// TestClone_BareRepo tests cloning a repository as bare (default behavior).
 //
 // Scenario: User runs `wt clone file:///path/to/repo`
-// Expected: Repo is cloned and registered in registry
-func TestClone_RegularRepo(t *testing.T) {
+// Expected: Bare repo is cloned into .git directory and registered in registry
+func TestClone_BareRepo(t *testing.T) {
 	// Not parallel - modifies HOME
 
 	tmpDir := t.TempDir()
@@ -50,9 +50,15 @@ func TestClone_RegularRepo(t *testing.T) {
 		t.Error("cloned repo directory should exist")
 	}
 
-	// Verify it's a git repo
-	if _, err := os.Stat(filepath.Join(clonedPath, ".git")); os.IsNotExist(err) {
+	// Verify .git directory exists
+	gitDir := filepath.Join(clonedPath, ".git")
+	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
 		t.Error("cloned repo should have .git directory")
+	}
+
+	// Verify it's a bare repo inside .git (has HEAD file directly in .git)
+	if _, err := os.Stat(filepath.Join(gitDir, "HEAD")); os.IsNotExist(err) {
+		t.Error(".git should contain bare repo with HEAD file")
 	}
 
 	// Verify repo was registered
@@ -67,70 +73,6 @@ func TestClone_RegularRepo(t *testing.T) {
 
 	if reg.Repos[0].Name != "cloned-repo" {
 		t.Errorf("expected name 'cloned-repo', got %q", reg.Repos[0].Name)
-	}
-}
-
-// TestClone_BareRepo tests cloning a bare repository.
-//
-// Scenario: User runs `wt clone --bare file:///path/to/repo`
-// Expected: Bare repo is cloned and registered in registry
-func TestClone_BareRepo(t *testing.T) {
-	// Not parallel - modifies HOME
-
-	tmpDir := t.TempDir()
-	tmpDir = resolvePath(t, tmpDir)
-
-	// Create a source repo to clone from
-	sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
-
-	// Setup registry directory
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
-	cmd := newCloneCmd()
-	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"--bare", "file://" + sourceRepo, "bare-repo.git"})
-
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("clone command failed: %v", err)
-	}
-
-	// Verify bare repo was cloned
-	barePath := filepath.Join(tmpDir, "bare-repo.git")
-	if _, err := os.Stat(barePath); os.IsNotExist(err) {
-		t.Error("bare repo directory should exist")
-	}
-
-	// Verify it's a bare repo (has HEAD file directly, no .git)
-	if _, err := os.Stat(filepath.Join(barePath, "HEAD")); os.IsNotExist(err) {
-		t.Error("bare repo should have HEAD file")
-	}
-	if _, err := os.Stat(filepath.Join(barePath, ".git")); err == nil {
-		t.Error("bare repo should not have .git directory")
-	}
-
-	// Verify repo was registered
-	reg, err := registry.Load()
-	if err != nil {
-		t.Fatalf("failed to load registry: %v", err)
-	}
-
-	if len(reg.Repos) != 1 {
-		t.Fatalf("expected 1 repo, got %d", len(reg.Repos))
-	}
-
-	// Name should be without .git suffix
-	if reg.Repos[0].Name != "bare-repo" {
-		t.Errorf("expected name 'bare-repo', got %q", reg.Repos[0].Name)
 	}
 }
 
