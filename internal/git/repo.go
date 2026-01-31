@@ -810,33 +810,6 @@ func CloneBareWithWorktreeSupport(ctx context.Context, url, destPath string) err
 	return nil
 }
 
-// SetupBareWorktreeSupport converts an existing bare repo into the .git directory pattern.
-// This is useful when a forge CLI clones a bare repo and we need to restructure it.
-//
-// The directory structure after setup will be:
-//
-//	destPath/
-//	└── .git/     # bare git repo contents (moved from original location)
-func SetupBareWorktreeSupport(ctx context.Context, bareRepoPath, destPath string) error {
-	// Create the destination directory
-	if err := os.MkdirAll(destPath, 0o755); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	// Move the bare repo to .git subdirectory
-	gitDir := filepath.Join(destPath, ".git")
-	if err := os.Rename(bareRepoPath, gitDir); err != nil {
-		return fmt.Errorf("failed to move bare repo: %w", err)
-	}
-
-	// Set fetch refspec to get all branches
-	if err := runGit(ctx, gitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
-		return fmt.Errorf("failed to configure fetch refspec: %w", err)
-	}
-
-	return nil
-}
-
 // GetBranchCreatedTime returns when the branch was created (first commit on branch)
 // Falls back to first commit time if reflog is unavailable
 func GetBranchCreatedTime(ctx context.Context, repoPath, branch string) (time.Time, error) {
