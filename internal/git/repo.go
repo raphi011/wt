@@ -671,24 +671,52 @@ func DetectRepoType(path string) (RepoType, error) {
 		if info.IsDir() {
 			return RepoTypeRegular, nil
 		}
-		// .git file means it's a worktree, not a repo
+		// .git file - could be a worktree or a pointer to a bare repo (grove pattern)
+		// Read the gitdir to determine which
+		content, err := os.ReadFile(gitDir)
+		if err != nil {
+			return 0, fmt.Errorf("failed to read .git file: %w", err)
+		}
+		gitdirLine := strings.TrimSpace(string(content))
+		if !strings.HasPrefix(gitdirLine, "gitdir: ") {
+			return 0, fmt.Errorf("invalid .git file format: %s", path)
+		}
+		targetDir := strings.TrimPrefix(gitdirLine, "gitdir: ")
+		// Resolve relative paths
+		if !filepath.IsAbs(targetDir) {
+			targetDir = filepath.Join(path, targetDir)
+		}
+		// Check if target is a bare repo
+		if isBareRepo(targetDir) {
+			return RepoTypeBare, nil
+		}
+		// Otherwise it's a worktree pointer
 		return 0, fmt.Errorf("path is a worktree, not a repository: %s", path)
 	}
 
 	// Check for bare repo markers (HEAD file at root)
-	headFile := filepath.Join(path, "HEAD")
-	if _, err := os.Stat(headFile); err == nil {
-		// Also verify objects/ and refs/ directories exist
-		objectsDir := filepath.Join(path, "objects")
-		refsDir := filepath.Join(path, "refs")
-		if _, err := os.Stat(objectsDir); err == nil {
-			if _, err := os.Stat(refsDir); err == nil {
-				return RepoTypeBare, nil
-			}
-		}
+	if isBareRepo(path) {
+		return RepoTypeBare, nil
 	}
 
 	return 0, fmt.Errorf("not a git repository: %s", path)
+}
+
+// isBareRepo checks if a path has bare repo markers (HEAD, objects/, refs/)
+func isBareRepo(path string) bool {
+	headFile := filepath.Join(path, "HEAD")
+	if _, err := os.Stat(headFile); err != nil {
+		return false
+	}
+	objectsDir := filepath.Join(path, "objects")
+	if _, err := os.Stat(objectsDir); err != nil {
+		return false
+	}
+	refsDir := filepath.Join(path, "refs")
+	if _, err := os.Stat(refsDir); err != nil {
+		return false
+	}
+	return true
 }
 
 // GetGitDir returns the git directory for a repo
