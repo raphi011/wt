@@ -110,6 +110,7 @@ func init() {
 	// New registry commands
 	rootCmd.AddCommand(newAddCmd())
 	rootCmd.AddCommand(newRemoveCmd())
+	rootCmd.AddCommand(newCloneCmd())
 
 	// PR commands
 	rootCmd.AddCommand(newPrCmd())

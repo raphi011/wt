@@ -129,7 +129,7 @@ func configPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "wt", "config.toml"), nil
+	return filepath.Join(home, ".wt", "config.toml"), nil
 }
 
 // rawConfig is used for initial TOML parsing before processing hooks
