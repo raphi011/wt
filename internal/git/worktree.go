@@ -415,27 +415,34 @@ func OpenWorktreeFrom(ctx context.Context, absRepoPath, basePath, branch, worktr
 
 // getBranchWorktreeFrom returns the worktree path if branch is checked out in the given repo
 func getBranchWorktreeFrom(ctx context.Context, repoPath, branch string) (string, error) {
-	output, err := outputGit(ctx, repoPath, "worktree", "list", "--porcelain")
+	output, err := outputGit(ctx, repoPath, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return "", fmt.Errorf("failed to list worktrees: %v", err)
 	}
 
-	lines := strings.Split(string(output), "\n")
-	var currentPath string
-	for _, line := range lines {
-		if strings.HasPrefix(line, "worktree ") {
-			currentPath = strings.TrimPrefix(line, "worktree ")
-		} else if strings.HasPrefix(line, "branch refs/heads/") {
-			wtBranch := strings.TrimPrefix(line, "branch refs/heads/")
-			if wtBranch == branch {
-				if currentPath == "" {
-					// Branch found but path not parsed - malformed output
-					return "", fmt.Errorf("malformed git worktree output: found branch %q without worktree path", branch)
-				}
-				return currentPath, nil
+	// Split on double-NUL for record boundaries
+	records := strings.Split(string(output), "\x00\x00")
+
+	for _, record := range records {
+		if record == "" {
+			continue
+		}
+
+		var wtPath, wtBranch string
+
+		// Split on single-NUL for fields within record
+		fields := strings.Split(record, "\x00")
+		for _, field := range fields {
+			switch {
+			case strings.HasPrefix(field, "worktree "):
+				wtPath = strings.TrimPrefix(field, "worktree ")
+			case strings.HasPrefix(field, "branch refs/heads/"):
+				wtBranch = strings.TrimPrefix(field, "branch refs/heads/")
 			}
-		} else if line == "" {
-			currentPath = ""
+		}
+
+		if wtBranch == branch && wtPath != "" {
+			return wtPath, nil
 		}
 	}
 

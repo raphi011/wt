@@ -318,28 +318,34 @@ func GetOriginURL(ctx context.Context, repoPath string) (string, error) {
 
 // GetBranchWorktree returns the worktree path if branch is checked out, empty string if not
 func GetBranchWorktree(ctx context.Context, branch string) (string, error) {
-	output, err := outputGit(ctx, "", "worktree", "list", "--porcelain")
+	output, err := outputGit(ctx, "", "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return "", fmt.Errorf("failed to list worktrees: %v", err)
 	}
 
-	// Parse porcelain output: each worktree has "worktree <path>" and "branch refs/heads/<name>"
-	lines := strings.Split(string(output), "\n")
-	var currentPath string
-	for _, line := range lines {
-		if strings.HasPrefix(line, "worktree ") {
-			currentPath = strings.TrimPrefix(line, "worktree ")
-		} else if strings.HasPrefix(line, "branch refs/heads/") {
-			wtBranch := strings.TrimPrefix(line, "branch refs/heads/")
-			if wtBranch == branch {
-				if currentPath == "" {
-					// Branch found but path not parsed - malformed output
-					return "", fmt.Errorf("malformed git worktree output: found branch %q without worktree path", branch)
-				}
-				return currentPath, nil
+	// Split on double-NUL for record boundaries
+	records := strings.Split(string(output), "\x00\x00")
+
+	for _, record := range records {
+		if record == "" {
+			continue
+		}
+
+		var wtPath, wtBranch string
+
+		// Split on single-NUL for fields within record
+		fields := strings.Split(record, "\x00")
+		for _, field := range fields {
+			switch {
+			case strings.HasPrefix(field, "worktree "):
+				wtPath = strings.TrimPrefix(field, "worktree ")
+			case strings.HasPrefix(field, "branch refs/heads/"):
+				wtBranch = strings.TrimPrefix(field, "branch refs/heads/")
 			}
-		} else if line == "" {
-			currentPath = ""
+		}
+
+		if wtBranch == branch && wtPath != "" {
+			return wtPath, nil
 		}
 	}
 
@@ -353,37 +359,48 @@ type WorktreeInfo struct {
 	CommitHash string // Full hash from git, caller can truncate
 }
 
-// ListWorktreesFromRepo returns all worktrees for a repository using git worktree list --porcelain.
-// This is much faster than querying each worktree individually.
+// ListWorktreesFromRepo returns all worktrees for a repository using git worktree list --porcelain -z.
+// Uses NUL-separated output for robust parsing of paths with special characters.
+// Skips bare worktrees (e.g., .bare directory in bare repo layouts).
 func ListWorktreesFromRepo(ctx context.Context, repoPath string) ([]WorktreeInfo, error) {
-	output, err := outputGit(ctx, repoPath, "worktree", "list", "--porcelain")
+	output, err := outputGit(ctx, repoPath, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list worktrees: %v", err)
 	}
 
 	var worktrees []WorktreeInfo
-	var current WorktreeInfo
 
-	for _, line := range strings.Split(string(output), "\n") {
-		switch {
-		case strings.HasPrefix(line, "worktree "):
-			// Start of new worktree entry
-			if current.Path != "" {
-				worktrees = append(worktrees, current)
-			}
-			current = WorktreeInfo{Path: strings.TrimPrefix(line, "worktree ")}
-		case strings.HasPrefix(line, "HEAD "):
-			current.CommitHash = strings.TrimPrefix(line, "HEAD ")
-		case strings.HasPrefix(line, "branch refs/heads/"):
-			current.Branch = strings.TrimPrefix(line, "branch refs/heads/")
-		case line == "detached":
-			current.Branch = "(detached)"
+	// Split on double-NUL for record boundaries
+	records := strings.Split(string(output), "\x00\x00")
+
+	for _, record := range records {
+		if record == "" {
+			continue
 		}
-	}
 
-	// Don't forget the last entry
-	if current.Path != "" {
-		worktrees = append(worktrees, current)
+		var wt WorktreeInfo
+		var isBare bool
+
+		// Split on single-NUL for fields within record
+		fields := strings.Split(record, "\x00")
+		for _, field := range fields {
+			switch {
+			case strings.HasPrefix(field, "worktree "):
+				wt.Path = strings.TrimPrefix(field, "worktree ")
+			case strings.HasPrefix(field, "HEAD "):
+				wt.CommitHash = strings.TrimPrefix(field, "HEAD ")
+			case strings.HasPrefix(field, "branch refs/heads/"):
+				wt.Branch = strings.TrimPrefix(field, "branch refs/heads/")
+			case field == "detached":
+				wt.Branch = "(detached)"
+			case field == "bare":
+				isBare = true
+			}
+		}
+
+		if wt.Path != "" && !isBare {
+			worktrees = append(worktrees, wt)
+		}
 	}
 
 	return worktrees, nil
