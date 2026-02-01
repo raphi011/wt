@@ -5,6 +5,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
@@ -212,5 +213,123 @@ func TestPrune_ByRepoName(t *testing.T) {
 	// Verify worktree was removed
 	if _, err := os.Stat(wtPath); err == nil {
 		t.Error("worktree should be removed after prune")
+	}
+}
+
+// TestPrune_WithRepoBranchFormat tests pruning with repo:branch format.
+//
+// Scenario: User has two repos with same branch name, runs `wt prune --branch myrepo:feature -f`
+// Expected: Only the worktree in the specified repo is pruned
+func TestPrune_WithRepoBranchFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Create two repos with the same branch name
+	repo1Path := setupTestRepoWithBranches(t, tmpDir, "repo1", []string{"feature"})
+	repo2Path := setupTestRepoWithBranches(t, tmpDir, "repo2", []string{"feature"})
+
+	// Create worktrees in both repos
+	wt1Path := createTestWorktree(t, repo1Path, "feature")
+	wt2Path := createTestWorktree(t, repo2Path, "feature")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: repo1Path},
+			{Name: "repo2", Path: repo2Path},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	oldCfg := cfg
+	cfg = &config.Config{}
+	defer func() { cfg = oldCfg }()
+
+	// Work from a different directory
+	workDir := filepath.Join(tmpDir, "other")
+	os.MkdirAll(workDir, 0755)
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(workDir)
+	defer os.Chdir(oldDir)
+
+	ctx := testContext(t)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	// Use repo:branch format to target only repo1
+	cmd.SetArgs([]string{"--branch", "repo1:feature", "--force", "-g"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Verify only repo1's worktree was removed
+	if _, err := os.Stat(wt1Path); err == nil {
+		t.Error("repo1 worktree should be removed after prune")
+	}
+
+	// Verify repo2's worktree still exists
+	if _, err := os.Stat(wt2Path); os.IsNotExist(err) {
+		t.Error("repo2 worktree should NOT be removed")
+	}
+}
+
+// TestPrune_RepoBranchFormat_RepoNotFound tests error when repo in repo:branch format is not found.
+//
+// Scenario: User runs `wt prune --branch nonexistent:feature -f`
+// Expected: Command fails with informative error
+func TestPrune_RepoBranchFormat_RepoNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
+	createTestWorktree(t, repoPath, "feature")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	oldCfg := cfg
+	cfg = &config.Config{}
+	defer func() { cfg = oldCfg }()
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
+	ctx := testContext(t)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	// Use nonexistent repo name
+	cmd.SetArgs([]string{"--branch", "nonexistent:feature", "--force"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for nonexistent repo")
+	}
+
+	// Error should mention the repo name
+	if !strings.Contains(err.Error(), "nonexistent") {
+		t.Errorf("error should mention nonexistent repo, got: %v", err)
 	}
 }

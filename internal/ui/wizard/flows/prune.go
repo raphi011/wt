@@ -2,12 +2,19 @@ package flows
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/ui/styles"
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
 	"github.com/raphi011/wt/internal/ui/wizard/steps"
 )
+
+// pruneOptionValue holds the value stored in each Option for prune wizard.
+type pruneOptionValue struct {
+	ID         int
+	IsPrunable bool
+	Reason     string
+}
 
 // PruneOptions holds the options gathered from interactive mode.
 type PruneOptions struct {
@@ -17,12 +24,13 @@ type PruneOptions struct {
 
 // PruneWorktreeInfo contains worktree data for display in the wizard.
 type PruneWorktreeInfo struct {
-	ID       int
-	RepoName string
-	Branch   string
-	Reason   string // "Merged PR", "Merged branch", "Clean", "Dirty", "Not merged", "Has commits"
-	IsDirty  bool   // Whether worktree has uncommitted changes
-	Worktree git.Worktree
+	ID         int
+	RepoName   string
+	Branch     string
+	Reason     string // "Merged PR", "Merged branch", "Clean", "Dirty", "Not merged", "Has commits"
+	IsDirty    bool   // Whether worktree has uncommitted changes
+	IsPrunable bool   // Whether worktree can be auto-pruned (merged PR, not dirty)
+	Worktree   git.Worktree
 }
 
 // PruneWizardParams contains parameters for the prune wizard.
@@ -43,29 +51,31 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 	var preSelected []int
 
 	for i, wt := range params.Worktrees {
-		// Format: "repo/branch (reason)"
+		// Format: "repo/branch"
 		label := fmt.Sprintf("%s/%s", wt.RepoName, wt.Branch)
-		description := wt.Reason
-
-		// Determine if this should be pre-selected (auto-prunable)
-		isPrunable := isPrunableReason(wt.Reason)
 
 		options[i] = framework.Option{
-			Label:       label,
-			Value:       wt.ID,
-			Description: description,
-			Disabled:    false, // All can be selected in interactive mode
+			Label: label,
+			Value: pruneOptionValue{
+				ID:         wt.ID,
+				IsPrunable: wt.IsPrunable,
+				Reason:     wt.Reason,
+			},
+			Description: wt.Reason, // Fallback for default renderer
+			Disabled:    false,     // All can be selected in interactive mode
 		}
 
-		if isPrunable {
+		// Pre-select prunable worktrees
+		if wt.IsPrunable {
 			preSelected = append(preSelected, i)
 		}
 	}
 
-	// Create multi-select step
+	// Create multi-select step with custom description renderer
 	selectStep := steps.NewFilterableList("worktrees", "Worktrees", "Select worktrees to prune", options).
 		WithMultiSelect().
-		SetMinMax(0, 0) // No minimum required (user can cancel)
+		SetMinMax(0, 0). // No minimum required (user can cancel)
+		WithDescriptionRenderer(pruneDescriptionRenderer)
 
 	// Pre-select prunable worktrees
 	if len(preSelected) > 0 {
@@ -128,8 +138,26 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 	return opts, nil
 }
 
-// isPrunableReason returns true if the reason indicates auto-prunable status.
-func isPrunableReason(reason string) bool {
-	reason = strings.ToLower(reason)
-	return reason == "merged pr"
+// pruneDescriptionRenderer renders the description for prune options with colored status.
+// - Prunable items: reason in success (green) color
+// - Non-prunable selected items: "Force" prefix in error (red) color + reason
+// - Non-prunable non-selected items: reason in muted color
+func pruneDescriptionRenderer(opt framework.Option, isSelected bool) string {
+	val, ok := opt.Value.(pruneOptionValue)
+	if !ok {
+		return styles.MutedStyle.Render(opt.Description)
+	}
+
+	if val.IsPrunable {
+		// Prunable: show reason in success color
+		return styles.SuccessStyle.Render(val.Reason)
+	}
+
+	if isSelected {
+		// Non-prunable but selected: show "Force" in error color + reason
+		return styles.ErrorStyle.Render("Force") + " " + styles.MutedStyle.Render(val.Reason)
+	}
+
+	// Non-prunable and not selected: show reason in muted color
+	return styles.MutedStyle.Render(val.Reason)
 }

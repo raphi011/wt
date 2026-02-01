@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/spf13/cobra"
@@ -89,13 +90,14 @@ func newPruneCmd() *cobra.Command {
 Without flags, removes all worktrees with merged PRs in current repo.
 Use --global to prune all registered repos.
 Use --interactive to select worktrees to prune.`,
-		Example: `  wt prune                    # Remove worktrees with merged PRs
-  wt prune --global           # Prune all repos
-  wt prune -d                 # Dry-run: preview without removing
-  wt prune -i                 # Interactive mode
-  wt prune -r myrepo          # Prune specific repo
-  wt prune -l backend         # Prune repos with label
-  wt prune --branch feature   # Remove specific branch worktree`,
+		Example: `  wt prune                         # Remove worktrees with merged PRs
+  wt prune --global                # Prune all repos
+  wt prune -d                      # Dry-run: preview without removing
+  wt prune -i                      # Interactive mode
+  wt prune -r myrepo               # Prune specific repo
+  wt prune -l backend              # Prune repos with label
+  wt prune --branch feature -f     # Remove specific branch worktree
+  wt prune --branch myrepo:feat -f # Remove branch in specific repo`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
@@ -223,13 +225,11 @@ Use --interactive to select worktrees to prune.`,
 			// Determine which to remove and why
 			var toRemove []pruneWorktree
 			var toSkip []pruneWorktree
-			toRemoveMap := make(map[string]bool)
 
 			for _, wt := range allWorktrees {
 				// Only auto-prune worktrees with merged PRs
 				if wt.PRState == "MERGED" && !wt.IsDirty {
 					toRemove = append(toRemove, wt)
-					toRemoveMap[wt.Path] = true
 				} else {
 					toSkip = append(toSkip, wt)
 				}
@@ -239,12 +239,15 @@ Use --interactive to select worktrees to prune.`,
 			if interactive {
 				wizardInfos := make([]flows.PruneWorktreeInfo, 0, len(allWorktrees))
 				for i, wt := range allWorktrees {
+					// Worktree is prunable if it has a merged PR and no uncommitted changes
+					isPrunable := wt.PRState == "MERGED" && !wt.IsDirty
 					wizardInfos = append(wizardInfos, flows.PruneWorktreeInfo{
-						ID:       i + 1, // Use index as ID
-						RepoName: wt.RepoName,
-						Branch:   wt.Branch,
-						Reason:   formatPruneReason(wt),
-						IsDirty:  wt.IsDirty,
+						ID:         i + 1, // Use index as ID
+						RepoName:   wt.RepoName,
+						Branch:     wt.Branch,
+						Reason:     formatPruneReason(wt),
+						IsDirty:    wt.IsDirty,
+						IsPrunable: isPrunable,
 					})
 				}
 
@@ -270,81 +273,20 @@ Use --interactive to select worktrees to prune.`,
 				}
 
 				toRemove = nil
-				toRemoveMap = make(map[string]bool)
 				toSkip = nil
 
 				for i, wt := range allWorktrees {
 					if selectedSet[i+1] {
 						toRemove = append(toRemove, wt)
-						toRemoveMap[wt.Path] = true
 					} else {
 						toSkip = append(toSkip, wt)
 					}
 				}
 			}
 
-			// Select hooks
-			hookMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandPrune)
-			if err != nil {
-				return err
-			}
-
-			hookEnv, err := hooks.ParseEnvWithStdin(env)
-			if err != nil {
-				return err
-			}
-
-			// Remove worktrees
-			var removed []pruneWorktree
-			var failed []pruneWorktree
-
-			if len(toRemove) > 0 {
-				if dryRun {
-					removed = toRemove
-				} else {
-					for _, wt := range toRemove {
-						// Get full worktree info for removal
-						wtInfo, err := git.GetWorktreeInfo(ctx, wt.Path)
-						if err != nil {
-							fmt.Fprintf(os.Stderr, "Warning: failed to get info for %s: %v\n", wt.Path, err)
-							failed = append(failed, wt)
-							continue
-						}
-
-						if err := git.RemoveWorktree(ctx, *wtInfo, true); err != nil {
-							fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", wt.Path, err)
-							failed = append(failed, wt)
-							continue
-						}
-
-						// Remove from PR cache
-						folderName := filepath.Base(wt.Path)
-						prCache.Delete(folderName)
-						removed = append(removed, wt)
-
-						// Run hooks
-						hookCtx := hooks.Context{
-							WorktreeDir: wt.Path,
-							RepoDir:     wt.RepoPath,
-							Branch:      wt.Branch,
-							Repo:        filepath.Base(wt.RepoPath),
-							Origin:      wt.RepoName,
-							Trigger:     string(hooks.CommandPrune),
-							Env:         hookEnv,
-						}
-						hooks.RunForEach(hookMatches, hookCtx, wt.RepoPath)
-					}
-
-					// Prune stale references
-					processedRepos := make(map[string]bool)
-					for _, wt := range removed {
-						if !processedRepos[wt.RepoPath] {
-							git.PruneWorktrees(ctx, wt.RepoPath)
-							processedRepos[wt.RepoPath] = true
-						}
-					}
-				}
-			}
+			// Remove worktrees using shared helper
+			// For auto-prune (merged PRs), force=true is implicit
+			removed, failed := pruneWorktrees(ctx, toRemove, true, dryRun, hookNames, noHook, env, prCache)
 
 			// Display results
 			if len(removed) > 0 || (verbose && len(toSkip) > 0) {
@@ -412,40 +354,51 @@ Use --interactive to select worktrees to prune.`,
 	return cmd
 }
 
-// runPruneTargetBranch handles removal of a specific branch worktree
-func runPruneTargetBranch(ctx context.Context, repos []*registry.Repo, branch string, force, dryRun bool, hookNames []string, noHook bool, env []string) error {
+// runPruneTargetBranch handles removal of a specific branch worktree.
+// Supports "repo:branch" format to target a specific repo's worktree.
+func runPruneTargetBranch(ctx context.Context, repos []*registry.Repo, target string, force, dryRun bool, hookNames []string, noHook bool, env []string) error {
 	l := log.FromContext(ctx)
+
+	// Parse repo:branch format
+	targetRepo, branch := parseBranchTarget(target)
 
 	if !force {
 		return fmt.Errorf("worktree %q requires -f/--force to remove", branch)
 	}
 
 	// Find the worktree
-	var targetWT *git.Worktree
-	var targetRepoPath string
+	var targetWT pruneWorktree
 
 	for _, repo := range repos {
+		// Skip repos that don't match if a repo was specified
+		if targetRepo != "" && repo.Name != targetRepo {
+			continue
+		}
+
 		wtInfos, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 		if err != nil {
 			continue
 		}
 		for _, wti := range wtInfos {
 			if wti.Branch == branch {
-				// Get full info
-				wt, err := git.GetWorktreeInfo(ctx, wti.Path)
-				if err == nil {
-					targetWT = wt
-					targetRepoPath = repo.Path
-					break
+				targetWT = pruneWorktree{
+					Path:     wti.Path,
+					Branch:   wti.Branch,
+					RepoName: repo.Name,
+					RepoPath: repo.Path,
 				}
+				break
 			}
 		}
-		if targetWT != nil {
+		if targetWT.Path != "" {
 			break
 		}
 	}
 
-	if targetWT == nil {
+	if targetWT.Path == "" {
+		if targetRepo != "" {
+			return fmt.Errorf("worktree for branch %q not found in repo %q", branch, targetRepo)
+		}
 		return fmt.Errorf("worktree for branch %q not found", branch)
 	}
 
@@ -454,41 +407,15 @@ func runPruneTargetBranch(ctx context.Context, repos []*registry.Repo, branch st
 		return nil
 	}
 
-	// Select hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandPrune)
-	if err != nil {
-		return err
+	// Use pruneWorktrees for consistent removal logic
+	removed, failed := pruneWorktrees(ctx, []pruneWorktree{targetWT}, force, false, hookNames, noHook, env, nil)
+	if len(failed) > 0 {
+		return fmt.Errorf("failed to remove worktree: %s", targetWT.Path)
+	}
+	if len(removed) > 0 {
+		l.Printf("Removed worktree: %s (%s)\n", branch, targetWT.Path)
 	}
 
-	hookEnv, err := hooks.ParseEnvWithStdin(env)
-	if err != nil {
-		return err
-	}
-
-	// Remove worktree
-	if err := git.RemoveWorktree(ctx, *targetWT, force); err != nil {
-		return fmt.Errorf("failed to remove worktree: %w", err)
-	}
-
-	// Run hooks
-	hookCtx := hooks.Context{
-		WorktreeDir: targetWT.Path,
-		RepoDir:     targetRepoPath,
-		Branch:      targetWT.Branch,
-		Repo:        filepath.Base(targetRepoPath),
-		Origin:      targetWT.RepoName,
-		Trigger:     string(hooks.CommandPrune),
-		Env:         hookEnv,
-	}
-	if hookCtx.Origin == "" {
-		hookCtx.Origin = hookCtx.Repo
-	}
-	hooks.RunForEach(hookMatches, hookCtx, targetRepoPath)
-
-	// Prune stale refs
-	git.PruneWorktrees(ctx, targetRepoPath)
-
-	l.Printf("Removed worktree: %s (%s)\n", branch, targetWT.Path)
 	return nil
 }
 
@@ -582,4 +509,88 @@ func convertForgePR(pr *forge.PRInfo) *prcache.PRInfo {
 		CachedAt:     pr.CachedAt,
 		Fetched:      pr.Fetched,
 	}
+}
+
+// parseBranchTarget parses "repo:branch" or "branch" format.
+// Returns (repo, branch) where repo is empty if not specified.
+// Uses colon separator to avoid ambiguity with branches containing "/".
+func parseBranchTarget(target string) (repo, branch string) {
+	if idx := strings.Index(target, ":"); idx > 0 {
+		return target[:idx], target[idx+1:]
+	}
+	return "", target // no repo specified
+}
+
+// pruneWorktrees removes the given worktrees and runs hooks.
+// Returns slices of successfully removed and failed worktrees.
+func pruneWorktrees(ctx context.Context, toRemove []pruneWorktree, force, dryRun bool,
+	hookNames []string, noHook bool, env []string, prCache *prcache.Cache) (removed, failed []pruneWorktree) {
+
+	if len(toRemove) == 0 {
+		return nil, nil
+	}
+
+	if dryRun {
+		return toRemove, nil
+	}
+
+	// Select hooks
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandPrune)
+	if err != nil {
+		// Log error but continue - don't fail the whole prune
+		fmt.Fprintf(os.Stderr, "Warning: failed to select hooks: %v\n", err)
+	}
+
+	hookEnv, err := hooks.ParseEnvWithStdin(env)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to parse hook env: %v\n", err)
+	}
+
+	for _, wt := range toRemove {
+		// Get full worktree info for removal
+		wtInfo, err := git.GetWorktreeInfo(ctx, wt.Path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to get info for %s: %v\n", wt.Path, err)
+			failed = append(failed, wt)
+			continue
+		}
+
+		if err := git.RemoveWorktree(ctx, *wtInfo, force); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", wt.Path, err)
+			failed = append(failed, wt)
+			continue
+		}
+
+		// Remove from PR cache
+		if prCache != nil {
+			folderName := filepath.Base(wt.Path)
+			prCache.Delete(folderName)
+		}
+		removed = append(removed, wt)
+
+		// Run hooks
+		if hookMatches != nil {
+			hookCtx := hooks.Context{
+				WorktreeDir: wt.Path,
+				RepoDir:     wt.RepoPath,
+				Branch:      wt.Branch,
+				Repo:        filepath.Base(wt.RepoPath),
+				Origin:      wt.RepoName,
+				Trigger:     string(hooks.CommandPrune),
+				Env:         hookEnv,
+			}
+			hooks.RunForEach(hookMatches, hookCtx, wt.RepoPath)
+		}
+	}
+
+	// Prune stale references
+	processedRepos := make(map[string]bool)
+	for _, wt := range removed {
+		if !processedRepos[wt.RepoPath] {
+			git.PruneWorktrees(ctx, wt.RepoPath)
+			processedRepos[wt.RepoPath] = true
+		}
+	}
+
+	return removed, failed
 }
