@@ -333,3 +333,254 @@ func TestPrune_RepoBranchFormat_RepoNotFound(t *testing.T) {
 		t.Errorf("error should mention nonexistent repo, got: %v", err)
 	}
 }
+
+// TestPrune_DeleteBranchesFlag tests that --delete-branches deletes local branch.
+//
+// Scenario: User runs `wt prune feature -f --delete-branches`
+// Expected: Both worktree and local branch are removed
+func TestPrune_DeleteBranchesFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	oldCfg := cfg
+	cfg = &config.Config{}
+	defer func() { cfg = oldCfg }()
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
+	// Verify worktree and branch exist before prune
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatal("worktree should exist before prune")
+	}
+
+	ctx := testContext(t)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f", "--delete-branches"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Verify worktree was removed
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("worktree should be removed after prune")
+	}
+
+	// Verify branch was deleted
+	output, err := runGitCommand(repoPath, "branch", "--list", "feature")
+	if err != nil {
+		t.Fatalf("failed to list branches: %v", err)
+	}
+	if strings.TrimSpace(output) != "" {
+		t.Error("branch should be deleted after prune with --delete-branches")
+	}
+}
+
+// TestPrune_NoDeleteBranchesDefault tests that branches are kept by default.
+//
+// Scenario: User runs `wt prune feature -f` without --delete-branches
+// Expected: Worktree is removed but local branch is kept
+func TestPrune_NoDeleteBranchesDefault(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	oldCfg := cfg
+	cfg = &config.Config{}
+	defer func() { cfg = oldCfg }()
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
+	ctx := testContext(t)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Verify worktree was removed
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("worktree should be removed after prune")
+	}
+
+	// Verify branch was NOT deleted
+	output, err := runGitCommand(repoPath, "branch", "--list", "feature")
+	if err != nil {
+		t.Fatalf("failed to list branches: %v", err)
+	}
+	if strings.TrimSpace(output) == "" {
+		t.Error("branch should still exist after prune without --delete-branches")
+	}
+}
+
+// TestPrune_ConfigDeleteBranches tests that config option enables branch deletion.
+//
+// Scenario: User has delete_local_branches=true in config, runs `wt prune feature -f`
+// Expected: Both worktree and local branch are removed
+func TestPrune_ConfigDeleteBranches(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	oldCfg := cfg
+	// Set config to delete branches by default
+	cfg = &config.Config{
+		Prune: config.PruneConfig{
+			DeleteLocalBranches: true,
+		},
+	}
+	defer func() { cfg = oldCfg }()
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
+	ctx := testContext(t)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Verify worktree was removed
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("worktree should be removed after prune")
+	}
+
+	// Verify branch was deleted (due to config)
+	output, err := runGitCommand(repoPath, "branch", "--list", "feature")
+	if err != nil {
+		t.Fatalf("failed to list branches: %v", err)
+	}
+	if strings.TrimSpace(output) != "" {
+		t.Error("branch should be deleted after prune with delete_local_branches=true in config")
+	}
+}
+
+// TestPrune_NoDeleteBranchesOverridesConfig tests that --no-delete-branches overrides config.
+//
+// Scenario: User has delete_local_branches=true in config, runs `wt prune feature -f --no-delete-branches`
+// Expected: Worktree is removed but local branch is kept
+func TestPrune_NoDeleteBranchesOverridesConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	oldCfg := cfg
+	// Set config to delete branches by default
+	cfg = &config.Config{
+		Prune: config.PruneConfig{
+			DeleteLocalBranches: true,
+		},
+	}
+	defer func() { cfg = oldCfg }()
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
+	ctx := testContext(t)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f", "--no-delete-branches"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Verify worktree was removed
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("worktree should be removed after prune")
+	}
+
+	// Verify branch was NOT deleted (--no-delete-branches overrides config)
+	output, err := runGitCommand(repoPath, "branch", "--list", "feature")
+	if err != nil {
+		t.Fatalf("failed to list branches: %v", err)
+	}
+	if strings.TrimSpace(output) == "" {
+		t.Error("branch should still exist after prune with --no-delete-branches")
+	}
+}

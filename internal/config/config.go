@@ -40,6 +40,11 @@ type MergeConfig struct {
 	Strategy string `toml:"strategy"` // "squash", "rebase", or "merge"
 }
 
+// PruneConfig holds prune-related configuration
+type PruneConfig struct {
+	DeleteLocalBranches bool `toml:"delete_local_branches"`
+}
+
 // CheckoutConfig holds checkout-related configuration
 type CheckoutConfig struct {
 	WorktreeFormat string `toml:"worktree_format"` // Template for worktree folder names
@@ -70,6 +75,7 @@ type Config struct {
 	Checkout      CheckoutConfig    `toml:"checkout"`       // checkout settings
 	Forge         ForgeConfig       `toml:"forge"`
 	Merge         MergeConfig       `toml:"merge"`
+	Prune         PruneConfig       `toml:"prune"`
 	Hosts         map[string]string `toml:"hosts"` // domain -> forge type mapping
 	Theme         ThemeConfig       `toml:"theme"` // UI theme/colors for interactive mode
 }
@@ -163,6 +169,7 @@ type rawConfig struct {
 	Checkout      CheckoutConfig         `toml:"checkout"`
 	Forge         ForgeConfig            `toml:"forge"`
 	Merge         MergeConfig            `toml:"merge"`
+	Prune         PruneConfig            `toml:"prune"`
 	Hosts         map[string]string      `toml:"hosts"`
 	Theme         ThemeConfig            `toml:"theme"`
 }
@@ -206,6 +213,7 @@ func Load() (Config, error) {
 		Checkout:      raw.Checkout,
 		Forge:         raw.Forge,
 		Merge:         raw.Merge,
+		Prune:         raw.Prune,
 		Hosts:         raw.Hosts,
 		Theme:         raw.Theme,
 	}
@@ -550,6 +558,10 @@ worktree_format = "{repo}-{branch}"
 # [merge]
 # strategy = "squash"  # squash, rebase, or merge (default: squash)
 #                      # Note: rebase is not supported on GitLab
+
+# Prune settings for "wt prune"
+# [prune]
+# delete_local_branches = false  # Delete local branches after worktree removal
 
 # Host mappings - for self-hosted GitHub Enterprise or GitLab instances
 # Maps custom domains to forge type for automatic detection
