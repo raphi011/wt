@@ -432,7 +432,7 @@ worktree_format = "{repo}-{branch}"
 #   {branch}       - branch name
 #   {repo}         - folder name of git repo (matches -r flag)
 #   {origin}       - repo name from git origin (falls back to {repo})
-#   {trigger}      - command that triggered the hook (checkout, pr, prune, merge, cd)
+#   {trigger}      - command that triggered the hook (checkout, pr, prune, merge)
 #   {key}          - custom variable passed via --arg key=value
 #   {key:-def}     - custom variable with default value if not provided
 #

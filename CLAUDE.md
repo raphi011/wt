@@ -85,12 +85,11 @@ internal/ui/             - Terminal UI components
 **Target Resolution Pattern** - Commands target repos/worktrees via `-r` (repository), `-l` (label), `--branch`, or `-i` (interactive):
 
 - **Repo targeting**: `wt exec`, `wt hook` - use `-r <repo>` or `-l <label>` to target repos
-- **Repo or interactive**: `wt cd` - use `-r <repo>`, `-l <label>`, or `-i` (mutually exclusive)
 - **Branch targeting**: `wt prune`, `wt hook` - use `--branch <name>` to target specific worktree
 - **Context-aware**: `wt note`, `wt pr create`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current; outside uses `-r`/`-l`
 - **Special case**: `wt checkout` - inside repo uses branch name; outside repo requires `-r <repo>` or `-l <label>` to specify target repos; use `-i` for interactive mode
 
-Commands using this pattern: `wt exec`, `wt cd`, `wt note set/get/clear`, `wt hook`, `wt pr create`, `wt pr merge`, `wt prune`
+Commands using this pattern: `wt exec`, `wt note set/get/clear`, `wt hook`, `wt pr create`, `wt pr merge`, `wt prune`
 
 **Keep completions in sync** - **IMPORTANT**: When adding or modifying CLI flags, you MUST update the shell completion scripts in `cmd/wt/completions.go`. This file contains completions for fish, bash, and zsh. Search for existing flags of the same command to find where to add the new flag in each shell format.
 

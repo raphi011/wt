@@ -7,6 +7,7 @@ package framework
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -141,12 +142,14 @@ func (w *Wizard) IsCancelled() bool {
 }
 
 // Run executes the wizard and returns when complete or cancelled.
+// The TUI renders to stderr so stdout remains available for piping
+// (e.g., cd $(wt cd -i) works correctly).
 func (w *Wizard) Run() (*Wizard, error) {
 	if len(w.steps) == 0 {
 		return w, fmt.Errorf("wizard has no steps")
 	}
 
-	p := tea.NewProgram(w)
+	p := tea.NewProgram(w, tea.WithOutput(os.Stderr))
 	finalModel, err := p.Run()
 	if err != nil {
 		return nil, err
