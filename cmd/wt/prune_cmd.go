@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 
 	"github.com/spf13/cobra"
@@ -509,16 +508,6 @@ func convertForgePR(pr *forge.PRInfo) *prcache.PRInfo {
 		CachedAt:     pr.CachedAt,
 		Fetched:      pr.Fetched,
 	}
-}
-
-// parseBranchTarget parses "repo:branch" or "branch" format.
-// Returns (repo, branch) where repo is empty if not specified.
-// Uses colon separator to avoid ambiguity with branches containing "/".
-func parseBranchTarget(target string) (repo, branch string) {
-	if idx := strings.Index(target, ":"); idx > 0 {
-		return target[:idx], target[idx+1:]
-	}
-	return "", target // no repo specified
 }
 
 // pruneWorktrees removes the given worktrees and runs hooks.

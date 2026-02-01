@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
 )
@@ -54,7 +52,7 @@ func newLabelAddCmd() *cobra.Command {
 			}
 
 			// Get target repos
-			repos, err := resolveTargetReposForLabel(ctx, reg, repository)
+			repos, err := resolveTargetReposNoFallback(ctx, reg, repository)
 			if err != nil {
 				return err
 			}
@@ -95,7 +93,7 @@ func newLabelRemoveCmd() *cobra.Command {
 			}
 
 			// Get target repos
-			repos, err := resolveTargetReposForLabel(ctx, reg, repository)
+			repos, err := resolveTargetReposNoFallback(ctx, reg, repository)
 			if err != nil {
 				return err
 			}
@@ -151,7 +149,7 @@ func newLabelListCmd() *cobra.Command {
 			}
 
 			// Get target repos
-			repos, err := resolveTargetReposForLabel(ctx, reg, repository)
+			repos, err := resolveTargetReposNoFallback(ctx, reg, repository)
 			if err != nil {
 				return err
 			}
@@ -195,7 +193,7 @@ func newLabelClearCmd() *cobra.Command {
 			}
 
 			// Get target repos
-			repos, err := resolveTargetReposForLabel(ctx, reg, repository)
+			repos, err := resolveTargetReposNoFallback(ctx, reg, repository)
 			if err != nil {
 				return err
 			}
@@ -215,32 +213,4 @@ func newLabelClearCmd() *cobra.Command {
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 
 	return cmd
-}
-
-// resolveTargetReposForLabel resolves repos for label commands
-func resolveTargetReposForLabel(ctx context.Context, reg *registry.Registry, repoNames []string) ([]*registry.Repo, error) {
-	if len(repoNames) > 0 {
-		var repos []*registry.Repo
-		for _, name := range repoNames {
-			repo, err := reg.FindByName(name)
-			if err != nil {
-				return nil, err
-			}
-			repos = append(repos, repo)
-		}
-		return repos, nil
-	}
-
-	// Try current repo
-	repoPath := git.GetCurrentRepoMainPath(ctx)
-	if repoPath == "" {
-		return nil, fmt.Errorf("not in a git repository (use -r to specify)")
-	}
-
-	repo, err := reg.FindByPath(repoPath)
-	if err != nil {
-		return nil, err
-	}
-
-	return []*registry.Repo{repo}, nil
 }
