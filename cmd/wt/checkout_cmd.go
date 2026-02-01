@@ -15,8 +15,6 @@ import (
 
 func newCheckoutCmd() *cobra.Command {
 	var (
-		repository  []string
-		labels      []string
 		newBranch   bool
 		base        string
 		fetch       bool
@@ -29,20 +27,25 @@ func newCheckoutCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:     "checkout [branch]",
-		Short:   "Create worktree for branch",
-		Aliases: []string{"co"},
-		GroupID: GroupCore,
+		Use:               "checkout [[scope:]branch]",
+		Short:             "Create worktree for branch",
+		Aliases:           []string{"co"},
+		GroupID:           GroupCore,
+		ValidArgsFunction: completeScopedWorktreeArg,
 		Long: `Create a worktree for an existing or new branch.
 
 Use -b to create a new branch, or omit for an existing branch.
-Use -r to target repos by name, -l to target repos by label.
-Use -i for interactive mode to be prompted for options.`,
+Use -i for interactive mode to be prompted for options.
+
+Target uses [scope:]branch format where scope can be a repo name or label:
+  - Without scope: uses current repo (or searches all repos for existing branch)
+  - With repo scope: targets that specific repo
+  - With label scope (requires -b): targets all repos with that label`,
 		Example: `  wt checkout feature-branch              # Existing branch in current repo
-  wt checkout -b feature-branch           # Create new branch from origin/main
-  wt checkout -b feature-branch -f        # Fetch main first, then create branch
-  wt checkout -b feature-branch -r repo1  # In specific repo
-  wt checkout -b feature -l backend       # In repos with label
+  wt checkout myrepo:feature              # Existing branch in myrepo
+  wt checkout -b feature-branch           # Create new branch in current repo
+  wt checkout -b myrepo:feature           # Create new branch in myrepo
+  wt checkout -b backend:feature          # Create new branch in backend label repos
   wt checkout -i                          # Interactive mode`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -53,9 +56,9 @@ Use -i for interactive mode to be prompted for options.`,
 				fetch = cfg.Checkout.AutoFetch
 			}
 
-			var branch string
+			var target string
 			if len(args) > 0 {
-				branch = args[0]
+				target = args[0]
 			}
 
 			// Load registry
@@ -66,7 +69,7 @@ Use -i for interactive mode to be prompted for options.`,
 
 			// Interactive mode
 			if interactive {
-				opts, err := runCheckoutWizard(ctx, reg, repository, labels, hookNames, noHook)
+				opts, err := runCheckoutWizard(ctx, reg, hookNames, noHook)
 				if err != nil {
 					return err
 				}
@@ -75,17 +78,25 @@ Use -i for interactive mode to be prompted for options.`,
 				}
 
 				// Apply wizard selections
-				branch = opts.Branch
+				target = opts.Branch
 				newBranch = opts.NewBranch
 				fetch = opts.Fetch
 				hookNames = opts.SelectedHooks
 				noHook = opts.NoHook
 
+				// Build scope:branch if repos selected
+				if len(opts.SelectedRepos) > 0 {
+					repo, err := reg.FindByPath(opts.SelectedRepos[0])
+					if err == nil {
+						target = repo.Name + ":" + opts.Branch
+					}
+				}
+
 				// If already in worktree, just run hooks
 				if opts.IsWorktree {
-					wtPath, _ := git.GetBranchWorktree(ctx, branch)
+					wtPath, _ := git.GetBranchWorktree(ctx, opts.Branch)
 					if wtPath != "" {
-						fmt.Printf("Branch %s already checked out at: %s\n", branch, wtPath)
+						fmt.Printf("Branch %s already checked out at: %s\n", opts.Branch, wtPath)
 						// Run hooks if any
 						if len(hookNames) > 0 {
 							repo, _ := findOrRegisterCurrentRepo(ctx, reg)
@@ -95,7 +106,7 @@ Use -i for interactive mode to be prompted for options.`,
 								hookCtx := hooks.Context{
 									WorktreeDir: wtPath,
 									RepoDir:     repo.Path,
-									Branch:      branch,
+									Branch:      opts.Branch,
 									Repo:        repo.Name,
 									Origin:      git.GetRepoDisplayName(repo.Path),
 									Trigger:     "checkout",
@@ -107,33 +118,74 @@ Use -i for interactive mode to be prompted for options.`,
 						return nil
 					}
 				}
-
-				// Use wizard-selected repos
-				if len(opts.SelectedRepos) > 0 {
-					repository = nil // Clear CLI repos
-					for _, path := range opts.SelectedRepos {
-						repo, err := reg.FindByPath(path)
-						if err == nil {
-							repository = append(repository, repo.Name)
-						}
-					}
-				}
 			}
 
-			// Resolve target repos
-			repos, err := resolveTargetRepos(ctx, reg, repository, labels)
+			// Parse target
+			parsed, err := parseScopedTarget(reg, target)
 			if err != nil {
 				return err
 			}
 
-			if len(repos) == 0 {
-				return fmt.Errorf("no repos found")
+			// Determine repos to operate on
+			var repos []*registry.Repo
+
+			if len(parsed.Repos) > 0 {
+				// Scoped target
+				repos = parsed.Repos
+			} else if newBranch {
+				// New branch without scope - use current repo
+				repo, err := findOrRegisterCurrentRepo(ctx, reg)
+				if err != nil {
+					return fmt.Errorf("not in a repo, use scope:branch to specify target")
+				}
+				repos = []*registry.Repo{repo}
+			} else {
+				// Existing branch without scope - search all repos
+				for i := range reg.Repos {
+					repo := &reg.Repos[i]
+					// Check if this repo has a worktree for this branch
+					wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+					if err != nil {
+						continue
+					}
+					for _, wt := range wts {
+						if wt.Branch == parsed.Branch {
+							fmt.Printf("Found existing worktree: %s (%s)\n", wt.Path, repo.Name)
+							return nil
+						}
+					}
+					// Check if branch exists locally
+					branches, _ := git.ListLocalBranches(ctx, repo.Path)
+					for _, b := range branches {
+						if b == parsed.Branch {
+							repos = append(repos, repo)
+							break
+						}
+					}
+				}
+
+				if len(repos) == 0 {
+					// Try current repo as fallback
+					repo, err := findOrRegisterCurrentRepo(ctx, reg)
+					if err != nil {
+						return fmt.Errorf("branch %q not found in any repo", parsed.Branch)
+					}
+					repos = []*registry.Repo{repo}
+				}
+
+				if len(repos) > 1 {
+					var names []string
+					for _, r := range repos {
+						names = append(names, r.Name+":"+parsed.Branch)
+					}
+					return fmt.Errorf("branch %q exists in multiple repos: %v\nUse scope:branch to specify", parsed.Branch, names)
+				}
 			}
 
-			l.Debug("checkout", "branch", branch, "repos", len(repos), "new", newBranch)
+			l.Debug("checkout", "branch", parsed.Branch, "repos", len(repos), "new", newBranch)
 
 			for _, repo := range repos {
-				if err := checkoutInRepo(ctx, repo, branch, newBranch, base, fetch, autoStash, note, hookNames, noHook, env); err != nil {
+				if err := checkoutInRepo(ctx, repo, parsed.Branch, newBranch, base, fetch, autoStash, note, hookNames, noHook, env); err != nil {
 					return fmt.Errorf("%s: %w", repo.Name, err)
 				}
 			}
@@ -142,8 +194,6 @@ Use -i for interactive mode to be prompted for options.`,
 		},
 	}
 
-	cmd.Flags().StringSliceVarP(&repository, "repository", "r", nil, "Repository name(s)")
-	cmd.Flags().StringSliceVarP(&labels, "label", "l", nil, "Target repos by label")
 	cmd.Flags().BoolVarP(&newBranch, "new-branch", "b", false, "Create a new branch")
 	cmd.Flags().StringVar(&base, "base", "", "Base branch to create from")
 	cmd.Flags().BoolVarP(&fetch, "fetch", "f", false, "Fetch base branch first")
@@ -157,8 +207,7 @@ Use -i for interactive mode to be prompted for options.`,
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 
 	// Completions
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
-	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.RegisterFlagCompletionFunc("base", completeBranches)
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
 	registerCheckoutCompletions(cmd)
 
@@ -265,7 +314,7 @@ func completeHooks(cmd *cobra.Command, args []string, toComplete string) ([]stri
 }
 
 // runCheckoutWizard runs the interactive checkout wizard
-func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliRepos, cliLabels, cliHooks []string, cliNoHook bool) (flows.CheckoutOptions, error) {
+func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []string, cliNoHook bool) (flows.CheckoutOptions, error) {
 	// Build available repos list
 	var repoPaths, repoNames []string
 	var preSelectedRepos []int

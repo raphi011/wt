@@ -82,21 +82,27 @@ internal/ui/             - Terminal UI components
 
 ### Development Guidelines
 
-**Target Resolution Pattern** - Commands target repos/worktrees via `-r` (repository), `-l` (label), `--branch`, or `-i` (interactive):
+**Target Resolution Pattern** - Commands use a unified `[scope:]branch` positional argument pattern where `scope` can be a repo name OR label:
 
-- **Repo targeting**: `wt exec`, `wt hook` - use `-r <repo>` or `-l <label>` to target repos
-- **Branch targeting**: `wt prune`, `wt hook` - use `--branch <name>` to target specific worktree
-- **Context-aware**: `wt note`, `wt pr create`, `wt pr merge`, `wt prune` - when inside worktree, defaults to current; outside uses `-r`/`-l`
-- **Special case**: `wt checkout` - inside repo uses branch name; outside repo requires `-r <repo>` or `-l <label>` to specify target repos; use `-i` for interactive mode
+- **Worktree targeting** (most commands): `wt cd`, `wt exec`, `wt checkout`, `wt prune`, `wt hook`, `wt note`
+  - `branch` - searches current repo, or all repos for existing branches
+  - `repo:branch` - targets specific repo
+  - `label:branch` - targets all repos with that label (resolved after checking repo names)
 
-Commands using this pattern: `wt exec`, `wt note set/get/clear`, `wt hook`, `wt pr create`, `wt pr merge`, `wt prune`
+- **Repo targeting**: `wt pr create/merge/view`, `wt list`, `wt label`
+  - `wt list` and `wt label` still use `-r`/`-l` flags (filtering, not worktree targeting)
+  - `wt pr` subcommands use optional `[repo]` positional arg (no branch needed)
+
+**Resolution order for `scope:branch`:**
+1. Try to match scope as repo name
+2. If no repo match, try to match as label (returns multiple repos)
 
 **Keep completions in sync** - **IMPORTANT**: When adding or modifying CLI flags, you MUST update the shell completion scripts in `cmd/wt/completions.go`. This file contains completions for fish, bash, and zsh. Search for existing flags of the same command to find where to add the new flag in each shell format.
 
 **Reuse flags consistently** - When adding flags that serve the same purpose across commands, use identical names/shortcuts. Standard flags:
 - `-i, --interactive` - interactive mode (wt checkout, wt cd, wt prune)
-- `-r, --repository` - repository name for targeting (wt checkout, list, exec, cd, hook)
-- `-l, --label` - target repos by label (wt checkout, list, exec, hook)
+- `-r, --repository` - repository name filtering (wt list, wt label - NOT for targeting)
+- `-l, --label` - label filtering (wt list, wt label - NOT for targeting)
 - `-d, --dry-run` - preview without making changes
 - `-f, --force` - force operation (override safety checks)
 - `-c, --include-clean` - include clean worktrees (0 commits, no changes)
@@ -104,6 +110,8 @@ Commands using this pattern: `wt exec`, `wt note set/get/clear`, `wt hook`, `wt 
 - `-a, --arg` - set hook variable KEY=VALUE (repeatable)
 - `--json` - output as JSON
 - `--hook` / `--no-hook` - control hook execution (for checkout, pr checkout, prune)
+
+**Note**: Most commands now use positional `[scope:]branch` args instead of `-r`/`-l` flags for targeting.
 
 **Never modify git internal files directly** - Always use git CLI commands via `exec.Command`. Never read/write `.git/` directory contents, `.git` files in worktrees, or git refs directly. Use `git worktree repair` for fixing broken links, `git worktree prune` for cleanup.
 

@@ -99,7 +99,7 @@ on = ["checkout"]
 wt pr checkout 123
 
 # Checkout PR from a different local repo (by name)
-wt pr checkout 123 -r backend-api
+wt pr checkout 123 backend-api
 
 # Clone repo you don't have locally and checkout PR
 wt pr checkout 456 org/new-repo
@@ -113,7 +113,7 @@ View PR details or open in browser:
 ```bash
 wt pr view               # Show PR details
 wt pr view -w            # Open PR in browser
-wt pr view -r myrepo     # View PR for specific repo
+wt pr view myrepo        # View PR for specific repo
 ```
 
 After review, merge and clean up in one command:
@@ -143,7 +143,7 @@ wt pr create --title "WIP: Refactor auth" --draft
 wt pr create --title "Ready for review" -w
 
 # By repo name (when outside worktree)
-wt pr create --title "Add feature" -r myrepo
+wt pr create --title "Add feature" myrepo
 ```
 
 ### Cleaning Up
@@ -168,7 +168,10 @@ wt prune -d -v
 wt prune --reset-cache
 
 # Remove specific branch worktree
-wt prune --branch feature-login -f
+wt prune feature-login -f
+
+# Remove worktree from specific repo
+wt prune myrepo:feature-login -f
 ```
 
 ### Working Across Multiple Repos
@@ -211,32 +214,35 @@ wt label list -g      # All labels across repos
 # Clear labels from a repo
 wt label clear
 
-# Create same branch across all backend repos
-wt checkout -b feature-auth -l backend
+# Create same branch across all backend repos (using label prefix)
+wt checkout -b backend:feature-auth
 
-# Or target specific repos by name
-wt checkout -b feature-auth -r backend-api -r auth-service
+# Or target specific repo by name
+wt checkout -b backend-api:feature-auth
 
-# Run command across repos
-wt exec -l backend -- git status
-wt exec -r backend-api -r auth-service -- make test
+# Run command across worktrees
+wt exec main -- git status              # In all repos' main worktree
+wt exec backend-api:main -- make test   # In specific repo's worktree
 ```
 
 ### Quick Navigation
 
 ```bash
-# Jump to repo by name
-cd $(wt cd -r backend-api)
+# Jump to most recently accessed worktree
+cd $(wt cd)
 
-# Jump to repo by label (must match exactly one)
-cd $(wt cd -l backend)
+# Jump to worktree by branch name
+cd $(wt cd feature-auth)
+
+# Jump to worktree in specific repo (if branch exists in multiple repos)
+cd $(wt cd backend-api:feature-auth)
 
 # Interactive fuzzy search
 cd $(wt cd -i)
 
-# Run command in repo
-wt exec -r myrepo -- git status
-wt exec -r myrepo -- code .
+# Run command in worktree
+wt exec -- git status                   # In current worktree
+wt exec myrepo:main -- code .
 ```
 
 ### Running Hooks Manually
@@ -245,14 +251,14 @@ wt exec -r myrepo -- code .
 # Run a hook on current worktree
 wt hook vscode
 
-# Run on specific repo
-wt hook vscode -r myrepo
-
 # Run multiple hooks
 wt hook vscode kitty
 
-# Run across repos by label
-wt hook build -l backend
+# Run on specific worktree (repo:branch format)
+wt hook vscode -- myrepo:feature
+
+# Run across worktrees by label
+wt hook build -- backend:main
 
 # Pass custom variables
 wt hook claude --arg prompt="implement feature X"
@@ -273,8 +279,8 @@ wt note get
 # Clear note
 wt note clear
 
-# Set note in specific repo
-wt note set "Ready for review" -r myrepo
+# Set note on specific worktree (repo:branch format)
+wt note set "Ready for review" myrepo:feature
 ```
 
 ## Configuration
@@ -294,7 +300,7 @@ wt config hooks                          # List configured hooks
 # Directory for new worktrees (must be absolute or start with ~)
 worktree_dir = "~/Git/worktrees"
 
-# Where repos live (for -r/-l lookup, defaults to worktree_dir)
+# Where repos live (for repo: lookups, defaults to worktree_dir)
 repo_dir = "~/Git"
 
 # Default sort order for list: "id", "repo", "branch", "commit"

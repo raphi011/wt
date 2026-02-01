@@ -2,13 +2,13 @@
 package registry
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/raphi011/wt/internal/storage"
 )
 
 // Repo represents a registered git repository
@@ -24,27 +24,11 @@ type Registry struct {
 	Repos []Repo `json:"repos"`
 }
 
-// wtDir returns the path to ~/.wt/, creating it if needed
-func wtDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("get home directory: %w", err)
-	}
-	dir := filepath.Join(home, ".wt")
-
-	// Auto-create directory if it doesn't exist
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", fmt.Errorf("create ~/.wt directory: %w", err)
-	}
-
-	return dir, nil
-}
-
 // registryPath returns the path to ~/.wt/repos.json
 func registryPath() (string, error) {
-	dir, err := wtDir()
+	dir, err := storage.WtDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("get wt directory: %w", err)
 	}
 	return filepath.Join(dir, "repos.json"), nil
 }
@@ -57,17 +41,12 @@ func Load() (*Registry, error) {
 		return nil, err
 	}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+	var reg Registry
+	if err := storage.LoadJSON(path, &reg); err != nil {
+		if os.IsNotExist(err) {
 			return &Registry{Repos: []Repo{}}, nil
 		}
-		return nil, fmt.Errorf("read registry: %w", err)
-	}
-
-	var reg Registry
-	if err := json.Unmarshal(data, &reg); err != nil {
-		return nil, fmt.Errorf("parse registry: %w", err)
+		return nil, fmt.Errorf("load registry: %w", err)
 	}
 
 	return &reg, nil
@@ -80,20 +59,7 @@ func (r *Registry) Save() error {
 		return err
 	}
 
-	data, err := json.MarshalIndent(r, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal registry: %w", err)
-	}
-
-	// Write to temp file first for atomic operation
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return fmt.Errorf("write registry: %w", err)
-	}
-
-	// Atomic rename
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp) // Clean up temp file on failure
+	if err := storage.SaveJSON(path, r); err != nil {
 		return fmt.Errorf("save registry: %w", err)
 	}
 

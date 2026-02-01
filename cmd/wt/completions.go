@@ -113,14 +113,13 @@ func completeRemoteBranches(cmd *cobra.Command, args []string, toComplete string
 }
 
 // completeWorktrees provides worktree completion for the specified repo.
-// Supports both "branch" and "repo:branch" formats.
+// Supports "branch", "repo:branch", and "label:branch" formats.
 func completeWorktrees(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	ctx := context.Background()
 
-	// Check if user is typing repo:branch format
+	// Check if user is typing scope:branch format
 	if idx := strings.Index(toComplete, ":"); idx >= 0 {
-		// User is typing "repo:branch" - complete branch within specified repo
-		repoName := toComplete[:idx]
+		scopeName := toComplete[:idx]
 		branchPrefix := toComplete[idx+1:]
 
 		reg, err := registry.Load()
@@ -128,62 +127,52 @@ func completeWorktrees(cmd *cobra.Command, args []string, toComplete string) ([]
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		repo, err := reg.FindByName(repoName)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		var matches []string
-		for _, wt := range worktrees {
-			if strings.HasPrefix(wt.Branch, branchPrefix) {
-				matches = append(matches, repoName+":"+wt.Branch)
+		// Try repo name first
+		repo, err := reg.FindByName(scopeName)
+		if err == nil {
+			worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
-		}
-		return matches, cobra.ShellCompDirectiveNoFileComp
-	}
 
-	// Check if -r flag is set
-	repoName, _ := cmd.Flags().GetString("repository")
-	if repoName == "" {
-		repos, _ := cmd.Flags().GetStringSlice("repository")
-		if len(repos) > 0 {
-			repoName = repos[0]
+			var matches []string
+			for _, wt := range worktrees {
+				if strings.HasPrefix(wt.Branch, branchPrefix) {
+					matches = append(matches, scopeName+":"+wt.Branch)
+				}
+			}
+			return matches, cobra.ShellCompDirectiveNoFileComp
 		}
+
+		// Try label
+		labelRepos := reg.FindByLabel(scopeName)
+		if len(labelRepos) > 0 {
+			branchSet := make(map[string]bool)
+			for _, repo := range labelRepos {
+				worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+				if err != nil {
+					continue
+				}
+				for _, wt := range worktrees {
+					if strings.HasPrefix(wt.Branch, branchPrefix) {
+						branchSet[wt.Branch] = true
+					}
+				}
+			}
+
+			var matches []string
+			for branch := range branchSet {
+				matches = append(matches, scopeName+":"+branch)
+			}
+			return matches, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
 	var matches []string
 
-	// If repo flag is set, only complete branches from that repo
-	if repoName != "" {
-		reg, err := registry.Load()
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		repo, err := reg.FindByName(repoName)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		for _, wt := range worktrees {
-			if strings.HasPrefix(wt.Branch, toComplete) {
-				matches = append(matches, wt.Branch)
-			}
-		}
-		return matches, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	// No repo specified - try current repo first
+	// Try current repo first
 	repoPath := git.GetCurrentRepoMainPath(ctx)
 	if repoPath != "" {
 		worktrees, err := git.ListWorktreesFromRepo(ctx, repoPath)
@@ -196,14 +185,130 @@ func completeWorktrees(cmd *cobra.Command, args []string, toComplete string) ([]
 		}
 	}
 
-	// Also offer "repo:" completions for all registered repos
+	// Also offer "repo:" and "label:" completions
 	reg, err := registry.Load()
 	if err == nil {
+		// Repo prefixes
 		for _, repo := range reg.Repos {
 			prefix := repo.Name + ":"
 			if strings.HasPrefix(prefix, toComplete) || strings.HasPrefix(toComplete, repo.Name) {
 				matches = append(matches, prefix)
 			}
+		}
+
+		// Label prefixes
+		for _, label := range reg.AllLabels() {
+			prefix := label + ":"
+			if strings.HasPrefix(prefix, toComplete) || strings.HasPrefix(toComplete, label) {
+				matches = append(matches, prefix)
+			}
+		}
+	}
+
+	return matches, cobra.ShellCompDirectiveNoFileComp
+}
+
+// completeCdArg provides completion for `wt cd [scope:]branch`
+// scope can be a repo name or label.
+// Inside a repo: shows branches from current repo (no prefix) + scope:branch for others
+// Outside a repo or with scope prefix: shows scope:branch combinations
+func completeCdArg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	ctx := context.Background()
+
+	// Check if user is typing scope:branch format
+	if idx := strings.Index(toComplete, ":"); idx >= 0 {
+		scopeName := toComplete[:idx]
+		branchPrefix := toComplete[idx+1:]
+
+		reg, err := registry.Load()
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		// Try repo name first
+		repo, err := reg.FindByName(scopeName)
+		if err == nil {
+			worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+
+			var matches []string
+			for _, wt := range worktrees {
+				if strings.HasPrefix(wt.Branch, branchPrefix) {
+					matches = append(matches, scopeName+":"+wt.Branch)
+				}
+			}
+			return matches, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		// Try label
+		labelRepos := reg.FindByLabel(scopeName)
+		if len(labelRepos) > 0 {
+			// Collect unique branches across all labeled repos
+			branchSet := make(map[string]bool)
+			for _, repo := range labelRepos {
+				worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+				if err != nil {
+					continue
+				}
+				for _, wt := range worktrees {
+					if strings.HasPrefix(wt.Branch, branchPrefix) {
+						branchSet[wt.Branch] = true
+					}
+				}
+			}
+
+			var matches []string
+			for branch := range branchSet {
+				matches = append(matches, scopeName+":"+branch)
+			}
+			return matches, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	var matches []string
+
+	// Check if we're inside a git repo
+	currentRepoPath := git.GetCurrentRepoMainPath(ctx)
+
+	if currentRepoPath != "" {
+		// Inside a repo - show branches from current repo first (no prefix)
+		worktrees, err := git.ListWorktreesFromRepo(ctx, currentRepoPath)
+		if err == nil {
+			for _, wt := range worktrees {
+				if strings.HasPrefix(wt.Branch, toComplete) {
+					matches = append(matches, wt.Branch)
+				}
+			}
+		}
+	}
+
+	// Also offer "repo:" and "label:" completions
+	reg, err := registry.Load()
+	if err != nil {
+		return matches, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	// Repo prefixes
+	for _, repo := range reg.Repos {
+		prefix := repo.Name + ":"
+		if strings.HasPrefix(prefix, toComplete) || strings.HasPrefix(toComplete, repo.Name) {
+			matches = append(matches, prefix)
+		}
+	}
+
+	// Label prefixes
+	for _, label := range reg.AllLabels() {
+		prefix := label + ":"
+		if strings.HasPrefix(prefix, toComplete) || strings.HasPrefix(toComplete, label) {
+			matches = append(matches, prefix)
 		}
 	}
 

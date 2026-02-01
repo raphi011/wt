@@ -58,7 +58,7 @@ func TestPrune_NoWorktrees(t *testing.T) {
 
 // TestPrune_WithWorktree tests pruning a worktree.
 //
-// Scenario: User runs `wt prune feature` to prune a specific worktree
+// Scenario: User runs `wt prune feature -f` to prune a specific worktree
 // Expected: Worktree is removed
 func TestPrune_WithWorktree(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -99,7 +99,7 @@ func TestPrune_WithWorktree(t *testing.T) {
 	ctx := testContext(t)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"--branch", "feature", "--force"})
+	cmd.SetArgs([]string{"feature", "-f"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("prune command failed: %v", err)
@@ -113,7 +113,7 @@ func TestPrune_WithWorktree(t *testing.T) {
 
 // TestPrune_DryRun tests dry-run mode.
 //
-// Scenario: User runs `wt prune -d -f feature`
+// Scenario: User runs `wt prune feature -d -f`
 // Expected: Shows what would be pruned without actually pruning
 func TestPrune_DryRun(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -149,8 +149,8 @@ func TestPrune_DryRun(t *testing.T) {
 	ctx := testContext(t)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
-	// Need --force even in dry-run since the worktree has uncommitted state
-	cmd.SetArgs([]string{"--branch", "feature", "-d", "-f"})
+	// Need --force even in dry-run since targeting specific worktree
+	cmd.SetArgs([]string{"feature", "-d", "-f"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("prune command failed: %v", err)
@@ -164,7 +164,7 @@ func TestPrune_DryRun(t *testing.T) {
 
 // TestPrune_ByRepoName tests pruning in a specific repo.
 //
-// Scenario: User runs `wt prune -r myrepo feature`
+// Scenario: User runs `wt prune myrepo:feature -f`
 // Expected: Worktree is pruned from the specified repo
 func TestPrune_ByRepoName(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -204,7 +204,7 @@ func TestPrune_ByRepoName(t *testing.T) {
 	ctx := testContext(t)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"-r", "myrepo", "--branch", "feature", "--force"})
+	cmd.SetArgs([]string{"myrepo:feature", "-f"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("prune command failed: %v", err)
@@ -218,7 +218,7 @@ func TestPrune_ByRepoName(t *testing.T) {
 
 // TestPrune_WithRepoBranchFormat tests pruning with repo:branch format.
 //
-// Scenario: User has two repos with same branch name, runs `wt prune --branch myrepo:feature -f`
+// Scenario: User has two repos with same branch name, runs `wt prune repo1:feature -f`
 // Expected: Only the worktree in the specified repo is pruned
 func TestPrune_WithRepoBranchFormat(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -265,7 +265,7 @@ func TestPrune_WithRepoBranchFormat(t *testing.T) {
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	// Use repo:branch format to target only repo1
-	cmd.SetArgs([]string{"--branch", "repo1:feature", "--force", "-g"})
+	cmd.SetArgs([]string{"repo1:feature", "-f"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("prune command failed: %v", err)
@@ -284,7 +284,7 @@ func TestPrune_WithRepoBranchFormat(t *testing.T) {
 
 // TestPrune_RepoBranchFormat_RepoNotFound tests error when repo in repo:branch format is not found.
 //
-// Scenario: User runs `wt prune --branch nonexistent:feature -f`
+// Scenario: User runs `wt prune nonexistent:feature -f`
 // Expected: Command fails with informative error
 func TestPrune_RepoBranchFormat_RepoNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -321,7 +321,7 @@ func TestPrune_RepoBranchFormat_RepoNotFound(t *testing.T) {
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	// Use nonexistent repo name
-	cmd.SetArgs([]string{"--branch", "nonexistent:feature", "--force"})
+	cmd.SetArgs([]string{"nonexistent:feature", "-f"})
 
 	err := cmd.Execute()
 	if err == nil {

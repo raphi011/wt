@@ -4,10 +4,11 @@
 package prcache
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/raphi011/wt/internal/storage"
 )
 
 // CacheMaxAge is the maximum age of cached PR info before it's considered stale
@@ -48,24 +49,13 @@ func Path() string {
 
 // Load loads the PR cache from disk
 func Load() (*Cache, error) {
-	cachePath := Path()
-
-	data, err := os.ReadFile(cachePath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &Cache{
-				PRs: make(map[string]*PRInfo),
-			}, nil
-		}
-		return nil, err
-	}
-
 	var cache Cache
-	if err := json.Unmarshal(data, &cache); err != nil {
+	if err := storage.LoadJSON(Path(), &cache); err != nil {
+		if os.IsNotExist(err) {
+			return &Cache{PRs: make(map[string]*PRInfo)}, nil
+		}
 		// Corrupted - start fresh
-		return &Cache{
-			PRs: make(map[string]*PRInfo),
-		}, nil
+		return &Cache{PRs: make(map[string]*PRInfo)}, nil
 	}
 
 	// Initialize nil map
@@ -78,25 +68,7 @@ func Load() (*Cache, error) {
 
 // Save saves the PR cache to disk atomically
 func (c *Cache) Save() error {
-	cachePath := Path()
-
-	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
-		return err
-	}
-
-	tempPath := cachePath + ".tmp"
-
-	data, err := json.MarshalIndent(c, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if err := os.WriteFile(tempPath, data, 0o600); err != nil {
-		return err
-	}
-
-	return os.Rename(tempPath, cachePath)
+	return storage.SaveJSON(Path(), c)
 }
 
 // Set stores PR info for a folder

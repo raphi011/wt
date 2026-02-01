@@ -4,33 +4,38 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
 
 func newCdCmd() *cobra.Command {
-	var (
-		repository  string
-		label       string
-		interactive bool
-	)
+	var interactive bool
 
 	cmd := &cobra.Command{
-		Use:     "cd",
-		Short:   "Print repo/worktree path for shell scripting",
+		Use:     "cd [repo:]branch",
+		Short:   "Print worktree path for shell scripting",
 		GroupID: GroupUtility,
-		Args:    cobra.NoArgs,
-		Long: `Print the path of a repo or worktree for shell scripting.
+		Args:    cobra.MaximumNArgs(1),
+		Long: `Print the path of a worktree for shell scripting.
 
-Use with shell command substitution: cd $(wt cd -r myrepo)`,
-		Example: `  cd $(wt cd -r myrepo)   # cd to repo
-  cd $(wt cd -l backend)  # cd to repo with label (must match one)
-  cd $(wt cd -i)          # interactive fuzzy search for worktree`,
+Use with shell command substitution: cd $(wt cd feature-x)
+
+The argument can be:
+  - branch name: searches all repos, errors if ambiguous
+  - repo:branch: finds exact worktree in specified repo
+
+With no arguments, returns the most recently accessed worktree.`,
+		Example: `  cd $(wt cd)              # cd to most recently accessed worktree
+  cd $(wt cd feature-x)    # cd to feature-x worktree (error if ambiguous)
+  cd $(wt cd wt:feature-x) # cd to feature-x worktree in wt repo
+  cd $(wt cd -i)           # interactive fuzzy search for worktree`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			out := output.FromContext(ctx)
@@ -88,38 +93,102 @@ Use with shell command substitution: cd $(wt cd -r myrepo)`,
 				}
 
 				targetPath = result.SelectedPath
-			} else {
-				// Non-interactive mode
-				var repo *registry.Repo
-
-				if repository != "" {
-					repo, err = reg.FindByName(repository)
-					if err != nil {
-						return err
-					}
-				} else if label != "" {
-					repos := reg.FindByLabel(label)
-					if len(repos) == 0 {
-						return fmt.Errorf("no repo with label: %s", label)
-					}
-					if len(repos) > 1 {
-						return fmt.Errorf("label %q matches multiple repos: use -r to specify", label)
-					}
-					repo = repos[0]
-				} else {
-					// Try current repo
-					repoPath := git.GetCurrentRepoMainPath(ctx)
-					if repoPath == "" {
-						return fmt.Errorf("not in a git repository")
-					}
-					repo, err = reg.FindByPath(repoPath)
-					if err != nil {
-						return err
-					}
+			} else if len(args) == 0 {
+				// No arguments: return most recently accessed worktree
+				mostRecent, err := history.GetMostRecent()
+				if err != nil {
+					return fmt.Errorf("load history: %w", err)
+				}
+				if mostRecent == "" {
+					return fmt.Errorf("no worktree history (use wt cd <branch> first)")
 				}
 
-				targetPath = repo.Path
+				// Verify the path still exists
+				if _, err := os.Stat(mostRecent); os.IsNotExist(err) {
+					return fmt.Errorf("most recent worktree no longer exists: %s", mostRecent)
+				}
+
+				targetPath = mostRecent
+			} else {
+				// Parse positional argument
+				arg := args[0]
+				var repoName, branchName string
+
+				if idx := strings.Index(arg, ":"); idx >= 0 {
+					// repo:branch format
+					repoName = arg[:idx]
+					branchName = arg[idx+1:]
+				} else {
+					// Just branch name
+					branchName = arg
+				}
+
+				if repoName != "" {
+					// Explicit repo specified - find exact worktree
+					repo, err := reg.FindByName(repoName)
+					if err != nil {
+						return err
+					}
+
+					worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+					if err != nil {
+						return fmt.Errorf("list worktrees: %w", err)
+					}
+
+					for _, wt := range worktrees {
+						if wt.Branch == branchName {
+							targetPath = wt.Path
+							break
+						}
+					}
+
+					if targetPath == "" {
+						return fmt.Errorf("worktree not found: %s:%s", repoName, branchName)
+					}
+				} else {
+					// Search all repos for matching branch
+					type match struct {
+						repoName string
+						path     string
+					}
+					var matches []match
+
+					for i := range reg.Repos {
+						repo := &reg.Repos[i]
+						worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+						if err != nil {
+							continue
+						}
+
+						for _, wt := range worktrees {
+							if wt.Branch == branchName {
+								matches = append(matches, match{
+									repoName: repo.Name,
+									path:     wt.Path,
+								})
+							}
+						}
+					}
+
+					if len(matches) == 0 {
+						return fmt.Errorf("worktree not found: %s", branchName)
+					}
+
+					if len(matches) > 1 {
+						// Ambiguous - list matches
+						var names []string
+						for _, m := range matches {
+							names = append(names, m.repoName+":"+branchName)
+						}
+						return fmt.Errorf("branch %q exists in multiple repos: %s", branchName, strings.Join(names, ", "))
+					}
+
+					targetPath = matches[0].path
+				}
 			}
+
+			// Record access to history (ignore errors - best effort)
+			_ = history.RecordAccess(targetPath)
 
 			// Print path
 			out.Println(targetPath)
@@ -128,15 +197,10 @@ Use with shell command substitution: cd $(wt cd -r myrepo)`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&repository, "repository", "r", "", "Repository name")
-	cmd.Flags().StringVarP(&label, "label", "l", "", "Repository label (must match one)")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode with fuzzy search")
 
-	cmd.MarkFlagsMutuallyExclusive("repository", "label", "interactive")
-
-	// Completions
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
-	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	// Register completions
+	cmd.ValidArgsFunction = completeCdArg
 
 	return cmd
 }
