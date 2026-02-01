@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Wizard orchestrates a multi-step interactive flow.
@@ -149,6 +150,10 @@ func (w *Wizard) Run() (*Wizard, error) {
 		return w, fmt.Errorf("wizard has no steps")
 	}
 
+	// Set lipgloss output to stderr so colors work even when stdout is piped
+	// (e.g., cd $(wt cd -i) redirects stdout but stderr remains a TTY)
+	lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(os.Stderr))
+
 	p := tea.NewProgram(w, tea.WithOutput(os.Stderr))
 	finalModel, err := p.Run()
 	if err != nil {
@@ -257,7 +262,7 @@ func (w *Wizard) View() string {
 	var b strings.Builder
 
 	// Title
-	b.WriteString(TitleStyle().Render(w.title + " Wizard"))
+	b.WriteString(TitleStyle().Render(w.title))
 	b.WriteString("\n\n")
 
 	// Info line
@@ -268,9 +273,11 @@ func (w *Wizard) View() string {
 		}
 	}
 
-	// Step tabs
-	b.WriteString(w.renderStepTabs())
-	b.WriteString("\n\n")
+	// Step tabs (skip if single step with no summary)
+	if !(len(w.steps) == 1 && w.skipSummary) {
+		b.WriteString(w.renderStepTabs())
+		b.WriteString("\n\n")
+	}
 
 	// Current step content or summary
 	if w.currentStep >= len(w.steps) {

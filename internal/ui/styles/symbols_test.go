@@ -17,7 +17,7 @@ func TestSetNerdfont(t *testing.T) {
 	if !NerdfontEnabled() {
 		t.Error("expected nerdfont to be enabled")
 	}
-	if PRMergedSymbol() != "" {
+	if PRMergedSymbol() != "\ueafe" {
 		t.Errorf("expected nerdfont merged symbol, got %q", PRMergedSymbol())
 	}
 
@@ -84,10 +84,10 @@ func TestFormatPRState_Nerdfont(t *testing.T) {
 		isDraft  bool
 		expected string
 	}{
-		{"MERGED", false, " Merged"},
-		{"OPEN", false, " Open"},
-		{"OPEN", true, " Draft"},
-		{"CLOSED", false, " Closed"},
+		{"MERGED", false, "\ueafe Merged"},
+		{"OPEN", false, "\uea64 Open"},
+		{"OPEN", true, "\uebdb Draft"},
+		{"CLOSED", false, "\uebda Closed"},
 	}
 
 	for _, tt := range tests {
@@ -138,7 +138,7 @@ func TestCurrentSymbols(t *testing.T) {
 	SetNerdfont(true)
 	symbols = CurrentSymbols()
 
-	if symbols.PRMerged != "" {
+	if symbols.PRMerged != "\ueafe" {
 		t.Errorf("expected nerdfont PRMerged symbol")
 	}
 

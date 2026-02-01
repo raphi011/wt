@@ -42,11 +42,10 @@ type FilterableListStep struct {
 	selectedIsNew bool                                                        // True if "Create" was selected
 
 	// Multi-select mode
-	multiSelect     bool         // Enable multi-select mode
-	multiSelected   map[int]bool // Selected indices in multi-select mode
-	minSelect       int          // Minimum required selections (0 = no min)
-	maxSelect       int          // Maximum allowed selections (0 = no max)
-	sortSelectedTop bool         // Sort selected items to top (default true for multi-select)
+	multiSelect   bool         // Enable multi-select mode
+	multiSelected map[int]bool // Selected indices in multi-select mode
+	minSelect     int          // Minimum required selections (0 = no min)
+	maxSelect     int          // Maximum allowed selections (0 = no max)
 
 	// Input filtering
 	runeFilter framework.RuneFilter // nil = allow all printable
@@ -114,7 +113,6 @@ func (s *FilterableListStep) WithRuneFilter(f framework.RuneFilter) *FilterableL
 func (s *FilterableListStep) WithMultiSelect() *FilterableListStep {
 	s.multiSelect = true
 	s.multiSelected = make(map[int]bool)
-	s.sortSelectedTop = true
 	return s
 }
 
@@ -204,10 +202,6 @@ func (s *FilterableListStep) Update(msg tea.KeyMsg) (framework.Step, tea.Cmd, fr
 				if s.maxSelect == 0 || len(s.multiSelected) < s.maxSelect {
 					s.multiSelected[idx] = true
 				}
-			}
-			// Re-sort to keep selected items at top
-			if s.sortSelectedTop {
-				s.applyFilter()
 			}
 		}
 	case "enter", "right":
@@ -591,21 +585,7 @@ func (s *FilterableListStep) applyFilter() {
 		matching = fuzzy.FindFrom(s.filter, optionSource(s.options))
 	}
 
-	// In multi-select mode with sortSelectedTop, sort selected items to the top
-	if s.multiSelect && s.sortSelectedTop && len(s.multiSelected) > 0 {
-		var selectedItems []fuzzy.Match
-		var unselectedItems []fuzzy.Match
-		for _, match := range matching {
-			if s.multiSelected[match.Index] {
-				selectedItems = append(selectedItems, match)
-			} else {
-				unselectedItems = append(unselectedItems, match)
-			}
-		}
-		s.filtered = append(selectedItems, unselectedItems...)
-	} else {
-		s.filtered = matching
-	}
+	s.filtered = matching
 
 	// Calculate total items (including create option if shown)
 	showCreate := s.shouldShowCreate()
