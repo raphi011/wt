@@ -20,6 +20,7 @@ import (
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/progress"
 	"github.com/raphi011/wt/internal/ui/static"
+	"github.com/raphi011/wt/internal/ui/styles"
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
 
@@ -30,14 +31,23 @@ const maxConcurrentPRFetches = 5
 type pruneReason string
 
 const (
-	// Prune reasons (will be removed)
-	reasonMergedPR pruneReason = "Merged PR"
-
 	// Skip reasons (will not be removed)
-	skipDirty     pruneReason = "Dirty"
-	skipNoPR      pruneReason = "No PR"
-	skipPRNotDone pruneReason = "PR open"
+	skipDirty pruneReason = "Dirty"
+	skipNoPR  pruneReason = "No PR"
 )
+
+// formatPruneReason returns a display string for the prune reason
+// Uses symbols when nerdfont is enabled
+func formatPruneReason(wt pruneWorktree) string {
+	if wt.IsDirty {
+		return string(skipDirty)
+	}
+	if wt.PRState == "" {
+		return string(skipNoPR)
+	}
+	// Use PR state formatting with symbols
+	return styles.FormatPRState(wt.PRState, wt.IsDraft)
+}
 
 // pruneWorktree holds worktree info for prune operations
 type pruneWorktree struct {
@@ -48,6 +58,7 @@ type pruneWorktree struct {
 	OriginURL string
 	IsDirty   bool
 	PRState   string
+	IsDraft   bool
 }
 
 func newPruneCmd() *cobra.Command {
@@ -192,6 +203,7 @@ Use --interactive to select worktrees to prune.`,
 				folderName := filepath.Base(allWorktrees[i].Path)
 				if pr := prCache.Get(folderName); pr != nil && pr.Fetched {
 					allWorktrees[i].PRState = pr.State
+					allWorktrees[i].IsDraft = pr.IsDraft
 				}
 			}
 
@@ -212,32 +224,14 @@ Use --interactive to select worktrees to prune.`,
 			var toRemove []pruneWorktree
 			var toSkip []pruneWorktree
 			toRemoveMap := make(map[string]bool)
-			reasonMap := make(map[string]pruneReason)
 
 			for _, wt := range allWorktrees {
-				var reason pruneReason
-				var skipReason pruneReason
-
 				// Only auto-prune worktrees with merged PRs
 				if wt.PRState == "MERGED" && !wt.IsDirty {
-					reason = reasonMergedPR
-				} else {
-					if wt.IsDirty {
-						skipReason = skipDirty
-					} else if wt.PRState == "" {
-						skipReason = skipNoPR
-					} else {
-						skipReason = skipPRNotDone
-					}
-				}
-
-				if reason != "" {
 					toRemove = append(toRemove, wt)
 					toRemoveMap[wt.Path] = true
-					reasonMap[wt.Path] = reason
 				} else {
 					toSkip = append(toSkip, wt)
-					reasonMap[wt.Path] = skipReason
 				}
 			}
 
@@ -249,7 +243,7 @@ Use --interactive to select worktrees to prune.`,
 						ID:       i + 1, // Use index as ID
 						RepoName: wt.RepoName,
 						Branch:   wt.Branch,
-						Reason:   string(reasonMap[wt.Path]),
+						Reason:   formatPruneReason(wt),
 						IsDirty:  wt.IsDirty,
 					})
 				}
@@ -363,7 +357,7 @@ Use --interactive to select worktrees to prune.`,
 				headers := []string{"REPO", "BRANCH", "REASON"}
 				var rows [][]string
 				for _, wt := range removed {
-					rows = append(rows, []string{wt.RepoName, wt.Branch, string(reasonMap[wt.Path])})
+					rows = append(rows, []string{wt.RepoName, wt.Branch, formatPruneReason(wt)})
 				}
 				out.Print(static.RenderTable(headers, rows))
 
@@ -371,7 +365,7 @@ Use --interactive to select worktrees to prune.`,
 					fmt.Println("Skipped:")
 					rows = nil
 					for _, wt := range toSkip {
-						rows = append(rows, []string{wt.RepoName, wt.Branch, string(reasonMap[wt.Path])})
+						rows = append(rows, []string{wt.RepoName, wt.Branch, formatPruneReason(wt)})
 					}
 					out.Print(static.RenderTable(headers, rows))
 				}
