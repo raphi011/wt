@@ -11,24 +11,24 @@ import (
 )
 
 // completeBranches provides branch name completion.
-// It checks if -r flag is set and uses that repo's branches, otherwise uses current directory.
+// It checks for a scoped target (repo:branch) in args and uses that repo's branches,
+// otherwise uses current directory.
 func completeBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	ctx := context.Background()
 
-	// Check if -r flag is set
-	repoName, _ := cmd.Flags().GetString("repository")
-	if repoName == "" {
-		// Try getting string slice version (for commands with multiple repos)
-		repos, _ := cmd.Flags().GetStringSlice("repository")
-		if len(repos) > 0 {
-			repoName = repos[0]
+	// Check if any positional arg contains a scope prefix (repo:branch)
+	var repoName string
+	for _, arg := range args {
+		if idx := strings.Index(arg, ":"); idx >= 0 {
+			repoName = arg[:idx]
+			break
 		}
 	}
 
 	var repoPath string
 
 	if repoName != "" {
-		// Load registry and find repo
+		// Load registry and find repo by name
 		reg, err := registry.Load()
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -65,21 +65,24 @@ func completeBranches(cmd *cobra.Command, args []string, toComplete string) ([]s
 }
 
 // completeRemoteBranches provides remote branch name completion.
+// It checks for a scoped target (repo:branch) in args and uses that repo's branches,
+// otherwise uses current directory.
 func completeRemoteBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	ctx := context.Background()
 
-	// Check if -r flag is set
-	repoName, _ := cmd.Flags().GetString("repository")
-	if repoName == "" {
-		repos, _ := cmd.Flags().GetStringSlice("repository")
-		if len(repos) > 0 {
-			repoName = repos[0]
+	// Check if any positional arg contains a scope prefix (repo:branch)
+	var repoName string
+	for _, arg := range args {
+		if idx := strings.Index(arg, ":"); idx >= 0 {
+			repoName = arg[:idx]
+			break
 		}
 	}
 
 	var repoPath string
 
 	if repoName != "" {
+		// Load registry and find repo by name
 		reg, err := registry.Load()
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
