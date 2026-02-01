@@ -87,8 +87,8 @@ func Execute() {
 	defer cancel()
 
 	// Create logger (stderr for diagnostics)
-	logger := log.New(os.Stderr, verbose, quiet)
-	ctx = log.WithLogger(ctx, logger)
+	l := log.New(os.Stderr, verbose, quiet)
+	ctx = log.WithLogger(ctx, l)
 
 	// Add output printer (stdout for primary data)
 	ctx = output.WithPrinter(ctx, os.Stdout)
