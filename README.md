@@ -186,7 +186,7 @@ wt repo add ~/path/to/myrepo
 wt repo clone git@github.com:org/repo.git
 
 # Migrate an existing repo to bare structure (for faster worktrees)
-wt repo mv ./myrepo
+wt repo make-bare ./myrepo
 
 # Unregister a repo
 wt repo remove myrepo

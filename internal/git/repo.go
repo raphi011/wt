@@ -667,8 +667,10 @@ func DetectRepoType(path string) (RepoType, error) {
 	return 0, fmt.Errorf("not a git repository: %s", path)
 }
 
-// isBareRepo checks if a path has bare repo markers (HEAD, objects/, refs/)
+// isBareRepo checks if a path is a bare repository by checking core.bare config.
+// This is used to detect bare-in-.git pattern where a bare repo is placed inside .git/
 func isBareRepo(path string) bool {
+	// First check basic structure (HEAD, objects, refs)
 	headFile := filepath.Join(path, "HEAD")
 	if _, err := os.Stat(headFile); err != nil {
 		return false
@@ -681,7 +683,28 @@ func isBareRepo(path string) bool {
 	if _, err := os.Stat(refsDir); err != nil {
 		return false
 	}
-	return true
+
+	// Check core.bare config - this distinguishes bare from regular repos
+	configPath := filepath.Join(path, "config")
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		return false
+	}
+
+	// Look for "bare = true" in the config
+	lines := strings.Split(string(content), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "bare") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				value := strings.TrimSpace(parts[1])
+				return value == "true"
+			}
+		}
+	}
+
+	return false
 }
 
 // GetGitDir returns the git directory for a repo

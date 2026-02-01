@@ -4,6 +4,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -516,5 +517,593 @@ func TestRepoRemove_NonExistent(t *testing.T) {
 
 	if err := cmd.Execute(); err == nil {
 		t.Error("expected error for non-existent repo")
+	}
+}
+
+// TestRepoMakeBare_BasicMigration tests basic migration from regular repo to bare-in-.git.
+//
+// Scenario: User runs `wt repo make-bare` in a regular git repo
+// Expected: Repo is converted to bare-in-.git structure and registered
+func TestRepoMakeBare_BasicMigration(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "migrate-test")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd := newRepoMakeBareCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("make-bare command failed: %v", err)
+	}
+
+	// Verify structure - .git should be a directory with bare repo
+	gitDir := filepath.Join(repoPath, ".git")
+	info, err := os.Stat(gitDir)
+	if err != nil {
+		t.Fatalf("failed to stat .git: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error(".git should be a directory")
+	}
+
+	// Verify main worktree was created
+	mainWorktree := filepath.Join(repoPath, "main")
+	if _, err := os.Stat(mainWorktree); os.IsNotExist(err) {
+		t.Error("main worktree should exist")
+	}
+
+	// Verify repo was registered
+	reg, err := registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	if len(reg.Repos) != 1 {
+		t.Fatalf("expected 1 repo, got %d", len(reg.Repos))
+	}
+
+	if reg.Repos[0].Name != "migrate-test" {
+		t.Errorf("expected name 'migrate-test', got %q", reg.Repos[0].Name)
+	}
+}
+
+// TestRepoMakeBare_WithCustomName tests migration with custom display name.
+//
+// Scenario: User runs `wt repo make-bare -n myapp ./repo`
+// Expected: Repo is migrated and registered with custom name
+func TestRepoMakeBare_WithCustomName(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "original-name")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd := newRepoMakeBareCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath, "-n", "custom-name"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("make-bare command failed: %v", err)
+	}
+
+	reg, err := registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	if reg.Repos[0].Name != "custom-name" {
+		t.Errorf("expected name 'custom-name', got %q", reg.Repos[0].Name)
+	}
+}
+
+// TestRepoMakeBare_WithLabels tests migration with labels.
+//
+// Scenario: User runs `wt repo make-bare -l backend -l api ./repo`
+// Expected: Repo is migrated and registered with labels
+func TestRepoMakeBare_WithLabels(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "labeled-migrate")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd := newRepoMakeBareCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath, "-l", "backend", "-l", "api"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("make-bare command failed: %v", err)
+	}
+
+	reg, err := registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	if len(reg.Repos[0].Labels) != 2 {
+		t.Fatalf("expected 2 labels, got %d", len(reg.Repos[0].Labels))
+	}
+
+	labels := make(map[string]bool)
+	for _, l := range reg.Repos[0].Labels {
+		labels[l] = true
+	}
+
+	if !labels["backend"] || !labels["api"] {
+		t.Errorf("expected labels [backend, api], got %v", reg.Repos[0].Labels)
+	}
+}
+
+// TestRepoMakeBare_WithWorktreeFormat tests migration with worktree format.
+//
+// Scenario: User runs `wt repo make-bare -w "./{branch}" ./repo`
+// Expected: Repo is migrated and registered with worktree format
+func TestRepoMakeBare_WithWorktreeFormat(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "format-migrate")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd := newRepoMakeBareCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath, "-w", "./{branch}"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("make-bare command failed: %v", err)
+	}
+
+	reg, err := registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	if reg.Repos[0].WorktreeFormat != "./{branch}" {
+		t.Errorf("expected worktree format './{branch}', got %q", reg.Repos[0].WorktreeFormat)
+	}
+}
+
+// TestRepoMakeBare_DryRun tests dry run mode.
+//
+// Scenario: User runs `wt repo make-bare --dry-run ./repo`
+// Expected: Shows migration plan without making changes
+func TestRepoMakeBare_DryRun(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "dryrun-migrate")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx, out := testContextWithOutput(t)
+	cmd := newRepoMakeBareCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath, "--dry-run"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("make-bare command failed: %v", err)
+	}
+
+	// Verify dry run message in output
+	if !strings.Contains(out.String(), "dry run") {
+		t.Error("expected dry run message in output")
+	}
+
+	// Verify no changes were made - main worktree should NOT exist
+	mainWorktree := filepath.Join(repoPath, "main")
+	if _, err := os.Stat(mainWorktree); !os.IsNotExist(err) {
+		t.Error("main worktree should not exist in dry run")
+	}
+
+	// Verify repo was NOT registered
+	reg, err := registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	if len(reg.Repos) != 0 {
+		t.Errorf("expected 0 repos in dry run, got %d", len(reg.Repos))
+	}
+}
+
+// TestRepoMakeBare_WithExistingWorktrees tests migration with existing worktrees.
+//
+// Scenario: User runs `wt repo make-bare` on repo with existing worktrees
+// Expected: Repo is migrated and existing worktrees are updated
+func TestRepoMakeBare_WithExistingWorktrees(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
+
+	// Create an existing worktree with repo prefix (e.g., myrepo-feature)
+	// Migration will strip the prefix, renaming it to just "feature"
+	wtOrigPath := filepath.Join(tmpDir, "myrepo-feature")
+	cmd := exec.Command("git", "worktree", "add", wtOrigPath, "feature")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to create worktree: %v\n%s", err, out)
+	}
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd2 := newRepoMakeBareCmd()
+	cmd2.SetContext(ctx)
+	cmd2.SetArgs([]string{repoPath})
+
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("make-bare command failed: %v", err)
+	}
+
+	// Verify main worktree was created
+	mainWorktree := filepath.Join(repoPath, "main")
+	if _, err := os.Stat(mainWorktree); os.IsNotExist(err) {
+		t.Error("main worktree should exist")
+	}
+
+	// Migration strips the repo prefix from worktree names
+	// So myrepo-feature becomes just "feature"
+	wtNewPath := filepath.Join(tmpDir, "feature")
+	wtGitFile := filepath.Join(wtNewPath, ".git")
+	if _, err := os.Stat(wtGitFile); os.IsNotExist(err) {
+		t.Errorf("worktree .git file should exist at %s", wtNewPath)
+	}
+
+	// Verify we can run git status in the renamed worktree
+	cmd = exec.Command("git", "status")
+	cmd.Dir = wtNewPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git status in worktree failed: %v\n%s", err, out)
+	}
+}
+
+// TestRepoMakeBare_IsWorktree tests error when path is a worktree.
+//
+// Scenario: User runs `wt repo make-bare` on a worktree path
+// Expected: Command fails with error about being a worktree
+func TestRepoMakeBare_IsWorktree(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "has-worktree", []string{"feature"})
+
+	// Create a worktree
+	wtPath := filepath.Join(tmpDir, "the-worktree")
+	cmd := exec.Command("git", "worktree", "add", wtPath, "feature")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to create worktree: %v\n%s", err, out)
+	}
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd2 := newRepoMakeBareCmd()
+	cmd2.SetContext(ctx)
+	cmd2.SetArgs([]string{wtPath}) // Try to migrate the worktree, not the main repo
+
+	err := cmd2.Execute()
+	if err == nil {
+		t.Error("expected error for worktree path")
+	}
+
+	if !strings.Contains(err.Error(), "worktree") {
+		t.Errorf("expected error about worktree, got: %v", err)
+	}
+}
+
+// TestRepoMakeBare_AlreadyBare tests error when repo is already bare-in-.git.
+//
+// Scenario: User runs `wt repo make-bare` on already migrated repo
+// Expected: Command fails with error
+func TestRepoMakeBare_AlreadyBare(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupBareInGitRepo(t, tmpDir, "already-bare")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd := newRepoMakeBareCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Error("expected error for already bare repo")
+	}
+}
+
+// TestRepoMakeBare_NotGitRepo tests error when path is not a git repo.
+//
+// Scenario: User runs `wt repo make-bare` on non-git directory
+// Expected: Command fails with error
+func TestRepoMakeBare_NotGitRepo(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	notGitPath := filepath.Join(tmpDir, "not-a-repo")
+	os.MkdirAll(notGitPath, 0755)
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd := newRepoMakeBareCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{notGitPath})
+
+	if err := cmd.Execute(); err == nil {
+		t.Error("expected error for non-git directory")
+	}
+}
+
+// TestRepoMakeBare_HasSubmodules tests error when repo has submodules.
+//
+// Scenario: User runs `wt repo make-bare` on repo with submodules
+// Expected: Command fails with error about submodules
+func TestRepoMakeBare_HasSubmodules(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithSubmodule(t, tmpDir, "with-submodule")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd := newRepoMakeBareCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Error("expected error for repo with submodules")
+	}
+
+	if !strings.Contains(err.Error(), "submodule") {
+		t.Errorf("expected error about submodules, got: %v", err)
+	}
+}
+
+// TestRepoMakeBare_AlreadyRegistered tests migration of already registered repo.
+//
+// Scenario: User runs `wt repo make-bare` on repo already in registry
+// Expected: Repo is migrated, registration is skipped
+func TestRepoMakeBare_AlreadyRegistered(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "already-registered")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	// Pre-register the repo
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "already-registered", Path: repoPath},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	ctx, out := testContextWithOutput(t)
+	cmd := newRepoMakeBareCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("make-bare command failed: %v", err)
+	}
+
+	// Verify migration completed
+	mainWorktree := filepath.Join(repoPath, "main")
+	if _, err := os.Stat(mainWorktree); os.IsNotExist(err) {
+		t.Error("main worktree should exist after migration")
+	}
+
+	// Verify output mentions already registered
+	if !strings.Contains(out.String(), "Already registered") {
+		t.Error("expected 'Already registered' in output")
+	}
+
+	// Verify still only one repo in registry
+	reg, err := registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	if len(reg.Repos) != 1 {
+		t.Errorf("expected 1 repo, got %d", len(reg.Repos))
+	}
+}
+
+// TestRepoMakeBare_NameConflict tests error when name conflicts with existing repo.
+//
+// Scenario: User runs `wt repo make-bare` with name that already exists
+// Expected: Command fails with name conflict error
+func TestRepoMakeBare_NameConflict(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "name-conflict")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	// Register a different repo with the same name
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "name-conflict", Path: "/some/other/path"},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	ctx := testContext(t)
+	cmd := newRepoMakeBareCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Error("expected error for name conflict")
+	}
+
+	if !strings.Contains(err.Error(), "name already exists") {
+		t.Errorf("expected name conflict error, got: %v", err)
+	}
+}
+
+// TestRepoMakeBare_ByPath tests migration when providing explicit path argument.
+//
+// Scenario: User runs `wt repo make-bare ./myrepo` from outside the repo
+// Expected: Repo at path is migrated and registered
+func TestRepoMakeBare_ByPath(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Create repo in a subdirectory
+	reposDir := filepath.Join(tmpDir, "repos")
+	os.MkdirAll(reposDir, 0755)
+	repoPath := setupTestRepo(t, reposDir, "path-migrate")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	// Change to a different directory (not the repo)
+	oldWd, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(oldWd)
+
+	ctx := testContext(t)
+	cmd := newRepoMakeBareCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("make-bare command failed: %v", err)
+	}
+
+	// Verify migration completed
+	mainWorktree := filepath.Join(repoPath, "main")
+	if _, err := os.Stat(mainWorktree); os.IsNotExist(err) {
+		t.Error("main worktree should exist")
+	}
+
+	// Verify registration
+	reg, err := registry.Load()
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	if len(reg.Repos) != 1 {
+		t.Fatalf("expected 1 repo, got %d", len(reg.Repos))
+	}
+
+	if reg.Repos[0].Name != "path-migrate" {
+		t.Errorf("expected name 'path-migrate', got %q", reg.Repos[0].Name)
 	}
 }

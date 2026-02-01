@@ -231,3 +231,64 @@ func setupBareRepo(t *testing.T, dir, name string) string {
 
 	return repoPath
 }
+
+// setupTestRepoWithSubmodule creates a git repo with a submodule
+func setupTestRepoWithSubmodule(t *testing.T, dir, name string) string {
+	t.Helper()
+
+	// First create a submodule repo to reference
+	submoduleRepo := setupTestRepo(t, dir, name+"-submodule")
+
+	// Create the main repo
+	repoPath := setupTestRepo(t, dir, name)
+
+	// Allow file:// transport for submodule (required in newer git versions)
+	cmd := exec.Command("git", "config", "--global", "protocol.file.allow", "always")
+	cmd.Dir = repoPath
+	cmd.CombinedOutput() // Ignore error - may already be set
+
+	// Add the submodule
+	cmd = exec.Command("git", "submodule", "add", submoduleRepo, "vendor/submodule")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to add submodule: %v\n%s", err, out)
+	}
+
+	// Commit the submodule
+	cmd = exec.Command("git", "commit", "-m", "Add submodule")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to commit submodule: %v\n%s", err, out)
+	}
+
+	return repoPath
+}
+
+// setupBareInGitRepo creates a bare-in-.git repo (already migrated structure)
+func setupBareInGitRepo(t *testing.T, dir, name string) string {
+	t.Helper()
+
+	dir = resolvePath(t, dir)
+	repoPath := filepath.Join(dir, name)
+
+	if err := os.MkdirAll(repoPath, 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+
+	gitDir := filepath.Join(repoPath, ".git")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatalf("failed to create .git dir: %v", err)
+	}
+
+	// Initialize bare repo inside .git
+	cmd := exec.Command("git", "init", "--bare")
+	cmd.Dir = gitDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to init bare repo: %v\n%s", err, out)
+	}
+
+	// Bare-in-.git pattern keeps core.bare=true (set by --bare)
+	// No need to change it - the --bare flag already sets core.bare=true
+
+	return repoPath
+}
