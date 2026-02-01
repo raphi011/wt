@@ -3,9 +3,10 @@
 package history
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/raphi011/wt/internal/storage"
 )
 
 // History stores the most recently accessed worktree path
@@ -21,46 +22,19 @@ func Path() string {
 
 // Load reads the history from disk
 func Load() (*History, error) {
-	historyPath := Path()
-
-	data, err := os.ReadFile(historyPath)
-	if err != nil {
+	var h History
+	if err := storage.LoadJSON(Path(), &h); err != nil {
 		if os.IsNotExist(err) {
 			return &History{}, nil
 		}
 		return nil, err
 	}
-
-	var h History
-	if err := json.Unmarshal(data, &h); err != nil {
-		// Corrupted - start fresh
-		return &History{}, nil
-	}
-
 	return &h, nil
 }
 
 // Save writes the history to disk atomically
 func (h *History) Save() error {
-	historyPath := Path()
-
-	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(historyPath), 0o755); err != nil {
-		return err
-	}
-
-	tempPath := historyPath + ".tmp"
-
-	data, err := json.MarshalIndent(h, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if err := os.WriteFile(tempPath, data, 0o600); err != nil {
-		return err
-	}
-
-	return os.Rename(tempPath, historyPath)
+	return storage.SaveJSON(Path(), h)
 }
 
 // RecordAccess saves the given path as the most recently accessed worktree
