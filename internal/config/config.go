@@ -40,6 +40,13 @@ type MergeConfig struct {
 	Strategy string `toml:"strategy"` // "squash", "rebase", or "merge"
 }
 
+// CheckoutConfig holds checkout-related configuration
+type CheckoutConfig struct {
+	WorktreeFormat string `toml:"worktree_format"` // Template for worktree folder names
+	BaseRef        string `toml:"base_ref"`        // "local" or "remote" (default: "remote")
+	AutoFetch      bool   `toml:"auto_fetch"`      // Fetch before creating new branches
+}
+
 // ThemeConfig holds theme/color configuration for interactive UI
 type ThemeConfig struct {
 	Name     string `toml:"name"`     // preset name: "default", "dracula", "nord", "gruvbox"
@@ -55,18 +62,16 @@ type ThemeConfig struct {
 
 // Config holds the wt configuration
 type Config struct {
-	WorktreeDir    string            `toml:"worktree_dir"`
-	RepoDir        string            `toml:"repo_dir"` // optional: where to find repos for -r/-l
-	WorktreeFormat string            `toml:"worktree_format"`
-	BaseRef        string            `toml:"base_ref"`       // "local" or "remote" (default: "remote")
-	AutoFetch      bool              `toml:"auto_fetch"`     // fetch before creating new branches (default: false)
-	DefaultSort    string            `toml:"default_sort"`   // "id", "repo", "branch", "commit" (default: "id")
-	DefaultLabels  []string          `toml:"default_labels"` // labels for newly registered repos
-	Hooks          HooksConfig       `toml:"-"`              // custom parsing needed
-	Forge          ForgeConfig       `toml:"forge"`
-	Merge          MergeConfig       `toml:"merge"`
-	Hosts          map[string]string `toml:"hosts"` // domain -> forge type mapping
-	Theme          ThemeConfig       `toml:"theme"` // UI theme/colors for interactive mode
+	WorktreeDir   string            `toml:"worktree_dir"`
+	RepoDir       string            `toml:"repo_dir"`       // optional: where to find repos for -r/-l
+	DefaultSort   string            `toml:"default_sort"`   // "id", "repo", "branch", "commit" (default: "id")
+	DefaultLabels []string          `toml:"default_labels"` // labels for newly registered repos
+	Hooks         HooksConfig       `toml:"-"`              // custom parsing needed
+	Checkout      CheckoutConfig    `toml:"checkout"`       // checkout settings
+	Forge         ForgeConfig       `toml:"forge"`
+	Merge         MergeConfig       `toml:"merge"`
+	Hosts         map[string]string `toml:"hosts"` // domain -> forge type mapping
+	Theme         ThemeConfig       `toml:"theme"` // UI theme/colors for interactive mode
 }
 
 // RepoScanDir returns the directory to scan for repositories.
@@ -93,9 +98,11 @@ const DefaultWorktreeFormat = "{repo}-{branch}"
 // Default returns the default configuration
 func Default() Config {
 	return Config{
-		WorktreeDir:    "",
-		RepoDir:        "",
-		WorktreeFormat: DefaultWorktreeFormat,
+		WorktreeDir: "",
+		RepoDir:     "",
+		Checkout: CheckoutConfig{
+			WorktreeFormat: DefaultWorktreeFormat,
+		},
 		Forge: ForgeConfig{
 			Default: "github",
 		},
@@ -148,18 +155,16 @@ func configPath() (string, error) {
 
 // rawConfig is used for initial TOML parsing before processing hooks
 type rawConfig struct {
-	WorktreeDir    string                 `toml:"worktree_dir"`
-	RepoDir        string                 `toml:"repo_dir"`
-	WorktreeFormat string                 `toml:"worktree_format"`
-	BaseRef        string                 `toml:"base_ref"`
-	AutoFetch      bool                   `toml:"auto_fetch"`
-	DefaultSort    string                 `toml:"default_sort"`
-	DefaultLabels  []string               `toml:"default_labels"`
-	Hooks          map[string]interface{} `toml:"hooks"`
-	Forge          ForgeConfig            `toml:"forge"`
-	Merge          MergeConfig            `toml:"merge"`
-	Hosts          map[string]string      `toml:"hosts"`
-	Theme          ThemeConfig            `toml:"theme"`
+	WorktreeDir   string                 `toml:"worktree_dir"`
+	RepoDir       string                 `toml:"repo_dir"`
+	DefaultSort   string                 `toml:"default_sort"`
+	DefaultLabels []string               `toml:"default_labels"`
+	Hooks         map[string]interface{} `toml:"hooks"`
+	Checkout      CheckoutConfig         `toml:"checkout"`
+	Forge         ForgeConfig            `toml:"forge"`
+	Merge         MergeConfig            `toml:"merge"`
+	Hosts         map[string]string      `toml:"hosts"`
+	Theme         ThemeConfig            `toml:"theme"`
 }
 
 // Load reads config from ~/.config/wt/config.toml
@@ -193,18 +198,16 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		WorktreeDir:    raw.WorktreeDir,
-		RepoDir:        raw.RepoDir,
-		WorktreeFormat: raw.WorktreeFormat,
-		BaseRef:        raw.BaseRef,
-		AutoFetch:      raw.AutoFetch,
-		DefaultSort:    raw.DefaultSort,
-		DefaultLabels:  raw.DefaultLabels,
-		Hooks:          parseHooksConfig(raw.Hooks),
-		Forge:          raw.Forge,
-		Merge:          raw.Merge,
-		Hosts:          raw.Hosts,
-		Theme:          raw.Theme,
+		WorktreeDir:   raw.WorktreeDir,
+		RepoDir:       raw.RepoDir,
+		DefaultSort:   raw.DefaultSort,
+		DefaultLabels: raw.DefaultLabels,
+		Hooks:         parseHooksConfig(raw.Hooks),
+		Checkout:      raw.Checkout,
+		Forge:         raw.Forge,
+		Merge:         raw.Merge,
+		Hosts:         raw.Hosts,
+		Theme:         raw.Theme,
 	}
 
 	// Validate worktree_dir (must be absolute or start with ~)
@@ -260,8 +263,8 @@ func Load() (Config, error) {
 	}
 
 	// Validate base_ref (only "local", "remote", or empty allowed)
-	if cfg.BaseRef != "" && cfg.BaseRef != "local" && cfg.BaseRef != "remote" {
-		return Default(), fmt.Errorf("invalid base_ref %q: must be \"local\" or \"remote\"", cfg.BaseRef)
+	if cfg.Checkout.BaseRef != "" && cfg.Checkout.BaseRef != "local" && cfg.Checkout.BaseRef != "remote" {
+		return Default(), fmt.Errorf("invalid checkout.base_ref %q: must be \"local\" or \"remote\"", cfg.Checkout.BaseRef)
 	}
 
 	// Validate default_sort (only "id", "repo", "branch", "commit", or empty allowed)
@@ -272,8 +275,8 @@ func Load() (Config, error) {
 	// Note: theme.name is validated at runtime with a warning, not an error
 
 	// Use defaults for empty values
-	if cfg.WorktreeFormat == "" {
-		cfg.WorktreeFormat = DefaultWorktreeFormat
+	if cfg.Checkout.WorktreeFormat == "" {
+		cfg.Checkout.WorktreeFormat = DefaultWorktreeFormat
 	}
 	if cfg.Forge.Default == "" {
 		cfg.Forge.Default = "github"
@@ -419,6 +422,8 @@ const defaultConfigAfterWorktreeDir = `
 # Can also be set via WT_REPO_DIR env var (env overrides config)
 # repo_dir = "~/Code"
 
+# Checkout settings - controls worktree creation behavior
+[checkout]
 # Worktree folder naming format
 # Available placeholders:
 #   {repo}    - folder name of git repo (matches -r flag)

@@ -106,9 +106,9 @@ func newConfigShowCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Config file: ~/.wt/config.toml\n\n")
-			fmt.Printf("worktree_format: %s\n", cfg.WorktreeFormat)
-			fmt.Printf("base_ref: %s\n", cfg.BaseRef)
-			fmt.Printf("auto_fetch: %v\n", cfg.AutoFetch)
+			fmt.Printf("checkout.worktree_format: %s\n", cfg.Checkout.WorktreeFormat)
+			fmt.Printf("checkout.base_ref: %s\n", cfg.Checkout.BaseRef)
+			fmt.Printf("checkout.auto_fetch: %v\n", cfg.Checkout.AutoFetch)
 			fmt.Printf("default_sort: %s\n", cfg.DefaultSort)
 			fmt.Printf("forge.default: %s\n", cfg.Forge.Default)
 			fmt.Printf("merge.strategy: %s\n", cfg.Merge.Strategy)
@@ -170,6 +170,14 @@ func defaultConfig() string {
 	return `# wt configuration
 # Config location: ~/.wt/config.toml
 
+# Default labels for newly registered repos
+# default_labels = []
+
+# Default sort order for 'wt list'
+# default_sort = "created"
+
+# Checkout settings
+[checkout]
 # Worktree naming format
 # Placeholders: {repo}, {branch}
 # Path prefixes:
@@ -178,9 +186,6 @@ func defaultConfig() string {
 #   "~/worktrees/{repo}-{branch}" = centralized folder
 worktree_format = "{branch}"
 
-# Default labels for newly registered repos
-# default_labels = []
-
 # Base ref mode for new branches (wt checkout -b)
 # "remote" = use origin/<branch> (default)
 # "local" = use local <branch>
@@ -188,9 +193,6 @@ worktree_format = "{branch}"
 
 # Auto-fetch before creating new branches
 # auto_fetch = false
-
-# Default sort order for 'wt list'
-# default_sort = "created"
 
 # Hooks - run commands after worktree creation/removal
 # [hooks.code]

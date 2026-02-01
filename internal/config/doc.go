@@ -14,9 +14,9 @@
 //
 //   - worktree_dir: Base directory for new worktrees (must be absolute or ~/...)
 //   - repo_dir: Optional separate directory for repo scanning
-//   - worktree_format: Template for worktree folder names (default: "{repo}-{branch}")
-//   - base_ref: "local" or "remote" for new branch base (default: "remote")
-//   - auto_fetch: Fetch base branch before creating new branches (default: false)
+//   - checkout.worktree_format: Template for worktree folder names (default: "{repo}-{branch}")
+//   - checkout.base_ref: "local" or "remote" for new branch base (default: "remote")
+//   - checkout.auto_fetch: Fetch base branch before creating new branches (default: false)
 //   - default_sort: Default sort order for "wt list"
 //
 // # Hooks Configuration

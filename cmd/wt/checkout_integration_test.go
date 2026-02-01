@@ -45,7 +45,9 @@ func TestCheckout_ExistingBranch(t *testing.T) {
 	// Set config
 	oldCfg := cfg
 	cfg = &config.Config{
-		WorktreeFormat: "../{repo}-{branch}",
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
 	}
 	defer func() { cfg = oldCfg }()
 
@@ -106,8 +108,10 @@ func TestCheckout_NewBranch(t *testing.T) {
 
 	oldCfg := cfg
 	cfg = &config.Config{
-		WorktreeFormat: "../{repo}-{branch}",
-		BaseRef:        "local", // Use local branches, not origin/
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local", // Use local branches, not origin/
+		},
 	}
 	defer func() { cfg = oldCfg }()
 
@@ -167,7 +171,9 @@ func TestCheckout_ByRepoName(t *testing.T) {
 
 	oldCfg := cfg
 	cfg = &config.Config{
-		WorktreeFormat: "../{repo}-{branch}",
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
 	}
 	defer func() { cfg = oldCfg }()
 
@@ -228,8 +234,10 @@ func TestCheckout_ByLabel(t *testing.T) {
 
 	oldCfg := cfg
 	cfg = &config.Config{
-		WorktreeFormat: "../{repo}-{branch}",
-		BaseRef:        "local",
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
 	}
 	defer func() { cfg = oldCfg }()
 
@@ -292,7 +300,9 @@ func TestCheckout_SlashBranchName(t *testing.T) {
 
 	oldCfg := cfg
 	cfg = &config.Config{
-		WorktreeFormat: "../{repo}-{branch}",
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
 	}
 	defer func() { cfg = oldCfg }()
 

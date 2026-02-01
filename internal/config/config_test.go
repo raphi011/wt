@@ -14,6 +14,9 @@ func TestDefault(t *testing.T) {
 	if cfg.RepoDir != "" {
 		t.Errorf("expected repo dir '', got %q", cfg.RepoDir)
 	}
+	if cfg.Checkout.WorktreeFormat != DefaultWorktreeFormat {
+		t.Errorf("expected checkout.worktree_format %q, got %q", DefaultWorktreeFormat, cfg.Checkout.WorktreeFormat)
+	}
 }
 
 func TestLoadNonexistent(t *testing.T) {
@@ -281,15 +284,18 @@ func TestDefaultConfigWithDirsNoRepoDir(t *testing.T) {
 }
 
 func TestAutoFetchParsing(t *testing.T) {
-	// Verify auto_fetch is parsed correctly from TOML
+	// Verify auto_fetch is parsed correctly from TOML under [checkout] section
 	tests := []struct {
 		name     string
 		toml     string
 		expected bool
 	}{
-		{"not set", `worktree_format = "{repo}-{branch}"`, false},
-		{"set true", `auto_fetch = true`, true},
-		{"set false", `auto_fetch = false`, false},
+		{"not set", `[checkout]
+worktree_format = "{repo}-{branch}"`, false},
+		{"set true", `[checkout]
+auto_fetch = true`, true},
+		{"set false", `[checkout]
+auto_fetch = false`, false},
 	}
 
 	for _, tt := range tests {
@@ -298,8 +304,8 @@ func TestAutoFetchParsing(t *testing.T) {
 			if _, err := toml.Decode(tt.toml, &raw); err != nil {
 				t.Fatalf("failed to parse TOML: %v", err)
 			}
-			if raw.AutoFetch != tt.expected {
-				t.Errorf("AutoFetch = %v, want %v", raw.AutoFetch, tt.expected)
+			if raw.Checkout.AutoFetch != tt.expected {
+				t.Errorf("Checkout.AutoFetch = %v, want %v", raw.Checkout.AutoFetch, tt.expected)
 			}
 		})
 	}
