@@ -7,32 +7,47 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/registry"
 )
 
 func newExecCmd() *cobra.Command {
-	var (
-		repository []string
-		labels     []string
-	)
-
 	cmd := &cobra.Command{
-		Use:     "exec [flags] -- <command>",
-		Short:   "Run command in worktree(s) or repo(s)",
+		Use:     "exec [repo:]branch... -- <command>",
+		Short:   "Run command in worktree(s)",
 		Aliases: []string{"x"},
 		GroupID: GroupUtility,
-		Long: `Run a command in one or more worktrees or repos.
+		Long: `Run a command in one or more worktrees.
 
-Use -r to target repos by name, -l to target repos by label.`,
-		Example: `  wt exec -r myrepo -- git status        # In specific repo
-  wt exec -l backend -- make test        # In repos with label
-  wt exec -r repo1 -r repo2 -- npm install`,
+Target worktrees using [repo:]branch arguments before --:
+  - branch: finds worktree in current repo, or all repos if ambiguous
+  - repo:branch: finds exact worktree in specified repo
+
+With no targets, runs in the current worktree.`,
+		Example: `  wt exec -- git status                  # In current worktree
+  wt exec main -- git status             # In main worktree
+  wt exec wt:main -- git status          # In main worktree of wt repo
+  wt exec wt:main myrepo:dev -- make test  # In multiple worktrees`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
 
-			if len(args) == 0 {
+			// Cobra handles -- specially - ArgsLenAtDash returns index where -- appeared
+			dashIdx := cmd.ArgsLenAtDash()
+
+			var targets []string
+			var cmdArgs []string
+
+			if dashIdx == -1 {
+				// No --, treat all args as command
+				cmdArgs = args
+			} else {
+				targets = args[:dashIdx]
+				cmdArgs = args[dashIdx:]
+			}
+
+			if len(cmdArgs) == 0 {
 				return fmt.Errorf("no command specified (use -- before command)")
 			}
 
@@ -42,30 +57,117 @@ Use -r to target repos by name, -l to target repos by label.`,
 				return fmt.Errorf("load registry: %w", err)
 			}
 
-			// Resolve target repos
-			repos, err := resolveTargetRepos(ctx, reg, repository, labels)
-			if err != nil {
-				return err
+			// Resolve target worktrees
+			type worktreeTarget struct {
+				repoName string
+				path     string
+			}
+			var worktrees []worktreeTarget
+
+			if len(targets) == 0 {
+				// No targets - use current directory
+				repoPath := git.GetCurrentRepoMainPath(ctx)
+				if repoPath == "" {
+					return fmt.Errorf("not in a git repository")
+				}
+				repo, err := reg.FindByPath(repoPath)
+				repoName := ""
+				if err == nil {
+					repoName = repo.Name
+				}
+				worktrees = append(worktrees, worktreeTarget{repoName: repoName, path: workDir})
+			} else {
+				// Parse each target
+				for _, target := range targets {
+					repoName, branchName := parseBranchTarget(target)
+
+					if repoName != "" {
+						// Explicit repo - find exact worktree
+						repo, err := reg.FindByName(repoName)
+						if err != nil {
+							return err
+						}
+
+						wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+						if err != nil {
+							return fmt.Errorf("list worktrees for %s: %w", repoName, err)
+						}
+
+						found := false
+						for _, wt := range wts {
+							if wt.Branch == branchName {
+								worktrees = append(worktrees, worktreeTarget{
+									repoName: repoName,
+									path:     wt.Path,
+								})
+								found = true
+								break
+							}
+						}
+
+						if !found {
+							return fmt.Errorf("worktree not found: %s:%s", repoName, branchName)
+						}
+					} else {
+						// No repo specified - search all repos
+						var matches []worktreeTarget
+
+						for i := range reg.Repos {
+							repo := &reg.Repos[i]
+							wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+							if err != nil {
+								continue
+							}
+
+							for _, wt := range wts {
+								if wt.Branch == branchName {
+									matches = append(matches, worktreeTarget{
+										repoName: repo.Name,
+										path:     wt.Path,
+									})
+								}
+							}
+						}
+
+						if len(matches) == 0 {
+							return fmt.Errorf("worktree not found: %s", branchName)
+						}
+
+						// Add all matches (run in all repos with this branch)
+						worktrees = append(worktrees, matches...)
+					}
+				}
 			}
 
-			if len(repos) == 0 {
-				return fmt.Errorf("no repos found")
+			// Deduplicate by path
+			seen := make(map[string]bool)
+			var unique []worktreeTarget
+			for _, wt := range worktrees {
+				if !seen[wt.path] {
+					seen[wt.path] = true
+					unique = append(unique, wt)
+				}
 			}
+			worktrees = unique
 
-			l.Debug("exec", "command", args[0], "repos", len(repos))
+			l.Debug("exec", "command", cmdArgs[0], "worktrees", len(worktrees))
 
-			// Execute command in each repo
-			for _, repo := range repos {
-				fmt.Printf("=== %s ===\n", repo.Name)
+			// Execute command in each worktree
+			for _, wt := range worktrees {
+				label := wt.repoName
+				if label == "" {
+					label = wt.path
+				}
+				fmt.Printf("=== %s ===\n", label)
 
-				execCmd := exec.CommandContext(ctx, args[0], args[1:]...)
-				execCmd.Dir = repo.Path
+				execCmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
+				execCmd.Dir = wt.path
 				execCmd.Stdout = os.Stdout
 				execCmd.Stderr = os.Stderr
 				execCmd.Stdin = os.Stdin
 
 				if err := execCmd.Run(); err != nil {
-					l.Printf("Error in %s: %v\n", repo.Name, err)
+					l.Printf("Error in %s: %v\n", label, err)
 				}
 				fmt.Println()
 			}
@@ -74,12 +176,21 @@ Use -r to target repos by name, -l to target repos by label.`,
 		},
 	}
 
-	cmd.Flags().StringSliceVarP(&repository, "repository", "r", nil, "Repository name(s)")
-	cmd.Flags().StringSliceVarP(&labels, "label", "l", nil, "Target repos by label")
-
-	// Completions
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
-	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	// Register completions
+	cmd.ValidArgsFunction = completeExecArg
 
 	return cmd
+}
+
+// completeExecArg provides completion for exec command targets
+func completeExecArg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	// After --, no more completions for targets
+	for _, arg := range args {
+		if arg == "--" {
+			return nil, cobra.ShellCompDirectiveDefault
+		}
+	}
+
+	// Reuse the same completion logic as cd
+	return completeCdArg(cmd, nil, toComplete)
 }

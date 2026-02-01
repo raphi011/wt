@@ -217,9 +217,9 @@ wt checkout -b feature-auth -l backend
 # Or target specific repos by name
 wt checkout -b feature-auth -r backend-api -r auth-service
 
-# Run command across repos
-wt exec -l backend -- git status
-wt exec -r backend-api -r auth-service -- make test
+# Run command across worktrees
+wt exec main -- git status              # In all repos' main worktree
+wt exec backend-api:main -- make test   # In specific repo's worktree
 ```
 
 ### Quick Navigation
@@ -237,9 +237,9 @@ cd $(wt cd backend-api:feature-auth)
 # Interactive fuzzy search
 cd $(wt cd -i)
 
-# Run command in repo
-wt exec -r myrepo -- git status
-wt exec -r myrepo -- code .
+# Run command in worktree
+wt exec -- git status                   # In current worktree
+wt exec myrepo:main -- code .
 ```
 
 ### Running Hooks Manually
