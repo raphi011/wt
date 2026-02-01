@@ -268,10 +268,7 @@ func Load() (Config, error) {
 		return Default(), fmt.Errorf("invalid default_sort %q: must be \"id\", \"repo\", \"branch\", or \"commit\"", cfg.DefaultSort)
 	}
 
-	// Validate theme.name (only known presets allowed)
-	if cfg.Theme.Name != "" && !isValidThemeName(cfg.Theme.Name) {
-		return Default(), fmt.Errorf("invalid theme.name %q: must be \"default\", \"dracula\", \"nord\", \"gruvbox\", \"catppuccin-frappe\", or \"catppuccin-mocha\"", cfg.Theme.Name)
-	}
+	// Note: theme.name is validated at runtime with a warning, not an error
 
 	// Use defaults for empty values
 	if cfg.WorktreeFormat == "" {

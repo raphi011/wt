@@ -141,3 +141,21 @@ func TestApplyTheme_UpdatesGlobalStyles(t *testing.T) {
 	// Reset to default
 	Init(config.ThemeConfig{})
 }
+
+func TestInit_UnknownThemeFallsBackToDefault(t *testing.T) {
+	// Unknown theme should fall back to default (with warning logged to stderr)
+	Init(config.ThemeConfig{Name: "nonexistent-theme"})
+
+	theme := Current()
+
+	// Should use default colors
+	if theme.Primary != lipgloss.Color("62") {
+		t.Errorf("expected default primary color 62 for unknown theme, got %v", theme.Primary)
+	}
+	if theme.Accent != lipgloss.Color("212") {
+		t.Errorf("expected default accent color 212 for unknown theme, got %v", theme.Accent)
+	}
+
+	// Reset to default
+	Init(config.ThemeConfig{})
+}

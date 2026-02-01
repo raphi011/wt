@@ -1,6 +1,10 @@
 package styles
 
 import (
+	"fmt"
+	"os"
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/raphi011/wt/internal/config"
 )
@@ -112,6 +116,10 @@ func Init(cfg config.ThemeConfig) {
 	if cfg.Name != "" {
 		if preset, ok := themePresets[cfg.Name]; ok {
 			theme = preset
+		} else {
+			// Unknown theme name - log warning and use default
+			fmt.Fprintf(os.Stderr, "Warning: unknown theme %q, using default (available: %s)\n",
+				cfg.Name, strings.Join(config.ValidThemeNames, ", "))
 		}
 	}
 
