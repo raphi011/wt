@@ -42,14 +42,15 @@ type MergeConfig struct {
 
 // ThemeConfig holds theme/color configuration for interactive UI
 type ThemeConfig struct {
-	Name    string `toml:"name"`    // preset name: "default", "dracula", "nord", "gruvbox"
-	Primary string `toml:"primary"` // main accent color (borders, titles)
-	Accent  string `toml:"accent"`  // highlight color (selected items)
-	Success string `toml:"success"` // success indicators (checkmarks)
-	Error   string `toml:"error"`   // error messages
-	Muted   string `toml:"muted"`   // disabled/inactive text
-	Normal  string `toml:"normal"`  // standard text
-	Info    string `toml:"info"`    // informational text
+	Name     string `toml:"name"`     // preset name: "default", "dracula", "nord", "gruvbox"
+	Primary  string `toml:"primary"`  // main accent color (borders, titles)
+	Accent   string `toml:"accent"`   // highlight color (selected items)
+	Success  string `toml:"success"`  // success indicators (checkmarks)
+	Error    string `toml:"error"`    // error messages
+	Muted    string `toml:"muted"`    // disabled/inactive text
+	Normal   string `toml:"normal"`   // standard text
+	Info     string `toml:"info"`     // informational text
+	Nerdfont bool   `toml:"nerdfont"` // use nerd font symbols (default: false)
 }
 
 // Config holds the wt configuration
@@ -578,6 +579,9 @@ worktree_format = "{repo}-{branch}"
 # [theme]
 # name = "nord"
 # accent = "#ff79c6"   # override just the accent color
+#
+# Enable nerd font symbols for enhanced icons (requires a nerd font):
+# nerdfont = true
 `
 
 // defaultConfig is the full default config template with worktree_dir commented out
