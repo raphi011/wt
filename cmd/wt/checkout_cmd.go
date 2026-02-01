@@ -206,7 +206,6 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 
 	// Completions
-	cmd.RegisterFlagCompletionFunc("base", completeBranches)
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
 	registerCheckoutCompletions(cmd)
 
