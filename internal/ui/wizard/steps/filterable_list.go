@@ -49,6 +49,9 @@ type FilterableListStep struct {
 
 	// Input filtering
 	runeFilter framework.RuneFilter // nil = allow all printable
+
+	// Custom description renderer
+	descriptionRenderer func(opt framework.Option, isSelected bool) string
 }
 
 // NewFilterableList creates a new filterable single-select step.
@@ -105,6 +108,14 @@ func (s *FilterableListStep) WithValueLabel(fn func(value string, isNew bool, op
 // Use RuneFilterNoSpaces for branch names or identifiers.
 func (s *FilterableListStep) WithRuneFilter(f framework.RuneFilter) *FilterableListStep {
 	s.runeFilter = f
+	return s
+}
+
+// WithDescriptionRenderer sets a custom function for rendering option descriptions.
+// The function receives the option and whether it's selected (in multi-select mode),
+// and should return a pre-styled string (using lipgloss).
+func (s *FilterableListStep) WithDescriptionRenderer(fn func(opt framework.Option, isSelected bool) string) *FilterableListStep {
+	s.descriptionRenderer = fn
 	return s
 }
 
@@ -386,7 +397,19 @@ func (s *FilterableListStep) View() string {
 		}
 
 		b.WriteString(cursor + checkbox + label + "\n")
-		if opt.Description != "" {
+
+		// Render description (custom renderer or default)
+		isItemSelected := s.multiSelect && s.multiSelected[match.Index]
+		if s.descriptionRenderer != nil {
+			desc := s.descriptionRenderer(opt, isItemSelected)
+			if desc != "" {
+				descIndent := "    "
+				if s.multiSelect {
+					descIndent = "      " // Extra indent for checkbox
+				}
+				b.WriteString(descIndent + desc + "\n")
+			}
+		} else if opt.Description != "" {
 			descIndent := "    "
 			if s.multiSelect {
 				descIndent = "      " // Extra indent for checkbox

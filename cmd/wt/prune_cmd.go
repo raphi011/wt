@@ -239,12 +239,15 @@ Use --interactive to select worktrees to prune.`,
 			if interactive {
 				wizardInfos := make([]flows.PruneWorktreeInfo, 0, len(allWorktrees))
 				for i, wt := range allWorktrees {
+					// Worktree is prunable if it has a merged PR and no uncommitted changes
+					isPrunable := wt.PRState == "MERGED" && !wt.IsDirty
 					wizardInfos = append(wizardInfos, flows.PruneWorktreeInfo{
-						ID:       i + 1, // Use index as ID
-						RepoName: wt.RepoName,
-						Branch:   wt.Branch,
-						Reason:   formatPruneReason(wt),
-						IsDirty:  wt.IsDirty,
+						ID:         i + 1, // Use index as ID
+						RepoName:   wt.RepoName,
+						Branch:     wt.Branch,
+						Reason:     formatPruneReason(wt),
+						IsDirty:    wt.IsDirty,
+						IsPrunable: isPrunable,
 					})
 				}
 
