@@ -9,80 +9,6 @@ import (
 	"github.com/raphi011/wt/internal/registry"
 )
 
-// resolveTargetRepos finds repos based on -r and -l flags, or current directory.
-// If no flags are provided, attempts to find/register the current repo.
-// Deduplicates results by path.
-func resolveTargetRepos(ctx context.Context, reg *registry.Registry, repoNames, labels []string) ([]*registry.Repo, error) {
-	var repos []*registry.Repo
-
-	// If specific repos requested
-	if len(repoNames) > 0 {
-		for _, name := range repoNames {
-			repo, err := reg.FindByName(name)
-			if err != nil {
-				return nil, err
-			}
-			repos = append(repos, repo)
-		}
-	}
-
-	// If labels requested
-	if len(labels) > 0 {
-		labeled := reg.FindByLabels(labels)
-		repos = append(repos, labeled...)
-	}
-
-	// If no specific target, try current directory
-	if len(repos) == 0 {
-		repo, err := findOrRegisterCurrentRepo(ctx, reg)
-		if err != nil {
-			return nil, err
-		}
-		repos = append(repos, repo)
-	}
-
-	// Deduplicate
-	seen := make(map[string]bool)
-	var unique []*registry.Repo
-	for _, r := range repos {
-		if !seen[r.Path] {
-			seen[r.Path] = true
-			unique = append(unique, r)
-		}
-	}
-
-	return unique, nil
-}
-
-// resolveTargetReposNoFallback resolves repos by name only, without auto-registering.
-// Use this when the command should fail if not in a registered repo.
-func resolveTargetReposNoFallback(ctx context.Context, reg *registry.Registry, repoNames []string) ([]*registry.Repo, error) {
-	if len(repoNames) > 0 {
-		var repos []*registry.Repo
-		for _, name := range repoNames {
-			repo, err := reg.FindByName(name)
-			if err != nil {
-				return nil, err
-			}
-			repos = append(repos, repo)
-		}
-		return repos, nil
-	}
-
-	// Try current repo without auto-registering
-	repoPath := git.GetCurrentRepoMainPath(ctx)
-	if repoPath == "" {
-		return nil, fmt.Errorf("not in a git repository (use -r to specify)")
-	}
-
-	repo, err := reg.FindByPath(repoPath)
-	if err != nil {
-		return nil, err
-	}
-
-	return []*registry.Repo{repo}, nil
-}
-
 // findOrRegisterCurrentRepo finds the repo for cwd, auto-registering if needed.
 // Returns error if not in a git repository.
 func findOrRegisterCurrentRepo(ctx context.Context, reg *registry.Registry) (*registry.Repo, error) {
@@ -275,4 +201,53 @@ func resolveScopedRepos(reg *registry.Registry, scope string) ([]*registry.Repo,
 	}
 
 	return nil, fmt.Errorf("no repo or label found: %s", scope)
+}
+
+// resolveScopeArgsOrCurrent resolves scope arguments, falling back to current repo.
+// If scopes provided: resolves each as repo name → label.
+// If no scopes: uses current repo (errors if not in a registered repo).
+func resolveScopeArgsOrCurrent(ctx context.Context, reg *registry.Registry, scopes []string) ([]*registry.Repo, error) {
+	if len(scopes) > 0 {
+		return resolveScopeArgs(reg, scopes)
+	}
+
+	// Fall back to current repo
+	repoPath := git.GetCurrentRepoMainPath(ctx)
+	if repoPath == "" {
+		return nil, fmt.Errorf("not in a git repository (specify repo or label)")
+	}
+
+	repo, err := reg.FindByPath(repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("repo not registered: %s", repoPath)
+	}
+
+	return []*registry.Repo{repo}, nil
+}
+
+// resolveScopeArgs resolves multiple scope arguments to repos.
+// Each scope is tried as repo name first, then label.
+// Results are deduplicated by path.
+func resolveScopeArgs(reg *registry.Registry, scopes []string) ([]*registry.Repo, error) {
+	var repos []*registry.Repo
+
+	for _, scope := range scopes {
+		resolved, err := resolveScopedRepos(reg, scope)
+		if err != nil {
+			return nil, err
+		}
+		repos = append(repos, resolved...)
+	}
+
+	// Deduplicate by path
+	seen := make(map[string]bool)
+	var unique []*registry.Repo
+	for _, r := range repos {
+		if !seen[r.Path] {
+			seen[r.Path] = true
+			unique = append(unique, r)
+		}
+	}
+
+	return unique, nil
 }

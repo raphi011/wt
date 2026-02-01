@@ -46,22 +46,24 @@ Use subcommands to list, add, clone, or remove repositories from the registry.`,
 
 func newRepoListCmd() *cobra.Command {
 	var (
-		label      string
 		sortBy     string
 		jsonOutput bool
 	)
 
 	cmd := &cobra.Command{
-		Use:     "list",
+		Use:     "list [label...]",
 		Short:   "List registered repositories",
 		Aliases: []string{"ls"},
-		Args:    cobra.NoArgs,
+		Args:    cobra.ArbitraryArgs,
 		Long: `List all registered repositories.
 
-Shows name, path, type (bare/regular), worktree format, and labels.`,
+Shows name, path, and labels.
+Use positional args to filter by label(s).`,
 		Example: `  wt repo list                  # List all repos
-  wt repo list -l backend       # Filter by label
+  wt repo list backend          # Filter by label
+  wt repo list backend frontend # Filter by multiple labels
   wt repo list --json           # Output as JSON`,
+		ValidArgsFunction: completeLabels,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := output.FromContext(cmd.Context())
 
@@ -71,12 +73,17 @@ Shows name, path, type (bare/regular), worktree format, and labels.`,
 				return fmt.Errorf("load registry: %w", err)
 			}
 
-			// Filter by label if specified
+			// Filter by labels if specified
 			var repos []registry.Repo
-			if label != "" {
-				for _, repo := range reg.Repos {
-					if repo.HasLabel(label) {
-						repos = append(repos, repo)
+			if len(args) > 0 {
+				// Collect repos matching any of the labels
+				seen := make(map[string]bool)
+				for _, label := range args {
+					for _, repo := range reg.Repos {
+						if repo.HasLabel(label) && !seen[repo.Path] {
+							seen[repo.Path] = true
+							repos = append(repos, repo)
+						}
 					}
 				}
 			} else {
@@ -115,6 +122,9 @@ Shows name, path, type (bare/regular), worktree format, and labels.`,
 
 			// Table output
 			if len(repos) == 0 {
+				if len(args) > 0 {
+					return fmt.Errorf("no repos found with label(s): %s", strings.Join(args, ", "))
+				}
 				fmt.Println("No repos registered. Use 'wt repo add <path>' to register a repo.")
 				return nil
 			}
@@ -136,12 +146,10 @@ Shows name, path, type (bare/regular), worktree format, and labels.`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&label, "label", "l", "", "Filter by label")
 	cmd.Flags().StringVarP(&sortBy, "sort", "s", "name", "Sort by: name, label")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	// Completions
-	cmd.RegisterFlagCompletionFunc("label", completeLabels)
 	cmd.RegisterFlagCompletionFunc("sort", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"name", "label"}, cobra.ShellCompDirectiveNoFileComp
 	})

@@ -18,11 +18,13 @@ func newLabelCmd() *cobra.Command {
 		GroupID: GroupUtility,
 		Long: `Manage labels on repositories.
 
-Labels are stored in the registry and can be used to target repos with -l flag.`,
+Labels are stored in the registry and can be used to target repos.`,
 		Example: `  wt label add backend           # Add label to current repo
-  wt label add backend -r api    # Add label to specific repo
-  wt label remove backend        # Remove label
-  wt label list                  # List labels`,
+  wt label add backend api       # Add label to specific repo
+  wt label add backend mygroup   # Add label to repos with 'mygroup' label
+  wt label remove backend        # Remove label from current repo
+  wt label list                  # List labels for current repo
+  wt label list -g               # List all labels`,
 	}
 
 	cmd.AddCommand(newLabelAddCmd())
@@ -34,16 +36,22 @@ Labels are stored in the registry and can be used to target repos with -l flag.`
 }
 
 func newLabelAddCmd() *cobra.Command {
-	var repository []string
-
 	cmd := &cobra.Command{
-		Use:               "add <label>",
-		Short:             "Add a label to a repository",
-		Args:              cobra.ExactArgs(1),
-		ValidArgsFunction: completeLabels,
+		Use:   "add <label> [scope...]",
+		Short: "Add a label to repositories",
+		Args:  cobra.MinimumNArgs(1),
+		Long: `Add a label to one or more repositories.
+
+If no scope is specified, adds to the current repository.
+Scopes are resolved as repo name first, then label.`,
+		Example: `  wt label add backend           # Add to current repo
+  wt label add backend api       # Add to repo named 'api'
+  wt label add backend frontend  # Add to repos with 'frontend' label`,
+		ValidArgsFunction: completeLabelAddArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			label := args[0]
+			scopes := args[1:]
 
 			// Load registry
 			reg, err := registry.Load()
@@ -52,7 +60,7 @@ func newLabelAddCmd() *cobra.Command {
 			}
 
 			// Get target repos
-			repos, err := resolveTargetReposNoFallback(ctx, reg, repository)
+			repos, err := resolveScopeArgsOrCurrent(ctx, reg, scopes)
 			if err != nil {
 				return err
 			}
@@ -68,23 +76,26 @@ func newLabelAddCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringSliceVarP(&repository, "repository", "r", nil, "Repository name(s)")
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
-
 	return cmd
 }
 
 func newLabelRemoveCmd() *cobra.Command {
-	var repository []string
-
 	cmd := &cobra.Command{
-		Use:               "remove <label>",
-		Short:             "Remove a label from a repository",
-		Args:              cobra.ExactArgs(1),
-		ValidArgsFunction: completeLabels,
+		Use:   "remove <label> [scope...]",
+		Short: "Remove a label from repositories",
+		Args:  cobra.MinimumNArgs(1),
+		Long: `Remove a label from one or more repositories.
+
+If no scope is specified, removes from the current repository.
+Scopes are resolved as repo name first, then label.`,
+		Example: `  wt label remove backend           # Remove from current repo
+  wt label remove backend api       # Remove from repo named 'api'
+  wt label remove backend frontend  # Remove from repos with 'frontend' label`,
+		ValidArgsFunction: completeLabelAddArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			label := args[0]
+			scopes := args[1:]
 
 			// Load registry
 			reg, err := registry.Load()
@@ -93,7 +104,7 @@ func newLabelRemoveCmd() *cobra.Command {
 			}
 
 			// Get target repos
-			repos, err := resolveTargetReposNoFallback(ctx, reg, repository)
+			repos, err := resolveScopeArgsOrCurrent(ctx, reg, scopes)
 			if err != nil {
 				return err
 			}
@@ -109,22 +120,24 @@ func newLabelRemoveCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringSliceVarP(&repository, "repository", "r", nil, "Repository name(s)")
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
-
 	return cmd
 }
 
 func newLabelListCmd() *cobra.Command {
-	var (
-		repository []string
-		global     bool
-	)
+	var global bool
 
 	cmd := &cobra.Command{
-		Use:   "list",
+		Use:   "list [scope...]",
 		Short: "List labels",
-		Args:  cobra.NoArgs,
+		Args:  cobra.ArbitraryArgs,
+		Long: `List labels for repositories.
+
+If no scope is specified, lists labels for the current repository.
+Scopes are resolved as repo name first, then label.`,
+		Example: `  wt label list           # List labels for current repo
+  wt label list api       # List labels for repo named 'api'
+  wt label list -g        # List all labels across repos`,
+		ValidArgsFunction: completeScopeArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			out := output.FromContext(ctx)
@@ -149,7 +162,7 @@ func newLabelListCmd() *cobra.Command {
 			}
 
 			// Get target repos
-			repos, err := resolveTargetReposNoFallback(ctx, reg, repository)
+			repos, err := resolveScopeArgsOrCurrent(ctx, reg, args)
 			if err != nil {
 				return err
 			}
@@ -169,20 +182,24 @@ func newLabelListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringSliceVarP(&repository, "repository", "r", nil, "Repository name(s)")
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "List all labels across repos")
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 
 	return cmd
 }
 
 func newLabelClearCmd() *cobra.Command {
-	var repository []string
-
 	cmd := &cobra.Command{
-		Use:   "clear",
-		Short: "Clear all labels from a repository",
-		Args:  cobra.NoArgs,
+		Use:   "clear [scope...]",
+		Short: "Clear all labels from repositories",
+		Args:  cobra.ArbitraryArgs,
+		Long: `Clear all labels from one or more repositories.
+
+If no scope is specified, clears labels from the current repository.
+Scopes are resolved as repo name first, then label.`,
+		Example: `  wt label clear           # Clear labels from current repo
+  wt label clear api       # Clear labels from repo named 'api'
+  wt label clear frontend  # Clear labels from repos with 'frontend' label`,
+		ValidArgsFunction: completeScopeArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
@@ -193,7 +210,7 @@ func newLabelClearCmd() *cobra.Command {
 			}
 
 			// Get target repos
-			repos, err := resolveTargetReposNoFallback(ctx, reg, repository)
+			repos, err := resolveScopeArgsOrCurrent(ctx, reg, args)
 			if err != nil {
 				return err
 			}
@@ -208,9 +225,6 @@ func newLabelClearCmd() *cobra.Command {
 			return reg.Save()
 		},
 	}
-
-	cmd.Flags().StringSliceVarP(&repository, "repository", "r", nil, "Repository name(s)")
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 
 	return cmd
 }

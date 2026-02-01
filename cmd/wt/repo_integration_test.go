@@ -83,7 +83,7 @@ func TestRepoList_ListRepos(t *testing.T) {
 
 // TestRepoList_FilterByLabel tests filtering repos by label.
 //
-// Scenario: User runs `wt repo list -l backend`
+// Scenario: User runs `wt repo list backend`
 // Expected: Shows only repos with the backend label
 func TestRepoList_FilterByLabel(t *testing.T) {
 	// Not parallel - modifies HOME
@@ -112,10 +112,51 @@ func TestRepoList_FilterByLabel(t *testing.T) {
 	ctx := testContext(t)
 	cmd := newRepoListCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"-l", "backend"})
+	cmd.SetArgs([]string{"backend"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("repo list command failed: %v", err)
+	}
+}
+
+// TestRepoList_LabelNotFound tests error when filtering by nonexistent label.
+//
+// Scenario: User runs `wt repo list nonexistent`
+// Expected: Returns error about no repos found with label
+func TestRepoList_LabelNotFound(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	// Create registry with repos that don't have the searched label
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: "/tmp/repo1", Labels: []string{"backend"}},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	ctx := testContext(t)
+	cmd := newRepoListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"nonexistent"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for nonexistent label, got nil")
+	}
+	if !strings.Contains(err.Error(), "no repos found with label") {
+		t.Errorf("expected error about no repos found with label, got %q", err.Error())
 	}
 }
 

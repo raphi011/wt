@@ -89,9 +89,12 @@ internal/ui/             - Terminal UI components
   - `repo:branch` - targets specific repo
   - `label:branch` - targets all repos with that label (resolved after checking repo names)
 
-- **Repo targeting**: `wt pr create/merge/view`, `wt list`, `wt label`
-  - `wt list` and `wt label` still use `-r`/`-l` flags (filtering, not worktree targeting)
-  - `wt pr` subcommands use optional `[repo]` positional arg (no branch needed)
+- **Repo targeting**: `wt pr create/merge/view`, `wt list`, `wt label`, `wt repo list`
+  - `wt list [scope...]` - positional args for repo name or label filtering
+  - `wt label add/remove/list/clear <label> [scope...]` - positional scope args
+  - `wt repo list [label...]` - positional args for label filtering
+  - `wt pr checkout [repo] <number>` - optional repo as first positional arg
+  - `wt pr create/merge/view [repo]` - optional repo positional arg
 
 **Resolution order for `scope:branch`:**
 1. Try to match scope as repo name
@@ -101,8 +104,6 @@ internal/ui/             - Terminal UI components
 
 **Reuse flags consistently** - When adding flags that serve the same purpose across commands, use identical names/shortcuts. Standard flags:
 - `-i, --interactive` - interactive mode (wt checkout, wt cd, wt prune)
-- `-r, --repository` - repository name filtering (wt list, wt label - NOT for targeting)
-- `-l, --label` - label filtering (wt list, wt label - NOT for targeting)
 - `-d, --dry-run` - preview without making changes
 - `-f, --force` - force operation (override safety checks)
 - `-c, --include-clean` - include clean worktrees (0 commits, no changes)
@@ -111,7 +112,7 @@ internal/ui/             - Terminal UI components
 - `--json` - output as JSON
 - `--hook` / `--no-hook` - control hook execution (for checkout, pr checkout, prune)
 
-**Note**: Most commands now use positional `[scope:]branch` args instead of `-r`/`-l` flags for targeting.
+**Note**: Commands use positional args for repo/label targeting (see "Repo targeting" above).
 
 **Never modify git internal files directly** - Always use git CLI commands via `exec.Command`. Never read/write `.git/` directory contents, `.git` files in worktrees, or git refs directly. Use `git worktree repair` for fixing broken links, `git worktree prune` for cleanup.
 

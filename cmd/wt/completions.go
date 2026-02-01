@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -289,6 +290,73 @@ func completeCdArg(cmd *cobra.Command, args []string, toComplete string) ([]stri
 		prefix := label + ":"
 		if strings.HasPrefix(prefix, toComplete) || strings.HasPrefix(toComplete, label) {
 			matches = append(matches, prefix)
+		}
+	}
+
+	return matches, cobra.ShellCompDirectiveNoFileComp
+}
+
+// completePrCheckoutArgs provides completion for `wt pr checkout [repo] <number>`.
+// First arg: repo names (if not numeric). No completion for PR numbers.
+func completePrCheckoutArgs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	// If we already have an arg that looks like a PR number, no more completion
+	if len(args) >= 1 {
+		// Check if first arg is numeric (PR number) - no more args needed
+		if _, err := strconv.Atoi(args[0]); err == nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		// First arg is repo, second would be PR number - no completion
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	// First arg: offer repo names
+	reg, err := registry.Load()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	var matches []string
+	for _, name := range reg.AllRepoNames() {
+		if strings.HasPrefix(name, toComplete) {
+			matches = append(matches, name)
+		}
+	}
+	return matches, cobra.ShellCompDirectiveNoFileComp
+}
+
+// completeLabelAddArgs provides completion for `wt label add/remove <label> [scope...]`.
+// First arg: label names. Subsequent args: scope args (repo names + labels).
+func completeLabelAddArgs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	// First arg is the label
+	if len(args) == 0 {
+		return completeLabels(cmd, args, toComplete)
+	}
+
+	// Subsequent args are scopes
+	return completeScopeArgs(cmd, args, toComplete)
+}
+
+// completeScopeArgs provides completion for scope arguments (repo names + labels).
+// Used by commands like `wt list` where positional args can be repo names or labels.
+func completeScopeArgs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	reg, err := registry.Load()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	var matches []string
+
+	// Repo names
+	for _, name := range reg.AllRepoNames() {
+		if strings.HasPrefix(name, toComplete) {
+			matches = append(matches, name)
+		}
+	}
+
+	// Labels
+	for _, label := range reg.AllLabels() {
+		if strings.HasPrefix(label, toComplete) {
+			matches = append(matches, label)
 		}
 	}
 
