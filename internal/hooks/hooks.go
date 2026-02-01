@@ -20,7 +20,6 @@ const (
 	CommandPR       CommandType = "pr"
 	CommandPrune    CommandType = "prune"
 	CommandMerge    CommandType = "merge"
-	CommandCd       CommandType = "cd"
 )
 
 // Context holds the values for placeholder substitution

@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/git"
-	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
@@ -19,9 +18,6 @@ func newCdCmd() *cobra.Command {
 		repository  string
 		label       string
 		interactive bool
-		hookNames   []string
-		noHook      bool
-		env         []string
 	)
 
 	cmd := &cobra.Command{
@@ -46,7 +42,6 @@ Use with shell command substitution: cd $(wt cd -r myrepo)`,
 			}
 
 			var targetPath string
-			var repoName string
 
 			if interactive {
 				// Interactive mode: show fuzzy list of all worktrees
@@ -93,7 +88,6 @@ Use with shell command substitution: cd $(wt cd -r myrepo)`,
 				}
 
 				targetPath = result.SelectedPath
-				repoName = result.RepoName
 			} else {
 				// Non-interactive mode
 				var repo *registry.Repo
@@ -125,34 +119,10 @@ Use with shell command substitution: cd $(wt cd -r myrepo)`,
 				}
 
 				targetPath = repo.Path
-				repoName = repo.Name
 			}
 
 			// Print path
 			out.Println(targetPath)
-
-			// Run hooks
-			hookEnv, err := hooks.ParseEnvWithStdin(env)
-			if err != nil {
-				return err
-			}
-
-			hookMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCd)
-			if err != nil {
-				return err
-			}
-
-			if len(hookMatches) > 0 {
-				hookCtx := hooks.Context{
-					WorktreeDir: targetPath,
-					RepoDir:     targetPath,
-					Repo:        repoName,
-					Origin:      git.GetRepoDisplayName(targetPath),
-					Trigger:     "cd",
-					Env:         hookEnv,
-				}
-				hooks.RunAllNonFatal(hookMatches, hookCtx, targetPath)
-			}
 
 			return nil
 		},
@@ -161,17 +131,12 @@ Use with shell command substitution: cd $(wt cd -r myrepo)`,
 	cmd.Flags().StringVarP(&repository, "repository", "r", "", "Repository name")
 	cmd.Flags().StringVarP(&label, "label", "l", "", "Repository label (must match one)")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode with fuzzy search")
-	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
-	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip hooks")
-	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable KEY=VALUE")
 
 	cmd.MarkFlagsMutuallyExclusive("repository", "label", "interactive")
-	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 
 	// Completions
 	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
-	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
 
 	return cmd
 }
