@@ -41,8 +41,8 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 	options := make([]framework.Option, len(params.Worktrees))
 
 	for i, wt := range params.Worktrees {
-		// Format: "repo/branch" with optional dirty marker
-		label := fmt.Sprintf("%s/%s", wt.RepoName, wt.Branch)
+		// Format: "repo:branch" with optional dirty marker
+		label := fmt.Sprintf("%s:%s", wt.RepoName, wt.Branch)
 		if wt.IsDirty {
 			label += " *"
 		}

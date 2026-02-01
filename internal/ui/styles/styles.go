@@ -69,16 +69,16 @@ var (
 var (
 	// RoundedBorder creates a rounded border with primary color
 	RoundedBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(Primary).
-			Padding(1, 2)
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(Primary).
+		Padding(1, 2)
 )
 
 // Text highlighting styles
 var (
 	// HighlightStyle for highlighting matched characters (pink, bold, underline)
 	HighlightStyle = lipgloss.NewStyle().
-			Foreground(Accent).
-			Bold(true).
-			Underline(true)
+		Foreground(Accent).
+		Bold(true).
+		Underline(true)
 )

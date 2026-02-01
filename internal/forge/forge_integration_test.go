@@ -119,7 +119,7 @@ func configureGitCredentials(t *testing.T, clonePath, forgeName string) {
 	for _, cfg := range [][]string{
 		{"user.email", "test@example.com"},
 		{"user.name", "Test User"},
-		{"credential.helper", ""},            // Clear any existing helper
+		{"credential.helper", ""}, // Clear any existing helper
 		{"credential.helper", credentialHelper},
 	} {
 		c := exec.Command("git", "-C", clonePath, "config", cfg[0], cfg[1])
