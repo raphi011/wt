@@ -72,7 +72,7 @@ const fishInit = `# wt shell wrapper
 # Or add to config.fish: wt init fish | source
 
 function wt --wraps=wt --description 'Git worktree manager'
-    if test (count $argv) -gt 0 -a "$argv[1]" = "cd"
+    if test (count $argv) -gt 0; and test "$argv[1]" = "cd"
         set -l dir (command wt $argv)
         and cd $dir
     else
