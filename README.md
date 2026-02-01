@@ -44,20 +44,7 @@ wt config init ~/Git/worktrees ~/Code    # with separate repo dir
 
 This creates `~/.config/wt/config.toml` with your worktree directory (and optionally repo directory).
 
-### 2. Migrate Existing Repos (Optional)
-
-If you have repos and worktrees scattered around, consolidate them:
-
-```bash
-wt mv -d                      # Preview what would be moved
-wt mv                         # Move to configured directories
-wt mv ~/old-projects          # Move all repos/worktrees from a folder
-wt mv ~/old-projects/my-repo  # Move a single repo (and its worktrees)
-```
-
-Scans the current directory (or specified path) for git repos and worktrees. Worktrees are moved to `worktree_dir`, repos to `repo_dir` (if configured, otherwise `worktree_dir`).
-
-### 3. List Worktrees
+### 2. List Worktrees
 
 ```bash
 wt list -g
@@ -89,6 +76,9 @@ wt checkout -b feature-login --base develop
 # Fetch latest before creating (ensures up-to-date base)
 wt checkout -b feature-login -f
 
+# Stash local changes and apply them to the new worktree
+wt checkout -b feature-login -s
+
 # Add a note to remember what you're working on
 wt checkout -b feature-login --note "Implementing OAuth flow"
 ```
@@ -113,6 +103,9 @@ wt pr checkout 123 -r backend-api
 
 # Clone repo you don't have locally and checkout PR
 wt pr checkout 456 org/new-repo
+
+# Specify forge type when auto-detection fails
+wt pr checkout 123 --forge gitlab
 ```
 
 View PR details or open in browser:
@@ -159,9 +152,6 @@ wt pr create --title "Add feature" -r myrepo
 # See what worktrees exist
 wt list
 
-# Show detailed status for a specific repo
-wt show -r myrepo
-
 # Remove merged worktrees (uses cached PR status)
 wt prune
 
@@ -174,14 +164,37 @@ wt prune -d
 # Verbose dry-run: see what's skipped and why
 wt prune -d -v
 
-# Also remove worktrees with 0 commits (stale checkouts)
-wt prune -c
+# Clear cached PR data and re-fetch
+wt prune --reset-cache
 
 # Remove specific branch worktree
 wt prune --branch feature-login -f
 ```
 
 ### Working Across Multiple Repos
+
+Register and label repos for batch operations:
+
+```bash
+# Register a repo (from inside the repo)
+wt repo add .
+
+# Register a repo by path
+wt repo add ~/path/to/myrepo
+
+# Clone and register a new repo
+wt repo clone git@github.com:org/repo.git
+
+# Migrate an existing repo to bare structure (for faster worktrees)
+wt repo mv ./myrepo
+
+# Unregister a repo
+wt repo remove myrepo
+
+# List all repos
+wt repo
+wt repo -l backend    # Filter by label
+```
 
 Label your repos for batch operations:
 
@@ -190,6 +203,13 @@ Label your repos for batch operations:
 cd ~/Git/backend-api && wt label add backend
 cd ~/Git/auth-service && wt label add backend
 cd ~/Git/web-app && wt label add frontend
+
+# List labels
+wt label list         # Labels for current repo
+wt label list -g      # All labels across repos
+
+# Clear labels from a repo
+wt label clear
 
 # Create same branch across all backend repos
 wt checkout -b feature-auth -l backend
@@ -200,10 +220,6 @@ wt checkout -b feature-auth -r backend-api -r auth-service
 # Run command across repos
 wt exec -l backend -- git status
 wt exec -r backend-api -r auth-service -- make test
-
-# List repos and their labels
-wt repo
-wt repo -l backend
 ```
 
 ### Quick Navigation
@@ -261,43 +277,6 @@ wt note clear
 wt note set "Ready for review" -r myrepo
 ```
 
-### Moving Worktrees / Migrating to wt
-
-Already have worktrees scattered around? Use `wt mv` to consolidate them:
-
-```bash
-# Preview what would be moved (destination from config)
-wt mv -d
-
-# Move all worktrees to configured worktree_dir
-wt mv
-
-# Move all from a specific folder
-wt mv ~/old-projects
-
-# Move a single worktree
-wt mv ~/old-projects/my-worktree
-
-# Move a repo and all its worktrees
-wt mv ~/old-projects/my-repo
-
-# Move and rename to consistent format
-wt mv --format={repo}-{branch}
-
-# Force move even if worktrees have uncommitted changes
-wt mv -f
-
-# Cascade: also move linked repos/worktrees outside the target path
-wt mv --cascade
-wt mv ~/old-projects/my-worktree --cascade  # Also moves repo + siblings
-```
-
-The `--cascade` flag follows references between repos and worktrees. When moving a worktree, it also moves the repo and sibling worktrees. When scanning a folder, it includes external worktrees from found repos.
-
-This updates git's worktree tracking automatically—no manual fixup needed.
-
-**Tip:** If you change `worktree_format` in your config, run `wt mv` to rename existing worktrees to match the new format. Collisions are handled automatically by appending a numbered suffix (e.g., `repo-main-1`).
-
 ## Configuration
 
 Config file: `~/.config/wt/config.toml`
@@ -318,6 +297,10 @@ worktree_dir = "~/Git/worktrees"
 # Where repos live (for -r/-l lookup, defaults to worktree_dir)
 repo_dir = "~/Git"
 
+# Default sort order for list: "id", "repo", "branch", "commit"
+default_sort = "id"
+
+[checkout]
 # Folder naming: {repo}, {branch}, {origin}
 worktree_format = "{repo}-{branch}"
 
@@ -326,9 +309,6 @@ base_ref = "remote"
 
 # Auto-fetch base branch before creating new branches (default: false)
 auto_fetch = true
-
-# Default sort order for list: "id", "repo", "branch", "commit"
-default_sort = "id"
 ```
 
 ### Hooks
@@ -392,6 +372,30 @@ strategy = "squash"  # squash, rebase, or merge
 "gitlab.internal.corp" = "gitlab"
 ```
 
+### Theming
+
+Customize the interactive UI with preset themes or custom colors:
+
+```toml
+[theme]
+# Use a preset theme
+name = "dracula"  # default, dracula, nord, gruvbox, catppuccin-frappe, catppuccin-mocha
+
+# Use nerd font symbols (requires a nerd font installed)
+nerdfont = true
+```
+
+Override individual colors with hex codes or ANSI color numbers:
+
+```toml
+[theme]
+name = "nord"       # Start with a preset
+primary = "#88c0d0" # Override specific colors
+accent = "#b48ead"
+```
+
+Available color keys: `primary`, `accent`, `success`, `error`, `muted`, `normal`, `info`.
+
 ## Integration with gh-dash
 
 `wt` works great with [gh-dash](https://github.com/dlvhdr/gh-dash). Add a keybinding to checkout PRs as worktrees:
@@ -421,26 +425,25 @@ wt completion zsh > ~/.zfunc/_wt
 
 ## Command Reference
 
-Common commands have short aliases (shown in `wt --help`): `co`, `ls`, `s`, `p`, `r`, `x`.
+Common commands have short aliases (shown in `wt --help`): `co`, `ls`, `p`, `r`, `x`.
 
 | Command | Description |
 |---------|-------------|
 | `wt checkout` | Checkout worktree for branch |
 | `wt list` | List worktrees |
-| `wt show` | Show worktree details |
 | `wt prune` | Remove merged worktrees |
-| `wt repo` | List repositories |
+| `wt repo` | Manage repositories |
 | `wt pr checkout` | Checkout PR (clones if needed) |
 | `wt pr create` | Create PR for current branch |
 | `wt pr view` | View PR details or open in browser |
 | `wt pr merge` | Merge PR and clean up |
 | `wt exec` | Run command in worktree |
 | `wt cd` | Print worktree/repo path |
-| `wt mv` | Move worktrees |
 | `wt note` | Manage branch notes |
 | `wt label` | Manage repo labels |
 | `wt hook` | Run configured hook |
 | `wt config` | Manage configuration |
+| `wt init` | Output shell wrapper for cd |
 | `wt completion` | Generate shell completions |
 
 Run `wt <command> --help` for detailed usage.
