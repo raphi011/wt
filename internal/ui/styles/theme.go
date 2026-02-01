@@ -150,6 +150,9 @@ func Init(cfg config.ThemeConfig) {
 
 	// Update the global style variables
 	applyTheme(theme)
+
+	// Set nerdfont symbols
+	SetNerdfont(cfg.Nerdfont)
 }
 
 // applyTheme updates all global style variables to use the given theme
