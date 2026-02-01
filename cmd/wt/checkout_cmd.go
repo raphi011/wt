@@ -27,12 +27,11 @@ func newCheckoutCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:               "checkout [[scope:]branch]",
-		Short:             "Create worktree for branch",
-		Aliases:           []string{"co"},
-		GroupID:           GroupCore,
-		ValidArgsFunction: completeScopedWorktreeArg,
-		Long: `Create a worktree for an existing or new branch.
+		Use:     "checkout [[scope:]branch]",
+		Short:   "Create worktree for branch",
+		Aliases: []string{"co"},
+		GroupID: GroupCore,
+		Long:    `Create a worktree for an existing or new branch.
 
 Use -b to create a new branch, or omit for an existing branch.
 Use -i for interactive mode to be prompted for options.
@@ -207,7 +206,6 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 
 	// Completions
-	cmd.RegisterFlagCompletionFunc("base", completeBranches)
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
 	registerCheckoutCompletions(cmd)
 

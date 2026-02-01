@@ -10,50 +10,52 @@ import (
 	"github.com/raphi011/wt/internal/registry"
 )
 
+// repoPathFromArgs extracts the repo path from positional args.
+// It checks for:
+// 1. A scoped target (repo:branch) pattern - extracts repo name before colon
+// 2. A bare repo name that matches a registered repo
+// Falls back to current directory if neither is found.
+func repoPathFromArgs(ctx context.Context, args []string) string {
+	reg, err := registry.Load()
+	if err != nil {
+		return git.GetCurrentRepoMainPath(ctx)
+	}
+
+	for _, arg := range args {
+		// Check for scope:branch pattern
+		if idx := strings.Index(arg, ":"); idx >= 0 {
+			repoName := arg[:idx]
+			if repo, err := reg.FindByName(repoName); err == nil {
+				return repo.Path
+			}
+		}
+
+		// Check if arg is a bare repo name
+		if repo, err := reg.FindByName(arg); err == nil {
+			return repo.Path
+		}
+	}
+
+	// Fall back to current directory
+	return git.GetCurrentRepoMainPath(ctx)
+}
+
 // completeBranches provides branch name completion.
-// It checks if -r flag is set and uses that repo's branches, otherwise uses current directory.
+// It checks args for a repo reference (scope:branch or bare repo name),
+// otherwise uses current directory.
 func completeBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	ctx := context.Background()
 
-	// Check if -r flag is set
-	repoName, _ := cmd.Flags().GetString("repository")
-	if repoName == "" {
-		// Try getting string slice version (for commands with multiple repos)
-		repos, _ := cmd.Flags().GetStringSlice("repository")
-		if len(repos) > 0 {
-			repoName = repos[0]
-		}
+	repoPath := repoPathFromArgs(ctx, args)
+	if repoPath == "" {
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	var repoPath string
-
-	if repoName != "" {
-		// Load registry and find repo
-		reg, err := registry.Load()
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		repo, err := reg.FindByName(repoName)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		repoPath = repo.Path
-	} else {
-		// Use current directory
-		repoPath = git.GetCurrentRepoMainPath(ctx)
-		if repoPath == "" {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-	}
-
-	// Get branches from the repo
 	branches, err := git.ListLocalBranches(ctx, repoPath)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	// Filter by prefix
 	var matches []string
 	for _, b := range branches {
 		if strings.HasPrefix(b, toComplete) {
@@ -65,36 +67,14 @@ func completeBranches(cmd *cobra.Command, args []string, toComplete string) ([]s
 }
 
 // completeRemoteBranches provides remote branch name completion.
+// It checks args for a repo reference (scope:branch or bare repo name),
+// otherwise uses current directory.
 func completeRemoteBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	ctx := context.Background()
 
-	// Check if -r flag is set
-	repoName, _ := cmd.Flags().GetString("repository")
-	if repoName == "" {
-		repos, _ := cmd.Flags().GetStringSlice("repository")
-		if len(repos) > 0 {
-			repoName = repos[0]
-		}
-	}
-
-	var repoPath string
-
-	if repoName != "" {
-		reg, err := registry.Load()
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		repo, err := reg.FindByName(repoName)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		repoPath = repo.Path
-	} else {
-		repoPath = git.GetCurrentRepoMainPath(ctx)
-		if repoPath == "" {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
+	repoPath := repoPathFromArgs(ctx, args)
+	if repoPath == "" {
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
 	branches, err := git.ListRemoteBranches(ctx, repoPath)
@@ -317,35 +297,140 @@ func completeCdArg(cmd *cobra.Command, args []string, toComplete string) ([]stri
 
 // Register completions for checkout command
 func registerCheckoutCompletions(cmd *cobra.Command) {
-	// Branch argument completion
+	// Branch argument completion for --base flag
 	cmd.RegisterFlagCompletionFunc("base", completeBranches)
 
-	// Positional arg (branch name) completion - both local and remote
+	// Positional arg completion for [scope:]branch
+	// With -b flag: only suggest repo prefixes (creating new branch)
+	// Without -b flag: suggest both repo prefixes and existing branches
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) > 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		// Get both local and remote branches
-		local, _ := completeBranches(cmd, args, toComplete)
-		remote, _ := completeRemoteBranches(cmd, args, toComplete)
+		ctx := context.Background()
+		newBranch, _ := cmd.Flags().GetBool("new-branch")
 
-		// Combine and deduplicate
-		seen := make(map[string]bool)
-		var all []string
-		for _, b := range local {
-			if !seen[b] {
-				seen[b] = true
-				all = append(all, b)
+		// If user is typing scope:branch format, complete the branch part
+		if idx := strings.Index(toComplete, ":"); idx >= 0 {
+			scopeName := toComplete[:idx]
+			branchPrefix := toComplete[idx+1:]
+
+			reg, err := registry.Load()
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+
+			// Try repo name first
+			repo, err := reg.FindByName(scopeName)
+			if err == nil {
+				// For -b, don't suggest existing branches (user is creating new)
+				if newBranch {
+					return nil, cobra.ShellCompDirectiveNoFileComp
+				}
+
+				// Suggest local branches
+				branches, err := git.ListLocalBranches(ctx, repo.Path)
+				if err != nil {
+					return nil, cobra.ShellCompDirectiveNoFileComp
+				}
+
+				var matches []string
+				for _, b := range branches {
+					if strings.HasPrefix(b, branchPrefix) {
+						matches = append(matches, scopeName+":"+b)
+					}
+				}
+				return matches, cobra.ShellCompDirectiveNoFileComp
+			}
+
+			// Try label
+			labelRepos := reg.FindByLabel(scopeName)
+			if len(labelRepos) > 0 {
+				// For -b, don't suggest existing branches
+				if newBranch {
+					return nil, cobra.ShellCompDirectiveNoFileComp
+				}
+
+				// Collect unique branches across all labeled repos
+				branchSet := make(map[string]bool)
+				for _, r := range labelRepos {
+					branches, err := git.ListLocalBranches(ctx, r.Path)
+					if err != nil {
+						continue
+					}
+					for _, b := range branches {
+						if strings.HasPrefix(b, branchPrefix) {
+							branchSet[b] = true
+						}
+					}
+				}
+
+				var matches []string
+				for branch := range branchSet {
+					matches = append(matches, scopeName+":"+branch)
+				}
+				return matches, cobra.ShellCompDirectiveNoFileComp
+			}
+
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		// No colon yet - suggest repo prefixes and optionally branches
+		var matches []string
+
+		// Load registry for repo/label prefixes
+		reg, err := registry.Load()
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		// Repo prefixes (always suggest these)
+		for _, repo := range reg.Repos {
+			prefix := repo.Name + ":"
+			if strings.HasPrefix(prefix, toComplete) {
+				matches = append(matches, prefix)
 			}
 		}
-		for _, b := range remote {
-			if !seen[b] {
-				seen[b] = true
-				all = append(all, b)
+
+		// Label prefixes (always suggest these)
+		for _, label := range reg.AllLabels() {
+			prefix := label + ":"
+			if strings.HasPrefix(prefix, toComplete) {
+				matches = append(matches, prefix)
 			}
 		}
 
-		return all, cobra.ShellCompDirectiveNoFileComp
+		// Without -b flag, also suggest existing branches
+		if !newBranch {
+			currentRepoPath := git.GetCurrentRepoMainPath(ctx)
+			if currentRepoPath != "" {
+				// Local branches
+				branches, err := git.ListLocalBranches(ctx, currentRepoPath)
+				if err == nil {
+					for _, b := range branches {
+						if strings.HasPrefix(b, toComplete) {
+							matches = append(matches, b)
+						}
+					}
+				}
+
+				// Remote branches
+				remoteBranches, err := git.ListRemoteBranches(ctx, currentRepoPath)
+				if err == nil {
+					seen := make(map[string]bool)
+					for _, b := range matches {
+						seen[b] = true
+					}
+					for _, b := range remoteBranches {
+						if strings.HasPrefix(b, toComplete) && !seen[b] {
+							matches = append(matches, b)
+						}
+					}
+				}
+			}
+		}
+
+		return matches, cobra.ShellCompDirectiveNoFileComp
 	}
 }
