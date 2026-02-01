@@ -46,7 +46,7 @@ func (s *TextInputStep) Init() tea.Cmd {
 
 func (s *TextInputStep) Update(msg tea.KeyMsg) (framework.Step, tea.Cmd, framework.StepResult) {
 	switch msg.String() {
-	case "enter", "right":
+	case "enter":
 		value := strings.TrimSpace(s.input.Value())
 		if value == "" {
 			return s, nil, framework.StepContinue
@@ -54,6 +54,19 @@ func (s *TextInputStep) Update(msg tea.KeyMsg) (framework.Step, tea.Cmd, framewo
 		if s.validate != nil {
 			if err := s.validate(value); err != nil {
 				// Could show error, for now just don't advance
+				return s, nil, framework.StepContinue
+			}
+		}
+		s.submitted = true
+		s.submitValue = value
+		return s, nil, framework.StepSubmitIfReady
+	case "right":
+		value := strings.TrimSpace(s.input.Value())
+		if value == "" {
+			return s, nil, framework.StepContinue
+		}
+		if s.validate != nil {
+			if err := s.validate(value); err != nil {
 				return s, nil, framework.StepContinue
 			}
 		}
@@ -78,7 +91,7 @@ func (s *TextInputStep) View() string {
 }
 
 func (s *TextInputStep) Help() string {
-	return "type text • ← back • enter confirm • esc cancel"
+	return "type text • ←/→ navigate • enter confirm • esc cancel"
 }
 
 func (s *TextInputStep) Value() framework.StepValue {

@@ -57,7 +57,12 @@ func (s *SingleSelectStep) Update(msg tea.KeyMsg) (framework.Step, tea.Cmd, fram
 		s.cursor = s.findFirstEnabled()
 	case "end", "pgdown":
 		s.cursor = s.findLastEnabled()
-	case "enter", "right":
+	case "enter":
+		if len(s.options) > 0 && !s.options[s.cursor].Disabled {
+			s.selected = s.cursor
+			return s, nil, framework.StepSubmitIfReady
+		}
+	case "right":
 		if len(s.options) > 0 && !s.options[s.cursor].Disabled {
 			s.selected = s.cursor
 			return s, nil, framework.StepAdvance
@@ -102,7 +107,7 @@ func (s *SingleSelectStep) View() string {
 }
 
 func (s *SingleSelectStep) Help() string {
-	return "↑/↓ select • ←/→ steps • enter confirm • esc cancel"
+	return "↑/↓ select • ←/→ navigate • enter confirm • esc cancel"
 }
 
 func (s *SingleSelectStep) Value() framework.StepValue {
