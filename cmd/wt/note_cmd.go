@@ -60,7 +60,7 @@ func newNoteSetCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Printf("Note set on %s/%s\n", repo.Name, branch)
+			fmt.Printf("Note set on %s:%s\n", repo.Name, branch)
 			return nil
 		},
 	}
@@ -140,7 +140,7 @@ func newNoteClearCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Printf("Note cleared on %s/%s\n", repo.Name, branch)
+			fmt.Printf("Note cleared on %s:%s\n", repo.Name, branch)
 			return nil
 		},
 	}

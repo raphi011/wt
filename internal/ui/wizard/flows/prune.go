@@ -51,8 +51,8 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 	var preSelected []int
 
 	for i, wt := range params.Worktrees {
-		// Format: "repo/branch"
-		label := fmt.Sprintf("%s/%s", wt.RepoName, wt.Branch)
+		// Format: "repo:branch"
+		label := fmt.Sprintf("%s:%s", wt.RepoName, wt.Branch)
 
 		options[i] = framework.Option{
 			Label: label,
