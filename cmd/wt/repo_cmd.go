@@ -435,7 +435,7 @@ If destination is not specified, clones into the current directory.`,
 			if branch != "" {
 				format := worktreeFormat
 				if format == "" {
-					format = cfg.WorktreeFormat
+					format = cfg.Checkout.WorktreeFormat
 				}
 				wtPath := resolveWorktreePathWithConfig(absPath, repoName, branch, format)
 

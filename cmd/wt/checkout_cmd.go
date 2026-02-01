@@ -48,6 +48,11 @@ Use -i for interactive mode to be prompted for options.`,
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
 
+			// Apply config default if --fetch flag not explicitly set
+			if !cmd.Flags().Changed("fetch") {
+				fetch = cfg.Checkout.AutoFetch
+			}
+
 			var branch string
 			if len(args) > 0 {
 				branch = args[0]
@@ -239,7 +244,7 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 	l := log.FromContext(ctx)
 
 	// Get effective worktree format
-	format := repo.GetEffectiveWorktreeFormat(cfg.WorktreeFormat)
+	format := repo.GetEffectiveWorktreeFormat(cfg.Checkout.WorktreeFormat)
 
 	// Resolve worktree path
 	wtPath := resolveWorktreePath(repo, branch, format)
@@ -272,7 +277,7 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 			baseRef = git.GetDefaultBranch(ctx, gitDir)
 		}
 		// Use remote ref by default
-		if cfg.BaseRef != "local" {
+		if cfg.Checkout.BaseRef != "local" {
 			baseRef = "origin/" + baseRef
 		}
 		if err := git.CreateWorktreeNewBranch(ctx, gitDir, wtPath, branch, baseRef); err != nil {

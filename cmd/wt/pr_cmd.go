@@ -171,7 +171,7 @@ func newPrCheckoutCmd() *cobra.Command {
 			l.Debug("pr checkout", "branch", branch, "repo", repoPath)
 
 			// Get worktree format
-			format := repo.GetEffectiveWorktreeFormat(cfg.WorktreeFormat)
+			format := repo.GetEffectiveWorktreeFormat(cfg.Checkout.WorktreeFormat)
 			wtPath := resolveWorktreePathWithConfig(repoPath, repo.Name, branch, format)
 
 			// Detect repo type
