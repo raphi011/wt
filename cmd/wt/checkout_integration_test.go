@@ -143,7 +143,7 @@ func TestCheckout_NewBranch(t *testing.T) {
 
 // TestCheckout_ByRepoName tests checkout in a specific repo by name.
 //
-// Scenario: User runs `wt checkout feature -r myrepo`
+// Scenario: User runs `wt checkout myrepo:feature`
 // Expected: Worktree created in the specified repo
 func TestCheckout_ByRepoName(t *testing.T) {
 	// Not parallel - modifies HOME
@@ -188,7 +188,7 @@ func TestCheckout_ByRepoName(t *testing.T) {
 	ctx := testContext(t)
 	cmd := newCheckoutCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"feature", "-r", "myrepo"})
+	cmd.SetArgs([]string{"myrepo:feature"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("checkout command failed: %v", err)
@@ -203,7 +203,7 @@ func TestCheckout_ByRepoName(t *testing.T) {
 
 // TestCheckout_ByLabel tests checkout in repos by label.
 //
-// Scenario: User runs `wt checkout -b feature -l backend`
+// Scenario: User runs `wt checkout -b backend:feature`
 // Expected: Worktree created in all repos with backend label
 func TestCheckout_ByLabel(t *testing.T) {
 	// Not parallel - modifies HOME
@@ -251,7 +251,7 @@ func TestCheckout_ByLabel(t *testing.T) {
 	ctx := testContext(t)
 	cmd := newCheckoutCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"-b", "feature", "-l", "backend"})
+	cmd.SetArgs([]string{"-b", "backend:feature"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("checkout command failed: %v", err)

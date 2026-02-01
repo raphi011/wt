@@ -73,39 +73,33 @@ func newPruneCmd() *cobra.Command {
 		noHook      bool
 		env         []string
 		interactive bool
-		repository  []string
-		labels      []string
-		branch      string
 	)
 
 	cmd := &cobra.Command{
-		Use:     "prune",
+		Use:     "prune [[scope:]branch...]",
 		Short:   "Prune merged worktrees",
 		Aliases: []string{"p"},
 		GroupID: GroupCore,
-		Args:    cobra.NoArgs,
 		Long: `Remove worktrees with merged PRs.
 
-Without flags, removes all worktrees with merged PRs in current repo.
+Without arguments, removes all worktrees with merged PRs in current repo.
 Use --global to prune all registered repos.
-Use --interactive to select worktrees to prune.`,
+Use --interactive to select worktrees to prune.
+
+Target specific worktrees using [scope:]branch arguments where scope can be
+a repo name or label. Use -f when targeting specific worktrees.`,
 		Example: `  wt prune                         # Remove worktrees with merged PRs
   wt prune --global                # Prune all repos
   wt prune -d                      # Dry-run: preview without removing
   wt prune -i                      # Interactive mode
-  wt prune -r myrepo               # Prune specific repo
-  wt prune -l backend              # Prune repos with label
-  wt prune --branch feature -f     # Remove specific branch worktree
-  wt prune --branch myrepo:feat -f # Remove branch in specific repo`,
+  wt prune feature -f              # Remove feature worktree (all repos)
+  wt prune myrepo:feature -f       # Remove specific worktree
+  wt prune backend:main -f         # Remove main in backend-labeled repos`,
+		ValidArgsFunction: completeScopedWorktreeArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
 			out := output.FromContext(ctx)
-
-			// Validate flags
-			if force && branch == "" && !interactive {
-				return fmt.Errorf("-f/--force requires --branch to target specific worktree")
-			}
 
 			// Load registry
 			reg, err := registry.Load()
@@ -113,16 +107,19 @@ Use --interactive to select worktrees to prune.`,
 				return fmt.Errorf("load registry: %w", err)
 			}
 
-			// Determine target repos
+			// If specific targets provided, handle targeted removal
+			if len(args) > 0 {
+				if !force {
+					return fmt.Errorf("targeting specific worktrees requires -f/--force")
+				}
+				return runPruneTargets(ctx, reg, args, dryRun, hookNames, noHook, env)
+			}
+
+			// Determine target repos for auto-prune
 			var repos []*registry.Repo
 			if global {
 				for i := range reg.Repos {
 					repos = append(repos, &reg.Repos[i])
-				}
-			} else if len(repository) > 0 || len(labels) > 0 {
-				repos, err = resolveTargetRepos(ctx, reg, repository, labels)
-				if err != nil {
-					return err
 				}
 			} else {
 				// Try current repo
@@ -143,11 +140,6 @@ Use --interactive to select worktrees to prune.`,
 			}
 
 			l.Debug("pruning worktrees", "repos", len(repos), "dryRun", dryRun)
-
-			// If specific branch targeted, handle targeted removal
-			if branch != "" {
-				return runPruneTargetBranch(ctx, repos, branch, force, dryRun, hookNames, noHook, env)
-			}
 
 			// Collect all worktrees from target repos
 			var allWorktrees []pruneWorktree
@@ -329,7 +321,7 @@ Use --interactive to select worktrees to prune.`,
 	}
 
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Preview without removing")
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force remove")
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force remove (required for targeted prune)")
 	cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show non-prunable worktrees")
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "Prune all repos")
 	cmd.Flags().BoolVarP(&refresh, "refresh", "R", false, "Refresh PR status first")
@@ -338,81 +330,57 @@ Use --interactive to select worktrees to prune.`,
 	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-removal hooks")
 	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable KEY=VALUE")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode")
-	cmd.Flags().StringSliceVarP(&repository, "repository", "r", nil, "Target repo(s) by name")
-	cmd.Flags().StringSliceVarP(&labels, "label", "l", nil, "Target repos by label")
-	cmd.Flags().StringVar(&branch, "branch", "", "Target specific branch worktree")
 
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 
 	// Completions
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
-	cmd.RegisterFlagCompletionFunc("label", completeLabels)
-	cmd.RegisterFlagCompletionFunc("branch", completeWorktrees)
 
 	return cmd
 }
 
-// runPruneTargetBranch handles removal of a specific branch worktree.
-// Supports "repo:branch" format to target a specific repo's worktree.
-func runPruneTargetBranch(ctx context.Context, repos []*registry.Repo, target string, force, dryRun bool, hookNames []string, noHook bool, env []string) error {
+// runPruneTargets handles removal of specific worktrees by [scope:]branch args.
+func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []string, dryRun bool, hookNames []string, noHook bool, env []string) error {
 	l := log.FromContext(ctx)
+	out := output.FromContext(ctx)
 
-	// Parse repo:branch format
-	targetRepo, branch := parseBranchTarget(target)
-
-	if !force {
-		return fmt.Errorf("worktree %q requires -f/--force to remove", branch)
+	// Resolve all targets
+	wtTargets, err := resolveWorktreeTargets(ctx, reg, targets)
+	if err != nil {
+		return err
 	}
 
-	// Find the worktree
-	var targetWT pruneWorktree
-
-	for _, repo := range repos {
-		// Skip repos that don't match if a repo was specified
-		if targetRepo != "" && repo.Name != targetRepo {
-			continue
-		}
-
-		wtInfos, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-		if err != nil {
-			continue
-		}
-		for _, wti := range wtInfos {
-			if wti.Branch == branch {
-				targetWT = pruneWorktree{
-					Path:     wti.Path,
-					Branch:   wti.Branch,
-					RepoName: repo.Name,
-					RepoPath: repo.Path,
-				}
-				break
-			}
-		}
-		if targetWT.Path != "" {
-			break
-		}
-	}
-
-	if targetWT.Path == "" {
-		if targetRepo != "" {
-			return fmt.Errorf("worktree for branch %q not found in repo %q", branch, targetRepo)
-		}
-		return fmt.Errorf("worktree for branch %q not found", branch)
+	// Convert to pruneWorktree
+	var toRemove []pruneWorktree
+	for _, t := range wtTargets {
+		toRemove = append(toRemove, pruneWorktree{
+			Path:     t.Path,
+			Branch:   t.Branch,
+			RepoName: t.RepoName,
+			RepoPath: t.RepoPath,
+		})
 	}
 
 	if dryRun {
-		l.Printf("Would remove worktree: %s (%s)\n", branch, targetWT.Path)
+		out.Println("Would remove:")
+		for _, wt := range toRemove {
+			l.Printf("  %s:%s (%s)\n", wt.RepoName, wt.Branch, wt.Path)
+		}
 		return nil
 	}
 
 	// Use pruneWorktrees for consistent removal logic
-	removed, failed := pruneWorktrees(ctx, []pruneWorktree{targetWT}, force, false, hookNames, noHook, env, nil)
-	if len(failed) > 0 {
-		return fmt.Errorf("failed to remove worktree: %s", targetWT.Path)
+	removed, failed := pruneWorktrees(ctx, toRemove, true, false, hookNames, noHook, env, nil)
+
+	for _, wt := range removed {
+		l.Printf("Removed worktree: %s:%s (%s)\n", wt.RepoName, wt.Branch, wt.Path)
 	}
-	if len(removed) > 0 {
-		l.Printf("Removed worktree: %s (%s)\n", branch, targetWT.Path)
+	for _, wt := range failed {
+		l.Printf("Failed to remove: %s:%s (%s)\n", wt.RepoName, wt.Branch, wt.Path)
+	}
+
+	if len(failed) > 0 {
+		return fmt.Errorf("failed to remove %d worktree(s)", len(failed))
 	}
 
 	return nil

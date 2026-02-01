@@ -14,7 +14,7 @@ import (
 
 // TestHook_RunHook tests running a configured hook.
 //
-// Scenario: User runs `wt hook myhook -r myrepo`
+// Scenario: User runs `wt hook myhook` from inside a repo
 // Expected: Hook command is executed in repo directory
 func TestHook_RunHook(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -54,10 +54,15 @@ func TestHook_RunHook(t *testing.T) {
 	}
 	defer func() { cfg = oldCfg }()
 
+	// Work from inside the repo
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
 	ctx := testContext(t)
 	cmd := newHookCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"myhook", "-r", "myrepo"})
+	cmd.SetArgs([]string{"myhook"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("hook command failed: %v", err)
@@ -119,7 +124,7 @@ func TestHook_UnknownHook(t *testing.T) {
 
 // TestHook_DryRun tests dry-run mode.
 //
-// Scenario: User runs `wt hook myhook -d -r myrepo`
+// Scenario: User runs `wt hook myhook -d` from inside a repo
 // Expected: Hook command is printed but not executed
 func TestHook_DryRun(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -158,10 +163,15 @@ func TestHook_DryRun(t *testing.T) {
 	}
 	defer func() { cfg = oldCfg }()
 
+	// Work from inside the repo
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
 	ctx := testContext(t)
 	cmd := newHookCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"myhook", "-r", "myrepo", "-d"})
+	cmd.SetArgs([]string{"myhook", "-d"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("hook command failed: %v", err)
@@ -175,7 +185,7 @@ func TestHook_DryRun(t *testing.T) {
 
 // TestHook_WithEnvVar tests hook with environment variable.
 //
-// Scenario: User runs `wt hook myhook -a VAR=value -r myrepo`
+// Scenario: User runs `wt hook myhook -a myvar=value` from inside a repo
 // Expected: Hook command has access to the variable
 func TestHook_WithEnvVar(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -214,10 +224,15 @@ func TestHook_WithEnvVar(t *testing.T) {
 	}
 	defer func() { cfg = oldCfg }()
 
+	// Work from inside the repo
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
 	ctx := testContext(t)
 	cmd := newHookCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"myhook", "-r", "myrepo", "-a", "myvar=hello"})
+	cmd.SetArgs([]string{"myhook", "-a", "myvar=hello"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("hook command failed: %v", err)
@@ -236,7 +251,7 @@ func TestHook_WithEnvVar(t *testing.T) {
 
 // TestHook_WithRepoBranchFormat tests hook with repo:branch format.
 //
-// Scenario: User has two repos with same branch name, runs `wt hook myhook --branch myrepo:feature`
+// Scenario: User has two repos with same branch name, runs `wt hook myhook -- repo1:feature`
 // Expected: Hook runs only in the specified repo's worktree
 func TestHook_WithRepoBranchFormat(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -295,9 +310,8 @@ func TestHook_WithRepoBranchFormat(t *testing.T) {
 	ctx := testContext(t)
 	cmd := newHookCmd()
 	cmd.SetContext(ctx)
-	// Use repo:branch format to target only repo1's worktree
-	// Need to include both repos so the search considers them
-	cmd.SetArgs([]string{"myhook", "--branch", "repo1:feature", "-r", "repo1", "-r", "repo2"})
+	// Use -- repo:branch format to target only repo1's worktree
+	cmd.SetArgs([]string{"myhook", "--", "repo1:feature"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("hook command failed: %v", err)
@@ -317,7 +331,7 @@ func TestHook_WithRepoBranchFormat(t *testing.T) {
 
 // TestHook_RepoBranchFormat_BranchNotFound tests error when branch in repo:branch format is not found.
 //
-// Scenario: User runs `wt hook myhook --branch myrepo:nonexistent`
+// Scenario: User runs `wt hook myhook -- myrepo:nonexistent`
 // Expected: Command fails with informative error
 func TestHook_RepoBranchFormat_BranchNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -362,8 +376,8 @@ func TestHook_RepoBranchFormat_BranchNotFound(t *testing.T) {
 	ctx := testContext(t)
 	cmd := newHookCmd()
 	cmd.SetContext(ctx)
-	// Use nonexistent branch name
-	cmd.SetArgs([]string{"myhook", "--branch", "myrepo:nonexistent"})
+	// Use nonexistent branch name with -- format
+	cmd.SetArgs([]string{"myhook", "--", "myrepo:nonexistent"})
 
 	err := cmd.Execute()
 	if err == nil {

@@ -125,3 +125,154 @@ func parseBranchTarget(target string) (repo, branch string) {
 	}
 	return "", target // no repo specified
 }
+
+// ScopedTargetResult holds the result of parsing a scoped target
+type ScopedTargetResult struct {
+	Repos   []*registry.Repo // Matched repos (1 for repo name, multiple for label)
+	Branch  string           // The branch part
+	IsLabel bool             // True if scope matched a label (not a repo name)
+}
+
+// parseScopedTarget parses "scope:branch" where scope can be repo name or label.
+// Resolution order: try repo name first, then label.
+// If no scope provided, returns empty Repos slice (caller decides behavior).
+func parseScopedTarget(reg *registry.Registry, target string) (ScopedTargetResult, error) {
+	scope, branch := parseBranchTarget(target)
+
+	if scope == "" {
+		// No scope - return just the branch
+		return ScopedTargetResult{Branch: branch}, nil
+	}
+
+	// Try repo name first
+	repo, err := reg.FindByName(scope)
+	if err == nil {
+		return ScopedTargetResult{
+			Repos:   []*registry.Repo{repo},
+			Branch:  branch,
+			IsLabel: false,
+		}, nil
+	}
+
+	// Try label
+	labelRepos := reg.FindByLabel(scope)
+	if len(labelRepos) > 0 {
+		return ScopedTargetResult{
+			Repos:   labelRepos,
+			Branch:  branch,
+			IsLabel: true,
+		}, nil
+	}
+
+	return ScopedTargetResult{}, fmt.Errorf("no repo or label found: %s", scope)
+}
+
+// WorktreeTarget holds a resolved worktree target
+type WorktreeTarget struct {
+	RepoName string
+	RepoPath string
+	Branch   string
+	Path     string
+}
+
+// resolveWorktreeTargets parses [scope:]branch args and returns worktree paths.
+// scope can be a repo name or label. If no scope, searches all repos.
+// Returns error if any target is not found.
+func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets []string) ([]WorktreeTarget, error) {
+	var results []WorktreeTarget
+
+	for _, target := range targets {
+		parsed, err := parseScopedTarget(reg, target)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(parsed.Repos) > 0 {
+			// Scoped target - find worktree in specified repo(s)
+			found := false
+			for _, repo := range parsed.Repos {
+				wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+				if err != nil {
+					continue
+				}
+				for _, wt := range wts {
+					if wt.Branch == parsed.Branch {
+						results = append(results, WorktreeTarget{
+							RepoName: repo.Name,
+							RepoPath: repo.Path,
+							Branch:   parsed.Branch,
+							Path:     wt.Path,
+						})
+						found = true
+						break
+					}
+				}
+			}
+			if !found {
+				if parsed.IsLabel {
+					return nil, fmt.Errorf("worktree not found: %s (label matched %d repos)", target, len(parsed.Repos))
+				}
+				return nil, fmt.Errorf("worktree not found: %s", target)
+			}
+		} else {
+			// No scope - search all repos
+			var matches []WorktreeTarget
+			for i := range reg.Repos {
+				repo := &reg.Repos[i]
+				wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+				if err != nil {
+					continue
+				}
+				for _, wt := range wts {
+					if wt.Branch == parsed.Branch {
+						matches = append(matches, WorktreeTarget{
+							RepoName: repo.Name,
+							RepoPath: repo.Path,
+							Branch:   parsed.Branch,
+							Path:     wt.Path,
+						})
+					}
+				}
+			}
+			if len(matches) == 0 {
+				return nil, fmt.Errorf("worktree not found: %s", parsed.Branch)
+			}
+			results = append(results, matches...)
+		}
+	}
+
+	// Deduplicate by path
+	seen := make(map[string]bool)
+	var unique []WorktreeTarget
+	for _, wt := range results {
+		if !seen[wt.Path] {
+			seen[wt.Path] = true
+			unique = append(unique, wt)
+		}
+	}
+
+	return unique, nil
+}
+
+// resolveScopedRepos resolves scope (repo name or label) to repos.
+// If scope is empty, returns error asking for explicit scope.
+// Used when targeting repos (not worktrees) like for checkout -b.
+func resolveScopedRepos(reg *registry.Registry, scope string) ([]*registry.Repo, error) {
+	if scope == "" {
+		return nil, fmt.Errorf("repo or label required")
+	}
+
+	// Try repo name first
+	repo, err := reg.FindByName(scope)
+	if err == nil {
+		return []*registry.Repo{repo}, nil
+	}
+
+	// Try label
+	labelRepos := reg.FindByLabel(scope)
+	if len(labelRepos) > 0 {
+		return labelRepos, nil
+	}
+
+	return nil, fmt.Errorf("no repo or label found: %s", scope)
+}

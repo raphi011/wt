@@ -245,25 +245,26 @@ func newPrCheckoutCmd() *cobra.Command {
 
 func newPrCreateCmd() *cobra.Command {
 	var (
-		repository string
-		title      string
-		body       string
-		bodyFile   string
-		base       string
-		draft      bool
-		web        bool
+		title    string
+		body     string
+		bodyFile string
+		base     string
+		draft    bool
+		web      bool
 	)
 
 	cmd := &cobra.Command{
-		Use:     "create",
-		Short:   "Create PR for worktree",
-		Aliases: []string{"c", "new"},
-		Args:    cobra.NoArgs,
-		Long:    `Create a PR for the current branch.`,
+		Use:               "create [repo]",
+		Short:             "Create PR for worktree",
+		Aliases:           []string{"c", "new"},
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeRepoNames,
+		Long:              `Create a PR for the current branch.`,
 		Example: `  wt pr create --title "Add feature"
+  wt pr create myrepo --title "Add feature"  # Create for specific repo
   wt pr create --title "Add feature" --body "Details"
   wt pr create --title "Add feature" --draft
-  wt pr create --title "Add feature" -w    # Open in browser`,
+  wt pr create --title "Add feature" -w      # Open in browser`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
@@ -277,10 +278,10 @@ func newPrCreateCmd() *cobra.Command {
 
 			// Determine target repo
 			var repo *registry.Repo
-			if repository != "" {
-				repo, err = reg.FindByName(repository)
+			if len(args) > 0 {
+				repo, err = reg.FindByName(args[0])
 				if err != nil {
-					return fmt.Errorf("repository %q not found", repository)
+					return fmt.Errorf("repository %q not found", args[0])
 				}
 			} else {
 				repo, err = findOrRegisterCurrentRepo(ctx, reg)
@@ -349,7 +350,6 @@ func newPrCreateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&repository, "repository", "r", "", "Repository name")
 	cmd.Flags().StringVarP(&title, "title", "t", "", "PR title")
 	cmd.Flags().StringVarP(&body, "body", "b", "", "PR body")
 	cmd.Flags().StringVar(&bodyFile, "body-file", "", "Read body from file")
@@ -360,7 +360,6 @@ func newPrCreateCmd() *cobra.Command {
 	cmd.MarkFlagRequired("title")
 	cmd.MarkFlagFilename("body-file") // Enable file completion for body-file flag
 	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("base", completeBranches)
 
 	return cmd
@@ -368,23 +367,24 @@ func newPrCreateCmd() *cobra.Command {
 
 func newPrMergeCmd() *cobra.Command {
 	var (
-		repository string
-		strategy   string
-		keep       bool
-		hookNames  []string
-		noHook     bool
-		env        []string
+		strategy  string
+		keep      bool
+		hookNames []string
+		noHook    bool
+		env       []string
 	)
 
 	cmd := &cobra.Command{
-		Use:     "merge",
-		Short:   "Merge PR and clean up worktree",
-		Aliases: []string{"m"},
-		Args:    cobra.NoArgs,
+		Use:               "merge [repo]",
+		Short:             "Merge PR and clean up worktree",
+		Aliases:           []string{"m"},
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeRepoNames,
 		Long: `Merge the PR for the current branch.
 
 Merges the PR, removes the worktree (if applicable), and deletes the local branch.`,
 		Example: `  wt pr merge                  # Merge current branch's PR
+  wt pr merge myrepo           # Merge for specific repo
   wt pr merge --keep           # Keep worktree after merge
   wt pr merge -s rebase        # Use rebase strategy`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -400,10 +400,10 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 
 			// Determine target repo
 			var repo *registry.Repo
-			if repository != "" {
-				repo, err = reg.FindByName(repository)
+			if len(args) > 0 {
+				repo, err = reg.FindByName(args[0])
 				if err != nil {
-					return fmt.Errorf("repository %q not found", repository)
+					return fmt.Errorf("repository %q not found", args[0])
 				}
 			} else {
 				repo, err = findOrRegisterCurrentRepo(ctx, reg)
@@ -490,7 +490,6 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 		},
 	}
 
-	cmd.Flags().StringVarP(&repository, "repository", "r", "", "Repository name")
 	cmd.Flags().StringVarP(&strategy, "strategy", "s", "", "Merge strategy: squash, rebase, merge")
 	cmd.Flags().BoolVarP(&keep, "keep", "k", false, "Keep worktree after merge")
 	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
@@ -498,7 +497,6 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable KEY=VALUE")
 
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
 	cmd.RegisterFlagCompletionFunc("strategy", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"squash", "rebase", "merge"}, cobra.ShellCompDirectiveNoFileComp
@@ -508,18 +506,17 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 }
 
 func newPrViewCmd() *cobra.Command {
-	var (
-		repository string
-		web        bool
-	)
+	var web bool
 
 	cmd := &cobra.Command{
-		Use:     "view",
-		Short:   "View PR details or open in browser",
-		Aliases: []string{"v"},
-		Args:    cobra.NoArgs,
-		Long:    `View PR details for the current branch.`,
+		Use:               "view [repo]",
+		Short:             "View PR details or open in browser",
+		Aliases:           []string{"v"},
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeRepoNames,
+		Long:              `View PR details for the current branch.`,
 		Example: `  wt pr view              # View PR details
+  wt pr view myrepo       # View PR for specific repo
   wt pr view -w           # Open PR in browser`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -534,10 +531,10 @@ func newPrViewCmd() *cobra.Command {
 
 			// Determine target repo
 			var repo *registry.Repo
-			if repository != "" {
-				repo, err = reg.FindByName(repository)
+			if len(args) > 0 {
+				repo, err = reg.FindByName(args[0])
 				if err != nil {
-					return fmt.Errorf("repository %q not found", repository)
+					return fmt.Errorf("repository %q not found", args[0])
 				}
 			} else {
 				repo, err = findOrRegisterCurrentRepo(ctx, reg)
@@ -589,10 +586,7 @@ func newPrViewCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&repository, "repository", "r", "", "Repository name")
 	cmd.Flags().BoolVarP(&web, "web", "w", false, "Open in browser")
-
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 
 	return cmd
 }
