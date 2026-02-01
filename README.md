@@ -18,7 +18,7 @@ But worktrees can pile up fast. You end up with a dozen directories, can't remem
 This project may include breaking command & configuration changes until v1.0 is released. Once v1 is released, backwards compatibility will be maintained.
 
 If something breaks:
-- Delete `.wt-cache.json` files in your worktree directory
+- Delete `~/.wt/prs.json` (PR cache)
 - Compare your config with `wt config init -s` and update to match newer config format
 
 ## Install
@@ -298,18 +298,6 @@ This updates git's worktree tracking automatically—no manual fixup needed.
 
 **Tip:** If you change `worktree_format` in your config, run `wt mv` to rename existing worktrees to match the new format. Collisions are handled automatically by appending a numbered suffix (e.g., `repo-main-1`).
 
-### Diagnosing Issues
-
-If worktrees get into a bad state (broken links, missing repos):
-
-```bash
-# Check for issues
-wt doctor
-
-# Auto-fix recoverable issues
-wt doctor --fix
-```
-
 ## Configuration
 
 Config file: `~/.config/wt/config.toml`
@@ -453,7 +441,6 @@ Common commands have short aliases (shown in `wt --help`): `co`, `ls`, `s`, `p`,
 | `wt label` | Manage repo labels |
 | `wt hook` | Run configured hook |
 | `wt config` | Manage configuration |
-| `wt doctor` | Diagnose and repair issues |
 | `wt completion` | Generate shell completions |
 
 Run `wt <command> --help` for detailed usage.

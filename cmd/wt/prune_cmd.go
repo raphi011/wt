@@ -10,13 +10,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/raphi011/wt/internal/cache"
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
+	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/progress"
 	"github.com/raphi011/wt/internal/ui/static"
@@ -168,31 +168,29 @@ Use --interactive to select worktrees to prune.`,
 			sp := progress.NewSpinner("Scanning worktrees...")
 			sp.Start()
 
-			// Load cache
-			cacheDir := getCacheDir()
-			wtCache, unlock, err := cache.LoadWithLock(cacheDir)
+			// Load PR cache
+			prCache, err := prcache.Load()
 			if err != nil {
 				sp.Stop()
 				return fmt.Errorf("load cache: %w", err)
 			}
-			defer unlock()
 
 			// Reset cache if requested
 			if resetCache {
-				wtCache.Reset()
+				prCache.Reset()
 				l.Println("Cache reset: PR info cleared")
 			}
 
 			// Refresh PR status if requested
 			if refresh {
 				sp.UpdateMessage(fmt.Sprintf("Fetching PR status (%d branches)...", len(allWorktrees)))
-				refreshPRStatusForPrune(ctx, allWorktrees, wtCache, cfg.Hosts, &cfg.Forge, sp)
+				refreshPRStatusForPrune(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge, sp)
 			}
 
 			// Update PR state from cache
 			for i := range allWorktrees {
 				folderName := filepath.Base(allWorktrees[i].Path)
-				if pr := wtCache.GetPRForBranch(folderName); pr != nil && pr.Fetched {
+				if pr := prCache.Get(folderName); pr != nil && pr.Fetched {
 					allWorktrees[i].PRState = pr.State
 				}
 			}
@@ -325,9 +323,9 @@ Use --interactive to select worktrees to prune.`,
 							continue
 						}
 
-						// Mark as removed in cache
+						// Remove from PR cache
 						folderName := filepath.Base(wt.Path)
-						wtCache.MarkRemoved(folderName)
+						prCache.Delete(folderName)
 						removed = append(removed, wt)
 
 						// Run hooks
@@ -379,8 +377,8 @@ Use --interactive to select worktrees to prune.`,
 				}
 			}
 
-			// Save cache
-			if err := cache.Save(cacheDir, wtCache); err != nil {
+			// Save PR cache
+			if err := prCache.Save(); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to save cache: %v\n", err)
 			}
 
@@ -500,14 +498,8 @@ func runPruneTargetBranch(ctx context.Context, repos []*registry.Repo, branch st
 	return nil
 }
 
-// getCacheDir returns the cache directory path
-func getCacheDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".wt")
-}
-
 // refreshPRStatusForPrune fetches PR status for worktrees in parallel
-func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, wtCache *cache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig, sp *progress.Spinner) {
+func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, prCache *prcache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig, sp *progress.Spinner) {
 	// Filter to worktrees that need PR status fetched
 	var toFetch []pruneWorktree
 	for _, wt := range worktrees {
@@ -516,7 +508,7 @@ func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, wtC
 		}
 		// Skip already merged
 		folderName := filepath.Base(wt.Path)
-		if pr := wtCache.GetPRForBranch(folderName); pr != nil && pr.Fetched && pr.State == "MERGED" {
+		if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.State == "MERGED" {
 			continue
 		}
 		toFetch = append(toFetch, wt)
@@ -566,7 +558,7 @@ func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, wtC
 
 			prMutex.Lock()
 			folderName := filepath.Base(wt.Path)
-			wtCache.SetPRForBranch(folderName, pr)
+			prCache.Set(folderName, convertForgePR(pr))
 			prMutex.Unlock()
 
 			countMutex.Lock()
@@ -579,5 +571,21 @@ func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, wtC
 
 	if failedCount > 0 {
 		sp.UpdateMessage(fmt.Sprintf("Fetched: %d, Failed: %d", fetchedCount, failedCount))
+	}
+}
+
+// convertForgePR converts forge.PRInfo to prcache.PRInfo
+func convertForgePR(pr *forge.PRInfo) *prcache.PRInfo {
+	return &prcache.PRInfo{
+		Number:       pr.Number,
+		State:        pr.State,
+		IsDraft:      pr.IsDraft,
+		URL:          pr.URL,
+		Author:       pr.Author,
+		CommentCount: pr.CommentCount,
+		HasReviews:   pr.HasReviews,
+		IsApproved:   pr.IsApproved,
+		CachedAt:     pr.CachedAt,
+		Fetched:      pr.Fetched,
 	}
 }

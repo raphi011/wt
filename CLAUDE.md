@@ -34,7 +34,7 @@ cmd/wt/                  - CLI commands and entry point (cobra)
   ├── main.go            - Entry point
   ├── root.go            - Root command setup and context injection
   └── *_cmd.go           - Individual command implementations
-internal/cache/          - Disk caching with file locking
+internal/prcache/        - PR cache (simple JSON at ~/.wt/prs.json)
 internal/config/         - Configuration loading (TOML)
 internal/forge/          - Git hosting service abstraction (GitHub/GitLab)
   ├── forge.go           - Forge interface
