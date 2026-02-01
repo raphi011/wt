@@ -10,22 +10,22 @@ import (
 
 // MigrationPlan describes what will be done during migration
 type MigrationPlan struct {
-	RepoPath       string            // Original repo path
-	GitDir         string            // Current .git directory path
-	CurrentBranch  string            // Branch to use for main worktree
+	RepoPath       string // Original repo path
+	GitDir         string // Current .git directory path
+	CurrentBranch  string // Branch to use for main worktree
 	WorktreesToFix []WorktreeMigration
 	HasSubmodules  bool
 }
 
 // WorktreeMigration describes a worktree that needs to be updated
 type WorktreeMigration struct {
-	OldPath     string // Current worktree path
-	NewPath     string // New path after migration (may be same)
-	Branch      string
-	OldName     string // Name in .git/worktrees/
-	NewName     string // Name after migration (may be same)
-	NeedsMove   bool   // Whether the worktree folder needs to be moved
-	IsOutside   bool   // Whether worktree is outside the repo directory
+	OldPath   string // Current worktree path
+	NewPath   string // New path after migration (may be same)
+	Branch    string
+	OldName   string // Name in .git/worktrees/
+	NewName   string // Name after migration (may be same)
+	NeedsMove bool   // Whether the worktree folder needs to be moved
+	IsOutside bool   // Whether worktree is outside the repo directory
 }
 
 // MigrateToBareResult contains the result of a successful migration
