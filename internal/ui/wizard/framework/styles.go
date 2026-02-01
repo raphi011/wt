@@ -8,12 +8,16 @@ import (
 // Style functions that return styles based on current theme
 // These are functions instead of variables to pick up theme changes
 
-// BorderStyle wraps the entire wizard
+// BorderStyle wraps the entire wizard (left border only)
 func BorderStyle() lipgloss.Style {
 	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+		BorderLeft(true).
+		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(styles.Primary).
-		Padding(1, 2)
+		PaddingTop(1).
+		PaddingBottom(1).
+		PaddingLeft(2).
+		PaddingRight(2)
 }
 
 // TitleStyle for the wizard title
