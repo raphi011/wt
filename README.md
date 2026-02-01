@@ -227,18 +227,20 @@ wt exec backend-api:main -- make test   # In specific repo's worktree
 
 ### Quick Navigation
 
+> **Note:** To use `wt cd` directly (without `cd $(...)` wrapper), add `eval "$(wt init)"` to your shell config. See `wt init --help` for details.
+
 ```bash
 # Jump to most recently accessed worktree
-cd $(wt cd)
+wt cd
 
 # Jump to worktree by branch name
-cd $(wt cd feature-auth)
+wt cd feature-auth
 
 # Jump to worktree in specific repo (if branch exists in multiple repos)
-cd $(wt cd backend-api:feature-auth)
+wt cd backend-api:feature-auth
 
 # Interactive fuzzy search
-cd $(wt cd -i)
+wt cd -i
 
 # Run command in worktree
 wt exec -- git status                   # In current worktree
