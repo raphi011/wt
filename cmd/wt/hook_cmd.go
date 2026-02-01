@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -35,11 +34,12 @@ func newHookCmd() *cobra.Command {
 
 Hooks are defined in config.toml and can use placeholders.
 By default runs in current repo/worktree; use -r/-l to target other repos.`,
-		Example: `  wt hook code                # Run 'code' hook in current repo
-  wt hook code -r myrepo      # Run in specific repo
-  wt hook code idea           # Run multiple hooks
-  wt hook code -d             # Dry-run: print command without executing
-  wt hook code --branch feat  # Run in specific worktree`,
+		Example: `  wt hook code                     # Run 'code' hook in current repo
+  wt hook code -r myrepo           # Run in specific repo
+  wt hook code idea                # Run multiple hooks
+  wt hook code -d                  # Dry-run: print command without executing
+  wt hook code --branch feat       # Run in specific worktree
+  wt hook code --branch myrepo:feat # Run in specific repo's worktree`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
@@ -141,10 +141,19 @@ func runHooksInRepo(_ context.Context, repo *registry.Repo, hookNames []string, 
 	return runHooksForContext(hookNames, cfg.Hooks.Hooks, hookCtx, repo.Path)
 }
 
-// runHooksInBranch runs hooks in a specific branch's worktree
-func runHooksInBranch(ctx context.Context, repos []*registry.Repo, hookNames []string, branch string, env map[string]string, dryRun bool) error {
+// runHooksInBranch runs hooks in a specific branch's worktree.
+// Supports "repo:branch" format to target a specific repo's worktree.
+func runHooksInBranch(ctx context.Context, repos []*registry.Repo, hookNames []string, target string, env map[string]string, dryRun bool) error {
+	// Parse repo:branch format (shared with prune command)
+	targetRepo, branch := parseBranchTarget(target)
+
 	// Find the worktree
 	for _, repo := range repos {
+		// Skip repos that don't match if a repo was specified
+		if targetRepo != "" && repo.Name != targetRepo {
+			continue
+		}
+
 		wtInfos, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 		if err != nil {
 			continue
@@ -164,6 +173,10 @@ func runHooksInBranch(ctx context.Context, repos []*registry.Repo, hookNames []s
 				return runHooksForContext(hookNames, cfg.Hooks.Hooks, hookCtx, repo.Path)
 			}
 		}
+	}
+
+	if targetRepo != "" {
+		return fmt.Errorf("worktree for branch %q not found in repo %q", branch, targetRepo)
 	}
 	return fmt.Errorf("worktree for branch %q not found", branch)
 }
@@ -186,25 +199,4 @@ func runHooksForContext(hookNames []string, hooksMap map[string]config.Hook, hoo
 	}
 
 	return nil
-}
-
-// resolveHookContext creates a hook context from the current directory
-func resolveHookContext(ctx context.Context, workDir string) (hooks.Context, error) {
-	// Check if we're in a git repo or worktree
-	repoPath := git.GetCurrentRepoMainPath(ctx)
-	if repoPath == "" {
-		return hooks.Context{}, fmt.Errorf("not in a git repository")
-	}
-
-	// Get current branch
-	branch, _ := git.GetCurrentBranch(ctx, workDir)
-
-	return hooks.Context{
-		WorktreeDir: workDir,
-		RepoDir:     repoPath,
-		Branch:      branch,
-		Repo:        filepath.Base(repoPath),
-		Origin:      git.GetRepoDisplayName(repoPath),
-		Trigger:     "run",
-	}, nil
 }
