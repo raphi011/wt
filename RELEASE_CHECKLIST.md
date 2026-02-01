@@ -138,9 +138,6 @@ Manual testing reference for pre-release verification. Test each command and fla
 | ❌ | `wt completion fish` | Fish completion script | Valid syntax |
 | ❌ | `wt completion bash` | Bash completion script | Valid syntax |
 | ❌ | `wt completion zsh` | Zsh completion script | Valid syntax |
-| ❌ | `wt doctor` | Checks for issues | Reports problems |
-| ❌ | `wt doctor --fix` | Auto-fixes issues | Repairs what's possible |
-| ❌ | `wt doctor --reset` | Rebuilds cache | Cache rebuilt |
 
 ---
 

@@ -98,7 +98,6 @@ func extractCommand(testName string) string {
 	cmdMap := map[string]string{
 		"Cd":              "wt cd",
 		"Checkout":        "wt checkout",
-		"Doctor":          "wt doctor",
 		"Exec":            "wt exec",
 		"Label":           "wt label",
 		"LabelAdd":        "wt label",

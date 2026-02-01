@@ -2,12 +2,22 @@ package forge
 
 import (
 	"context"
-
-	"github.com/raphi011/wt/internal/cache"
+	"time"
 )
 
-// PRInfo is an alias to cache.PRInfo for backward compatibility
-type PRInfo = cache.PRInfo
+// PRInfo represents pull request information
+type PRInfo struct {
+	Number       int       `json:"number"`
+	State        string    `json:"state"`    // Normalized: OPEN, MERGED, CLOSED
+	IsDraft      bool      `json:"is_draft"` // true if PR is a draft
+	URL          string    `json:"url"`
+	Author       string    `json:"author"`        // username/login
+	CommentCount int       `json:"comment_count"` // number of comments
+	HasReviews   bool      `json:"has_reviews"`   // any reviews submitted
+	IsApproved   bool      `json:"is_approved"`   // approved status
+	CachedAt     time.Time `json:"cached_at"`
+	Fetched      bool      `json:"fetched"` // true = API was queried (distinguishes "not fetched" from "no PR")
+}
 
 // CreatePRParams contains parameters for creating a PR/MR
 type CreatePRParams struct {
