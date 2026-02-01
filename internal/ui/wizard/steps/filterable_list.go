@@ -204,7 +204,35 @@ func (s *FilterableListStep) Update(msg tea.KeyMsg) (framework.Step, tea.Cmd, fr
 				}
 			}
 		}
-	case "enter", "right":
+	case "enter":
+		// Multi-select mode: submit if constraints are met
+		if s.multiSelect {
+			if s.canAdvanceMulti() {
+				return s, nil, framework.StepSubmitIfReady
+			}
+			return s, nil, framework.StepContinue
+		}
+		// Single-select mode
+		// Check if selecting create option (cursor 0 when create is shown)
+		if showCreate && s.cursor == 0 {
+			s.selected = 0
+			s.selectedIsNew = true
+			return s, nil, framework.StepSubmitIfReady
+		}
+		// Adjust cursor for option selection when create is shown
+		optionCursor := s.cursor
+		if showCreate {
+			optionCursor = s.cursor - 1
+		}
+		if len(s.filtered) > 0 && optionCursor >= 0 && optionCursor < len(s.filtered) {
+			idx := s.filtered[optionCursor].Index
+			if !s.options[idx].Disabled {
+				s.selected = s.cursor
+				s.selectedIsNew = false
+				return s, nil, framework.StepSubmitIfReady
+			}
+		}
+	case "right":
 		// Multi-select mode: advance if constraints are met
 		if s.multiSelect {
 			if s.canAdvanceMulti() {
@@ -380,9 +408,9 @@ func (s *FilterableListStep) View() string {
 
 func (s *FilterableListStep) Help() string {
 	if s.multiSelect {
-		return "↑/↓ move • space toggle • pgup/pgdn jump • type to filter • enter confirm • esc cancel"
+		return "↑/↓ move • space toggle • pgup/pgdn jump • type to filter • ←/→ navigate • enter confirm • esc cancel"
 	}
-	return "↑/↓ select • pgup/pgdn jump • type to filter • ← back • enter confirm • esc cancel"
+	return "↑/↓ select • pgup/pgdn jump • type to filter • ←/→ navigate • enter confirm • esc cancel"
 }
 
 func (s *FilterableListStep) Value() framework.StepValue {

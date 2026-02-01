@@ -12,6 +12,8 @@ const (
 	StepAdvance
 	// StepBack means move to the previous step.
 	StepBack
+	// StepSubmitIfReady means advance and submit if all steps are complete.
+	StepSubmitIfReady
 )
 
 // StepValue holds the result of a completed step.

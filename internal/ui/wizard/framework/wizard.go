@@ -219,6 +219,30 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		w.steps[w.currentStep] = newStep
 
 		switch result {
+		case StepSubmitIfReady:
+			// Mark step as confirmed
+			w.confirmedSteps[step.ID()] = true
+			// Run completion callback
+			if cb, ok := w.onComplete[step.ID()]; ok {
+				cb(w)
+			}
+			// Check if all steps are now complete - submit immediately
+			if w.AllStepsComplete() {
+				w.done = true
+				return w, tea.Quit
+			}
+			// Otherwise advance to next step (same as StepAdvance)
+			next := w.findNextStep(w.currentStep)
+			if next < 0 {
+				if w.skipSummary {
+					w.done = true
+					return w, tea.Quit
+				}
+				w.currentStep = len(w.steps)
+			} else {
+				w.currentStep = next
+				return w, w.steps[w.currentStep].Init()
+			}
 		case StepAdvance:
 			// Mark step as confirmed (user advanced past it)
 			w.confirmedSteps[step.ID()] = true
