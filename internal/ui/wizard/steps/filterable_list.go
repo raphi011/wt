@@ -278,7 +278,7 @@ func (s *FilterableListStep) View() string {
 	} else {
 		b.WriteString(s.prompt + ":\n")
 	}
-	b.WriteString(framework.FilterLabelStyle.Render("Filter: ") + framework.FilterStyle.Render(s.filter) + "\n\n")
+	b.WriteString(framework.FilterLabelStyle().Render("Filter: ") + framework.FilterStyle().Render(s.filter) + "\n\n")
 
 	showCreate := s.shouldShowCreate()
 
@@ -297,17 +297,17 @@ func (s *FilterableListStep) View() string {
 	end := min(start+maxVisible, totalItems)
 
 	if start > 0 {
-		b.WriteString(framework.OptionNormalStyle.Render("  ↑ more above") + "\n")
+		b.WriteString(framework.OptionNormalStyle().Render("  ↑ more above") + "\n")
 	}
 
 	for i := start; i < end; i++ {
 		// Handle create option at position 0 when shown
 		if showCreate && i == 0 {
 			cursor := "  "
-			style := framework.OptionNormalStyle
+			style := framework.OptionNormalStyle()
 			if s.cursor == 0 {
 				cursor = "> "
-				style = framework.OptionSelectedStyle
+				style = framework.OptionSelectedStyle()
 			}
 			createLabel := s.createLabelFn(s.filter)
 			b.WriteString(cursor + style.Render(createLabel) + "\n")
@@ -328,10 +328,10 @@ func (s *FilterableListStep) View() string {
 		opt := s.options[match.Index]
 
 		cursor := "  "
-		style := framework.OptionNormalStyle
+		style := framework.OptionNormalStyle()
 
 		if opt.Disabled {
-			style = framework.OptionDisabledStyle
+			style = framework.OptionDisabledStyle()
 			label := opt.Label
 			if opt.Description != "" {
 				label += " (" + opt.Description + ")"
@@ -342,7 +342,7 @@ func (s *FilterableListStep) View() string {
 
 		if i == s.cursor {
 			cursor = "> "
-			style = framework.OptionSelectedStyle
+			style = framework.OptionSelectedStyle()
 		}
 
 		// Show checkbox in multi-select mode
@@ -369,16 +369,16 @@ func (s *FilterableListStep) View() string {
 			if s.multiSelect {
 				descIndent = "      " // Extra indent for checkbox
 			}
-			b.WriteString(descIndent + framework.OptionDescriptionStyle.Render(opt.Description) + "\n")
+			b.WriteString(descIndent + framework.OptionDescriptionStyle().Render(opt.Description) + "\n")
 		}
 	}
 
 	if end < totalItems {
-		b.WriteString(framework.OptionNormalStyle.Render("  ↓ more below") + "\n")
+		b.WriteString(framework.OptionNormalStyle().Render("  ↓ more below") + "\n")
 	}
 
 	if totalItems == 0 {
-		b.WriteString(framework.OptionNormalStyle.Render("  No matching items") + "\n")
+		b.WriteString(framework.OptionNormalStyle().Render("  No matching items") + "\n")
 	}
 
 	return b.String()
@@ -564,11 +564,11 @@ func (s *FilterableListStep) highlightMatches(label string, matchedIndexes []int
 		char := string(r)
 		if matchSet[i] {
 			// Highlight matched character
-			result.WriteString(framework.MatchHighlightStyle.Render(char))
+			result.WriteString(framework.MatchHighlightStyle().Render(char))
 		} else if isSelected {
-			result.WriteString(framework.OptionSelectedStyle.Render(char))
+			result.WriteString(framework.OptionSelectedStyle().Render(char))
 		} else {
-			result.WriteString(framework.OptionNormalStyle.Render(char))
+			result.WriteString(framework.OptionNormalStyle().Render(char))
 		}
 	}
 	return result.String()

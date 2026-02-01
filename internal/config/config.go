@@ -40,6 +40,18 @@ type MergeConfig struct {
 	Strategy string `toml:"strategy"` // "squash", "rebase", or "merge"
 }
 
+// ThemeConfig holds theme/color configuration for interactive UI
+type ThemeConfig struct {
+	Name    string `toml:"name"`    // preset name: "default", "dracula", "nord", "gruvbox"
+	Primary string `toml:"primary"` // main accent color (borders, titles)
+	Accent  string `toml:"accent"`  // highlight color (selected items)
+	Success string `toml:"success"` // success indicators (checkmarks)
+	Error   string `toml:"error"`   // error messages
+	Muted   string `toml:"muted"`   // disabled/inactive text
+	Normal  string `toml:"normal"`  // standard text
+	Info    string `toml:"info"`    // informational text
+}
+
 // Config holds the wt configuration
 type Config struct {
 	WorktreeDir    string            `toml:"worktree_dir"`
@@ -53,6 +65,7 @@ type Config struct {
 	Forge          ForgeConfig       `toml:"forge"`
 	Merge          MergeConfig       `toml:"merge"`
 	Hosts          map[string]string `toml:"hosts"` // domain -> forge type mapping
+	Theme          ThemeConfig       `toml:"theme"` // UI theme/colors for interactive mode
 }
 
 // RepoScanDir returns the directory to scan for repositories.
@@ -145,6 +158,7 @@ type rawConfig struct {
 	Forge          ForgeConfig            `toml:"forge"`
 	Merge          MergeConfig            `toml:"merge"`
 	Hosts          map[string]string      `toml:"hosts"`
+	Theme          ThemeConfig            `toml:"theme"`
 }
 
 // Load reads config from ~/.config/wt/config.toml
@@ -189,6 +203,7 @@ func Load() (Config, error) {
 		Forge:          raw.Forge,
 		Merge:          raw.Merge,
 		Hosts:          raw.Hosts,
+		Theme:          raw.Theme,
 	}
 
 	// Validate worktree_dir (must be absolute or start with ~)
@@ -252,6 +267,8 @@ func Load() (Config, error) {
 	if cfg.DefaultSort != "" && cfg.DefaultSort != "id" && cfg.DefaultSort != "repo" && cfg.DefaultSort != "branch" && cfg.DefaultSort != "commit" {
 		return Default(), fmt.Errorf("invalid default_sort %q: must be \"id\", \"repo\", \"branch\", or \"commit\"", cfg.DefaultSort)
 	}
+
+	// Note: theme.name is validated at runtime with a warning, not an error
 
 	// Use defaults for empty values
 	if cfg.WorktreeFormat == "" {
@@ -353,6 +370,19 @@ func (c *ForgeConfig) GetUserForRepo(repoSpec string) string {
 		}
 	}
 	return ""
+}
+
+// ValidThemeNames is the list of supported theme presets
+var ValidThemeNames = []string{"default", "dracula", "nord", "gruvbox", "catppuccin-frappe", "catppuccin-mocha"}
+
+// isValidThemeName checks if the theme name is a known preset
+func isValidThemeName(name string) bool {
+	for _, valid := range ValidThemeNames {
+		if name == valid {
+			return true
+		}
+	}
+	return false
 }
 
 // matchPattern checks if repoSpec matches the pattern
@@ -526,6 +556,28 @@ worktree_format = "{repo}-{branch}"
 # Note: You must also authenticate with the respective CLI:
 #   gh auth login --hostname github.mycompany.com
 #   glab auth login --hostname gitlab.internal.corp
+
+# Theme settings - customize colors for interactive wizards
+# Available presets: "default", "dracula", "nord", "gruvbox",
+#                    "catppuccin-frappe", "catppuccin-mocha"
+#
+# [theme]
+# name = "dracula"  # use a preset theme
+#
+# Or customize individual colors (hex or 256-color codes):
+# [theme]
+# primary = "#89b4fa"  # borders, titles (Catppuccin blue)
+# accent = "#f5c2e7"   # selected items (Catppuccin pink)
+# success = "#a6e3a1"  # checkmarks (Catppuccin green)
+# error = "#f38ba8"    # error messages (Catppuccin red)
+# muted = "#6c7086"    # disabled text (Catppuccin overlay0)
+# normal = "#cdd6f4"   # standard text (Catppuccin text)
+# info = "#94e2d5"     # info text (Catppuccin teal)
+#
+# You can also use a preset and override specific colors:
+# [theme]
+# name = "nord"
+# accent = "#ff79c6"   # override just the accent color
 `
 
 // defaultConfig is the full default config template with worktree_dir commented out

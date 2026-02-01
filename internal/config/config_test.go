@@ -328,3 +328,110 @@ func TestDefaultConfigWithDirSpecialChars(t *testing.T) {
 		})
 	}
 }
+
+func TestIsValidThemeName(t *testing.T) {
+	tests := []struct {
+		name  string
+		valid bool
+	}{
+		{"default", true},
+		{"dracula", true},
+		{"nord", true},
+		{"gruvbox", true},
+		{"catppuccin-frappe", true},
+		{"catppuccin-mocha", true},
+		{"invalid", false},
+		{"", false},
+		{"DRACULA", false}, // case-sensitive
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isValidThemeName(tt.name)
+			if result != tt.valid {
+				t.Errorf("isValidThemeName(%q) = %v, want %v", tt.name, result, tt.valid)
+			}
+		})
+	}
+}
+
+func TestThemeConfigParsing(t *testing.T) {
+	tests := []struct {
+		name     string
+		toml     string
+		expected ThemeConfig
+	}{
+		{
+			name:     "empty theme",
+			toml:     `worktree_format = "{repo}-{branch}"`,
+			expected: ThemeConfig{},
+		},
+		{
+			name: "preset only",
+			toml: `[theme]
+name = "dracula"`,
+			expected: ThemeConfig{Name: "dracula"},
+		},
+		{
+			name: "custom colors",
+			toml: `[theme]
+primary = "#ff0000"
+accent = "#00ff00"`,
+			expected: ThemeConfig{Primary: "#ff0000", Accent: "#00ff00"},
+		},
+		{
+			name: "preset with override",
+			toml: `[theme]
+name = "nord"
+accent = "#ff79c6"`,
+			expected: ThemeConfig{Name: "nord", Accent: "#ff79c6"},
+		},
+		{
+			name: "all colors",
+			toml: `[theme]
+primary = "#111111"
+accent = "#222222"
+success = "#333333"
+error = "#444444"
+muted = "#555555"
+normal = "#666666"
+info = "#777777"`,
+			expected: ThemeConfig{
+				Primary: "#111111",
+				Accent:  "#222222",
+				Success: "#333333",
+				Error:   "#444444",
+				Muted:   "#555555",
+				Normal:  "#666666",
+				Info:    "#777777",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var raw rawConfig
+			if _, err := toml.Decode(tt.toml, &raw); err != nil {
+				t.Fatalf("failed to parse TOML: %v", err)
+			}
+			if raw.Theme != tt.expected {
+				t.Errorf("Theme = %+v, want %+v", raw.Theme, tt.expected)
+			}
+		})
+	}
+}
+
+func TestValidThemeNames(t *testing.T) {
+	// Verify ValidThemeNames contains expected presets
+	expected := []string{"default", "dracula", "nord", "gruvbox", "catppuccin-frappe", "catppuccin-mocha"}
+
+	if len(ValidThemeNames) != len(expected) {
+		t.Errorf("len(ValidThemeNames) = %d, want %d", len(ValidThemeNames), len(expected))
+	}
+
+	for i, name := range expected {
+		if ValidThemeNames[i] != name {
+			t.Errorf("ValidThemeNames[%d] = %q, want %q", i, ValidThemeNames[i], name)
+		}
+	}
+}
