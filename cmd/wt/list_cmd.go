@@ -35,26 +35,26 @@ func newListCmd() *cobra.Command {
 		global     bool
 		sortBy     string
 		refresh    bool
-		repository []string
-		labels     []string
 	)
 
 	cmd := &cobra.Command{
-		Use:     "list",
+		Use:     "list [scope...]",
 		Short:   "List worktrees",
 		Aliases: []string{"ls"},
 		GroupID: GroupCore,
-		Args:    cobra.NoArgs,
+		Args:    cobra.ArbitraryArgs,
 		Long: `List worktrees for registered repos.
 
 Inside a repo: shows only that repo's worktrees. Use --global for all.
-Use -r to filter by repo name(s), -l to filter by label(s).
+Use positional args to filter by repo name(s) or label(s).
+Resolution order: repo name → label.
 
 Worktrees are sorted by creation date (most recent first) by default.`,
 		Example: `  wt list                      # List worktrees for current repo
   wt list --global             # List all worktrees (all repos)
-  wt list -r myrepo            # Filter by repository name
-  wt list -l backend           # Filter by label
+  wt list myrepo               # Filter by repository name
+  wt list backend              # Filter by label (if no repo named 'backend')
+  wt list myrepo backend       # Filter by multiple scopes
   wt list --json               # Output as JSON`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -73,8 +73,8 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 				for i := range reg.Repos {
 					repos = append(repos, &reg.Repos[i])
 				}
-			} else if len(repository) > 0 || len(labels) > 0 {
-				repos, err = resolveTargetRepos(ctx, reg, repository, labels)
+			} else if len(args) > 0 {
+				repos, err = resolveScopeArgs(reg, args)
 				if err != nil {
 					return err
 				}
@@ -162,12 +162,9 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "Show all worktrees (not just current repo)")
 	cmd.Flags().StringVarP(&sortBy, "sort", "s", "", "Sort by: created, repo, branch")
 	cmd.Flags().BoolVarP(&refresh, "refresh", "R", false, "Refresh PR status before listing")
-	cmd.Flags().StringSliceVarP(&repository, "repository", "r", nil, "Filter by repository name(s)")
-	cmd.Flags().StringSliceVarP(&labels, "label", "l", nil, "Filter by label(s)")
 
 	// Completions
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
-	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.ValidArgsFunction = completeScopeArgs
 	cmd.RegisterFlagCompletionFunc("sort", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"created", "repo", "branch"}, cobra.ShellCompDirectiveNoFileComp
 	})

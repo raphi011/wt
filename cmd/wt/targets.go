@@ -276,3 +276,30 @@ func resolveScopedRepos(reg *registry.Registry, scope string) ([]*registry.Repo,
 
 	return nil, fmt.Errorf("no repo or label found: %s", scope)
 }
+
+// resolveScopeArgs resolves multiple scope arguments to repos.
+// Each scope is tried as repo name first, then label.
+// Results are deduplicated by path.
+func resolveScopeArgs(reg *registry.Registry, scopes []string) ([]*registry.Repo, error) {
+	var repos []*registry.Repo
+
+	for _, scope := range scopes {
+		resolved, err := resolveScopedRepos(reg, scope)
+		if err != nil {
+			return nil, err
+		}
+		repos = append(repos, resolved...)
+	}
+
+	// Deduplicate by path
+	seen := make(map[string]bool)
+	var unique []*registry.Repo
+	for _, r := range repos {
+		if !seen[r.Path] {
+			seen[r.Path] = true
+			unique = append(unique, r)
+		}
+	}
+
+	return unique, nil
+}

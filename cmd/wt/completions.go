@@ -295,6 +295,33 @@ func completeCdArg(cmd *cobra.Command, args []string, toComplete string) ([]stri
 	return matches, cobra.ShellCompDirectiveNoFileComp
 }
 
+// completeScopeArgs provides completion for scope arguments (repo names + labels).
+// Used by commands like `wt list` where positional args can be repo names or labels.
+func completeScopeArgs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	reg, err := registry.Load()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	var matches []string
+
+	// Repo names
+	for _, name := range reg.AllRepoNames() {
+		if strings.HasPrefix(name, toComplete) {
+			matches = append(matches, name)
+		}
+	}
+
+	// Labels
+	for _, label := range reg.AllLabels() {
+		if strings.HasPrefix(label, toComplete) {
+			matches = append(matches, label)
+		}
+	}
+
+	return matches, cobra.ShellCompDirectiveNoFileComp
+}
+
 // Register completions for checkout command
 func registerCheckoutCompletions(cmd *cobra.Command) {
 	// Branch argument completion for --base flag
