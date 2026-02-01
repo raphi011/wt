@@ -212,6 +212,14 @@ func getGitBranch(t *testing.T, path string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// runGitCommand runs a git command in the given directory and returns the output
+func runGitCommand(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
 // setupBareRepo creates a bare git repository
 func setupBareRepo(t *testing.T, dir, name string) string {
 	t.Helper()
