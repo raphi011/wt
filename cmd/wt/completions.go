@@ -210,6 +210,79 @@ func completeWorktrees(cmd *cobra.Command, args []string, toComplete string) ([]
 	return matches, cobra.ShellCompDirectiveNoFileComp
 }
 
+// completeCdArg provides completion for `wt cd [repo:]branch`
+// Inside a repo: shows branches from current repo (no prefix) + repo:branch for others
+// Outside a repo or with repo prefix: shows repo:branch combinations
+func completeCdArg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	ctx := context.Background()
+
+	// Check if user is typing repo:branch format
+	if idx := strings.Index(toComplete, ":"); idx >= 0 {
+		// User is typing "repo:branch" - complete branch within specified repo
+		repoName := toComplete[:idx]
+		branchPrefix := toComplete[idx+1:]
+
+		reg, err := registry.Load()
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		repo, err := reg.FindByName(repoName)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		var matches []string
+		for _, wt := range worktrees {
+			if strings.HasPrefix(wt.Branch, branchPrefix) {
+				matches = append(matches, repoName+":"+wt.Branch)
+			}
+		}
+		return matches, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	var matches []string
+
+	// Check if we're inside a git repo
+	currentRepoPath := git.GetCurrentRepoMainPath(ctx)
+
+	if currentRepoPath != "" {
+		// Inside a repo - show branches from current repo first (no prefix)
+		worktrees, err := git.ListWorktreesFromRepo(ctx, currentRepoPath)
+		if err == nil {
+			for _, wt := range worktrees {
+				if strings.HasPrefix(wt.Branch, toComplete) {
+					matches = append(matches, wt.Branch)
+				}
+			}
+		}
+	}
+
+	// Also offer "repo:" completions for all registered repos
+	reg, err := registry.Load()
+	if err != nil {
+		return matches, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	for _, repo := range reg.Repos {
+		prefix := repo.Name + ":"
+		if strings.HasPrefix(prefix, toComplete) || strings.HasPrefix(toComplete, repo.Name) {
+			matches = append(matches, prefix)
+		}
+	}
+
+	return matches, cobra.ShellCompDirectiveNoFileComp
+}
+
 // Register completions for checkout command
 func registerCheckoutCompletions(cmd *cobra.Command) {
 	// Branch argument completion

@@ -225,11 +225,14 @@ wt exec -r backend-api -r auth-service -- make test
 ### Quick Navigation
 
 ```bash
-# Jump to repo by name
-cd $(wt cd -r backend-api)
+# Jump to most recently accessed worktree
+cd $(wt cd)
 
-# Jump to repo by label (must match exactly one)
-cd $(wt cd -l backend)
+# Jump to worktree by branch name
+cd $(wt cd feature-auth)
+
+# Jump to worktree in specific repo (if branch exists in multiple repos)
+cd $(wt cd backend-api:feature-auth)
 
 # Interactive fuzzy search
 cd $(wt cd -i)
