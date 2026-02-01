@@ -83,7 +83,7 @@ func TestRepoList_ListRepos(t *testing.T) {
 
 // TestRepoList_FilterByLabel tests filtering repos by label.
 //
-// Scenario: User runs `wt repo list -l backend`
+// Scenario: User runs `wt repo list backend`
 // Expected: Shows only repos with the backend label
 func TestRepoList_FilterByLabel(t *testing.T) {
 	// Not parallel - modifies HOME
@@ -112,7 +112,7 @@ func TestRepoList_FilterByLabel(t *testing.T) {
 	ctx := testContext(t)
 	cmd := newRepoListCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"-l", "backend"})
+	cmd.SetArgs([]string{"backend"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("repo list command failed: %v", err)
