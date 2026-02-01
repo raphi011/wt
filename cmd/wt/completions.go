@@ -327,35 +327,13 @@ func completePrCheckoutArgs(cmd *cobra.Command, args []string, toComplete string
 // completeLabelAddArgs provides completion for `wt label add/remove <label> [scope...]`.
 // First arg: label names. Subsequent args: scope args (repo names + labels).
 func completeLabelAddArgs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	reg, err := registry.Load()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
 	// First arg is the label
 	if len(args) == 0 {
-		var matches []string
-		for _, label := range reg.AllLabels() {
-			if strings.HasPrefix(label, toComplete) {
-				matches = append(matches, label)
-			}
-		}
-		return matches, cobra.ShellCompDirectiveNoFileComp
+		return completeLabels(cmd, args, toComplete)
 	}
 
 	// Subsequent args are scopes
-	var matches []string
-	for _, name := range reg.AllRepoNames() {
-		if strings.HasPrefix(name, toComplete) {
-			matches = append(matches, name)
-		}
-	}
-	for _, label := range reg.AllLabels() {
-		if strings.HasPrefix(label, toComplete) {
-			matches = append(matches, label)
-		}
-	}
-	return matches, cobra.ShellCompDirectiveNoFileComp
+	return completeScopeArgs(cmd, args, toComplete)
 }
 
 // completeScopeArgs provides completion for scope arguments (repo names + labels).

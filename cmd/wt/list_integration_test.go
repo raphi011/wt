@@ -176,6 +176,7 @@ func TestList_ByRepoName(t *testing.T) {
 // Scenario: User runs `wt list backend` where backend is a label
 // Expected: Shows worktrees for repos with that label
 func TestList_ByLabel(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
@@ -230,6 +231,7 @@ func TestList_ByLabel(t *testing.T) {
 // Scenario: User runs `wt list repo1 backend`
 // Expected: Shows combined worktrees from repo1 and repos with backend label
 func TestList_MultipleScopes(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
@@ -292,6 +294,7 @@ func TestList_MultipleScopes(t *testing.T) {
 // Scenario: User runs `wt list nonexistent`
 // Expected: Returns error indicating no repo or label found
 func TestList_ScopeNotFound(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 

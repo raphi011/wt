@@ -119,6 +119,47 @@ func TestRepoList_FilterByLabel(t *testing.T) {
 	}
 }
 
+// TestRepoList_LabelNotFound tests error when filtering by nonexistent label.
+//
+// Scenario: User runs `wt repo list nonexistent`
+// Expected: Returns error about no repos found with label
+func TestRepoList_LabelNotFound(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	// Create registry with repos that don't have the searched label
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: "/tmp/repo1", Labels: []string{"backend"}},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	ctx := testContext(t)
+	cmd := newRepoListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"nonexistent"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for nonexistent label, got nil")
+	}
+	if !strings.Contains(err.Error(), "no repos found with label") {
+		t.Errorf("expected error about no repos found with label, got %q", err.Error())
+	}
+}
+
 // TestRepoList_JSON tests JSON output.
 //
 // Scenario: User runs `wt repo list --json`

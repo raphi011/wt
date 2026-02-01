@@ -63,9 +63,7 @@ Use positional args to filter by label(s).`,
   wt repo list backend          # Filter by label
   wt repo list backend frontend # Filter by multiple labels
   wt repo list --json           # Output as JSON`,
-		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			return completeLabels(cmd, args, toComplete)
-		},
+		ValidArgsFunction: completeLabels,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out := output.FromContext(cmd.Context())
 
@@ -124,6 +122,9 @@ Use positional args to filter by label(s).`,
 
 			// Table output
 			if len(repos) == 0 {
+				if len(args) > 0 {
+					return fmt.Errorf("no repos found with label(s): %s", strings.Join(args, ", "))
+				}
 				fmt.Println("No repos registered. Use 'wt repo add <path>' to register a repo.")
 				return nil
 			}
