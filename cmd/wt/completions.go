@@ -10,50 +10,52 @@ import (
 	"github.com/raphi011/wt/internal/registry"
 )
 
+// repoPathFromArgs extracts the repo path from positional args.
+// It checks for:
+// 1. A scoped target (repo:branch) pattern - extracts repo name before colon
+// 2. A bare repo name that matches a registered repo
+// Falls back to current directory if neither is found.
+func repoPathFromArgs(ctx context.Context, args []string) string {
+	reg, err := registry.Load()
+	if err != nil {
+		return git.GetCurrentRepoMainPath(ctx)
+	}
+
+	for _, arg := range args {
+		// Check for scope:branch pattern
+		if idx := strings.Index(arg, ":"); idx >= 0 {
+			repoName := arg[:idx]
+			if repo, err := reg.FindByName(repoName); err == nil {
+				return repo.Path
+			}
+		}
+
+		// Check if arg is a bare repo name
+		if repo, err := reg.FindByName(arg); err == nil {
+			return repo.Path
+		}
+	}
+
+	// Fall back to current directory
+	return git.GetCurrentRepoMainPath(ctx)
+}
+
 // completeBranches provides branch name completion.
-// It checks for a scoped target (repo:branch) in args and uses that repo's branches,
+// It checks args for a repo reference (scope:branch or bare repo name),
 // otherwise uses current directory.
 func completeBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	ctx := context.Background()
 
-	// Check if any positional arg contains a scope prefix (repo:branch)
-	var repoName string
-	for _, arg := range args {
-		if idx := strings.Index(arg, ":"); idx >= 0 {
-			repoName = arg[:idx]
-			break
-		}
+	repoPath := repoPathFromArgs(ctx, args)
+	if repoPath == "" {
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	var repoPath string
-
-	if repoName != "" {
-		// Load registry and find repo by name
-		reg, err := registry.Load()
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		repo, err := reg.FindByName(repoName)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		repoPath = repo.Path
-	} else {
-		// Use current directory
-		repoPath = git.GetCurrentRepoMainPath(ctx)
-		if repoPath == "" {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-	}
-
-	// Get branches from the repo
 	branches, err := git.ListLocalBranches(ctx, repoPath)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	// Filter by prefix
 	var matches []string
 	for _, b := range branches {
 		if strings.HasPrefix(b, toComplete) {
@@ -65,39 +67,14 @@ func completeBranches(cmd *cobra.Command, args []string, toComplete string) ([]s
 }
 
 // completeRemoteBranches provides remote branch name completion.
-// It checks for a scoped target (repo:branch) in args and uses that repo's branches,
+// It checks args for a repo reference (scope:branch or bare repo name),
 // otherwise uses current directory.
 func completeRemoteBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	ctx := context.Background()
 
-	// Check if any positional arg contains a scope prefix (repo:branch)
-	var repoName string
-	for _, arg := range args {
-		if idx := strings.Index(arg, ":"); idx >= 0 {
-			repoName = arg[:idx]
-			break
-		}
-	}
-
-	var repoPath string
-
-	if repoName != "" {
-		// Load registry and find repo by name
-		reg, err := registry.Load()
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		repo, err := reg.FindByName(repoName)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		repoPath = repo.Path
-	} else {
-		repoPath = git.GetCurrentRepoMainPath(ctx)
-		if repoPath == "" {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
+	repoPath := repoPathFromArgs(ctx, args)
+	if repoPath == "" {
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
 	branches, err := git.ListRemoteBranches(ctx, repoPath)
