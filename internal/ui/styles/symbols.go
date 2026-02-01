@@ -18,10 +18,10 @@ var defaultSymbols = Symbols{
 
 // Nerd font symbols
 var nerdfontSymbols = Symbols{
-	PRMerged: "", // nf-oct-git_merge
-	PROpen:   "", // nf-oct-git_pull_request
-	PRClosed: "", // nf-oct-git_pull_request_closed
-	PRDraft:  "", // nf-oct-git_pull_request_draft
+	PRMerged: "\ueafe", // nf-oct-git_merge
+	PROpen:   "\uea64", // nf-oct-git_pull_request
+	PRClosed: "\uebda", // nf-oct-git_pull_request_closed
+	PRDraft:  "\uebdb", // nf-oct-git_pull_request_draft
 }
 
 // useNerdfont tracks whether nerd font symbols are enabled

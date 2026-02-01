@@ -35,7 +35,7 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 		return CdOptions{Cancelled: true}, nil
 	}
 
-	w := framework.NewWizard("cd")
+	w := framework.NewWizard("Change Directory to Worktree")
 
 	// Build options from worktrees
 	options := make([]framework.Option, len(params.Worktrees))
