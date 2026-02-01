@@ -1,45 +1,23 @@
-
 # Test Documentation
 
-Generated: 2026-01-31
+Generated: 2026-02-01
 
 ## Summary
 
 | Command | Tests |
 |---------|-------|
-| [add](#add) | 6 |
-| [clone](#clone) | 6 |
 | [forge](#forge) | 6 |
 | [hook](#hook) | 4 |
-| [remove](#remove) | 2 |
+| [repoadd](#repoadd) | 6 |
+| [repoclone](#repoclone) | 5 |
+| [repolist](#repolist) | 4 |
+| [repomakebare](#repomakebare) | 13 |
+| [reporemove](#reporemove) | 2 |
 | [wt checkout](#wt-checkout) | 6 |
 | [wt label](#wt-label) | 4 |
 | [wt list](#wt-list) | 4 |
 | [wt prune](#wt-prune) | 4 |
-| [wt repo](#wt-repo) | 4 |
-| **Total** | **46** |
-
-## add
-
-| Test | Description |
-|------|-------------|
-| `TestAdd_RegisterRepo` | Tests registering an existing git repo. |
-| `TestAdd_WithLabels` | Tests registering a repo with labels. |
-| `TestAdd_DuplicatePath` | Tests that adding the same path twice fails. |
-| `TestAdd_NotAGitRepo` | Tests that adding a non-git directory fails. |
-| `TestAdd_MultiplePaths` | Tests adding multiple repos at once. |
-| `TestAdd_SkipsNonGitDirs` | Tests that non-git directories are skipped. |
-
-## clone
-
-| Test | Description |
-|------|-------------|
-| `TestClone_RegularRepo` | Tests cloning a regular repository. |
-| `TestClone_BareRepo` | Tests cloning a bare repository. |
-| `TestClone_WithLabels` | Tests cloning with labels. |
-| `TestClone_WithCustomName` | Tests cloning with a custom display name. |
-| `TestClone_DestinationExists` | Tests that cloning to an existing path fails. |
-| `TestClone_AutoName` | Tests cloning without destination extracts name from URL. |
+| **Total** | **58** |
 
 ## forge
 
@@ -61,12 +39,60 @@ Generated: 2026-01-31
 | `TestHook_DryRun` | Tests dry-run mode. |
 | `TestHook_WithEnvVar` | Tests hook with environment variable. |
 
-## remove
+## repoadd
 
 | Test | Description |
 |------|-------------|
-| `TestRemove_UnregisterRepo` | Tests unregistering a repo. |
-| `TestRemove_NonExistent` | Tests removing a non-existent repo. |
+| `TestRepoAdd_RegisterRepo` | Tests registering an existing git repo. |
+| `TestRepoAdd_WithLabels` | Tests registering a repo with labels. |
+| `TestRepoAdd_DuplicatePath` | Tests that adding the same path twice fails. |
+| `TestRepoAdd_NotAGitRepo` | Tests that adding a non-git directory fails. |
+| `TestRepoAdd_MultiplePaths` | Tests adding multiple repos at once. |
+| `TestRepoAdd_SkipsNonGitDirs` | Tests that non-git directories are skipped. |
+
+## repoclone
+
+| Test | Description |
+|------|-------------|
+| `TestRepoClone_BareRepo` | Tests cloning a repository as bare (default behavior). |
+| `TestRepoClone_WithLabels` | Tests cloning with labels. |
+| `TestRepoClone_WithCustomName` | Tests cloning with a custom display name. |
+| `TestRepoClone_DestinationExists` | Tests that cloning to an existing path fails. |
+| `TestRepoClone_AutoName` | Tests cloning without destination extracts name from URL. |
+
+## repolist
+
+| Test | Description |
+|------|-------------|
+| `TestRepoList_ListEmpty` | Tests listing repos when none are registered. |
+| `TestRepoList_ListRepos` | Tests listing registered repos. |
+| `TestRepoList_FilterByLabel` | Tests filtering repos by label. |
+| `TestRepoList_JSON` | Tests JSON output. |
+
+## repomakebare
+
+| Test | Description |
+|------|-------------|
+| `TestRepoMakeBare_BasicMigration` | Tests basic migration from regular repo to bare-in-.git. |
+| `TestRepoMakeBare_WithCustomName` | Tests migration with custom display name. |
+| `TestRepoMakeBare_WithLabels` | Tests migration with labels. |
+| `TestRepoMakeBare_WithWorktreeFormat` | Tests migration with worktree format. |
+| `TestRepoMakeBare_DryRun` | Tests dry run mode. |
+| `TestRepoMakeBare_WithExistingWorktrees` | Tests migration with existing worktrees. |
+| `TestRepoMakeBare_IsWorktree` | Tests error when path is a worktree. |
+| `TestRepoMakeBare_AlreadyBare` | Tests error when repo is already bare-in-.git. |
+| `TestRepoMakeBare_NotGitRepo` | Tests error when path is not a git repo. |
+| `TestRepoMakeBare_HasSubmodules` | Tests error when repo has submodules. |
+| `TestRepoMakeBare_AlreadyRegistered` | Tests migration of already registered repo. |
+| `TestRepoMakeBare_NameConflict` | Tests error when name conflicts with existing repo. |
+| `TestRepoMakeBare_ByPath` | Tests migration when providing explicit path argument. |
+
+## reporemove
+
+| Test | Description |
+|------|-------------|
+| `TestRepoRemove_UnregisterRepo` | Tests unregistering a repo. |
+| `TestRepoRemove_NonExistent` | Tests removing a non-existent repo. |
 
 ## wt checkout
 
@@ -105,13 +131,4 @@ Generated: 2026-01-31
 | `TestPrune_WithWorktree` | Tests pruning a worktree. |
 | `TestPrune_DryRun` | Tests dry-run mode. |
 | `TestPrune_ByRepoName` | Tests pruning in a specific repo. |
-
-## wt repo
-
-| Test | Description |
-|------|-------------|
-| `TestRepoList_ListEmpty` | Tests listing repos when none are registered. |
-| `TestRepoList_ListRepos` | Tests listing registered repos. |
-| `TestRepoList_FilterByLabel` | Tests filtering repos by label. |
-| `TestRepoList_JSON` | Tests JSON output. |
 

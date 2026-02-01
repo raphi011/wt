@@ -31,7 +31,7 @@ Use subcommands to list, add, clone, or remove repositories from the registry.`,
   wt repo add ~/work/my-project # Register a repo
   wt repo clone <url>           # Clone and register a repo
   wt repo remove my-project     # Unregister a repo
-  wt repo mv ./myrepo           # Migrate to bare structure`,
+  wt repo make-bare ./myrepo    # Migrate to bare structure`,
 	}
 
 	// Add subcommands
@@ -39,7 +39,7 @@ Use subcommands to list, add, clone, or remove repositories from the registry.`,
 	cmd.AddCommand(newRepoAddCmd())
 	cmd.AddCommand(newRepoCloneCmd())
 	cmd.AddCommand(newRepoRemoveCmd())
-	cmd.AddCommand(newRepoMvCmd())
+	cmd.AddCommand(newRepoMakeBareCmd())
 
 	return cmd
 }
@@ -483,7 +483,7 @@ func extractRepoNameFromURL(url string) string {
 	return parts[len(parts)-1]
 }
 
-func newRepoMvCmd() *cobra.Command {
+func newRepoMakeBareCmd() *cobra.Command {
 	var (
 		name           string
 		labels         []string
@@ -492,11 +492,10 @@ func newRepoMvCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:     "mv [path]",
-		Short:   "Migrate a regular repo to bare-in-.git structure",
-		Aliases: []string{"migrate"},
-		Args:    cobra.MaximumNArgs(1),
-		Long: `Migrate an existing normal git repository into the bare repo structure used by 'wt repo clone'.
+		Use:   "make-bare [path]",
+		Short: "Convert a regular repo to bare-in-.git structure",
+		Args:  cobra.MaximumNArgs(1),
+		Long: `Convert an existing normal git repository into the bare repo structure used by 'wt repo clone'.
 
 Before migration:
   myrepo/
@@ -518,12 +517,12 @@ The migration:
 - Converts the .git directory to a bare repository
 - Moves all working tree files into a subdirectory named after the current branch
 - Updates any existing worktrees to work with the new structure
-- Registers the repository in the wt registry`,
-		Example: `  wt repo mv                  # Migrate repo in current directory
-  wt repo mv ./myrepo         # Migrate repo at path
-  wt repo mv -n myapp         # Migrate with custom display name
-  wt repo mv -l backend       # Migrate with labels
-  wt repo mv --dry-run        # Preview migration without making changes`,
+- Registers the repository in the wt registry (if not already registered)`,
+		Example: `  wt repo make-bare                  # Migrate repo in current directory
+  wt repo make-bare ./myrepo         # Migrate repo at path
+  wt repo make-bare -n myapp         # Migrate with custom display name
+  wt repo make-bare -l backend       # Migrate with labels
+  wt repo make-bare --dry-run        # Preview migration without making changes`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
@@ -561,13 +560,16 @@ The migration:
 				return fmt.Errorf("load registry: %w", err)
 			}
 
+			alreadyRegistered := false
 			if _, err := reg.FindByPath(absPath); err == nil {
-				return fmt.Errorf("repo already registered: %s", absPath)
+				alreadyRegistered = true
 			}
 
-			// Check for name conflicts
-			if _, err := reg.FindByName(repoName); err == nil {
-				return fmt.Errorf("repo name already exists: %s", repoName)
+			// Check for name conflicts (only if not already registered)
+			if !alreadyRegistered {
+				if _, err := reg.FindByName(repoName); err == nil {
+					return fmt.Errorf("repo name already exists: %s", repoName)
+				}
 			}
 
 			// Show migration plan
@@ -607,25 +609,31 @@ The migration:
 				return fmt.Errorf("migration failed: %w", err)
 			}
 
-			// Register the repo
-			repo := registry.Repo{
-				Path:           absPath,
-				Name:           repoName,
-				WorktreeFormat: worktreeFormat,
-				Labels:         labels,
-			}
+			// Register the repo (skip if already registered)
+			if !alreadyRegistered {
+				repo := registry.Repo{
+					Path:           absPath,
+					Name:           repoName,
+					WorktreeFormat: worktreeFormat,
+					Labels:         labels,
+				}
 
-			if err := reg.Add(repo); err != nil {
-				return fmt.Errorf("register repo: %w", err)
-			}
+				if err := reg.Add(repo); err != nil {
+					return fmt.Errorf("register repo: %w", err)
+				}
 
-			if err := reg.Save(); err != nil {
-				return fmt.Errorf("save registry: %w", err)
+				if err := reg.Save(); err != nil {
+					return fmt.Errorf("save registry: %w", err)
+				}
 			}
 
 			out.Printf("Migration complete!\n")
 			out.Printf("  Main worktree: %s\n", result.MainWorktreePath)
-			out.Printf("  Registered as: %s\n", repoName)
+			if alreadyRegistered {
+				out.Printf("  Already registered as: %s\n", repoName)
+			} else {
+				out.Printf("  Registered as: %s\n", repoName)
+			}
 
 			// Verify by listing worktrees
 			worktrees, err := git.ListWorktreesFromRepo(ctx, absPath)
