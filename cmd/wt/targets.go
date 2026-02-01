@@ -277,6 +277,28 @@ func resolveScopedRepos(reg *registry.Registry, scope string) ([]*registry.Repo,
 	return nil, fmt.Errorf("no repo or label found: %s", scope)
 }
 
+// resolveScopeArgsOrCurrent resolves scope arguments, falling back to current repo.
+// If scopes provided: resolves each as repo name → label.
+// If no scopes: uses current repo (errors if not in a registered repo).
+func resolveScopeArgsOrCurrent(ctx context.Context, reg *registry.Registry, scopes []string) ([]*registry.Repo, error) {
+	if len(scopes) > 0 {
+		return resolveScopeArgs(reg, scopes)
+	}
+
+	// Fall back to current repo
+	repoPath := git.GetCurrentRepoMainPath(ctx)
+	if repoPath == "" {
+		return nil, fmt.Errorf("not in a git repository (specify repo or label)")
+	}
+
+	repo, err := reg.FindByPath(repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("repo not registered: %s", repoPath)
+	}
+
+	return []*registry.Repo{repo}, nil
+}
+
 // resolveScopeArgs resolves multiple scope arguments to repos.
 // Each scope is tried as repo name first, then label.
 // Results are deduplicated by path.

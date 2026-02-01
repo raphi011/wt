@@ -13,7 +13,7 @@ import (
 
 // TestLabel_Add tests adding a label to a repo.
 //
-// Scenario: User runs `wt label add backend -r myrepo`
+// Scenario: User runs `wt label add backend myrepo`
 // Expected: Label is added to the repo
 func TestLabel_Add(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -44,7 +44,7 @@ func TestLabel_Add(t *testing.T) {
 	ctx := testContext(t)
 	cmd := newLabelCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"add", "backend", "-r", "myrepo"})
+	cmd.SetArgs([]string{"add", "backend", "myrepo"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("label add command failed: %v", err)
@@ -76,7 +76,7 @@ func TestLabel_Add(t *testing.T) {
 
 // TestLabel_Remove tests removing a label from a repo.
 //
-// Scenario: User runs `wt label remove backend -r myrepo`
+// Scenario: User runs `wt label remove backend myrepo`
 // Expected: Label is removed from the repo
 func TestLabel_Remove(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -107,7 +107,7 @@ func TestLabel_Remove(t *testing.T) {
 	ctx := testContext(t)
 	cmd := newLabelCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"remove", "backend", "-r", "myrepo"})
+	cmd.SetArgs([]string{"remove", "backend", "myrepo"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("label remove command failed: %v", err)
@@ -144,7 +144,7 @@ func TestLabel_Remove(t *testing.T) {
 
 // TestLabel_List tests listing labels for a repo.
 //
-// Scenario: User runs `wt label list -r myrepo`
+// Scenario: User runs `wt label list myrepo`
 // Expected: Labels are listed
 func TestLabel_List(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -175,7 +175,7 @@ func TestLabel_List(t *testing.T) {
 	ctx, out := testContextWithOutput(t)
 	cmd := newLabelCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"list", "-r", "myrepo"})
+	cmd.SetArgs([]string{"list", "myrepo"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("label list command failed: %v", err)
@@ -189,7 +189,7 @@ func TestLabel_List(t *testing.T) {
 
 // TestLabel_Clear tests clearing all labels from a repo.
 //
-// Scenario: User runs `wt label clear -r myrepo`
+// Scenario: User runs `wt label clear myrepo`
 // Expected: All labels are removed
 func TestLabel_Clear(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -220,7 +220,7 @@ func TestLabel_Clear(t *testing.T) {
 	ctx := testContext(t)
 	cmd := newLabelCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"clear", "-r", "myrepo"})
+	cmd.SetArgs([]string{"clear", "myrepo"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("label clear command failed: %v", err)
