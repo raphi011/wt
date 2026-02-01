@@ -75,10 +75,10 @@ func (s *SingleSelectStep) View() string {
 
 	for i, opt := range s.options {
 		cursor := "  "
-		style := framework.OptionNormalStyle
+		style := framework.OptionNormalStyle()
 
 		if opt.Disabled {
-			style = framework.OptionDisabledStyle
+			style = framework.OptionDisabledStyle()
 			label := opt.Label
 			if opt.Description != "" {
 				label += " (" + opt.Description + ")"
@@ -89,12 +89,12 @@ func (s *SingleSelectStep) View() string {
 
 		if i == s.cursor {
 			cursor = "> "
-			style = framework.OptionSelectedStyle
+			style = framework.OptionSelectedStyle()
 		}
 
 		b.WriteString(cursor + style.Render(opt.Label) + "\n")
 		if opt.Description != "" {
-			b.WriteString("    " + framework.OptionDescriptionStyle.Render(opt.Description) + "\n")
+			b.WriteString("    " + framework.OptionDescriptionStyle().Render(opt.Description) + "\n")
 		}
 	}
 
@@ -223,16 +223,16 @@ func (s *SingleSelectStep) RenderWithScroll(maxVisible int) string {
 	end := min(start+maxVisible, len(s.options))
 
 	if start > 0 {
-		b.WriteString(framework.OptionNormalStyle.Render("  ↑ more above") + "\n")
+		b.WriteString(framework.OptionNormalStyle().Render("  ↑ more above") + "\n")
 	}
 
 	for i := start; i < end; i++ {
 		opt := s.options[i]
 		cursor := "  "
-		style := framework.OptionNormalStyle
+		style := framework.OptionNormalStyle()
 
 		if opt.Disabled {
-			style = framework.OptionDisabledStyle
+			style = framework.OptionDisabledStyle()
 			label := opt.Label
 			if opt.Description != "" {
 				label += " (" + opt.Description + ")"
@@ -243,21 +243,21 @@ func (s *SingleSelectStep) RenderWithScroll(maxVisible int) string {
 
 		if i == s.cursor {
 			cursor = "> "
-			style = framework.OptionSelectedStyle
+			style = framework.OptionSelectedStyle()
 		}
 
 		b.WriteString(cursor + style.Render(opt.Label) + "\n")
 		if opt.Description != "" {
-			b.WriteString("    " + framework.OptionDescriptionStyle.Render(opt.Description) + "\n")
+			b.WriteString("    " + framework.OptionDescriptionStyle().Render(opt.Description) + "\n")
 		}
 	}
 
 	if end < len(s.options) {
-		b.WriteString(framework.OptionNormalStyle.Render("  ↓ more below") + "\n")
+		b.WriteString(framework.OptionNormalStyle().Render("  ↓ more below") + "\n")
 	}
 
 	if len(s.options) == 0 {
-		b.WriteString(framework.OptionNormalStyle.Render("  No options available") + "\n")
+		b.WriteString(framework.OptionNormalStyle().Render("  No options available") + "\n")
 	}
 
 	return b.String()

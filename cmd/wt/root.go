@@ -13,6 +13,7 @@ import (
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
+	"github.com/raphi011/wt/internal/ui/styles"
 )
 
 var (
@@ -70,6 +71,9 @@ func Execute() {
 		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 	}
 	cfg = &loadedCfg
+
+	// Initialize theme from config
+	styles.Init(cfg.Theme)
 
 	// Get working directory
 	workDir, err = os.Getwd()

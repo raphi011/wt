@@ -257,13 +257,13 @@ func (w *Wizard) View() string {
 	var b strings.Builder
 
 	// Title
-	b.WriteString(TitleStyle.Render(w.title + " Wizard"))
+	b.WriteString(TitleStyle().Render(w.title + " Wizard"))
 	b.WriteString("\n\n")
 
 	// Info line
 	if w.infoLine != nil {
 		if info := w.infoLine(w); info != "" {
-			b.WriteString(InfoStyle.Render(info))
+			b.WriteString(InfoStyle().Render(info))
 			b.WriteString("\n\n")
 		}
 	}
@@ -282,12 +282,12 @@ func (w *Wizard) View() string {
 
 	// Help text
 	if w.currentStep >= len(w.steps) {
-		b.WriteString(HelpStyle.Render("← back • enter confirm • esc cancel"))
+		b.WriteString(HelpStyle().Render("← back • enter confirm • esc cancel"))
 	} else {
-		b.WriteString(HelpStyle.Render(w.steps[w.currentStep].Help()))
+		b.WriteString(HelpStyle().Render(w.steps[w.currentStep].Help()))
 	}
 
-	return BorderStyle.Render(b.String())
+	return BorderStyle().Render(b.String())
 }
 
 func (w *Wizard) handleSummaryInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -323,15 +323,15 @@ func (w *Wizard) renderStepTabs() string {
 		var tabText string
 		if isActive && isConfirmed {
 			// Current step that's also confirmed (went back to edit)
-			checkmark := StepCheckStyle.Render("✓ ")
-			tabText = checkmark + StepActiveStyle.Render(label)
+			checkmark := StepCheckStyle().Render("✓ ")
+			tabText = checkmark + StepActiveStyle().Render(label)
 		} else if isActive {
-			tabText = "  " + StepActiveStyle.Render(label)
+			tabText = "  " + StepActiveStyle().Render(label)
 		} else if isConfirmed {
-			checkmark := StepCheckStyle.Render("✓ ")
-			tabText = checkmark + StepCompletedStyle.Render(label)
+			checkmark := StepCheckStyle().Render("✓ ")
+			tabText = checkmark + StepCompletedStyle().Render(label)
 		} else {
-			tabText = "  " + StepInactiveStyle.Render(label)
+			tabText = "  " + StepInactiveStyle().Render(label)
 		}
 
 		tabs = append(tabs, tabText)
@@ -342,13 +342,13 @@ func (w *Wizard) renderStepTabs() string {
 		summaryLabel := fmt.Sprintf("%d. Summary", displayNum)
 		isSummaryActive := w.currentStep >= len(w.steps)
 		if isSummaryActive {
-			tabs = append(tabs, "  "+StepActiveStyle.Render(summaryLabel))
+			tabs = append(tabs, "  "+StepActiveStyle().Render(summaryLabel))
 		} else {
-			tabs = append(tabs, "  "+StepInactiveStyle.Render(summaryLabel))
+			tabs = append(tabs, "  "+StepInactiveStyle().Render(summaryLabel))
 		}
 	}
 
-	return strings.Join(tabs, StepArrowStyle.Render(" → "))
+	return strings.Join(tabs, StepArrowStyle().Render(" → "))
 }
 
 func (w *Wizard) renderSummary() string {
@@ -366,11 +366,11 @@ func (w *Wizard) renderSummary() string {
 			continue
 		}
 
-		b.WriteString(SummaryLabelStyle.Render("  "+step.Title()+": ") +
-			SummaryValueStyle.Render(v.Label) + "\n")
+		b.WriteString(SummaryLabelStyle().Render("  "+step.Title()+": ") +
+			SummaryValueStyle().Render(v.Label) + "\n")
 	}
 
-	b.WriteString("\n" + OptionNormalStyle.Render("Press enter to confirm, ← to go back"))
+	b.WriteString("\n" + OptionNormalStyle().Render("Press enter to confirm, ← to go back"))
 	return b.String()
 }
 

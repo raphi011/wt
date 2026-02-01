@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/raphi011/wt/internal/ui/styles"
 )
 
 // SelectResult holds the result of a selection prompt.
@@ -82,7 +83,7 @@ func Select(prompt string, options []string) (SelectResult, error) {
 
 	// Style the selected item
 	selectedStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("170")).
+		Foreground(styles.Accent).
 		Bold(true)
 	delegate.Styles.SelectedTitle = selectedStyle
 
