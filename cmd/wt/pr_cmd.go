@@ -25,7 +25,8 @@ func newPrCmd() *cobra.Command {
 		GroupID: GroupPR,
 		Long:    `Work with pull requests.`,
 		Example: `  wt pr checkout 123                # Checkout PR from current repo
-  wt pr checkout 123 org/repo       # Clone repo and checkout PR
+  wt pr checkout myrepo 123         # Checkout PR from local repo
+  wt pr checkout org/repo 123       # Clone repo and checkout PR
   wt pr create --title "Add feature"
   wt pr merge
   wt pr view`,
@@ -41,40 +42,48 @@ func newPrCmd() *cobra.Command {
 
 func newPrCheckoutCmd() *cobra.Command {
 	var (
-		repository string
-		forgeName  string
-		note       string
-		hookNames  []string
-		noHook     bool
-		env        []string
+		forgeName string
+		note      string
+		hookNames []string
+		noHook    bool
+		env       []string
 	)
 
 	cmd := &cobra.Command{
-		Use:     "checkout <number> [org/repo]",
+		Use:     "checkout [repo] <number>",
 		Short:   "Checkout PR (clones if needed)",
 		Aliases: []string{"co"},
 		Args:    cobra.RangeArgs(1, 2),
-		Long:    `Checkout a PR, cloning the repo as a bare repo if it doesn't exist locally.`,
+		Long: `Checkout a PR, cloning the repo as a bare repo if it doesn't exist locally.
+
+If repo contains '/', it's treated as org/repo and cloned from GitHub/GitLab.
+Otherwise, it's looked up in the local registry.`,
 		Example: `  wt pr checkout 123               # PR from current repo
-  wt pr checkout 123 -r myrepo     # PR from local repo
-  wt pr checkout 123 org/repo      # Clone repo and checkout PR`,
+  wt pr checkout myrepo 123        # PR from local repo in registry
+  wt pr checkout org/repo 123      # Clone repo and checkout PR`,
+		ValidArgsFunction: completePrCheckoutArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
 
-			// Parse arguments
-
+			// Parse arguments: [repo] <number>
 			var prNumber int
-			var orgRepo string
-			if len(args) >= 1 {
+			var repoArg string
+			if len(args) == 1 {
+				// Just PR number
 				num, err := strconv.Atoi(args[0])
 				if err != nil {
 					return fmt.Errorf("invalid PR number: %s", args[0])
 				}
 				prNumber = num
-			}
-			if len(args) >= 2 {
-				orgRepo = args[1]
+			} else {
+				// repo + PR number
+				repoArg = args[0]
+				num, err := strconv.Atoi(args[1])
+				if err != nil {
+					return fmt.Errorf("invalid PR number: %s", args[1])
+				}
+				prNumber = num
 			}
 
 			// Load registry
@@ -88,17 +97,15 @@ func newPrCheckoutCmd() *cobra.Command {
 			var repoPath string
 			var f forge.Forge
 
-			if orgRepo != "" {
+			if repoArg != "" && strings.Contains(repoArg, "/") {
 				// Clone mode: org/repo format
-				if !strings.Contains(orgRepo, "/") {
-					return fmt.Errorf("clone mode requires org/repo format (e.g., 'org/repo'), got %q", orgRepo)
-				}
+				orgRepo := repoArg
 
 				// Check if already exists in registry
 				parts := strings.Split(orgRepo, "/")
 				repoName := parts[len(parts)-1]
 				if existing, err := reg.FindByName(repoName); err == nil {
-					return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr checkout %d -r %s' instead", repoName, existing.Path, prNumber, repoName)
+					return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr checkout %s %d' instead", repoName, existing.Path, repoName, prNumber)
 				}
 
 				// Get forge
@@ -132,11 +139,11 @@ func newPrCheckoutCmd() *cobra.Command {
 				}
 
 				l.Printf("✓ Cloned and registered: %s\n", repoPath)
-			} else if repository != "" {
-				// Local mode with -r flag
-				repo, err = reg.FindByName(repository)
+			} else if repoArg != "" {
+				// Local mode: look up in registry
+				repo, err = reg.FindByName(repoArg)
 				if err != nil {
-					return fmt.Errorf("repository %q not found", repository)
+					return fmt.Errorf("repository %q not found in registry", repoArg)
 				}
 				repoPath = repo.Path
 			} else {
@@ -226,7 +233,6 @@ func newPrCheckoutCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&repository, "repository", "r", "", "Local repo name")
 	cmd.Flags().StringVar(&forgeName, "forge", "", "Forge type: github or gitlab")
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
 	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
@@ -234,7 +240,6 @@ func newPrCheckoutCmd() *cobra.Command {
 	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable KEY=VALUE")
 
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
 	cmd.RegisterFlagCompletionFunc("forge", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"github", "gitlab"}, cobra.ShellCompDirectiveNoFileComp
