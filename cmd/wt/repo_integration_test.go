@@ -743,6 +743,105 @@ func TestRepoMakeBare_WithWorktreeFormat(t *testing.T) {
 	}
 }
 
+// TestRepoMakeBare_WithSiblingFormat tests migration with sibling worktree format.
+//
+// Scenario: User runs `wt repo make-bare -w "../{repo}-{branch}" ./repo`
+// Expected: Main worktree is created as sibling to repo directory
+func TestRepoMakeBare_WithSiblingFormat(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "sibling-format")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd := newRepoMakeBareCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath, "-w", "../{repo}-{branch}"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("make-bare command failed: %v", err)
+	}
+
+	// Verify main worktree is at sibling location
+	mainWorktree := filepath.Join(tmpDir, "sibling-format-main")
+	if _, err := os.Stat(mainWorktree); os.IsNotExist(err) {
+		t.Errorf("main worktree should exist at sibling location: %s", mainWorktree)
+	}
+
+	// Verify we can run git status in the main worktree
+	gitCmd := exec.Command("git", "status")
+	gitCmd.Dir = mainWorktree
+	if out, err := gitCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git status in main worktree failed: %v\n%s", err, out)
+	}
+}
+
+// TestRepoMakeBare_SiblingFormatWithExistingWorktrees tests migration with sibling format and existing worktrees.
+//
+// Scenario: User runs `wt repo make-bare -w "../{repo}-{branch}"` on repo with existing worktrees
+// Expected: Existing worktrees are moved to format-based sibling locations
+func TestRepoMakeBare_SiblingFormatWithExistingWorktrees(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
+
+	// Create an existing worktree inside repo (nested)
+	wtOrigPath := filepath.Join(repoPath, "nested-feature")
+	cmd := exec.Command("git", "worktree", "add", wtOrigPath, "feature")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to create worktree: %v\n%s", err, out)
+	}
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd2 := newRepoMakeBareCmd()
+	cmd2.SetContext(ctx)
+	cmd2.SetArgs([]string{repoPath, "-w", "../{repo}-{branch}"})
+
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("make-bare command failed: %v", err)
+	}
+
+	// Verify main worktree at sibling location
+	mainWorktree := filepath.Join(tmpDir, "myrepo-main")
+	if _, err := os.Stat(mainWorktree); os.IsNotExist(err) {
+		t.Errorf("main worktree should exist at: %s", mainWorktree)
+	}
+
+	// Verify feature worktree moved to sibling location
+	wtNewPath := filepath.Join(tmpDir, "myrepo-feature")
+	wtGitFile := filepath.Join(wtNewPath, ".git")
+	if _, err := os.Stat(wtGitFile); os.IsNotExist(err) {
+		t.Errorf("worktree .git file should exist at %s", wtNewPath)
+	}
+
+	// Verify we can run git status in the moved worktree
+	cmd = exec.Command("git", "status")
+	cmd.Dir = wtNewPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git status in worktree failed: %v\n%s", err, out)
+	}
+}
+
 // TestRepoMakeBare_DryRun tests dry run mode.
 //
 // Scenario: User runs `wt repo make-bare --dry-run ./repo`
@@ -796,7 +895,7 @@ func TestRepoMakeBare_DryRun(t *testing.T) {
 // TestRepoMakeBare_WithExistingWorktrees tests migration with existing worktrees.
 //
 // Scenario: User runs `wt repo make-bare` on repo with existing worktrees
-// Expected: Repo is migrated and existing worktrees are updated
+// Expected: Repo is migrated and existing worktrees are moved to format-based paths
 func TestRepoMakeBare_WithExistingWorktrees(t *testing.T) {
 	// Not parallel - modifies HOME
 
@@ -805,8 +904,8 @@ func TestRepoMakeBare_WithExistingWorktrees(t *testing.T) {
 
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
 
-	// Create an existing worktree with repo prefix (e.g., myrepo-feature)
-	// Migration will strip the prefix, renaming it to just "feature"
+	// Create an existing worktree as sibling (e.g., myrepo-feature)
+	// With default "{branch}" format, migration moves it to myrepo/feature
 	wtOrigPath := filepath.Join(tmpDir, "myrepo-feature")
 	cmd := exec.Command("git", "worktree", "add", wtOrigPath, "feature")
 	cmd.Dir = repoPath
@@ -836,15 +935,15 @@ func TestRepoMakeBare_WithExistingWorktrees(t *testing.T) {
 		t.Error("main worktree should exist")
 	}
 
-	// Migration strips the repo prefix from worktree names
-	// So myrepo-feature becomes just "feature"
-	wtNewPath := filepath.Join(tmpDir, "feature")
+	// With default "{branch}" format, worktree moves to nested location
+	// myrepo-feature → myrepo/feature
+	wtNewPath := filepath.Join(repoPath, "feature")
 	wtGitFile := filepath.Join(wtNewPath, ".git")
 	if _, err := os.Stat(wtGitFile); os.IsNotExist(err) {
 		t.Errorf("worktree .git file should exist at %s", wtNewPath)
 	}
 
-	// Verify we can run git status in the renamed worktree
+	// Verify we can run git status in the moved worktree
 	cmd = exec.Command("git", "status")
 	cmd.Dir = wtNewPath
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -1153,7 +1252,7 @@ func TestRepoMakeBare_ByPath(t *testing.T) {
 // differs from its metadata directory name in .git/worktrees/.
 //
 // Scenario: User has a worktree created with a different folder name than its metadata dir
-// Expected: Migration uses actual metadata name, not folder basename
+// Expected: Migration moves worktree to format-based path regardless of folder name
 func TestRepoMakeBare_WorktreeMetadataNameMismatch(t *testing.T) {
 	// Not parallel - modifies HOME
 
@@ -1208,8 +1307,6 @@ func TestRepoMakeBare_WorktreeMetadataNameMismatch(t *testing.T) {
 	cmd2.SetContext(ctx)
 	cmd2.SetArgs([]string{repoPath})
 
-	// This would fail before the fix with:
-	// "rename worktree metadata: rename .git/worktrees/wt-feature-checkout .git/worktrees/...: no such file or directory"
 	if err := cmd2.Execute(); err != nil {
 		t.Fatalf("make-bare command failed: %v", err)
 	}
@@ -1220,9 +1317,11 @@ func TestRepoMakeBare_WorktreeMetadataNameMismatch(t *testing.T) {
 		t.Error("main worktree should exist")
 	}
 
-	// Verify we can run git status in the worktree
+	// With default "{branch}" format, worktree moves to nested location
+	// wt-feature-checkout → myrepo/feature-checkout
+	wtNewPath := filepath.Join(repoPath, "feature-checkout")
 	cmd = exec.Command("git", "status")
-	cmd.Dir = wtRenamedPath
+	cmd.Dir = wtNewPath
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git status in worktree failed: %v\n%s", err, out)
 	}
@@ -1403,8 +1502,9 @@ func TestRepoMakeBare_PreservesUpstream(t *testing.T) {
 		t.Errorf("expected main upstream to be refs/heads/main, got %s", out)
 	}
 
-	// Feature worktree gets renamed (prefix stripped)
-	featureWorktree := filepath.Join(tmpDir, "feature")
+	// With default "{branch}" format, feature worktree moves to nested location
+	// local-repo-feature → local-repo/feature
+	featureWorktree := filepath.Join(repoPath, "feature")
 	if _, err := os.Stat(featureWorktree); os.IsNotExist(err) {
 		t.Fatal("feature worktree should exist")
 	}
