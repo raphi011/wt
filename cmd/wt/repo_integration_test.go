@@ -1148,3 +1148,82 @@ func TestRepoMakeBare_ByPath(t *testing.T) {
 		t.Errorf("expected name 'path-migrate', got %q", reg.Repos[0].Name)
 	}
 }
+
+// TestRepoMakeBare_WorktreeMetadataNameMismatch tests migration when worktree folder name
+// differs from its metadata directory name in .git/worktrees/.
+//
+// Scenario: User has a worktree created with a different folder name than its metadata dir
+// Expected: Migration uses actual metadata name, not folder basename
+func TestRepoMakeBare_WorktreeMetadataNameMismatch(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature-checkout"})
+
+	// Create worktree with specific metadata name, then rename the folder
+	// This simulates when folder name differs from metadata name
+	wtMetadataName := "feature-checkout"  // what git uses internally
+	wtFolderName := "wt-feature-checkout" // what the folder is actually named
+
+	// First create worktree with the metadata name
+	wtOrigPath := filepath.Join(tmpDir, wtMetadataName)
+	cmd := exec.Command("git", "worktree", "add", wtOrigPath, "feature-checkout")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to create worktree: %v\n%s", err, out)
+	}
+
+	// Now rename the folder to simulate a user renaming their worktree folder
+	wtRenamedPath := filepath.Join(tmpDir, wtFolderName)
+	if err := os.Rename(wtOrigPath, wtRenamedPath); err != nil {
+		t.Fatalf("failed to rename worktree folder: %v", err)
+	}
+
+	// Run git worktree repair to update paths
+	cmd = exec.Command("git", "worktree", "repair", wtRenamedPath)
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to repair worktree: %v\n%s", err, out)
+	}
+
+	// Verify the mismatch: folder is "wt-feature-checkout" but metadata is "feature-checkout"
+	metadataPath := filepath.Join(repoPath, ".git", "worktrees", wtMetadataName)
+	if _, err := os.Stat(metadataPath); os.IsNotExist(err) {
+		t.Fatalf("expected metadata at %s but not found", metadataPath)
+	}
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	if err := os.MkdirAll(regPath, 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	ctx := testContext(t)
+	cmd2 := newRepoMakeBareCmd()
+	cmd2.SetContext(ctx)
+	cmd2.SetArgs([]string{repoPath})
+
+	// This would fail before the fix with:
+	// "rename worktree metadata: rename .git/worktrees/wt-feature-checkout .git/worktrees/...: no such file or directory"
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("make-bare command failed: %v", err)
+	}
+
+	// Verify main worktree was created
+	mainWorktree := filepath.Join(repoPath, "main")
+	if _, err := os.Stat(mainWorktree); os.IsNotExist(err) {
+		t.Error("main worktree should exist")
+	}
+
+	// Verify we can run git status in the worktree
+	cmd = exec.Command("git", "status")
+	cmd.Dir = wtRenamedPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git status in worktree failed: %v\n%s", err, out)
+	}
+}
