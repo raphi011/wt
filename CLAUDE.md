@@ -181,30 +181,16 @@ This allows piping: `cd $(wt cd --number 1)` works because logs go to stderr.
 
 Integration tests are in `cmd/wt/*_integration_test.go` with build tag `//go:build integration`.
 
-**Test Setup** - Tests set the global `cfg` variable and use Cobra's `SetContext`/`SetArgs`:
-```go
-cfg = &config.Config{WorktreeFormat: "../{repo}-{branch}"}
-ctx := testContext(t)
-cmd := newCheckoutCmd()
-cmd.SetContext(ctx)
-cmd.SetArgs([]string{"feature"})
-err := cmd.Execute()
-```
+**When writing or modifying integration tests, use the `integration-test-writer` agent** (`.claude/agents/integration-test-writer.md`) which contains:
+- Complete test template with all required patterns
+- Parallel test safety patterns (registry isolation, workDir isolation)
+- Helper function reference
+- Documentation format requirements
 
-**macOS Symlink Resolution** - On macOS, `t.TempDir()` returns paths like `/var/folders/...` but git commands may return `/private/var/folders/...` (the resolved symlink). Always use `resolvePath(t, t.TempDir())` helper to resolve symlinks before path comparisons. This helper is defined in `integration_test_helpers.go`.
-
-**All integration tests use `t.Parallel()`** for concurrent execution.
-
-**Integration Test Documentation** - All integration test functions MUST have doc comments in this format:
-```go
-// TestCommandName_Scenario describes what the test verifies in one line.
-//
-// Scenario: User runs `wt command args`
-// Expected: Description of expected outcome
-func TestCommandName_Scenario(t *testing.T) {
-```
-
-These doc comments are extracted by `make testdoc` to generate `docs/TESTS.md`. When adding new integration tests, always include the doc comment following this format.
+Key points:
+- All tests MUST use `t.Parallel()` as first statement
+- Never use `os.Setenv("HOME", ...)` or `os.Chdir()` - use `cfg.RegistryPath` and `workDir` instead
+- Always use `resolvePath(t, t.TempDir())` for macOS symlink resolution
 
 ### Commit Messages
 
