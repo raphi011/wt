@@ -225,6 +225,8 @@ type rawConfig struct {
 // Environment variables override config file values:
 // - WT_WORKTREE_DIR overrides worktree_dir
 // - WT_REPO_DIR overrides repo_dir
+// - WT_THEME overrides theme.name
+// - WT_THEME_MODE overrides theme.mode (auto, light, dark)
 func Load() (Config, error) {
 	path, err := configPath()
 	if err != nil {
@@ -367,6 +369,16 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("expand WT_REPO_DIR: %w", err)
 		}
 		cfg.RepoDir = expanded
+	}
+
+	// WT_THEME overrides theme.name
+	if envTheme := os.Getenv("WT_THEME"); envTheme != "" {
+		cfg.Theme.Name = envTheme
+	}
+
+	// WT_THEME_MODE overrides theme.mode
+	if envMode := os.Getenv("WT_THEME_MODE"); envMode != "" {
+		cfg.Theme.Mode = envMode
 	}
 
 	return nil
