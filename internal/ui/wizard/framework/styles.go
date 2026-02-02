@@ -14,8 +14,8 @@ func BorderStyle() lipgloss.Style {
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(styles.Primary).
-		PaddingTop(1).
-		PaddingBottom(1).
+		MarginTop(1).
+		MarginBottom(1).
 		PaddingLeft(2).
 		PaddingRight(2)
 }
