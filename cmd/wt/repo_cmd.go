@@ -548,14 +548,6 @@ The migration:
 				return fmt.Errorf("resolve path: %w", err)
 			}
 
-			l.Debug("validating migration", "path", absPath)
-
-			// Validate and get migration plan
-			plan, err := git.ValidateMigration(ctx, absPath)
-			if err != nil {
-				return err
-			}
-
 			// Determine display name
 			repoName := name
 			if repoName == "" {
@@ -569,7 +561,8 @@ The migration:
 			}
 
 			alreadyRegistered := false
-			if _, err := reg.FindByPath(absPath); err == nil {
+			existingRepo, _ := reg.FindByPath(absPath)
+			if existingRepo != nil {
 				alreadyRegistered = true
 			}
 
@@ -580,20 +573,41 @@ The migration:
 				}
 			}
 
+			// Determine effective worktree format
+			// Priority: flag → existing repo config → default "{branch}" (nested)
+			effectiveFormat := worktreeFormat
+			if effectiveFormat == "" && existingRepo != nil {
+				effectiveFormat = existingRepo.WorktreeFormat
+			}
+			if effectiveFormat == "" {
+				effectiveFormat = "{branch}" // make-bare default: nested within repo
+			}
+
+			l.Debug("validating migration", "path", absPath, "format", effectiveFormat)
+
+			// Validate and get migration plan
+			opts := git.MigrationOptions{
+				WorktreeFormat: effectiveFormat,
+				RepoName:       repoName,
+			}
+			plan, err := git.ValidateMigration(ctx, absPath, opts)
+			if err != nil {
+				return err
+			}
+
 			// Show migration plan
 			out.Printf("Migration plan for: %s\n\n", absPath)
 			out.Printf("  Current branch: %s\n", plan.CurrentBranch)
-			out.Printf("  Main worktree will be at: %s/%s/\n", absPath, plan.CurrentBranch)
+			out.Printf("  Main worktree will be at: %s\n", plan.MainWorktreePath)
+			out.Printf("  Worktree format: %s\n", effectiveFormat)
 
 			if len(plan.WorktreesToFix) > 0 {
 				out.Printf("\n  Existing worktrees:\n")
 				for _, wt := range plan.WorktreesToFix {
 					if wt.NeedsMove {
-						out.Printf("    %s → %s\n", wt.OldName, wt.NewName)
-					} else if wt.IsOutside {
-						out.Printf("    %s (outside repo, links will be updated)\n", wt.OldName)
+						out.Printf("    %s → %s\n", wt.OldPath, wt.NewPath)
 					} else {
-						out.Printf("    %s (links will be updated)\n", wt.OldName)
+						out.Printf("    %s (links will be updated)\n", wt.OldPath)
 					}
 				}
 			}

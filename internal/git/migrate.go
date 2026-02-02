@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/raphi011/wt/internal/worktree"
 )
 
 // getWorktreeMetadataName returns the worktree's metadata directory name
@@ -18,12 +20,19 @@ func getWorktreeMetadataName(ctx context.Context, wtPath string) (string, error)
 	return filepath.Base(strings.TrimSpace(string(gitDir))), nil
 }
 
+// MigrationOptions configures how the migration computes worktree paths
+type MigrationOptions struct {
+	WorktreeFormat string // Format string for worktree paths (e.g., "{branch}", "../{repo}-{branch}")
+	RepoName       string // Repository name for path resolution
+}
+
 // MigrationPlan describes what will be done during migration
 type MigrationPlan struct {
 	RepoPath           string // Original repo path
 	GitDir             string // Current .git directory path
 	CurrentBranch      string // Branch to use for main worktree
 	MainBranchUpstream string // Upstream for the main branch (e.g., "main" for origin/main)
+	MainWorktreePath   string // Computed path for the main worktree
 	WorktreesToFix     []WorktreeMigration
 	HasSubmodules      bool
 }
@@ -46,8 +55,9 @@ type MigrateToBareResult struct {
 	GitDir           string // Path to the .git directory
 }
 
-// ValidateMigration checks if a repo can be migrated and returns the migration plan
-func ValidateMigration(ctx context.Context, repoPath string) (*MigrationPlan, error) {
+// ValidateMigration checks if a repo can be migrated and returns the migration plan.
+// The opts parameter configures how worktree paths are computed.
+func ValidateMigration(ctx context.Context, repoPath string, opts MigrationOptions) (*MigrationPlan, error) {
 	// Resolve to absolute path
 	absPath, err := filepath.Abs(repoPath)
 	if err != nil {
@@ -103,15 +113,17 @@ func ValidateMigration(ctx context.Context, repoPath string) (*MigrationPlan, er
 		return nil, fmt.Errorf("list worktrees: %w", err)
 	}
 
+	// Compute main worktree path using format
+	mainWorktreePath := worktree.ResolvePath(absPath, opts.RepoName, branch, opts.WorktreeFormat)
+
 	plan := &MigrationPlan{
 		RepoPath:           absPath,
 		GitDir:             gitDir,
 		CurrentBranch:      branch,
 		MainBranchUpstream: mainUpstream,
+		MainWorktreePath:   mainWorktreePath,
 		HasSubmodules:      hasSubmodules,
 	}
-
-	repoName := filepath.Base(absPath)
 
 	for _, wt := range worktrees {
 		// Skip the main worktree (the one at absPath)
@@ -119,33 +131,25 @@ func ValidateMigration(ctx context.Context, repoPath string) (*MigrationPlan, er
 			continue
 		}
 
-		wtName := filepath.Base(wt.Path)
-		newName := StripRepoPrefix(repoName, wtName)
-
 		// Get actual metadata directory name (may differ from folder name)
 		metadataName, err := getWorktreeMetadataName(ctx, wt.Path)
 		if err != nil {
-			return nil, fmt.Errorf("get worktree %s metadata: %w", wtName, err)
+			return nil, fmt.Errorf("get worktree %s metadata: %w", filepath.Base(wt.Path), err)
 		}
 
-		// Check if worktree is outside repo directory
-		wtParent := filepath.Dir(wt.Path)
-		repoParent := filepath.Dir(absPath)
-		isOutside := wtParent != repoParent
+		// Compute new path based on worktree format
+		newPath := worktree.ResolvePath(absPath, opts.RepoName, wt.Branch, opts.WorktreeFormat)
 
-		// Compute new path
-		newPath := wt.Path
-		needsMove := false
-		if !isOutside && wtName != newName {
-			// Worktree is a sibling and needs renaming
-			newPath = filepath.Join(wtParent, newName)
-			needsMove = true
-		}
+		// Worktree name for metadata is based on branch name (sanitized)
+		newName := strings.ReplaceAll(wt.Branch, "/", "-")
 
-		// Check for name conflicts after stripping prefix
+		// Determine if move is needed
+		needsMove := wt.Path != newPath
+
+		// Check for conflicts at target path
 		if needsMove {
 			if _, err := os.Stat(newPath); err == nil {
-				return nil, fmt.Errorf("name conflict: worktree %q would be renamed to %q which already exists", wtName, newName)
+				return nil, fmt.Errorf("target path conflict: worktree %q would be moved to %q which already exists", wt.Path, newPath)
 			}
 		}
 
@@ -160,7 +164,7 @@ func ValidateMigration(ctx context.Context, repoPath string) (*MigrationPlan, er
 			OldName:   metadataName,
 			NewName:   newName,
 			NeedsMove: needsMove,
-			IsOutside: isOutside,
+			IsOutside: wt.Path != newPath, // Track if location changes
 		})
 	}
 
@@ -171,7 +175,6 @@ func ValidateMigration(ctx context.Context, repoPath string) (*MigrationPlan, er
 // This preserves all working tree files including uncommitted changes.
 func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResult, error) {
 	repoPath := plan.RepoPath
-	repoName := filepath.Base(repoPath)
 
 	// Phase 1: Create temp directory for bare repo
 	tempGitDir := filepath.Join(repoPath, ".git.migrating")
@@ -223,45 +226,83 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 		// Not fatal - repo may not have origin
 	}
 
-	// Phase 4: Create main worktree directory
-	mainWorktreePath := filepath.Join(repoPath, plan.CurrentBranch)
+	// Phase 4: Create main worktree directory (using computed path from plan)
+	mainWorktreePath := plan.MainWorktreePath
 	if err := os.MkdirAll(mainWorktreePath, 0755); err != nil {
 		return nil, fmt.Errorf("create main worktree dir: %w", err)
 	}
 
 	// Phase 5: Move all files (except .git) to main worktree
-	repoEntries, err := os.ReadDir(repoPath)
-	if err != nil {
-		return nil, fmt.Errorf("read repo directory: %w", err)
-	}
+	// Only needed if main worktree is nested inside repo
+	if filepath.Dir(mainWorktreePath) == repoPath {
+		// Main worktree is nested (e.g., repo/main)
+		mainWorktreeName := filepath.Base(mainWorktreePath)
 
-	for _, entry := range repoEntries {
-		name := entry.Name()
-		if name == ".git" || name == plan.CurrentBranch {
-			continue
+		repoEntries, err := os.ReadDir(repoPath)
+		if err != nil {
+			return nil, fmt.Errorf("read repo directory: %w", err)
 		}
 
-		// Skip worktree directories that are siblings
-		isWorktree := false
-		for _, wt := range plan.WorktreesToFix {
-			if filepath.Base(wt.OldPath) == name && filepath.Dir(wt.OldPath) == repoPath {
-				isWorktree = true
-				break
+		for _, entry := range repoEntries {
+			name := entry.Name()
+			if name == ".git" || name == mainWorktreeName {
+				continue
+			}
+
+			// Skip worktree directories that are nested inside repo
+			isWorktree := false
+			for _, wt := range plan.WorktreesToFix {
+				if filepath.Base(wt.OldPath) == name && filepath.Dir(wt.OldPath) == repoPath {
+					isWorktree = true
+					break
+				}
+			}
+			if isWorktree {
+				continue
+			}
+
+			oldPath := filepath.Join(repoPath, name)
+			newPath := filepath.Join(mainWorktreePath, name)
+			if err := os.Rename(oldPath, newPath); err != nil {
+				return nil, fmt.Errorf("move %s to worktree: %w", name, err)
 			}
 		}
-		if isWorktree {
-			continue
+	} else {
+		// Main worktree is a sibling (e.g., ../repo-main) - copy files instead
+		repoEntries, err := os.ReadDir(repoPath)
+		if err != nil {
+			return nil, fmt.Errorf("read repo directory: %w", err)
 		}
 
-		oldPath := filepath.Join(repoPath, name)
-		newPath := filepath.Join(mainWorktreePath, name)
-		if err := os.Rename(oldPath, newPath); err != nil {
-			return nil, fmt.Errorf("move %s to worktree: %w", name, err)
+		for _, entry := range repoEntries {
+			name := entry.Name()
+			if name == ".git" {
+				continue
+			}
+
+			// Skip worktree directories that are siblings
+			isWorktree := false
+			for _, wt := range plan.WorktreesToFix {
+				if filepath.Base(wt.OldPath) == name && filepath.Dir(wt.OldPath) == repoPath {
+					isWorktree = true
+					break
+				}
+			}
+			if isWorktree {
+				continue
+			}
+
+			oldPath := filepath.Join(repoPath, name)
+			newPath := filepath.Join(mainWorktreePath, name)
+			if err := os.Rename(oldPath, newPath); err != nil {
+				return nil, fmt.Errorf("move %s to worktree: %w", name, err)
+			}
 		}
 	}
 
 	// Phase 6: Create worktree metadata for main worktree
-	worktreeName := plan.CurrentBranch
+	// Worktree metadata name is the sanitized branch name
+	worktreeName := strings.ReplaceAll(plan.CurrentBranch, "/", "-")
 	worktreeMetaDir := filepath.Join(oldGitDir, "worktrees", worktreeName)
 	if err := os.MkdirAll(worktreeMetaDir, 0755); err != nil {
 		return nil, fmt.Errorf("create worktree metadata dir: %w", err)
@@ -273,7 +314,7 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 		return nil, fmt.Errorf("write HEAD: %w", err)
 	}
 
-	// Create gitdir file pointing back to worktree
+	// Create gitdir file pointing back to worktree (absolute path)
 	gitdirPath := filepath.Join(mainWorktreePath, ".git")
 	if err := os.WriteFile(filepath.Join(worktreeMetaDir, "gitdir"), []byte(gitdirPath+"\n"), 0644); err != nil {
 		return nil, fmt.Errorf("write gitdir: %w", err)
@@ -300,14 +341,20 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 	}
 
 	// Phase 7: Create .git file in main worktree pointing to bare repo
-	gitFileContent := fmt.Sprintf("gitdir: ../.git/worktrees/%s\n", worktreeName)
+	// Compute relative path from worktree to .git/worktrees/<name>
+	relPath, err := filepath.Rel(mainWorktreePath, worktreeMetaDir)
+	if err != nil {
+		// Fall back to absolute path if relative path computation fails
+		relPath = worktreeMetaDir
+	}
+	gitFileContent := fmt.Sprintf("gitdir: %s\n", relPath)
 	if err := os.WriteFile(gitdirPath, []byte(gitFileContent), 0644); err != nil {
 		return nil, fmt.Errorf("write .git file: %w", err)
 	}
 
 	// Phase 8: Update existing worktrees
 	for _, wt := range plan.WorktreesToFix {
-		if err := updateWorktreeLinks(ctx, repoPath, repoName, wt); err != nil {
+		if err := updateWorktreeLinks(ctx, repoPath, wt); err != nil {
 			return nil, fmt.Errorf("update worktree %s: %w", wt.OldName, err)
 		}
 	}
@@ -341,7 +388,7 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 }
 
 // updateWorktreeLinks updates a worktree's links to point to the new bare repo location
-func updateWorktreeLinks(_ context.Context, repoPath, _ string, wt WorktreeMigration) error {
+func updateWorktreeLinks(_ context.Context, repoPath string, wt WorktreeMigration) error {
 	gitDir := filepath.Join(repoPath, ".git")
 
 	// Move worktree folder if needed (prefix stripping)
