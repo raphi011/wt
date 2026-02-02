@@ -211,6 +211,13 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 
 	gitDir := git.GetGitDir(repo.Path, repoType)
 
+	// Stash changes if autostash is enabled
+	if autoStash {
+		if err := git.Stash(ctx, repo.Path); err != nil {
+			l.Debug("stash failed (may have no changes)", "error", err)
+		}
+	}
+
 	// Fetch if requested
 	if fetch && base != "" {
 		if err := git.FetchBranch(ctx, gitDir, base); err != nil {
@@ -259,6 +266,13 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 	}
 
 	fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
+
+	// Apply stashed changes to new worktree
+	if autoStash {
+		if err := git.StashPop(ctx, wtPath); err != nil {
+			l.Debug("stash pop failed (may have no stash)", "error", err)
+		}
+	}
 
 	// Set note if provided
 	if note != "" {

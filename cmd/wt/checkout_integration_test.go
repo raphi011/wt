@@ -713,3 +713,502 @@ func TestCheckout_AlreadyCheckedOut(t *testing.T) {
 		t.Errorf("error should mention 'already checked out', got: %s", errStr)
 	}
 }
+
+// TestCheckout_BaseBranch tests creating a new branch from a specific base.
+//
+// Scenario: User runs `wt checkout -b feature --base develop`
+// Expected: New branch is created from develop, not main
+func TestCheckout_BaseBranch(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	// Create a develop branch with a unique commit
+	runGitCommand(repoPath, "branch", "develop")
+	runGitCommand(repoPath, "checkout", "develop")
+	addCommit(t, repoPath, "develop.txt", "Develop commit")
+	runGitCommand(repoPath, "checkout", "main")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--base", "develop"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the branch was created from develop (should have develop.txt)
+	developFile := filepath.Join(wtPath, "develop.txt")
+	if _, err := os.Stat(developFile); os.IsNotExist(err) {
+		t.Error("feature branch should have develop.txt (created from develop)")
+	}
+}
+
+// TestCheckout_Fetch tests that --fetch fetches before creating branch.
+//
+// Scenario: User runs `wt checkout -b feature --fetch`
+// Expected: Fetch is performed before creating the branch
+func TestCheckout_Fetch(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath, originPath := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
+
+	// Add a commit to origin that the local repo doesn't have
+	// We need to clone the origin again to make changes
+	clonePath := filepath.Join(tmpDir, "origin-clone")
+	runGitCommand(tmpDir, "clone", originPath, clonePath)
+	runGitCommand(clonePath, "config", "user.email", "test@test.com")
+	runGitCommand(clonePath, "config", "user.name", "Test User")
+	addCommit(t, clonePath, "origin-only.txt", "Origin commit")
+	runGitCommand(clonePath, "push", "origin", "main")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--fetch"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the branch was created from the fetched origin/main (should have origin-only.txt)
+	originFile := filepath.Join(wtPath, "origin-only.txt")
+	if _, err := os.Stat(originFile); os.IsNotExist(err) {
+		t.Error("feature branch should have origin-only.txt (created from fetched origin/main)")
+	}
+}
+
+// TestCheckout_AutoStash tests that --autostash stashes and applies changes.
+//
+// Scenario: User has uncommitted changes, runs `wt checkout feature --autostash`
+// Expected: Changes are stashed, worktree created, changes applied to new worktree
+func TestCheckout_AutoStash(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+
+	// Create uncommitted changes in main worktree
+	changedFile := filepath.Join(repoPath, "uncommitted.txt")
+	if err := os.WriteFile(changedFile, []byte("uncommitted changes\n"), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+	runGitCommand(repoPath, "add", "uncommitted.txt")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "--autostash"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the stashed changes were applied to the new worktree
+	stashedFile := filepath.Join(wtPath, "uncommitted.txt")
+	if _, err := os.Stat(stashedFile); os.IsNotExist(err) {
+		t.Error("stashed changes should be applied to new worktree")
+	}
+
+	// Verify the original repo no longer has the uncommitted changes
+	if _, err := os.Stat(changedFile); err == nil {
+		// File still exists - check if it's still staged
+		out, _ := runGitCommand(repoPath, "status", "--porcelain")
+		if strings.Contains(out, "uncommitted.txt") {
+			t.Error("original repo should not have uncommitted changes after autostash")
+		}
+	}
+}
+
+// TestCheckout_Note tests that --note sets a note on the branch.
+//
+// Scenario: User runs `wt checkout -b feature --note "Work in progress"`
+// Expected: Branch is created with the note attached
+func TestCheckout_Note(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--note", "Work in progress"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the note was set
+	out, err := runGitCommand(repoPath, "config", "branch.feature.description")
+	if err != nil {
+		t.Fatalf("failed to get branch description: %v", err)
+	}
+	note := strings.TrimSpace(out)
+	if note != "Work in progress" {
+		t.Errorf("expected note 'Work in progress', got %q", note)
+	}
+}
+
+// TestCheckout_Hook tests that --hook runs a specific hook after checkout.
+//
+// Scenario: User runs `wt checkout -b feature --hook myhook`
+// Expected: Worktree is created and the specified hook runs
+func TestCheckout_Hook(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	markerPath := filepath.Join(tmpDir, "hook-ran")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"myhook": {
+					Command:     "touch " + markerPath,
+					Description: "Test hook",
+				},
+			},
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--hook", "myhook"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify hook ran
+	if _, err := os.Stat(markerPath); os.IsNotExist(err) {
+		t.Error("hook should have run and created marker file")
+	}
+}
+
+// TestCheckout_NoHook tests that --no-hook skips default hooks.
+//
+// Scenario: User runs `wt checkout -b feature --no-hook` with a default hook
+// Expected: Worktree is created but the hook does not run
+func TestCheckout_NoHook(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	markerPath := filepath.Join(tmpDir, "hook-ran")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"default-hook": {
+					Command:     "touch " + markerPath,
+					Description: "Default checkout hook",
+					On:          []string{"checkout"}, // This is a default hook
+				},
+			},
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--no-hook"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify hook did NOT run
+	if _, err := os.Stat(markerPath); err == nil {
+		t.Error("hook should NOT have run with --no-hook flag")
+	}
+}
+
+// TestCheckout_HookWithArg tests that --arg passes variables to hooks.
+//
+// Scenario: User runs `wt checkout -b feature --hook myhook --arg myvar=hello`
+// Expected: Hook receives the variable and can use it
+func TestCheckout_HookWithArg(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	outputPath := filepath.Join(tmpDir, "hook-output.txt")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"myhook": {
+					Command:     "echo {myvar} > " + outputPath,
+					Description: "Test hook with variable",
+				},
+			},
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--hook", "myhook", "--arg", "myvar=hello"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the variable was substituted in the hook
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read hook output: %v", err)
+	}
+	if strings.TrimSpace(string(content)) != "hello" {
+		t.Errorf("expected hook output 'hello', got %q", string(content))
+	}
+}
+
+// TestCheckout_DefaultHookRuns tests that default hooks run automatically.
+//
+// Scenario: User runs `wt checkout -b feature` with a hook that has on=["checkout"]
+// Expected: The default hook runs automatically
+func TestCheckout_DefaultHookRuns(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	markerPath := filepath.Join(tmpDir, "default-hook-ran")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"auto-hook": {
+					Command:     "touch " + markerPath,
+					Description: "Auto checkout hook",
+					On:          []string{"checkout"},
+				},
+			},
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature"}) // No --hook flag
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify default hook ran automatically
+	if _, err := os.Stat(markerPath); os.IsNotExist(err) {
+		t.Error("default hook should have run automatically")
+	}
+}
