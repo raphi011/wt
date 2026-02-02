@@ -53,6 +53,9 @@ internal/ui/             - Terminal UI components
   ├── table.go           - Lipgloss table formatting
   ├── spinner.go         - Bubbletea spinner
   └── wizard/            - Interactive wizard framework
+      ├── framework/     - Core wizard orchestration (Wizard, Step interface)
+      ├── flows/         - Command-specific wizard implementations
+      └── steps/         - Reusable step components (FilterableList, SingleSelect, etc.)
 ```
 
 ### Key Design Decisions
@@ -130,7 +133,7 @@ internal/ui/             - Terminal UI components
 
 5. **Handle empty selections** - If a multi-select step has no selections, translate to the appropriate flag (e.g., no hooks selected → `--no-hook`).
 
-6. **File structure** - Create wizard UI in `internal/ui/<command>_wizard.go`. Define `<Command>Options` struct for wizard output and `<Command>WizardParams` struct for wizard input. The wizard returns options which the command applies to its flags.
+6. **File structure** - Create wizard flows in `internal/ui/wizard/flows/<command>.go`. Define `<Command>Options` struct for wizard output and `<Command>WizardParams` struct for wizard input. The wizard returns options which the command applies to its flags.
 
 **Forge Feature Parity** - Any feature that involves forge operations (PRs, cloning, etc.) MUST support both GitHub and GitLab. Always:
 - Add methods to the `Forge` interface first
@@ -152,12 +155,15 @@ internal/ui/             - Terminal UI components
 **Global variables** - Shared state initialized in `root.go`:
 ```go
 var (
-    cfg     *config.Config  // Loaded configuration
-    workDir string          // Current working directory
+    // Global flags
+    verbose bool
+    quiet   bool
 )
 ```
 
 **context.Context** - Request-scoped values passed to functions:
+- `config.FromContext(ctx)` → Config (loaded configuration)
+- `config.WorkDirFromContext(ctx)` → Working directory
 - `log.FromContext(ctx)` → Logger (writes to stderr)
 - `output.FromContext(ctx)` → Printer (writes to stdout)
 

@@ -112,20 +112,13 @@ func (r *Registry) Remove(nameOrPath string) error {
 
 // Find looks up a repo by name or path
 func (r *Registry) Find(ref string) (*Repo, error) {
-	var matches []*Repo
-
 	for i := range r.Repos {
 		repo := &r.Repos[i]
 		if repo.Name == ref || repo.Path == ref {
 			return repo, nil
 		}
 	}
-
-	if len(matches) == 0 {
-		return nil, fmt.Errorf("repo not found: %s", ref)
-	}
-
-	return matches[0], nil
+	return nil, fmt.Errorf("repo not found: %s", ref)
 }
 
 // FindByName looks up a repo by name only

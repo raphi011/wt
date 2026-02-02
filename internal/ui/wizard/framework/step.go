@@ -12,7 +12,7 @@ const (
 	StepAdvance
 	// StepBack means move to the previous step.
 	StepBack
-	// StepSubmitIfReady means advance and submit if all steps are complete.
+	// StepSubmitIfReady means advance to the next step; if this was the last step, the wizard finishes.
 	StepSubmitIfReady
 )
 

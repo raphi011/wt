@@ -579,6 +579,74 @@ func TestCheckout_NoOriginNoUpstream(t *testing.T) {
 	}
 }
 
+// TestCheckout_AlreadyCheckedOut_ScopedTarget tests checkout blocking with repo:branch syntax.
+//
+// Scenario: User runs `wt checkout myrepo:feature` when feature already has a worktree
+// Expected: Command fails with error from git indicating branch is already checked out
+func TestCheckout_AlreadyCheckedOut_ScopedTarget(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+
+	// Work from a different directory (not inside repo)
+	workDir := filepath.Join(tmpDir, "work")
+	os.MkdirAll(workDir, 0755)
+	ctx := testContextWithConfig(t, cfg, workDir)
+
+	// First checkout with scoped target should succeed
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"myrepo:feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("first checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "myrepo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Second checkout with scoped target should fail
+	cmd2 := newCheckoutCmd()
+	cmd2.SetContext(ctx)
+	cmd2.SetArgs([]string{"myrepo:feature"})
+
+	err := cmd2.Execute()
+	if err == nil {
+		t.Fatal("expected error when checking out already checked-out branch with scoped target")
+	}
+
+	// Verify error mentions the branch (git error for existing worktree)
+	errStr := err.Error()
+	if !strings.Contains(errStr, "feature") {
+		t.Errorf("error should mention branch name 'feature', got: %s", errStr)
+	}
+}
+
 // TestCheckout_AlreadyCheckedOut tests that checkout fails for already checked-out branches.
 //
 // Scenario: User runs `wt checkout feature` when feature already has a worktree

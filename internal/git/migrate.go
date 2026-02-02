@@ -221,9 +221,11 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 		return nil, fmt.Errorf("set core.bare: %w", err)
 	}
 
-	// Set fetch refspec
-	if err := runGit(ctx, oldGitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
-		// Not fatal - repo may not have origin
+	// Set fetch refspec (only if origin exists)
+	if HasRemote(ctx, oldGitDir, "origin") {
+		if err := runGit(ctx, oldGitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to set fetch refspec: %v\n", err)
+		}
 	}
 
 	// Phase 4: Create main worktree directory (using computed path from plan)
@@ -361,22 +363,26 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 
 	// Phase 9: Repair worktrees
 	if err := runGit(ctx, oldGitDir, "worktree", "repair"); err != nil {
-		// Log warning but don't fail
-		// This can happen if worktrees have issues, but they might still work
+		// Log warning but don't fail - worktrees may have issues but might still work
+		fmt.Fprintf(os.Stderr, "Warning: worktree repair had issues (may need manual repair): %v\n", err)
 	}
 
 	// Phase 10: Restore upstream tracking
 	// Only restore if origin remote exists and the remote branch exists
 	if plan.MainBranchUpstream != "" && HasRemote(ctx, oldGitDir, "origin") {
 		if RemoteBranchExists(ctx, mainWorktreePath, plan.MainBranchUpstream) {
-			_ = SetUpstreamBranch(ctx, mainWorktreePath, plan.CurrentBranch, plan.MainBranchUpstream)
+			if err := SetUpstreamBranch(ctx, mainWorktreePath, plan.CurrentBranch, plan.MainBranchUpstream); err != nil {
+				fmt.Fprintf(os.Stderr, "Note: could not restore upstream tracking for %s: %v\n", plan.CurrentBranch, err)
+			}
 		}
 	}
 
 	for _, wt := range plan.WorktreesToFix {
 		if wt.Upstream != "" {
 			if RemoteBranchExists(ctx, wt.NewPath, wt.Upstream) {
-				_ = SetUpstreamBranch(ctx, wt.NewPath, wt.Branch, wt.Upstream)
+				if err := SetUpstreamBranch(ctx, wt.NewPath, wt.Branch, wt.Upstream); err != nil {
+					fmt.Fprintf(os.Stderr, "Note: could not restore upstream tracking for %s: %v\n", wt.Branch, err)
+				}
 			}
 		}
 	}

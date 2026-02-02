@@ -147,7 +147,10 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	// Skip conditions
 	// Skip "fetch" step when checking out existing branch (not creating new)
 	w.SkipWhen("fetch", func(wiz *framework.Wizard) bool {
-		step := wiz.GetStep("branch").(*steps.FilterableListStep)
+		step, ok := wiz.GetStep("branch").(*steps.FilterableListStep)
+		if !ok {
+			return true // Skip if step not found or wrong type
+		}
 		return !step.IsCreateSelected()
 	})
 
@@ -155,7 +158,10 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	// When repos selection completes, fetch branches from first selected repo
 	if hasRepos && params.FetchBranches != nil {
 		w.OnComplete("repos", func(wiz *framework.Wizard) {
-			repoStep := wiz.GetStep("repos").(*steps.FilterableListStep)
+			repoStep, ok := wiz.GetStep("repos").(*steps.FilterableListStep)
+			if !ok {
+				return // Skip if step not found or wrong type
+			}
 			indices := repoStep.GetSelectedIndices()
 			if len(indices) == 0 {
 				return
@@ -166,7 +172,10 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 			result := params.FetchBranches(firstRepoPath)
 
 			// Update branch step with fetched branches
-			branchStepUpdate := wiz.GetStep("branch").(*steps.FilterableListStep)
+			branchStepUpdate, ok := wiz.GetStep("branch").(*steps.FilterableListStep)
+			if !ok {
+				return // Skip if step not found or wrong type
+			}
 			branchOpts := buildBranchOptions(result.Branches)
 			branchStepUpdate.SetOptions(branchOpts)
 		})
@@ -191,9 +200,10 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	}
 
 	// Branch - get from the combined branch step
-	branchStepResult := result.GetStep("branch").(*steps.FilterableListStep)
 	opts.Branch = result.GetString("branch")
-	opts.NewBranch = branchStepResult.IsCreateSelected()
+	if branchStepResult, ok := result.GetStep("branch").(*steps.FilterableListStep); ok {
+		opts.NewBranch = branchStepResult.IsCreateSelected()
+	}
 
 	// Fetch (only relevant for new branches)
 	if opts.NewBranch {

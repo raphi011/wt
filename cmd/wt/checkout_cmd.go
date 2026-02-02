@@ -88,9 +88,10 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				// Build scope:branch if repos selected
 				if len(opts.SelectedRepos) > 0 {
 					repo, err := reg.FindByPath(opts.SelectedRepos[0])
-					if err == nil {
-						target = repo.Name + ":" + opts.Branch
+					if err != nil {
+						return fmt.Errorf("selected repo no longer registered: %s", opts.SelectedRepos[0])
 					}
+					target = repo.Name + ":" + opts.Branch
 				}
 			}
 
