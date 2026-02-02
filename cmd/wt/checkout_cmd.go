@@ -81,7 +81,6 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				// Apply wizard selections
 				target = opts.Branch
 				newBranch = opts.NewBranch
-				fetch = opts.Fetch
 				hookNames = opts.SelectedHooks
 				noHook = opts.NoHook
 
