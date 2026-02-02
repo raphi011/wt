@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 )
 
 type ctxKey struct{}
@@ -52,11 +53,15 @@ func (l *Logger) Println(args ...any) {
 	fmt.Fprintln(l.out, args...)
 }
 
-// Command logs an external command execution.
+// Command returns a function that logs an external command execution with duration.
+// Call the returned function after the command completes.
 // Only prints when verbose mode is enabled and quiet mode is disabled.
-func (l *Logger) Command(name string, args ...string) {
-	if l.verbose && !l.quiet {
-		fmt.Fprintf(l.out, "$ %s %s\n", name, strings.Join(args, " "))
+func (l *Logger) Command(name string, args ...string) func(time.Duration) {
+	if !l.verbose || l.quiet {
+		return func(time.Duration) {}
+	}
+	return func(d time.Duration) {
+		fmt.Fprintf(l.out, "$ %s %s (%s)\n", name, strings.Join(args, " "), d.Round(time.Millisecond))
 	}
 }
 
