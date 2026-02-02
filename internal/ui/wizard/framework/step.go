@@ -52,6 +52,13 @@ type Step interface {
 
 	// Reset clears the step's selection/input.
 	Reset()
+
+	// HasClearableInput returns true if the step has input that can be cleared.
+	// Used to determine ESC behavior: clear input first, then cancel.
+	HasClearableInput() bool
+
+	// ClearInput clears any user input (filter, text field, etc).
+	ClearInput()
 }
 
 // Option represents a selectable item in list-based steps.

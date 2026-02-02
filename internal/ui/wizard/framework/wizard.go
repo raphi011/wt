@@ -207,6 +207,15 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
+			// If step has clearable input, clear it first
+			if w.currentStep < len(w.steps) {
+				step := w.steps[w.currentStep]
+				if step.HasClearableInput() {
+					step.ClearInput()
+					return w, nil
+				}
+			}
+			// No input to clear, cancel wizard
 			w.cancelled = true
 			w.done = true
 			return w, tea.Quit
