@@ -1287,6 +1287,13 @@ func TestRepoMakeBare_PreservesUpstream(t *testing.T) {
 		t.Fatalf("failed to commit: %v\n%s", err, out)
 	}
 
+	// Rename branch to main (may be master depending on git config)
+	cmd = exec.Command("git", "branch", "-m", "main")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to rename branch to main: %v\n%s", err, out)
+	}
+
 	// Push main to origin
 	cmd = exec.Command("git", "push", "-u", "origin", "main")
 	cmd.Dir = repoPath
