@@ -6,10 +6,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/history"
+	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
@@ -17,6 +19,7 @@ import (
 
 func newCdCmd() *cobra.Command {
 	var interactive bool
+	var copyToClipboard bool
 
 	cmd := &cobra.Command{
 		Use:     "cd [repo:]branch",
@@ -35,7 +38,8 @@ With no arguments, returns the most recently accessed worktree.`,
 		Example: `  cd $(wt cd)              # cd to most recently accessed worktree
   cd $(wt cd feature-x)    # cd to feature-x worktree (error if ambiguous)
   cd $(wt cd wt:feature-x) # cd to feature-x worktree in wt repo
-  cd $(wt cd -i)           # interactive fuzzy search for worktree`,
+  cd $(wt cd -i)           # interactive fuzzy search for worktree
+  wt cd --copy feature-x   # copy worktree path to clipboard`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			out := output.FromContext(ctx)
@@ -190,6 +194,14 @@ With no arguments, returns the most recently accessed worktree.`,
 			// Record access to history (ignore errors - best effort)
 			_ = history.RecordAccess(targetPath)
 
+			// Copy to clipboard if requested
+			if copyToClipboard {
+				l := log.FromContext(ctx)
+				if err := clipboard.WriteAll(targetPath); err != nil {
+					l.Printf("Warning: failed to copy to clipboard: %v\n", err)
+				}
+			}
+
 			// Print path
 			out.Println(targetPath)
 
@@ -198,6 +210,7 @@ With no arguments, returns the most recently accessed worktree.`,
 	}
 
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode with fuzzy search")
+	cmd.Flags().BoolVar(&copyToClipboard, "copy", false, "Copy path to clipboard")
 
 	// Register completions
 	cmd.ValidArgsFunction = completeCdArg

@@ -344,11 +344,12 @@ func TestIsValidThemeName(t *testing.T) {
 		{"dracula", true},
 		{"nord", true},
 		{"gruvbox", true},
-		{"catppuccin-frappe", true},
-		{"catppuccin-mocha", true},
+		{"catppuccin", true}, // family name (not variant suffixes)
 		{"invalid", false},
 		{"", false},
-		{"DRACULA", false}, // case-sensitive
+		{"DRACULA", false},           // case-sensitive
+		{"catppuccin-mocha", false},  // old variant name no longer valid
+		{"catppuccin-frappe", false}, // old variant name no longer valid
 	}
 
 	for _, tt := range tests {
@@ -428,8 +429,8 @@ info = "#777777"`,
 }
 
 func TestValidThemeNames(t *testing.T) {
-	// Verify ValidThemeNames contains expected presets
-	expected := []string{"default", "dracula", "nord", "gruvbox", "catppuccin-frappe", "catppuccin-mocha"}
+	// Verify ValidThemeNames contains expected theme families
+	expected := []string{"default", "dracula", "nord", "gruvbox", "catppuccin"}
 
 	if len(ValidThemeNames) != len(expected) {
 		t.Errorf("len(ValidThemeNames) = %d, want %d", len(ValidThemeNames), len(expected))
@@ -438,6 +439,21 @@ func TestValidThemeNames(t *testing.T) {
 	for i, name := range expected {
 		if ValidThemeNames[i] != name {
 			t.Errorf("ValidThemeNames[%d] = %q, want %q", i, ValidThemeNames[i], name)
+		}
+	}
+}
+
+func TestValidThemeModes(t *testing.T) {
+	// Verify ValidThemeModes contains expected modes
+	expected := []string{"auto", "light", "dark"}
+
+	if len(ValidThemeModes) != len(expected) {
+		t.Errorf("len(ValidThemeModes) = %d, want %d", len(ValidThemeModes), len(expected))
+	}
+
+	for i, name := range expected {
+		if ValidThemeModes[i] != name {
+			t.Errorf("ValidThemeModes[%d] = %q, want %q", i, ValidThemeModes[i], name)
 		}
 	}
 }

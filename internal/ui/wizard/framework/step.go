@@ -1,6 +1,6 @@
 package framework
 
-import tea "github.com/charmbracelet/bubbletea"
+import tea "charm.land/bubbletea/v2"
 
 // StepResult indicates what action to take after a step update.
 type StepResult int
@@ -36,7 +36,7 @@ type Step interface {
 
 	// Update handles key events and returns the updated step,
 	// a command to run, and a result indicating navigation.
-	Update(msg tea.KeyMsg) (Step, tea.Cmd, StepResult)
+	Update(msg tea.KeyPressMsg) (Step, tea.Cmd, StepResult)
 
 	// View renders the step content.
 	View() string

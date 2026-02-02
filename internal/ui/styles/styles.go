@@ -5,30 +5,34 @@
 // prompt, and wizard packages).
 package styles
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"image/color"
+
+	"charm.land/lipgloss/v2"
+)
 
 // Primary colors used throughout the UI
 var (
 	// Primary is the main accent color (cyan/teal)
-	Primary lipgloss.TerminalColor = lipgloss.Color("62")
+	Primary color.Color = lipgloss.Color("62")
 
 	// Accent is the highlight color for selected/active items (pink)
-	Accent lipgloss.TerminalColor = lipgloss.Color("212")
+	Accent color.Color = lipgloss.Color("212")
 
 	// Success is used for checkmarks and positive outcomes (green)
-	Success lipgloss.TerminalColor = lipgloss.Color("82")
+	Success color.Color = lipgloss.Color("82")
 
 	// Error is used for error messages (red)
-	Error lipgloss.TerminalColor = lipgloss.Color("196")
+	Error color.Color = lipgloss.Color("196")
 
 	// Muted is used for disabled/inactive text (gray)
-	Muted lipgloss.TerminalColor = lipgloss.Color("240")
+	Muted color.Color = lipgloss.Color("240")
 
 	// Normal is the standard text color (light gray)
-	Normal lipgloss.TerminalColor = lipgloss.Color("252")
+	Normal color.Color = lipgloss.Color("252")
 
 	// Info is used for informational text (gray)
-	Info lipgloss.TerminalColor = lipgloss.Color("244")
+	Info color.Color = lipgloss.Color("244")
 )
 
 // Common styles

@@ -1,9 +1,9 @@
 package prompt
 
 import (
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raphi011/wt/internal/ui/styles"
 )
 
@@ -36,7 +36,7 @@ func (m selectModel) Init() tea.Cmd {
 
 func (m selectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "enter":
 			if item, ok := m.list.SelectedItem().(listItem); ok {
@@ -58,11 +58,11 @@ func (m selectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m selectModel) View() string {
+func (m selectModel) View() tea.View {
 	if m.done {
-		return ""
+		return tea.NewView("")
 	}
-	return m.list.View()
+	return tea.NewView(m.list.View())
 }
 
 // Select shows a list selection prompt and returns the user's selection.

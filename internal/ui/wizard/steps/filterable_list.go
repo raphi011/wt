@@ -8,7 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/sahilm/fuzzy"
 
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
@@ -190,7 +191,7 @@ func (s *FilterableListStep) Init() tea.Cmd {
 	return nil
 }
 
-func (s *FilterableListStep) Update(msg tea.KeyMsg) (framework.Step, tea.Cmd, framework.StepResult) {
+func (s *FilterableListStep) Update(msg tea.KeyPressMsg) (framework.Step, tea.Cmd, framework.StepResult) {
 	key := msg.String()
 	showCreate := s.shouldShowCreate()
 
@@ -284,10 +285,10 @@ func (s *FilterableListStep) Update(msg tea.KeyMsg) (framework.Step, tea.Cmd, fr
 			s.applyFilter()
 		}
 	default:
-		// Handle typing/pasting for filter
-		if msg.Type == tea.KeyRunes {
-			if text := framework.FilterRunes(msg.Runes, s.runeFilter); text != "" {
-				s.filter += text
+		// Handle typing/pasting for filter (v2: use Key().Text for printable chars)
+		if text := msg.Key().Text; text != "" {
+			if filtered := framework.FilterRunes([]rune(text), s.runeFilter); filtered != "" {
+				s.filter += filtered
 				s.applyFilter()
 			}
 		}
@@ -596,27 +597,13 @@ func (s *FilterableListStep) GetSelectedOption() framework.Option {
 }
 
 // highlightMatches renders the label with matched characters highlighted.
+// Uses lipgloss.StyleRunes for efficient character-level styling.
 func (s *FilterableListStep) highlightMatches(label string, matchedIndexes []int, isSelected bool) string {
-	// Create a set of matched indices for quick lookup
-	matchSet := make(map[int]bool)
-	for _, idx := range matchedIndexes {
-		matchSet[idx] = true
+	unmatched := framework.OptionNormalStyle()
+	if isSelected {
+		unmatched = framework.OptionSelectedStyle()
 	}
-
-	var result strings.Builder
-	runes := []rune(label)
-	for i, r := range runes {
-		char := string(r)
-		if matchSet[i] {
-			// Highlight matched character
-			result.WriteString(framework.MatchHighlightStyle().Render(char))
-		} else if isSelected {
-			result.WriteString(framework.OptionSelectedStyle().Render(char))
-		} else {
-			result.WriteString(framework.OptionNormalStyle().Render(char))
-		}
-	}
-	return result.String()
+	return lipgloss.StyleRunes(label, matchedIndexes, framework.MatchHighlightStyle(), unmatched)
 }
 
 func (s *FilterableListStep) applyFilter() {

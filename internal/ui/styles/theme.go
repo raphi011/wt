@@ -2,27 +2,34 @@ package styles
 
 import (
 	"fmt"
+	"image/color"
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/raphi011/wt/internal/config"
 )
 
 // Theme defines the color palette for UI components
 type Theme struct {
-	Primary lipgloss.TerminalColor // main accent color (borders, titles)
-	Accent  lipgloss.TerminalColor // highlight color (selected items)
-	Success lipgloss.TerminalColor // success indicators (checkmarks)
-	Error   lipgloss.TerminalColor // error messages
-	Muted   lipgloss.TerminalColor // disabled/inactive text
-	Normal  lipgloss.TerminalColor // standard text
-	Info    lipgloss.TerminalColor // informational text
+	Primary color.Color // main accent color (borders, titles)
+	Accent  color.Color // highlight color (selected items)
+	Success color.Color // success indicators (checkmarks)
+	Error   color.Color // error messages
+	Muted   color.Color // disabled/inactive text
+	Normal  color.Color // standard text
+	Info    color.Color // informational text
 }
 
-// Preset themes
+// themeFamily groups light and dark variants of a theme
+type themeFamily struct {
+	Light *Theme // nil if no light variant
+	Dark  *Theme // nil if no dark variant
+}
+
+// Preset themes - Dark variants
 var (
-	// DefaultTheme is the default color scheme
+	// DefaultTheme is the default color scheme (dark only)
 	DefaultTheme = Theme{
 		Primary: lipgloss.Color("62"),  // cyan/teal
 		Accent:  lipgloss.Color("212"), // pink/magenta
@@ -33,7 +40,7 @@ var (
 		Info:    lipgloss.Color("244"), // gray
 	}
 
-	// DraculaTheme is based on the Dracula color scheme
+	// DraculaTheme is based on the Dracula color scheme (dark only)
 	DraculaTheme = Theme{
 		Primary: lipgloss.Color("#bd93f9"), // purple
 		Accent:  lipgloss.Color("#ff79c6"), // pink
@@ -44,7 +51,7 @@ var (
 		Info:    lipgloss.Color("#8be9fd"), // cyan
 	}
 
-	// NordTheme is based on the Nord color scheme
+	// NordTheme is based on the Nord color scheme (dark)
 	NordTheme = Theme{
 		Primary: lipgloss.Color("#88c0d0"), // nord8 (frost cyan)
 		Accent:  lipgloss.Color("#b48ead"), // nord15 (aurora purple)
@@ -66,18 +73,7 @@ var (
 		Info:    lipgloss.Color("#8ec07c"), // aqua
 	}
 
-	// CatppuccinFrappeTheme is based on Catppuccin Frappé
-	CatppuccinFrappeTheme = Theme{
-		Primary: lipgloss.Color("#8caaee"), // blue
-		Accent:  lipgloss.Color("#f4b8e4"), // pink
-		Success: lipgloss.Color("#a6d189"), // green
-		Error:   lipgloss.Color("#e78284"), // red
-		Muted:   lipgloss.Color("#626880"), // overlay0
-		Normal:  lipgloss.Color("#c6d0f5"), // text
-		Info:    lipgloss.Color("#99d1db"), // teal
-	}
-
-	// CatppuccinMochaTheme is based on Catppuccin Mocha
+	// CatppuccinMochaTheme is based on Catppuccin Mocha (dark)
 	CatppuccinMochaTheme = Theme{
 		Primary: lipgloss.Color("#89b4fa"), // blue
 		Accent:  lipgloss.Color("#f5c2e7"), // pink
@@ -89,14 +85,49 @@ var (
 	}
 )
 
-// themePresets maps theme names to their definitions
-var themePresets = map[string]Theme{
-	"default":           DefaultTheme,
-	"dracula":           DraculaTheme,
-	"nord":              NordTheme,
-	"gruvbox":           GruvboxTheme,
-	"catppuccin-frappe": CatppuccinFrappeTheme,
-	"catppuccin-mocha":  CatppuccinMochaTheme,
+// Preset themes - Light variants
+var (
+	// NordLightTheme is based on the Nord color scheme (light)
+	NordLightTheme = Theme{
+		Primary: lipgloss.Color("#5e81ac"), // nord10 (frost blue, darker)
+		Accent:  lipgloss.Color("#b48ead"), // nord15 (aurora purple)
+		Success: lipgloss.Color("#a3be8c"), // nord14 (aurora green)
+		Error:   lipgloss.Color("#bf616a"), // nord11 (aurora red)
+		Muted:   lipgloss.Color("#9a9a9a"), // gray
+		Normal:  lipgloss.Color("#2e3440"), // nord0 (polar night)
+		Info:    lipgloss.Color("#81a1c1"), // nord9 (frost blue)
+	}
+
+	// GruvboxLightTheme is based on the Gruvbox color scheme (light)
+	GruvboxLightTheme = Theme{
+		Primary: lipgloss.Color("#076678"), // blue (dark for contrast)
+		Accent:  lipgloss.Color("#8f3f71"), // purple (dark for contrast)
+		Success: lipgloss.Color("#79740e"), // green (dark)
+		Error:   lipgloss.Color("#9d0006"), // red (dark)
+		Muted:   lipgloss.Color("#928374"), // gray
+		Normal:  lipgloss.Color("#3c3836"), // foreground (dark)
+		Info:    lipgloss.Color("#427b58"), // aqua (dark)
+	}
+
+	// CatppuccinLatteTheme is based on Catppuccin Latte (light)
+	CatppuccinLatteTheme = Theme{
+		Primary: lipgloss.Color("#1e66f5"), // blue
+		Accent:  lipgloss.Color("#ea76cb"), // pink
+		Success: lipgloss.Color("#40a02b"), // green
+		Error:   lipgloss.Color("#d20f39"), // red
+		Muted:   lipgloss.Color("#9ca0b0"), // overlay0
+		Normal:  lipgloss.Color("#4c4f69"), // text
+		Info:    lipgloss.Color("#179299"), // teal
+	}
+)
+
+// themeFamilies maps theme family names to their light/dark variants
+var themeFamilies = map[string]themeFamily{
+	"default":    {Dark: &DefaultTheme},                                     // dark only
+	"dracula":    {Dark: &DraculaTheme},                                     // dark only
+	"nord":       {Light: &NordLightTheme, Dark: &NordTheme},                // both variants
+	"gruvbox":    {Light: &GruvboxLightTheme, Dark: &GruvboxTheme},          // both variants
+	"catppuccin": {Light: &CatppuccinLatteTheme, Dark: &CatppuccinMochaTheme}, // both variants
 }
 
 // currentTheme holds the active theme
@@ -110,18 +141,7 @@ func Current() Theme {
 // Init initializes the theme from config
 // Call this after loading config and before displaying any UI
 func Init(cfg config.ThemeConfig) {
-	theme := DefaultTheme
-
-	// Start with preset if specified
-	if cfg.Name != "" {
-		if preset, ok := themePresets[cfg.Name]; ok {
-			theme = preset
-		} else {
-			// Unknown theme name - log warning and use default
-			fmt.Fprintf(os.Stderr, "Warning: unknown theme %q, using default (available: %s)\n",
-				cfg.Name, strings.Join(config.ValidThemeNames, ", "))
-		}
-	}
+	theme := selectTheme(cfg)
 
 	// Override individual colors if specified
 	if cfg.Primary != "" {
@@ -153,6 +173,67 @@ func Init(cfg config.ThemeConfig) {
 
 	// Set nerdfont symbols
 	SetNerdfont(cfg.Nerdfont)
+}
+
+// selectTheme picks the appropriate theme based on config and terminal background
+func selectTheme(cfg config.ThemeConfig) Theme {
+	// Default mode is "auto"
+	mode := cfg.Mode
+	if mode == "" {
+		mode = "auto"
+	}
+
+	// Get family (default if not found)
+	family, ok := themeFamilies[cfg.Name]
+	if !ok {
+		if cfg.Name != "" {
+			// Unknown theme name - log warning
+			fmt.Fprintf(os.Stderr, "Warning: unknown theme %q, using default (available: %s)\n",
+				cfg.Name, strings.Join(config.ValidThemeNames, ", "))
+		}
+		family = themeFamilies["default"]
+	}
+
+	// Determine which variant to use based on mode
+	var theme *Theme
+	switch mode {
+	case "light":
+		theme = family.Light
+	case "dark":
+		theme = family.Dark
+	case "auto":
+		// Detect terminal background using lipgloss v2
+		isDark := lipgloss.HasDarkBackground(os.Stdin, os.Stderr)
+		if isDark {
+			theme = family.Dark
+		} else {
+			theme = family.Light
+		}
+	default:
+		// Invalid mode - log warning and use auto
+		fmt.Fprintf(os.Stderr, "Warning: unknown theme mode %q, using auto (available: %s)\n",
+			mode, strings.Join(config.ValidThemeModes, ", "))
+		isDark := lipgloss.HasDarkBackground(os.Stdin, os.Stderr)
+		if isDark {
+			theme = family.Dark
+		} else {
+			theme = family.Light
+		}
+	}
+
+	// Fall back if the requested variant doesn't exist
+	if theme == nil {
+		if family.Dark != nil {
+			theme = family.Dark
+		} else if family.Light != nil {
+			theme = family.Light
+		} else {
+			// Should never happen, but fall back to default
+			return DefaultTheme
+		}
+	}
+
+	return *theme
 }
 
 // applyTheme updates all global style variables to use the given theme
@@ -189,14 +270,18 @@ func applyTheme(t Theme) {
 }
 
 // GetPreset returns a theme preset by name, or nil if not found
+// For theme families with variants, returns the dark variant by default
 func GetPreset(name string) *Theme {
-	if t, ok := themePresets[name]; ok {
-		return &t
+	if family, ok := themeFamilies[name]; ok {
+		if family.Dark != nil {
+			return family.Dark
+		}
+		return family.Light
 	}
 	return nil
 }
 
-// PresetNames returns a list of available preset names
+// PresetNames returns a list of available preset names (theme families)
 func PresetNames() []string {
 	return config.ValidThemeNames
 }
