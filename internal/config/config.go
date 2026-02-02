@@ -395,7 +395,7 @@ func (c *ForgeConfig) GetUserForRepo(repoSpec string) string {
 }
 
 // ValidThemeNames is the list of supported theme presets (families)
-var ValidThemeNames = []string{"default", "dracula", "nord", "gruvbox", "catppuccin"}
+var ValidThemeNames = []string{"none", "default", "dracula", "nord", "gruvbox", "catppuccin"}
 
 // ValidThemeModes is the list of supported theme modes
 var ValidThemeModes = []string{"auto", "light", "dark"}

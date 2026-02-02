@@ -83,6 +83,18 @@ var (
 		Normal:  lipgloss.Color("#cdd6f4"), // text
 		Info:    lipgloss.Color("#94e2d5"), // teal
 	}
+
+	// NoneTheme renders without any colors (uses terminal defaults)
+	// Formatting (bold/italic/underline) is preserved
+	NoneTheme = Theme{
+		Primary: lipgloss.NoColor{},
+		Accent:  lipgloss.NoColor{},
+		Success: lipgloss.NoColor{},
+		Error:   lipgloss.NoColor{},
+		Muted:   lipgloss.NoColor{},
+		Normal:  lipgloss.NoColor{},
+		Info:    lipgloss.NoColor{},
+	}
 )
 
 // Preset themes - Light variants
@@ -123,10 +135,11 @@ var (
 
 // themeFamilies maps theme family names to their light/dark variants
 var themeFamilies = map[string]themeFamily{
-	"default":    {Dark: &DefaultTheme},                                     // dark only
-	"dracula":    {Dark: &DraculaTheme},                                     // dark only
-	"nord":       {Light: &NordLightTheme, Dark: &NordTheme},                // both variants
-	"gruvbox":    {Light: &GruvboxLightTheme, Dark: &GruvboxTheme},          // both variants
+	"none":       {Light: &NoneTheme, Dark: &NoneTheme},                       // no colors
+	"default":    {Dark: &DefaultTheme},                                       // dark only
+	"dracula":    {Dark: &DraculaTheme},                                       // dark only
+	"nord":       {Light: &NordLightTheme, Dark: &NordTheme},                  // both variants
+	"gruvbox":    {Light: &GruvboxLightTheme, Dark: &GruvboxTheme},            // both variants
 	"catppuccin": {Light: &CatppuccinLatteTheme, Dark: &CatppuccinMochaTheme}, // both variants
 }
 

@@ -5,6 +5,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
@@ -681,5 +682,82 @@ func TestCheckout_NoOriginNoUpstream(t *testing.T) {
 	upstream := getGitUpstream(t, repoPath, "feature")
 	if upstream != "" {
 		t.Errorf("expected no upstream without origin, got %q", upstream)
+	}
+}
+
+// TestCheckout_AlreadyCheckedOut tests that checkout fails for already checked-out branches.
+//
+// Scenario: User runs `wt checkout feature` when feature already has a worktree
+// Expected: Command fails with error indicating branch is already checked out
+func TestCheckout_AlreadyCheckedOut(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	oldCfg := cfg
+	cfg = &config.Config{
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	defer func() { cfg = oldCfg }()
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
+	ctx := testContext(t)
+
+	// First checkout should succeed
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("first checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Second checkout of same branch should fail
+	cmd2 := newCheckoutCmd()
+	cmd2.SetContext(ctx)
+	cmd2.SetArgs([]string{"feature"})
+
+	err := cmd2.Execute()
+	if err == nil {
+		t.Fatal("expected error when checking out already checked-out branch")
+	}
+
+	// Verify error message mentions the branch and path
+	errStr := err.Error()
+	if !strings.Contains(errStr, "feature") {
+		t.Errorf("error should mention branch name 'feature', got: %s", errStr)
+	}
+	if !strings.Contains(errStr, "already checked out") {
+		t.Errorf("error should mention 'already checked out', got: %s", errStr)
 	}
 }

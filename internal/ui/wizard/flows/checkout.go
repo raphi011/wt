@@ -2,7 +2,6 @@ package flows
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
 	"github.com/raphi011/wt/internal/ui/wizard/steps"
@@ -12,7 +11,6 @@ import (
 type CheckoutOptions struct {
 	Branch        string
 	NewBranch     bool
-	IsWorktree    bool // True if selected branch already has a worktree (hooks only)
 	Fetch         bool
 	Cancelled     bool
 	SelectedRepos []string // Selected repo paths (when outside a repo)
@@ -61,9 +59,6 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	repoNames := params.RepoNames
 	hasRepos := len(repoPaths) > 0
 
-	// Keep track of current branches for worktree lookup
-	currentBranches := params.Branches
-
 	// Step 1: Repos (only when available)
 	if hasRepos {
 		repoOptions := make([]framework.Option, len(repoNames))
@@ -105,12 +100,9 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 		WithCreateFromFilter(func(filter string) string {
 			return fmt.Sprintf("+ Create %q", filter)
 		}).
-		WithValueLabel(func(value string, isNew bool, opt framework.Option) string {
+		WithValueLabel(func(value string, isNew bool, _ framework.Option) string {
 			if isNew {
 				return value + " (new)"
-			}
-			if strings.HasSuffix(opt.Label, "(checked out)") {
-				return value + " (hooks only)"
 			}
 			return value
 		}).
@@ -173,9 +165,6 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 			firstRepoPath := repoPaths[indices[0]]
 			result := params.FetchBranches(firstRepoPath)
 
-			// Update current branches for worktree lookup
-			currentBranches = result.Branches
-
 			// Update branch step with fetched branches
 			branchStepUpdate := wiz.GetStep("branch").(*steps.FilterableListStep)
 			branchOpts := buildBranchOptions(result.Branches)
@@ -206,16 +195,6 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	opts.Branch = result.GetString("branch")
 	opts.NewBranch = branchStepResult.IsCreateSelected()
 
-	// Check if selected branch is in worktree
-	if !opts.NewBranch {
-		for _, b := range currentBranches {
-			if strings.EqualFold(b.Name, opts.Branch) && b.InWorktree {
-				opts.IsWorktree = true
-				break
-			}
-		}
-	}
-
 	// Fetch (only relevant for new branches)
 	if opts.NewBranch {
 		opts.Fetch = result.GetBool("fetch")
@@ -230,18 +209,17 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	return opts, nil
 }
 
-// buildBranchOptions creates Option slice from branches with worktree info.
+// buildBranchOptions creates Option slice from branches, filtering out checked-out branches.
 func buildBranchOptions(branches []BranchInfo) []framework.Option {
-	opts := make([]framework.Option, len(branches))
-	for i, branch := range branches {
-		label := branch.Name
+	var opts []framework.Option
+	for _, branch := range branches {
 		if branch.InWorktree {
-			label += " (checked out)"
+			continue
 		}
-		opts[i] = framework.Option{
-			Label: label,
+		opts = append(opts, framework.Option{
+			Label: branch.Name,
 			Value: branch.Name,
-		}
+		})
 	}
 	return opts
 }

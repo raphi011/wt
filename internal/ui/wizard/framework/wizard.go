@@ -406,7 +406,7 @@ func (w *Wizard) renderSummary() string {
 			continue
 		}
 
-		b.WriteString(SummaryLabelStyle().Render("  "+step.Title()+": ") +
+		b.WriteString(SummaryLabelStyle().Render(step.Title()+": ") +
 			SummaryValueStyle().Render(v.Label) + "\n")
 	}
 

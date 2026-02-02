@@ -397,15 +397,16 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 					return nil, cobra.ShellCompDirectiveNoFileComp
 				}
 
-				// Suggest local branches
+				// Suggest local branches, excluding checked-out ones
 				branches, err := git.ListLocalBranches(ctx, repo.Path)
 				if err != nil {
 					return nil, cobra.ShellCompDirectiveNoFileComp
 				}
+				wtBranches := git.GetWorktreeBranches(ctx, repo.Path)
 
 				var matches []string
 				for _, b := range branches {
-					if strings.HasPrefix(b, branchPrefix) {
+					if strings.HasPrefix(b, branchPrefix) && !wtBranches[b] {
 						matches = append(matches, scopeName+":"+b)
 					}
 				}
@@ -420,15 +421,16 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 					return nil, cobra.ShellCompDirectiveNoFileComp
 				}
 
-				// Collect unique branches across all labeled repos
+				// Collect unique branches across all labeled repos, excluding checked-out ones
 				branchSet := make(map[string]bool)
 				for _, r := range labelRepos {
 					branches, err := git.ListLocalBranches(ctx, r.Path)
 					if err != nil {
 						continue
 					}
+					wtBranches := git.GetWorktreeBranches(ctx, r.Path)
 					for _, b := range branches {
-						if strings.HasPrefix(b, branchPrefix) {
+						if strings.HasPrefix(b, branchPrefix) && !wtBranches[b] {
 							branchSet[b] = true
 						}
 					}
@@ -469,21 +471,23 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 			}
 		}
 
-		// Without -b flag, also suggest existing branches
+		// Without -b flag, also suggest existing branches (excluding checked-out ones)
 		if !newBranch {
 			currentRepoPath := git.GetCurrentRepoMainPath(ctx)
 			if currentRepoPath != "" {
+				wtBranches := git.GetWorktreeBranches(ctx, currentRepoPath)
+
 				// Local branches
 				branches, err := git.ListLocalBranches(ctx, currentRepoPath)
 				if err == nil {
 					for _, b := range branches {
-						if strings.HasPrefix(b, toComplete) {
+						if strings.HasPrefix(b, toComplete) && !wtBranches[b] {
 							matches = append(matches, b)
 						}
 					}
 				}
 
-				// Remote branches
+				// Remote branches (exclude those matching checked-out local branches)
 				remoteBranches, err := git.ListRemoteBranches(ctx, currentRepoPath)
 				if err == nil {
 					seen := make(map[string]bool)
@@ -491,7 +495,7 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 						seen[b] = true
 					}
 					for _, b := range remoteBranches {
-						if strings.HasPrefix(b, toComplete) && !seen[b] {
+						if strings.HasPrefix(b, toComplete) && !seen[b] && !wtBranches[b] {
 							matches = append(matches, b)
 						}
 					}
