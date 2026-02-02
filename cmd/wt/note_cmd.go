@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
@@ -48,16 +49,18 @@ func newNoteSetCmd() *cobra.Command {
 		ValidArgsFunction: completeNoteArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
+			workDir := config.WorkDirFromContext(ctx)
 			text := args[0]
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
 
 			// Resolve target(s)
-			targets, err := resolveNoteTargets(ctx, reg, args[1:])
+			targets, err := resolveNoteTargets(ctx, cfg, workDir, reg, args[1:])
 			if err != nil {
 				return err
 			}
@@ -85,16 +88,18 @@ func newNoteGetCmd() *cobra.Command {
 		ValidArgsFunction: completeNoteArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
+			workDir := config.WorkDirFromContext(ctx)
 			out := output.FromContext(ctx)
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
 
 			// Resolve target(s)
-			targets, err := resolveNoteTargets(ctx, reg, args)
+			targets, err := resolveNoteTargets(ctx, cfg, workDir, reg, args)
 			if err != nil {
 				return err
 			}
@@ -131,15 +136,17 @@ func newNoteClearCmd() *cobra.Command {
 		ValidArgsFunction: completeNoteArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
+			workDir := config.WorkDirFromContext(ctx)
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
 
 			// Resolve target(s)
-			targets, err := resolveNoteTargets(ctx, reg, args)
+			targets, err := resolveNoteTargets(ctx, cfg, workDir, reg, args)
 			if err != nil {
 				return err
 			}
@@ -169,10 +176,10 @@ type noteTarget struct {
 // resolveNoteTargets resolves targets for note commands.
 // If no args, uses current worktree's branch.
 // Otherwise parses [scope:]branch format.
-func resolveNoteTargets(ctx context.Context, reg *registry.Registry, args []string) ([]noteTarget, error) {
+func resolveNoteTargets(ctx context.Context, cfg *config.Config, workDir string, reg *registry.Registry, args []string) ([]noteTarget, error) {
 	if len(args) == 0 {
 		// No target - use current worktree's branch
-		repo, branch, err := getCurrentRepoBranch(ctx, reg)
+		repo, branch, err := getCurrentRepoBranch(ctx, cfg, workDir, reg)
 		if err != nil {
 			return nil, err
 		}
@@ -231,7 +238,7 @@ func resolveNoteTargets(ctx context.Context, reg *registry.Registry, args []stri
 }
 
 // getCurrentRepoBranch gets the repo and current branch from current directory
-func getCurrentRepoBranch(ctx context.Context, reg *registry.Registry) (*registry.Repo, string, error) {
+func getCurrentRepoBranch(ctx context.Context, cfg *config.Config, workDir string, reg *registry.Registry) (*registry.Repo, string, error) {
 	repoPath := git.GetCurrentRepoMainPath(ctx)
 	if repoPath == "" {
 		return nil, "", fmt.Errorf("not in a git repository")
@@ -248,7 +255,7 @@ func getCurrentRepoBranch(ctx context.Context, reg *registry.Registry) (*registr
 		if err := reg.Add(newRepo); err != nil {
 			return nil, "", err
 		}
-		if err := reg.Save(); err != nil {
+		if err := reg.Save(cfg.RegistryPath); err != nil {
 			return nil, "", err
 		}
 		repo, err = reg.FindByPath(repoPath)
@@ -286,14 +293,15 @@ func completeNoteArg(cmd *cobra.Command, args []string, toComplete string) ([]st
 // completeScopedWorktreeArg provides completion for [scope:]branch format
 // including both repo: and label: prefixes
 func completeScopedWorktreeArg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	ctx := context.Background()
+	ctx := cmd.Context()
+	cfg := config.FromContext(ctx)
 
 	// Check if user is typing scope:branch format
 	if idx := strings.Index(toComplete, ":"); idx >= 0 {
 		scopeName := toComplete[:idx]
 		branchPrefix := toComplete[idx+1:]
 
-		reg, err := registry.Load()
+		reg, err := registry.Load(cfg.RegistryPath)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -359,7 +367,7 @@ func completeScopedWorktreeArg(cmd *cobra.Command, args []string, toComplete str
 	}
 
 	// Also offer "repo:" and "label:" completions
-	reg, err := registry.Load()
+	reg, err := registry.Load(cfg.RegistryPath)
 	if err != nil {
 		return matches, cobra.ShellCompDirectiveNoFileComp
 	}

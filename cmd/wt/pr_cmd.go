@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
@@ -66,6 +67,7 @@ Otherwise, it's looked up in the local registry.`,
 		ValidArgsFunction: completePrCheckoutArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 
 			// Parse arguments: [repo] <number>
@@ -89,7 +91,7 @@ Otherwise, it's looked up in the local registry.`,
 			}
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -136,7 +138,7 @@ Otherwise, it's looked up in the local registry.`,
 				if err := reg.Add(*repo); err != nil {
 					return fmt.Errorf("register repo: %w", err)
 				}
-				if err := reg.Save(); err != nil {
+				if err := reg.Save(cfg.RegistryPath); err != nil {
 					return fmt.Errorf("save registry: %w", err)
 				}
 
@@ -150,7 +152,7 @@ Otherwise, it's looked up in the local registry.`,
 				repoPath = repo.Path
 			} else {
 				// Current directory
-				repo, err = findOrRegisterCurrentRepo(ctx, reg)
+				repo, err = findOrRegisterCurrentRepoFromContext(ctx, reg)
 				if err != nil {
 					return err
 				}
@@ -289,11 +291,12 @@ func newPrCreateCmd() *cobra.Command {
   wt pr create --title "Add feature" -w      # Open in browser`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			out := output.FromContext(ctx)
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -306,7 +309,7 @@ func newPrCreateCmd() *cobra.Command {
 					return fmt.Errorf("repository %q not found", args[0])
 				}
 			} else {
-				repo, err = findOrRegisterCurrentRepo(ctx, reg)
+				repo, err = findOrRegisterCurrentRepoFromContext(ctx, reg)
 				if err != nil {
 					return err
 				}
@@ -411,11 +414,12 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
   wt pr merge -s rebase        # Use rebase strategy`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			out := output.FromContext(ctx)
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -428,7 +432,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 					return fmt.Errorf("repository %q not found", args[0])
 				}
 			} else {
-				repo, err = findOrRegisterCurrentRepo(ctx, reg)
+				repo, err = findOrRegisterCurrentRepoFromContext(ctx, reg)
 				if err != nil {
 					return err
 				}
@@ -554,11 +558,12 @@ func newPrViewCmd() *cobra.Command {
   wt pr view -w           # Open PR in browser`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			out := output.FromContext(ctx)
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -571,7 +576,7 @@ func newPrViewCmd() *cobra.Command {
 					return fmt.Errorf("repository %q not found", args[0])
 				}
 			} else {
-				repo, err = findOrRegisterCurrentRepo(ctx, reg)
+				repo, err = findOrRegisterCurrentRepoFromContext(ctx, reg)
 				if err != nil {
 					return err
 				}

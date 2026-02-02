@@ -23,31 +23,20 @@ func TestPrCheckout_InvalidPRNumber(t *testing.T) {
 
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
 	cmd := newPrCheckoutCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"notanumber"})
@@ -70,33 +59,23 @@ func TestPrCheckout_RepoNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Work from a non-repo directory
-	workDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(workDir, 0755)
+	otherDir := filepath.Join(tmpDir, "other")
+	os.MkdirAll(otherDir, 0755)
 
-	oldDir, _ := os.Getwd()
-	os.Chdir(workDir)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, otherDir)
 	cmd := newPrCheckoutCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"nonexistent", "123"})
@@ -121,27 +100,21 @@ func TestPrCheckout_InvalidPRNumberWithRepo(t *testing.T) {
 
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 
-	ctx := testContext(t)
 	cmd := newPrCheckoutCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"myrepo", "notanumber"})

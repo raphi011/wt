@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
@@ -65,10 +66,11 @@ Use positional args to filter by label(s).`,
   wt repo list --json           # Output as JSON`,
 		ValidArgsFunction: completeLabels,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg := config.FromContext(cmd.Context())
 			out := output.FromContext(cmd.Context())
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -180,6 +182,7 @@ be managed with other wt commands. Non-git directories are silently skipped.`,
   wt repo add ~/work/my-project -w "./{branch}"    # Custom worktree format`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 
 			// Custom name only works with single path
@@ -188,7 +191,7 @@ be managed with other wt commands. Non-git directories are silently skipped.`,
 			}
 
 			// Load registry once
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -243,7 +246,7 @@ be managed with other wt commands. Non-git directories are silently skipped.`,
 			}
 
 			// Save registry
-			if err := reg.Save(); err != nil {
+			if err := reg.Save(cfg.RegistryPath); err != nil {
 				return fmt.Errorf("save registry: %w", err)
 			}
 
@@ -282,12 +285,13 @@ By default, files are kept on disk. Use --delete to also remove files.`,
   wt repo remove my-project -D -f     # Delete without confirmation`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 
 			nameOrPath := args[0]
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -318,7 +322,7 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 			}
 
 			// Save registry
-			if err := reg.Save(); err != nil {
+			if err := reg.Save(cfg.RegistryPath); err != nil {
 				return fmt.Errorf("save registry: %w", err)
 			}
 
@@ -375,7 +379,9 @@ If destination is not specified, clones into the current directory.`,
   wt repo clone git@github.com:org/repo.git -l work   # Clone with label`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
+			workDir := config.WorkDirFromContext(ctx)
 
 			url := args[0]
 
@@ -389,10 +395,12 @@ If destination is not specified, clones into the current directory.`,
 				dest = extractRepoNameFromURL(url)
 			}
 
-			// Resolve to absolute path
-			absPath, err := filepath.Abs(dest)
-			if err != nil {
-				return fmt.Errorf("resolve path: %w", err)
+			// Resolve to absolute path relative to working directory
+			var absPath string
+			if filepath.IsAbs(dest) {
+				absPath = dest
+			} else {
+				absPath = filepath.Join(workDir, dest)
 			}
 
 			// Check if directory already exists
@@ -414,7 +422,7 @@ If destination is not specified, clones into the current directory.`,
 			}
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -433,7 +441,7 @@ If destination is not specified, clones into the current directory.`,
 				return fmt.Errorf("register repo: %w", err)
 			}
 
-			if err := reg.Save(); err != nil {
+			if err := reg.Save(cfg.RegistryPath); err != nil {
 				return fmt.Errorf("save registry: %w", err)
 			}
 
@@ -533,6 +541,7 @@ The migration:
   wt repo make-bare --dry-run        # Preview migration without making changes`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			out := output.FromContext(ctx)
 
@@ -555,7 +564,7 @@ The migration:
 			}
 
 			// Check if already registered
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -644,7 +653,7 @@ The migration:
 					return fmt.Errorf("register repo: %w", err)
 				}
 
-				if err := reg.Save(); err != nil {
+				if err := reg.Save(cfg.RegistryPath); err != nil {
 					return fmt.Errorf("save registry: %w", err)
 				}
 			}
@@ -690,7 +699,8 @@ The migration:
 
 // completeLabels provides completion for label flags
 func completeLabels(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	reg, err := registry.Load()
+	cfg := config.FromContext(cmd.Context())
+	reg, err := registry.Load(cfg.RegistryPath)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -699,7 +709,8 @@ func completeLabels(cmd *cobra.Command, args []string, toComplete string) ([]str
 
 // completeRepoNames provides completion for repo name arguments
 func completeRepoNames(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	reg, err := registry.Load()
+	cfg := config.FromContext(cmd.Context())
+	reg, err := registry.Load(cfg.RegistryPath)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}

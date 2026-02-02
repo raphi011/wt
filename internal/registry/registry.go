@@ -33,12 +33,15 @@ func registryPath() (string, error) {
 	return filepath.Join(dir, "repos.json"), nil
 }
 
-// Load reads the registry from ~/.wt/repos.json
-// Returns empty registry if file doesn't exist (auto-creates ~/.wt/)
-func Load() (*Registry, error) {
-	path, err := registryPath()
-	if err != nil {
-		return nil, err
+// Load reads the registry from the specified path, or ~/.wt/repos.json if empty.
+// Returns empty registry if file doesn't exist (auto-creates ~/.wt/).
+func Load(path string) (*Registry, error) {
+	if path == "" {
+		var err error
+		path, err = registryPath()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var reg Registry
@@ -52,11 +55,14 @@ func Load() (*Registry, error) {
 	return &reg, nil
 }
 
-// Save writes the registry to ~/.wt/repos.json atomically
-func (r *Registry) Save() error {
-	path, err := registryPath()
-	if err != nil {
-		return err
+// Save writes the registry to the specified path, or ~/.wt/repos.json if empty.
+func (r *Registry) Save(path string) error {
+	if path == "" {
+		var err error
+		path, err = registryPath()
+		if err != nil {
+			return err
+		}
 	}
 
 	if err := storage.SaveJSON(path, r); err != nil {

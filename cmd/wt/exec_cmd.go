@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/registry"
@@ -31,6 +32,8 @@ With no targets, runs in the current worktree.`,
   wt exec wt:main myrepo:dev -- make test  # In multiple worktrees`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
+			workDir := config.WorkDirFromContext(ctx)
 			l := log.FromContext(ctx)
 
 			// Cobra handles -- specially - ArgsLenAtDash returns index where -- appeared
@@ -52,7 +55,7 @@ With no targets, runs in the current worktree.`,
 			}
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}

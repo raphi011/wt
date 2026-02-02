@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
 )
@@ -50,11 +51,12 @@ Scopes are resolved as repo name first, then label.`,
 		ValidArgsFunction: completeLabelAddArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			label := args[0]
 			scopes := args[1:]
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -72,7 +74,7 @@ Scopes are resolved as repo name first, then label.`,
 				fmt.Printf("Added label %q to %s\n", label, repo.Name)
 			}
 
-			return reg.Save()
+			return reg.Save(cfg.RegistryPath)
 		},
 	}
 
@@ -94,11 +96,12 @@ Scopes are resolved as repo name first, then label.`,
 		ValidArgsFunction: completeLabelAddArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			label := args[0]
 			scopes := args[1:]
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -116,7 +119,7 @@ Scopes are resolved as repo name first, then label.`,
 				fmt.Printf("Removed label %q from %s\n", label, repo.Name)
 			}
 
-			return reg.Save()
+			return reg.Save(cfg.RegistryPath)
 		},
 	}
 
@@ -140,10 +143,11 @@ Scopes are resolved as repo name first, then label.`,
 		ValidArgsFunction: completeScopeArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			out := output.FromContext(ctx)
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -202,9 +206,10 @@ Scopes are resolved as repo name first, then label.`,
 		ValidArgsFunction: completeScopeArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -222,7 +227,7 @@ Scopes are resolved as repo name first, then label.`,
 				fmt.Printf("Cleared labels from %s\n", repo.Name)
 			}
 
-			return reg.Save()
+			return reg.Save(cfg.RegistryPath)
 		},
 	}
 

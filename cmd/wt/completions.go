@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/registry"
 )
@@ -16,8 +17,8 @@ import (
 // 1. A scoped target (repo:branch) pattern - extracts repo name before colon
 // 2. A bare repo name that matches a registered repo
 // Falls back to current directory if neither is found.
-func repoPathFromArgs(ctx context.Context, args []string) string {
-	reg, err := registry.Load()
+func repoPathFromArgs(ctx context.Context, cfg *config.Config, args []string) string {
+	reg, err := registry.Load(cfg.RegistryPath)
 	if err != nil {
 		return git.GetCurrentRepoMainPath(ctx)
 	}
@@ -45,9 +46,10 @@ func repoPathFromArgs(ctx context.Context, args []string) string {
 // It checks args for a repo reference (scope:branch or bare repo name),
 // otherwise uses current directory.
 func completeBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg := config.FromContext(cmd.Context())
 	ctx := context.Background()
 
-	repoPath := repoPathFromArgs(ctx, args)
+	repoPath := repoPathFromArgs(ctx, cfg, args)
 	if repoPath == "" {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -71,9 +73,10 @@ func completeBranches(cmd *cobra.Command, args []string, toComplete string) ([]s
 // It checks args for a repo reference (scope:branch or bare repo name),
 // otherwise uses current directory.
 func completeRemoteBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg := config.FromContext(cmd.Context())
 	ctx := context.Background()
 
-	repoPath := repoPathFromArgs(ctx, args)
+	repoPath := repoPathFromArgs(ctx, cfg, args)
 	if repoPath == "" {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -96,6 +99,7 @@ func completeRemoteBranches(cmd *cobra.Command, args []string, toComplete string
 // completeWorktrees provides worktree completion for the specified repo.
 // Supports "branch", "repo:branch", and "label:branch" formats.
 func completeWorktrees(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg := config.FromContext(cmd.Context())
 	ctx := context.Background()
 
 	// Check if user is typing scope:branch format
@@ -103,7 +107,7 @@ func completeWorktrees(cmd *cobra.Command, args []string, toComplete string) ([]
 		scopeName := toComplete[:idx]
 		branchPrefix := toComplete[idx+1:]
 
-		reg, err := registry.Load()
+		reg, err := registry.Load(cfg.RegistryPath)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -167,7 +171,7 @@ func completeWorktrees(cmd *cobra.Command, args []string, toComplete string) ([]
 	}
 
 	// Also offer "repo:" and "label:" completions
-	reg, err := registry.Load()
+	reg, err := registry.Load(cfg.RegistryPath)
 	if err == nil {
 		// Repo prefixes
 		for _, repo := range reg.Repos {
@@ -198,6 +202,7 @@ func completeCdArg(cmd *cobra.Command, args []string, toComplete string) ([]stri
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
+	cfg := config.FromContext(cmd.Context())
 	ctx := context.Background()
 
 	// Check if user is typing scope:branch format
@@ -205,7 +210,7 @@ func completeCdArg(cmd *cobra.Command, args []string, toComplete string) ([]stri
 		scopeName := toComplete[:idx]
 		branchPrefix := toComplete[idx+1:]
 
-		reg, err := registry.Load()
+		reg, err := registry.Load(cfg.RegistryPath)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
@@ -272,7 +277,7 @@ func completeCdArg(cmd *cobra.Command, args []string, toComplete string) ([]stri
 	}
 
 	// Also offer "repo:" and "label:" completions
-	reg, err := registry.Load()
+	reg, err := registry.Load(cfg.RegistryPath)
 	if err != nil {
 		return matches, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -309,8 +314,10 @@ func completePrCheckoutArgs(cmd *cobra.Command, args []string, toComplete string
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
+	cfg := config.FromContext(cmd.Context())
+
 	// First arg: offer repo names
-	reg, err := registry.Load()
+	reg, err := registry.Load(cfg.RegistryPath)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -339,7 +346,9 @@ func completeLabelAddArgs(cmd *cobra.Command, args []string, toComplete string) 
 // completeScopeArgs provides completion for scope arguments (repo names + labels).
 // Used by commands like `wt list` where positional args can be repo names or labels.
 func completeScopeArgs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	reg, err := registry.Load()
+	cfg := config.FromContext(cmd.Context())
+
+	reg, err := registry.Load(cfg.RegistryPath)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -376,6 +385,7 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
+		cfg := config.FromContext(cmd.Context())
 		ctx := context.Background()
 		newBranch, _ := cmd.Flags().GetBool("new-branch")
 
@@ -384,7 +394,7 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 			scopeName := toComplete[:idx]
 			branchPrefix := toComplete[idx+1:]
 
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
@@ -450,7 +460,7 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 		var matches []string
 
 		// Load registry for repo/label prefixes
-		reg, err := registry.Load()
+		reg, err := registry.Load(cfg.RegistryPath)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}

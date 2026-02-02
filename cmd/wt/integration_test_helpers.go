@@ -22,11 +22,22 @@ import (
 
 // testContext creates a context with log and output set to discard.
 // Use testContextWithOutput to capture output.
+// Use testContextWithConfig to add config and workDir.
 func testContext(t *testing.T) context.Context {
 	t.Helper()
 	ctx := context.Background()
 	ctx = log.WithLogger(ctx, log.New(io.Discard, false, false))
 	ctx = output.WithPrinter(ctx, io.Discard)
+	return ctx
+}
+
+// testContextWithConfig creates a context with config and workDir set.
+// This is the standard way to set up test context for command execution.
+func testContextWithConfig(t *testing.T, cfg *config.Config, workDir string) context.Context {
+	t.Helper()
+	ctx := testContext(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, workDir)
 	return ctx
 }
 

@@ -17,36 +17,27 @@ import (
 // Scenario: User runs `wt prune` in a repo with no extra worktrees
 // Expected: Nothing to prune, no error
 func TestPrune_NoWorktrees(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{})
@@ -61,42 +52,34 @@ func TestPrune_NoWorktrees(t *testing.T) {
 // Scenario: User runs `wt prune feature -f` to prune a specific worktree
 // Expected: Worktree is removed
 func TestPrune_WithWorktree(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Verify worktree exists first
 	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 		t.Fatal("worktree should exist before prune")
 	}
 
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, repoPath)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"feature", "-f"})
@@ -116,37 +99,28 @@ func TestPrune_WithWorktree(t *testing.T) {
 // Scenario: User runs `wt prune feature -d -f`
 // Expected: Shows what would be pruned without actually pruning
 func TestPrune_DryRun(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	// Need --force even in dry-run since targeting specific worktree
@@ -167,41 +141,33 @@ func TestPrune_DryRun(t *testing.T) {
 // Scenario: User runs `wt prune myrepo:feature -f`
 // Expected: Worktree is pruned from the specified repo
 func TestPrune_ByRepoName(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Work from a different directory
-	workDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(workDir, 0755)
+	otherDir := filepath.Join(tmpDir, "other")
+	os.MkdirAll(otherDir, 0755)
 
-	oldDir, _ := os.Getwd()
-	os.Chdir(workDir)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, otherDir)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"myrepo:feature", "-f"})
@@ -221,6 +187,8 @@ func TestPrune_ByRepoName(t *testing.T) {
 // Scenario: User has two repos with same branch name, runs `wt prune repo1:feature -f`
 // Expected: Only the worktree in the specified repo is pruned
 func TestPrune_WithRepoBranchFormat(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
@@ -232,12 +200,8 @@ func TestPrune_WithRepoBranchFormat(t *testing.T) {
 	wt1Path := createTestWorktree(t, repo1Path, "feature")
 	wt2Path := createTestWorktree(t, repo2Path, "feature")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -245,23 +209,17 @@ func TestPrune_WithRepoBranchFormat(t *testing.T) {
 			{Name: "repo2", Path: repo2Path},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Work from a different directory
-	workDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(workDir, 0755)
+	otherDir := filepath.Join(tmpDir, "other")
+	os.MkdirAll(otherDir, 0755)
 
-	oldDir, _ := os.Getwd()
-	os.Chdir(workDir)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, otherDir)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	// Use repo:branch format to target only repo1
@@ -287,37 +245,28 @@ func TestPrune_WithRepoBranchFormat(t *testing.T) {
 // Scenario: User runs `wt prune nonexistent:feature -f`
 // Expected: Command fails with informative error
 func TestPrune_RepoBranchFormat_RepoNotFound(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
 	createTestWorktree(t, repoPath, "feature")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	// Use nonexistent repo name
@@ -339,42 +288,34 @@ func TestPrune_RepoBranchFormat_RepoNotFound(t *testing.T) {
 // Scenario: User runs `wt prune feature -f --delete-branches`
 // Expected: Both worktree and local branch are removed
 func TestPrune_DeleteBranchesFlag(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Verify worktree and branch exist before prune
 	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 		t.Fatal("worktree should exist before prune")
 	}
 
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, repoPath)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"feature", "-f", "--delete-branches"})
@@ -403,37 +344,28 @@ func TestPrune_DeleteBranchesFlag(t *testing.T) {
 // Scenario: User runs `wt prune feature -f` without --delete-branches
 // Expected: Worktree is removed but local branch is kept
 func TestPrune_NoDeleteBranchesDefault(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"feature", "-f"})
@@ -462,42 +394,34 @@ func TestPrune_NoDeleteBranchesDefault(t *testing.T) {
 // Scenario: User has delete_local_branches=true in config, runs `wt prune feature -f`
 // Expected: Both worktree and local branch are removed
 func TestPrune_ConfigDeleteBranches(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
 	// Set config to delete branches by default
-	cfg = &config.Config{
+	cfg := &config.Config{
+		RegistryPath: regFile,
 		Prune: config.PruneConfig{
 			DeleteLocalBranches: true,
 		},
 	}
-	defer func() { cfg = oldCfg }()
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, repoPath)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"feature", "-f"})
@@ -526,42 +450,34 @@ func TestPrune_ConfigDeleteBranches(t *testing.T) {
 // Scenario: User has delete_local_branches=true in config, runs `wt prune feature -f --no-delete-branches`
 // Expected: Worktree is removed but local branch is kept
 func TestPrune_NoDeleteBranchesOverridesConfig(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
 	// Set config to delete branches by default
-	cfg = &config.Config{
+	cfg := &config.Config{
+		RegistryPath: regFile,
 		Prune: config.PruneConfig{
 			DeleteLocalBranches: true,
 		},
 	}
-	defer func() { cfg = oldCfg }()
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, repoPath)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"feature", "-f", "--no-delete-branches"})

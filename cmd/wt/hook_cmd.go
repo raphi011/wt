@@ -42,6 +42,8 @@ Target worktrees using [scope:]branch format where scope can be a repo name or l
   wt hook code -d                     # Dry-run: print command without executing`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
+			workDir := config.WorkDirFromContext(ctx)
 			l := log.FromContext(ctx)
 
 			// Split args at "--" into hook names and targets
@@ -72,7 +74,7 @@ Target worktrees using [scope:]branch format where scope can be a repo name or l
 			}
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -81,15 +83,15 @@ Target worktrees using [scope:]branch format where scope can be a repo name or l
 
 			// If no targets, run in current worktree
 			if len(targets) == 0 {
-				repo, err := findOrRegisterCurrentRepo(ctx, reg)
+				repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
 				if err != nil {
 					return err
 				}
-				return runHooksInRepo(ctx, repo, hookNames, hookEnv, dryRun)
+				return runHooksInRepo(ctx, repo, hookNames, hookEnv, dryRun, cfg, workDir)
 			}
 
 			// Run hooks in specified targets
-			return runHooksInTargets(ctx, reg, hookNames, targets, hookEnv, dryRun)
+			return runHooksInTargets(ctx, reg, hookNames, targets, hookEnv, dryRun, cfg)
 		},
 	}
 
@@ -109,7 +111,7 @@ func splitHookArgs(args []string, dashIdx int) (hookNames, targets []string) {
 }
 
 // runHooksInRepo runs hooks in the repo's current worktree or main repo
-func runHooksInRepo(ctx context.Context, repo *registry.Repo, hookNames []string, env map[string]string, dryRun bool) error {
+func runHooksInRepo(ctx context.Context, repo *registry.Repo, hookNames []string, env map[string]string, dryRun bool, cfg *config.Config, workDir string) error {
 	// Get current branch if in a worktree
 	branch, _ := git.GetCurrentBranch(ctx, workDir)
 
@@ -129,7 +131,7 @@ func runHooksInRepo(ctx context.Context, repo *registry.Repo, hookNames []string
 }
 
 // runHooksInTargets runs hooks in specified [scope:]branch targets
-func runHooksInTargets(ctx context.Context, reg *registry.Registry, hookNames []string, targets []string, env map[string]string, dryRun bool) error {
+func runHooksInTargets(ctx context.Context, reg *registry.Registry, hookNames []string, targets []string, env map[string]string, dryRun bool, cfg *config.Config) error {
 	// Resolve all targets
 	wtTargets, err := resolveWorktreeTargets(ctx, reg, targets)
 	if err != nil {
@@ -182,6 +184,8 @@ func runHooksForContext(hookNames []string, hooksMap map[string]config.Hook, hoo
 
 // completeHookArg provides completion for hook command arguments
 func completeHookArg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg := config.FromContext(cmd.Context())
+
 	// After --, complete worktree targets
 	for _, arg := range args {
 		if arg == "--" {

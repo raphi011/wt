@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -17,23 +18,16 @@ import (
 // Scenario: User runs `wt repo list` with no registered repos
 // Expected: Shows "No repos registered" message
 func TestRepoList_ListEmpty(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
-	tmpDir, err := os.MkdirTemp("", "wt-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{})
@@ -48,17 +42,15 @@ func TestRepoList_ListEmpty(t *testing.T) {
 // Scenario: User runs `wt repo list` with registered repos
 // Expected: Shows all registered repos
 func TestRepoList_ListRepos(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Create registry with repos
 	reg := &registry.Registry{
@@ -67,11 +59,11 @@ func TestRepoList_ListRepos(t *testing.T) {
 			{Name: "repo2", Path: "/tmp/repo2", Labels: []string{"frontend"}},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{})
@@ -86,17 +78,15 @@ func TestRepoList_ListRepos(t *testing.T) {
 // Scenario: User runs `wt repo list backend`
 // Expected: Shows only repos with the backend label
 func TestRepoList_FilterByLabel(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Create registry with repos
 	reg := &registry.Registry{
@@ -105,11 +95,11 @@ func TestRepoList_FilterByLabel(t *testing.T) {
 			{Name: "frontend-app", Path: "/tmp/frontend-app", Labels: []string{"frontend"}},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"backend"})
@@ -124,17 +114,15 @@ func TestRepoList_FilterByLabel(t *testing.T) {
 // Scenario: User runs `wt repo list nonexistent`
 // Expected: Returns error about no repos found with label
 func TestRepoList_LabelNotFound(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Create registry with repos that don't have the searched label
 	reg := &registry.Registry{
@@ -142,11 +130,11 @@ func TestRepoList_LabelNotFound(t *testing.T) {
 			{Name: "repo1", Path: "/tmp/repo1", Labels: []string{"backend"}},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"nonexistent"})
@@ -165,17 +153,15 @@ func TestRepoList_LabelNotFound(t *testing.T) {
 // Scenario: User runs `wt repo list --json`
 // Expected: Outputs repos in JSON format
 func TestRepoList_JSON(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Create registry with repos
 	reg := &registry.Registry{
@@ -183,12 +169,14 @@ func TestRepoList_JSON(t *testing.T) {
 			{Name: "test-repo", Path: "/tmp/test-repo"},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
 	// The JSON output goes through the output.Printer, so use testContextWithOutput
 	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, tmpDir)
 	cmd := newRepoListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"--json"})
@@ -218,16 +206,13 @@ func TestRepoAdd_RegisterRepo(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "testrepo")
 
 	// Create test registry
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	// Override HOME for registry
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Run add command
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoAddCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath})
@@ -237,7 +222,7 @@ func TestRepoAdd_RegisterRepo(t *testing.T) {
 	}
 
 	// Verify repo was registered
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -260,21 +245,18 @@ func TestRepoAdd_RegisterRepo(t *testing.T) {
 // Scenario: User runs `wt repo add /path/to/repo -l backend -l api`
 // Expected: Repo is registered with labels
 func TestRepoAdd_WithLabels(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "labeled-repo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoAddCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath, "-l", "backend", "-l", "api"})
@@ -283,7 +265,7 @@ func TestRepoAdd_WithLabels(t *testing.T) {
 		t.Fatalf("repo add command failed: %v", err)
 	}
 
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -313,21 +295,18 @@ func TestRepoAdd_WithLabels(t *testing.T) {
 // Scenario: User runs `wt repo add /path/to/repo` twice
 // Expected: Second add fails with error
 func TestRepoAdd_DuplicatePath(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "dup-repo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 
 	// First add
 	cmd1 := newRepoAddCmd()
@@ -351,7 +330,7 @@ func TestRepoAdd_DuplicatePath(t *testing.T) {
 // Scenario: User runs `wt repo add /path/to/non-git-dir`
 // Expected: Command fails with error
 func TestRepoAdd_NotAGitRepo(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
@@ -359,14 +338,11 @@ func TestRepoAdd_NotAGitRepo(t *testing.T) {
 	notGitPath := filepath.Join(tmpDir, "not-a-repo")
 	os.MkdirAll(notGitPath, 0755)
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoAddCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{notGitPath})
@@ -381,7 +357,7 @@ func TestRepoAdd_NotAGitRepo(t *testing.T) {
 // Scenario: User runs `wt repo add repo1 repo2`
 // Expected: Both repos are registered
 func TestRepoAdd_MultiplePaths(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
@@ -390,14 +366,11 @@ func TestRepoAdd_MultiplePaths(t *testing.T) {
 	repo1 := setupTestRepo(t, tmpDir, "repo1")
 	repo2 := setupTestRepo(t, tmpDir, "repo2")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoAddCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repo1, repo2})
@@ -407,7 +380,7 @@ func TestRepoAdd_MultiplePaths(t *testing.T) {
 	}
 
 	// Verify both repos were registered
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -431,7 +404,7 @@ func TestRepoAdd_MultiplePaths(t *testing.T) {
 // Scenario: User runs `wt repo add repo1 notgit repo2`
 // Expected: Only git repos are registered, non-git dirs are skipped
 func TestRepoAdd_SkipsNonGitDirs(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
@@ -442,14 +415,11 @@ func TestRepoAdd_SkipsNonGitDirs(t *testing.T) {
 	os.MkdirAll(notGit, 0755)
 	repo2 := setupTestRepo(t, tmpDir, "repo2")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoAddCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repo1, notGit, repo2})
@@ -459,7 +429,7 @@ func TestRepoAdd_SkipsNonGitDirs(t *testing.T) {
 	}
 
 	// Verify only git repos were registered
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -483,20 +453,17 @@ func TestRepoAdd_SkipsNonGitDirs(t *testing.T) {
 // Scenario: User runs `wt repo remove testrepo`
 // Expected: Repo is removed from registry
 func TestRepoRemove_UnregisterRepo(t *testing.T) {
-	// Don't run in parallel - modifies HOME env var
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "remove-test")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	// Set HOME BEFORE saving registry
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Add the repo via registry
 	reg := &registry.Registry{
@@ -504,12 +471,12 @@ func TestRepoRemove_UnregisterRepo(t *testing.T) {
 			{Name: "remove-test", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
 	// Now remove it
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoRemoveCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"remove-test"})
@@ -519,7 +486,7 @@ func TestRepoRemove_UnregisterRepo(t *testing.T) {
 	}
 
 	// Verify repo was removed
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -539,19 +506,16 @@ func TestRepoRemove_UnregisterRepo(t *testing.T) {
 // Scenario: User runs `wt repo remove nonexistent`
 // Expected: Command fails with error
 func TestRepoRemove_NonExistent(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoRemoveCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"nonexistent"})
@@ -566,21 +530,18 @@ func TestRepoRemove_NonExistent(t *testing.T) {
 // Scenario: User runs `wt repo make-bare` in a regular git repo
 // Expected: Repo is converted to bare-in-.git structure and registered
 func TestRepoMakeBare_BasicMigration(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "migrate-test")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoMakeBareCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath})
@@ -606,7 +567,7 @@ func TestRepoMakeBare_BasicMigration(t *testing.T) {
 	}
 
 	// Verify repo was registered
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -625,21 +586,18 @@ func TestRepoMakeBare_BasicMigration(t *testing.T) {
 // Scenario: User runs `wt repo make-bare -n myapp ./repo`
 // Expected: Repo is migrated and registered with custom name
 func TestRepoMakeBare_WithCustomName(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "original-name")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoMakeBareCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath, "-n", "custom-name"})
@@ -648,7 +606,7 @@ func TestRepoMakeBare_WithCustomName(t *testing.T) {
 		t.Fatalf("make-bare command failed: %v", err)
 	}
 
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -663,21 +621,18 @@ func TestRepoMakeBare_WithCustomName(t *testing.T) {
 // Scenario: User runs `wt repo make-bare -l backend -l api ./repo`
 // Expected: Repo is migrated and registered with labels
 func TestRepoMakeBare_WithLabels(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "labeled-migrate")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoMakeBareCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath, "-l", "backend", "-l", "api"})
@@ -686,7 +641,7 @@ func TestRepoMakeBare_WithLabels(t *testing.T) {
 		t.Fatalf("make-bare command failed: %v", err)
 	}
 
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -710,21 +665,18 @@ func TestRepoMakeBare_WithLabels(t *testing.T) {
 // Scenario: User runs `wt repo make-bare -w "./{branch}" ./repo`
 // Expected: Repo is migrated and registered with worktree format
 func TestRepoMakeBare_WithWorktreeFormat(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "format-migrate")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoMakeBareCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath, "-w", "./{branch}"})
@@ -733,7 +685,7 @@ func TestRepoMakeBare_WithWorktreeFormat(t *testing.T) {
 		t.Fatalf("make-bare command failed: %v", err)
 	}
 
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -748,21 +700,18 @@ func TestRepoMakeBare_WithWorktreeFormat(t *testing.T) {
 // Scenario: User runs `wt repo make-bare -w "../{repo}-{branch}" ./repo`
 // Expected: Main worktree is created as sibling to repo directory
 func TestRepoMakeBare_WithSiblingFormat(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "sibling-format")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoMakeBareCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath, "-w", "../{repo}-{branch}"})
@@ -790,7 +739,7 @@ func TestRepoMakeBare_WithSiblingFormat(t *testing.T) {
 // Scenario: User runs `wt repo make-bare -w "../{repo}-{branch}"` on repo with existing worktrees
 // Expected: Existing worktrees are moved to format-based sibling locations
 func TestRepoMakeBare_SiblingFormatWithExistingWorktrees(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
@@ -805,14 +754,11 @@ func TestRepoMakeBare_SiblingFormatWithExistingWorktrees(t *testing.T) {
 		t.Fatalf("failed to create worktree: %v\n%s", err, out)
 	}
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd2 := newRepoMakeBareCmd()
 	cmd2.SetContext(ctx)
 	cmd2.SetArgs([]string{repoPath, "-w", "../{repo}-{branch}"})
@@ -847,21 +793,20 @@ func TestRepoMakeBare_SiblingFormatWithExistingWorktrees(t *testing.T) {
 // Scenario: User runs `wt repo make-bare --dry-run ./repo`
 // Expected: Shows migration plan without making changes
 func TestRepoMakeBare_DryRun(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "dryrun-migrate")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
+	cfg := &config.Config{RegistryPath: regFile}
 	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, tmpDir)
 	cmd := newRepoMakeBareCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath, "--dry-run"})
@@ -882,7 +827,7 @@ func TestRepoMakeBare_DryRun(t *testing.T) {
 	}
 
 	// Verify repo was NOT registered
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -897,7 +842,7 @@ func TestRepoMakeBare_DryRun(t *testing.T) {
 // Scenario: User runs `wt repo make-bare` on repo with existing worktrees
 // Expected: Repo is migrated and existing worktrees are moved to format-based paths
 func TestRepoMakeBare_WithExistingWorktrees(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
@@ -913,14 +858,11 @@ func TestRepoMakeBare_WithExistingWorktrees(t *testing.T) {
 		t.Fatalf("failed to create worktree: %v\n%s", err, out)
 	}
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd2 := newRepoMakeBareCmd()
 	cmd2.SetContext(ctx)
 	cmd2.SetArgs([]string{repoPath})
@@ -956,7 +898,7 @@ func TestRepoMakeBare_WithExistingWorktrees(t *testing.T) {
 // Scenario: User runs `wt repo make-bare` on a worktree path
 // Expected: Command fails with error about being a worktree
 func TestRepoMakeBare_IsWorktree(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
@@ -971,14 +913,11 @@ func TestRepoMakeBare_IsWorktree(t *testing.T) {
 		t.Fatalf("failed to create worktree: %v\n%s", err, out)
 	}
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd2 := newRepoMakeBareCmd()
 	cmd2.SetContext(ctx)
 	cmd2.SetArgs([]string{wtPath}) // Try to migrate the worktree, not the main repo
@@ -998,21 +937,18 @@ func TestRepoMakeBare_IsWorktree(t *testing.T) {
 // Scenario: User runs `wt repo make-bare` on already migrated repo
 // Expected: Command fails with error
 func TestRepoMakeBare_AlreadyBare(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupBareInGitRepo(t, tmpDir, "already-bare")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoMakeBareCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath})
@@ -1028,7 +964,7 @@ func TestRepoMakeBare_AlreadyBare(t *testing.T) {
 // Scenario: User runs `wt repo make-bare` on non-git directory
 // Expected: Command fails with error
 func TestRepoMakeBare_NotGitRepo(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
@@ -1036,14 +972,11 @@ func TestRepoMakeBare_NotGitRepo(t *testing.T) {
 	notGitPath := filepath.Join(tmpDir, "not-a-repo")
 	os.MkdirAll(notGitPath, 0755)
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoMakeBareCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{notGitPath})
@@ -1058,21 +991,18 @@ func TestRepoMakeBare_NotGitRepo(t *testing.T) {
 // Scenario: User runs `wt repo make-bare` on repo with submodules
 // Expected: Command fails with error about submodules
 func TestRepoMakeBare_HasSubmodules(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepoWithSubmodule(t, tmpDir, "with-submodule")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoMakeBareCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath})
@@ -1092,19 +1022,17 @@ func TestRepoMakeBare_HasSubmodules(t *testing.T) {
 // Scenario: User runs `wt repo make-bare` on repo already in registry
 // Expected: Repo is migrated, registration is skipped
 func TestRepoMakeBare_AlreadyRegistered(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "already-registered")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Pre-register the repo
 	reg := &registry.Registry{
@@ -1112,11 +1040,13 @@ func TestRepoMakeBare_AlreadyRegistered(t *testing.T) {
 			{Name: "already-registered", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
 	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, tmpDir)
 	cmd := newRepoMakeBareCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath})
@@ -1137,7 +1067,7 @@ func TestRepoMakeBare_AlreadyRegistered(t *testing.T) {
 	}
 
 	// Verify still only one repo in registry
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -1152,19 +1082,17 @@ func TestRepoMakeBare_AlreadyRegistered(t *testing.T) {
 // Scenario: User runs `wt repo make-bare` with name that already exists
 // Expected: Command fails with name conflict error
 func TestRepoMakeBare_NameConflict(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "name-conflict")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Register a different repo with the same name
 	reg := &registry.Registry{
@@ -1172,11 +1100,11 @@ func TestRepoMakeBare_NameConflict(t *testing.T) {
 			{Name: "name-conflict", Path: "/some/other/path"},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoMakeBareCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath})
@@ -1196,7 +1124,7 @@ func TestRepoMakeBare_NameConflict(t *testing.T) {
 // Scenario: User runs `wt repo make-bare ./myrepo` from outside the repo
 // Expected: Repo at path is migrated and registered
 func TestRepoMakeBare_ByPath(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
@@ -1206,19 +1134,11 @@ func TestRepoMakeBare_ByPath(t *testing.T) {
 	os.MkdirAll(reposDir, 0755)
 	repoPath := setupTestRepo(t, reposDir, "path-migrate")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	// Change to a different directory (not the repo)
-	oldWd, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldWd)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoMakeBareCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{repoPath})
@@ -1234,7 +1154,7 @@ func TestRepoMakeBare_ByPath(t *testing.T) {
 	}
 
 	// Verify registration
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -1254,7 +1174,7 @@ func TestRepoMakeBare_ByPath(t *testing.T) {
 // Scenario: User has a worktree created with a different folder name than its metadata dir
 // Expected: Migration moves worktree to format-based path regardless of folder name
 func TestRepoMakeBare_WorktreeMetadataNameMismatch(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
@@ -1293,16 +1213,13 @@ func TestRepoMakeBare_WorktreeMetadataNameMismatch(t *testing.T) {
 		t.Fatalf("expected metadata at %s but not found", metadataPath)
 	}
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	if err := os.MkdirAll(regPath, 0755); err != nil {
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
 		t.Fatalf("failed to create registry dir: %v", err)
 	}
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
-
-	ctx := testContext(t)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd2 := newRepoMakeBareCmd()
 	cmd2.SetContext(ctx)
 	cmd2.SetArgs([]string{repoPath})
@@ -1332,7 +1249,7 @@ func TestRepoMakeBare_WorktreeMetadataNameMismatch(t *testing.T) {
 // Scenario: User runs `wt repo make-bare` on repo with upstream tracking configured
 // Expected: Main branch and worktrees retain their upstream tracking after migration
 func TestRepoMakeBare_PreservesUpstream(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
@@ -1466,17 +1383,15 @@ func TestRepoMakeBare_PreservesUpstream(t *testing.T) {
 	}
 
 	// Setup registry
-	regPath := filepath.Join(tmpDir, ".wt")
-	if err := os.MkdirAll(regPath, 0755); err != nil {
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
 		t.Fatalf("failed to create registry dir: %v", err)
 	}
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Run make-bare
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 	makeBareCmd := newRepoMakeBareCmd()
 	makeBareCmd.SetContext(ctx)
 	makeBareCmd.SetArgs([]string{repoPath})

@@ -100,11 +100,12 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 		ValidArgsFunction: completeScopedWorktreeArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			out := output.FromContext(ctx)
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -132,7 +133,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				}
 			} else {
 				// Try current repo
-				repo, err := findOrRegisterCurrentRepo(ctx, reg)
+				repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
 				if err != nil {
 					// Not in a repo, prune all
 					for i := range reg.Repos {
@@ -520,6 +521,8 @@ func pruneWorktrees(ctx context.Context, toRemove []pruneWorktree, force, dryRun
 	if dryRun {
 		return toRemove, nil
 	}
+
+	cfg := config.FromContext(ctx)
 
 	// Select hooks
 	hookMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandPrune)

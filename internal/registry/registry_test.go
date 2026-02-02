@@ -215,7 +215,7 @@ func TestRegistrySaveLoad(t *testing.T) {
 	}
 
 	// Save
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(""); err != nil {
 		t.Fatalf("Save() failed: %v", err)
 	}
 
@@ -226,7 +226,7 @@ func TestRegistrySaveLoad(t *testing.T) {
 	}
 
 	// Load
-	loaded, err := Load()
+	loaded, err := Load("")
 	if err != nil {
 		t.Fatalf("Load() failed: %v", err)
 	}

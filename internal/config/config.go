@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,6 +9,39 @@ import (
 
 	"github.com/BurntSushi/toml"
 )
+
+// Context keys for dependency injection
+type cfgKey struct{}
+type workDirKey struct{}
+
+// WithConfig returns a new context with the config stored in it.
+func WithConfig(ctx context.Context, cfg *Config) context.Context {
+	return context.WithValue(ctx, cfgKey{}, cfg)
+}
+
+// FromContext returns the config from context.
+// Returns nil if no config is stored.
+func FromContext(ctx context.Context) *Config {
+	if cfg, ok := ctx.Value(cfgKey{}).(*Config); ok {
+		return cfg
+	}
+	return nil
+}
+
+// WithWorkDir returns a new context with the working directory stored in it.
+func WithWorkDir(ctx context.Context, dir string) context.Context {
+	return context.WithValue(ctx, workDirKey{}, dir)
+}
+
+// WorkDirFromContext returns the working directory from context.
+// Falls back to os.Getwd() if not stored or empty.
+func WorkDirFromContext(ctx context.Context) string {
+	if dir, ok := ctx.Value(workDirKey{}).(string); ok && dir != "" {
+		return dir
+	}
+	wd, _ := os.Getwd()
+	return wd
+}
 
 // Hook defines a post-create hook
 type Hook struct {
@@ -69,6 +103,7 @@ type ThemeConfig struct {
 
 // Config holds the wt configuration
 type Config struct {
+	RegistryPath  string            `toml:"-"`              // Override ~/.wt/repos.json path (for testing)
 	WorktreeDir   string            `toml:"worktree_dir"`
 	RepoDir       string            `toml:"repo_dir"`       // optional: where to find repos for -r/-l
 	DefaultSort   string            `toml:"default_sort"`   // "id", "repo", "branch", "commit" (default: "id")

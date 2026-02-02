@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/output"
 )
 
@@ -97,7 +98,9 @@ func newConfigShowCmd() *cobra.Command {
 		Short: "Show effective configuration",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			out := output.FromContext(cmd.Context())
+			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
+			out := output.FromContext(ctx)
 
 			if jsonOutput {
 				enc := json.NewEncoder(out.Writer())
@@ -131,7 +134,9 @@ func newConfigHooksCmd() *cobra.Command {
 		Short: "List available hooks",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			out := output.FromContext(cmd.Context())
+			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
+			out := output.FromContext(ctx)
 
 			if jsonOutput {
 				enc := json.NewEncoder(out.Writer())
