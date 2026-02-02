@@ -187,16 +187,20 @@ This allows piping: `cd $(wt cd --number 1)` works because logs go to stderr.
 
 Integration tests are in `cmd/wt/*_integration_test.go` with build tag `//go:build integration`.
 
-**When writing or modifying integration tests, use the `integration-test-writer` agent** (`.claude/agents/integration-test-writer.md`) which contains:
-- Complete test template with all required patterns
-- Parallel test safety patterns (registry isolation, workDir isolation)
-- Helper function reference
-- Documentation format requirements
+**When writing or modifying tests, use the `integration-test-writer` agent** (`.claude/agents/integration-test-writer.md`) which covers:
+- **Integration tests**: Complete template, parallel test safety, registry/workDir isolation
+- **Wizard/interactive tests**: Step unit tests, wizard orchestration, keyMsg helpers
 
-Key points:
+Key points for integration tests:
 - All tests MUST use `t.Parallel()` as first statement
 - Never use `os.Setenv("HOME", ...)` or `os.Chdir()` - use `cfg.RegistryPath` and `workDir` instead
 - Always use `resolvePath(t, t.TempDir())` for macOS symlink resolution
+
+Key points for wizard tests:
+- Test steps by calling `Update()` directly with synthetic `tea.KeyPressMsg`
+- Use `keyMsg("enter")` helper to create key events
+- Use `updateStep[T]()` generic helper for type-safe step updates
+- For TextInputStep, call `Init()` before typing (to focus the input)
 
 ### Commit Messages
 
