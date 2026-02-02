@@ -8,6 +8,16 @@ import (
 	"strings"
 )
 
+// getWorktreeMetadataName returns the worktree's metadata directory name
+// by running `git rev-parse --git-dir` in the worktree.
+func getWorktreeMetadataName(ctx context.Context, wtPath string) (string, error) {
+	gitDir, err := outputGit(ctx, wtPath, "rev-parse", "--git-dir")
+	if err != nil {
+		return "", err
+	}
+	return filepath.Base(strings.TrimSpace(string(gitDir))), nil
+}
+
 // MigrationPlan describes what will be done during migration
 type MigrationPlan struct {
 	RepoPath       string // Original repo path
@@ -106,6 +116,12 @@ func ValidateMigration(ctx context.Context, repoPath string) (*MigrationPlan, er
 		wtName := filepath.Base(wt.Path)
 		newName := StripRepoPrefix(repoName, wtName)
 
+		// Get actual metadata directory name (may differ from folder name)
+		metadataName, err := getWorktreeMetadataName(ctx, wt.Path)
+		if err != nil {
+			return nil, fmt.Errorf("get worktree %s metadata: %w", wtName, err)
+		}
+
 		// Check if worktree is outside repo directory
 		wtParent := filepath.Dir(wt.Path)
 		repoParent := filepath.Dir(absPath)
@@ -131,7 +147,7 @@ func ValidateMigration(ctx context.Context, repoPath string) (*MigrationPlan, er
 			OldPath:   wt.Path,
 			NewPath:   newPath,
 			Branch:    wt.Branch,
-			OldName:   wtName,
+			OldName:   metadataName,
 			NewName:   newName,
 			NeedsMove: needsMove,
 			IsOutside: isOutside,
