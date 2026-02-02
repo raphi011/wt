@@ -370,3 +370,316 @@ func TestCheckout_NotInRepo(t *testing.T) {
 		t.Error("expected error when not in repo")
 	}
 }
+
+// TestCheckout_NewBranchPushesAndSetsUpstream tests that new branches are pushed and get upstream set.
+//
+// Scenario: User runs `wt checkout -b feature` with set_upstream = true
+// Expected: Branch is pushed to origin and upstream tracking is set
+func TestCheckout_NewBranchPushesAndSetsUpstream(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath, _ := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	setUpstreamTrue := true
+	oldCfg := cfg
+	cfg = &config.Config{
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+			SetUpstream:    &setUpstreamTrue,
+		},
+	}
+	defer func() { cfg = oldCfg }()
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
+	ctx := testContext(t)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify upstream is set (branch was pushed)
+	upstream := getGitUpstream(t, repoPath, "feature")
+	if upstream != "refs/heads/feature" {
+		t.Errorf("expected upstream 'refs/heads/feature', got %q", upstream)
+	}
+}
+
+// TestCheckout_ExistingBranchWithRemoteSetsUpstream tests upstream for existing remote branches.
+//
+// Scenario: User runs `wt checkout feature` where feature exists on origin, with set_upstream = true
+// Expected: Upstream tracking is set to origin/feature
+func TestCheckout_ExistingBranchWithRemoteSetsUpstream(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath, _ := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
+
+	// Create and push a branch to origin
+	pushBranchToOrigin(t, repoPath, "feature")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	setUpstreamTrue := true
+	oldCfg := cfg
+	cfg = &config.Config{
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			SetUpstream:    &setUpstreamTrue,
+		},
+	}
+	defer func() { cfg = oldCfg }()
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
+	ctx := testContext(t)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify upstream is set
+	upstream := getGitUpstream(t, repoPath, "feature")
+	if upstream != "refs/heads/feature" {
+		t.Errorf("expected upstream 'refs/heads/feature', got %q", upstream)
+	}
+}
+
+// TestCheckout_LocalOnlyBranchNoUpstream tests that local-only branches don't get upstream.
+//
+// Scenario: User runs `wt checkout local-only` where branch only exists locally, with set_upstream = true
+// Expected: No upstream is set (remote branch doesn't exist)
+func TestCheckout_LocalOnlyBranchNoUpstream(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath, _ := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
+
+	// Create a local branch without pushing
+	runGitCommand(repoPath, "branch", "local-only")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	setUpstreamTrue := true
+	oldCfg := cfg
+	cfg = &config.Config{
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			SetUpstream:    &setUpstreamTrue,
+		},
+	}
+	defer func() { cfg = oldCfg }()
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
+	ctx := testContext(t)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"local-only"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify no upstream is set (branch only exists locally, not a new branch so won't push)
+	upstream := getGitUpstream(t, repoPath, "local-only")
+	if upstream != "" {
+		t.Errorf("expected no upstream for local-only branch, got %q", upstream)
+	}
+}
+
+// TestCheckout_SetUpstreamDisabled tests that upstream is not set when disabled.
+//
+// Scenario: User runs `wt checkout -b feature` with set_upstream = false
+// Expected: No upstream tracking is set
+func TestCheckout_SetUpstreamDisabled(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath, _ := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	setUpstreamFalse := false
+	oldCfg := cfg
+	cfg = &config.Config{
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+			SetUpstream:    &setUpstreamFalse, // Explicitly disabled
+		},
+	}
+	defer func() { cfg = oldCfg }()
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
+	ctx := testContext(t)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "no-upstream-feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify no upstream is set
+	upstream := getGitUpstream(t, repoPath, "no-upstream-feature")
+	if upstream != "" {
+		t.Errorf("expected no upstream when disabled, got %q", upstream)
+	}
+}
+
+// TestCheckout_NoOriginNoUpstream tests checkout works without origin remote.
+//
+// Scenario: User runs `wt checkout -b feature` in repo without origin
+// Expected: Worktree created, no upstream (no error)
+func TestCheckout_NoOriginNoUpstream(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Use setupTestRepo which adds a fake origin URL but no actual remote
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	// Remove the origin remote
+	runGitCommand(repoPath, "remote", "remove", "origin")
+
+	regPath := filepath.Join(tmpDir, ".wt")
+	os.MkdirAll(regPath, 0755)
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	oldCfg := cfg
+	cfg = &config.Config{
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+	}
+	defer func() { cfg = oldCfg }()
+
+	oldDir, _ := os.Getwd()
+	os.Chdir(repoPath)
+	defer os.Chdir(oldDir)
+
+	ctx := testContext(t)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify no upstream (no origin remote)
+	upstream := getGitUpstream(t, repoPath, "feature")
+	if upstream != "" {
+		t.Errorf("expected no upstream without origin, got %q", upstream)
+	}
+}

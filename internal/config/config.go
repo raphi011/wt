@@ -50,6 +50,7 @@ type CheckoutConfig struct {
 	WorktreeFormat string `toml:"worktree_format"` // Template for worktree folder names
 	BaseRef        string `toml:"base_ref"`        // "local" or "remote" (default: "remote")
 	AutoFetch      bool   `toml:"auto_fetch"`      // Fetch before creating new branches
+	SetUpstream    *bool  `toml:"set_upstream"`    // Auto-set upstream tracking (default: true)
 }
 
 // ThemeConfig holds theme/color configuration for interactive UI
@@ -100,6 +101,14 @@ func (c *Config) GetAbsWorktreeDir() (string, error) {
 
 // DefaultWorktreeFormat is the default format for worktree folder names
 const DefaultWorktreeFormat = "{repo}-{branch}"
+
+// ShouldSetUpstream returns true if upstream tracking should be set (default: false)
+func (c *CheckoutConfig) ShouldSetUpstream() bool {
+	if c.SetUpstream == nil {
+		return false // Default to false
+	}
+	return *c.SetUpstream
+}
 
 // Default returns the default configuration
 func Default() Config {
@@ -450,6 +459,13 @@ worktree_format = "{repo}-{branch}"
 # When true, fetches the base branch from origin before creating worktree
 # Same as always passing --fetch flag
 # auto_fetch = false
+
+# Auto-set upstream tracking when checking out branches (default: false)
+# When true and origin exists:
+#   - For new branches (-b): pushes branch to origin, then sets upstream
+#   - For existing branches: sets upstream if origin/<branch> exists
+# This enables git push/pull without specifying remote.
+# set_upstream = false
 
 # Default sort order for 'wt list'
 # Available values: "id", "repo", "branch", "commit"

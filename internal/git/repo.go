@@ -252,6 +252,26 @@ func GetUpstreamBranch(ctx context.Context, repoPath, branch string) string {
 	return strings.TrimPrefix(ref, "refs/heads/")
 }
 
+// SetUpstreamBranch sets the upstream tracking branch for a local branch.
+// upstream should be "origin/<branch>" or just "<branch>" (will prepend origin/).
+func SetUpstreamBranch(ctx context.Context, repoPath, localBranch, upstream string) error {
+	if !strings.HasPrefix(upstream, "origin/") {
+		upstream = "origin/" + upstream
+	}
+	return runGit(ctx, repoPath, "branch", "--set-upstream-to="+upstream, localBranch)
+}
+
+// RemoteBranchExists checks if a remote tracking branch exists.
+func RemoteBranchExists(ctx context.Context, repoPath, branch string) bool {
+	ref := "refs/remotes/origin/" + branch
+	return runGit(ctx, repoPath, "rev-parse", "--verify", ref) == nil
+}
+
+// PushBranch pushes a branch to origin.
+func PushBranch(ctx context.Context, repoPath, branch string) error {
+	return runGit(ctx, repoPath, "push", "-u", "origin", branch)
+}
+
 // BranchExists checks if a local branch exists
 func BranchExists(ctx context.Context, branch string) (bool, error) {
 	err := runGit(ctx, "", "rev-parse", "--verify", "refs/heads/"+branch)

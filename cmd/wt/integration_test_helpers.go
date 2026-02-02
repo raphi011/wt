@@ -212,6 +212,99 @@ func getGitBranch(t *testing.T, path string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// getGitUpstream returns the upstream tracking branch for a given branch
+func getGitUpstream(t *testing.T, path, branch string) string {
+	t.Helper()
+	cmd := exec.Command("git", "config", "branch."+branch+".merge")
+	cmd.Dir = path
+	out, err := cmd.Output()
+	if err != nil {
+		return "" // No upstream configured
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// setupTestRepoWithOrigin creates a repo with a real local origin remote.
+// Returns: (mainRepoPath, originRepoPath)
+func setupTestRepoWithOrigin(t *testing.T, dir, name string) (string, string) {
+	t.Helper()
+
+	dir = resolvePath(t, dir)
+
+	// Create a bare "origin" repository
+	originPath := filepath.Join(dir, name+"-origin.git")
+	if err := os.MkdirAll(originPath, 0755); err != nil {
+		t.Fatalf("failed to create origin dir: %v", err)
+	}
+	cmd := exec.Command("git", "init", "--bare")
+	cmd.Dir = originPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to init bare origin: %v\n%s", err, out)
+	}
+
+	// Create the main repo
+	repoPath := filepath.Join(dir, name)
+	if err := os.MkdirAll(repoPath, 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+
+	cmds := [][]string{
+		{"git", "init", "-b", "main"},
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test User"},
+		{"git", "config", "commit.gpgsign", "false"},
+	}
+
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create initial commit
+	readmePath := filepath.Join(repoPath, "README.md")
+	if err := os.WriteFile(readmePath, []byte("# "+name+"\n"), 0644); err != nil {
+		t.Fatalf("failed to write README: %v", err)
+	}
+
+	cmds = [][]string{
+		{"git", "add", "README.md"},
+		{"git", "commit", "-m", "Initial commit"},
+		{"git", "remote", "add", "origin", originPath},
+		{"git", "push", "-u", "origin", "main"},
+	}
+
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	return repoPath, originPath
+}
+
+// pushBranchToOrigin creates a branch and pushes it to origin
+func pushBranchToOrigin(t *testing.T, repoPath, branch string) {
+	t.Helper()
+
+	cmds := [][]string{
+		{"git", "branch", branch},
+		{"git", "push", "origin", branch},
+	}
+
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+}
+
 // runGitCommand runs a git command in the given directory and returns the output
 func runGitCommand(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)

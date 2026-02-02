@@ -261,6 +261,23 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 		}
 	}
 
+	// Set upstream tracking if enabled and origin exists
+	if cfg.Checkout.ShouldSetUpstream() && git.HasRemote(ctx, gitDir, "origin") {
+		if newBranch {
+			// New branches: push to origin first, then set upstream
+			if err := git.PushBranch(ctx, gitDir, branch); err != nil {
+				l.Printf("Warning: failed to push branch: %v\n", err)
+			} else if err := git.SetUpstreamBranch(ctx, gitDir, branch, branch); err != nil {
+				l.Debug("failed to set upstream", "error", err)
+			}
+		} else if git.RemoteBranchExists(ctx, gitDir, branch) {
+			// Existing branches: only set upstream if remote branch exists
+			if err := git.SetUpstreamBranch(ctx, gitDir, branch, branch); err != nil {
+				l.Debug("failed to set upstream", "error", err)
+			}
+		}
+	}
+
 	fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
 
 	// Set note if provided
