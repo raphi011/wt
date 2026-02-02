@@ -200,6 +200,13 @@ Otherwise, it's looked up in the local registry.`,
 				return fmt.Errorf("create worktree: %w", err)
 			}
 
+			// Set upstream - branch was fetched so remote exists
+			if cfg.Checkout.ShouldSetUpstream() {
+				if err := git.SetUpstreamBranch(ctx, gitDir, branch, branch); err != nil {
+					l.Debug("failed to set upstream", "error", err)
+				}
+			}
+
 			// Cache PR info for the new worktree
 			if cache, err := prcache.Load(); err == nil {
 				if prInfo, err := f.GetPRForBranch(ctx, originURL, branch); err == nil {
