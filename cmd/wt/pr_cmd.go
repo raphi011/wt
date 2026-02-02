@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
+	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -196,6 +198,14 @@ Otherwise, it's looked up in the local registry.`,
 			// Create worktree
 			if err := git.CreateWorktree(ctx, gitDir, wtPath, branch); err != nil {
 				return fmt.Errorf("create worktree: %w", err)
+			}
+
+			// Cache PR info for the new worktree
+			if cache, err := prcache.Load(); err == nil {
+				if prInfo, err := f.GetPRForBranch(ctx, originURL, branch); err == nil {
+					cache.Set(filepath.Base(wtPath), convertForgePR(prInfo))
+					_ = cache.Save()
+				}
 			}
 
 			fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
@@ -443,6 +453,10 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 				return fmt.Errorf("no PR found for branch %s: %w", branch, err)
 			}
 
+			// Load PR cache for updates
+			cache, _ := prcache.Load()
+			cacheKey := filepath.Base(cwd)
+
 			if pr.State == "MERGED" {
 				out.Printf("PR #%d is already merged\n", pr.Number)
 			} else if pr.State == "CLOSED" {
@@ -454,6 +468,11 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 					return fmt.Errorf("merge failed: %w", err)
 				}
 				out.Printf("Merged PR #%d\n", pr.Number)
+
+				// Update cache with merged state
+				pr.State = "MERGED"
+				cache.Set(cacheKey, convertForgePR(pr))
+				_ = cache.Save()
 			}
 
 			// Run hooks
@@ -487,6 +506,9 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 						l.Printf("Warning: failed to remove worktree: %v\n", err)
 					} else {
 						out.Printf("Removed worktree: %s\n", cwd)
+						// Remove from cache since worktree no longer exists
+						cache.Delete(cacheKey)
+						_ = cache.Save()
 					}
 				}
 			}
