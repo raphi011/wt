@@ -53,6 +53,9 @@ internal/ui/             - Terminal UI components
   ├── table.go           - Lipgloss table formatting
   ├── spinner.go         - Bubbletea spinner
   └── wizard/            - Interactive wizard framework
+      ├── framework/     - Core wizard orchestration (Wizard, Step interface)
+      ├── flows/         - Command-specific wizard implementations
+      └── steps/         - Reusable step components (FilterableList, SingleSelect, etc.)
 ```
 
 ### Key Design Decisions
@@ -130,7 +133,7 @@ internal/ui/             - Terminal UI components
 
 5. **Handle empty selections** - If a multi-select step has no selections, translate to the appropriate flag (e.g., no hooks selected → `--no-hook`).
 
-6. **File structure** - Create wizard UI in `internal/ui/<command>_wizard.go`. Define `<Command>Options` struct for wizard output and `<Command>WizardParams` struct for wizard input. The wizard returns options which the command applies to its flags.
+6. **File structure** - Create wizard flows in `internal/ui/wizard/flows/<command>.go`. Define `<Command>Options` struct for wizard output and `<Command>WizardParams` struct for wizard input. The wizard returns options which the command applies to its flags.
 
 **Forge Feature Parity** - Any feature that involves forge operations (PRs, cloning, etc.) MUST support both GitHub and GitLab. Always:
 - Add methods to the `Forge` interface first
@@ -152,12 +155,15 @@ internal/ui/             - Terminal UI components
 **Global variables** - Shared state initialized in `root.go`:
 ```go
 var (
-    cfg     *config.Config  // Loaded configuration
-    workDir string          // Current working directory
+    // Global flags
+    verbose bool
+    quiet   bool
 )
 ```
 
 **context.Context** - Request-scoped values passed to functions:
+- `config.FromContext(ctx)` → Config (loaded configuration)
+- `config.WorkDirFromContext(ctx)` → Working directory
 - `log.FromContext(ctx)` → Logger (writes to stderr)
 - `output.FromContext(ctx)` → Printer (writes to stdout)
 
@@ -181,30 +187,16 @@ This allows piping: `cd $(wt cd --number 1)` works because logs go to stderr.
 
 Integration tests are in `cmd/wt/*_integration_test.go` with build tag `//go:build integration`.
 
-**Test Setup** - Tests set the global `cfg` variable and use Cobra's `SetContext`/`SetArgs`:
-```go
-cfg = &config.Config{WorktreeFormat: "../{repo}-{branch}"}
-ctx := testContext(t)
-cmd := newCheckoutCmd()
-cmd.SetContext(ctx)
-cmd.SetArgs([]string{"feature"})
-err := cmd.Execute()
-```
+**When writing or modifying integration tests, use the `integration-test-writer` agent** (`.claude/agents/integration-test-writer.md`) which contains:
+- Complete test template with all required patterns
+- Parallel test safety patterns (registry isolation, workDir isolation)
+- Helper function reference
+- Documentation format requirements
 
-**macOS Symlink Resolution** - On macOS, `t.TempDir()` returns paths like `/var/folders/...` but git commands may return `/private/var/folders/...` (the resolved symlink). Always use `resolvePath(t, t.TempDir())` helper to resolve symlinks before path comparisons. This helper is defined in `integration_test_helpers.go`.
-
-**All integration tests use `t.Parallel()`** for concurrent execution.
-
-**Integration Test Documentation** - All integration test functions MUST have doc comments in this format:
-```go
-// TestCommandName_Scenario describes what the test verifies in one line.
-//
-// Scenario: User runs `wt command args`
-// Expected: Description of expected outcome
-func TestCommandName_Scenario(t *testing.T) {
-```
-
-These doc comments are extracted by `make testdoc` to generate `docs/TESTS.md`. When adding new integration tests, always include the doc comment following this format.
+Key points:
+- All tests MUST use `t.Parallel()` as first statement
+- Never use `os.Setenv("HOME", ...)` or `os.Chdir()` - use `cfg.RegistryPath` and `workDir` instead
+- Always use `resolvePath(t, t.TempDir())` for macOS symlink resolution
 
 ### Commit Messages
 

@@ -12,7 +12,7 @@ const (
 	StepAdvance
 	// StepBack means move to the previous step.
 	StepBack
-	// StepSubmitIfReady means advance and submit if all steps are complete.
+	// StepSubmitIfReady means advance to the next step; if this was the last step, the wizard finishes.
 	StepSubmitIfReady
 )
 
@@ -58,7 +58,8 @@ type Step interface {
 	HasClearableInput() bool
 
 	// ClearInput clears any user input (filter, text field, etc).
-	ClearInput()
+	// Returns a command to run (e.g., textinput.Blink for cursor).
+	ClearInput() tea.Cmd
 }
 
 // Option represents a selectable item in list-based steps.

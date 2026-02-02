@@ -201,10 +201,8 @@ func TestRegistrySaveLoad(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Override home directory for test
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	// Use explicit registry path instead of HOME env var (parallel-safe)
+	regPath := filepath.Join(tmpDir, ".wt", "repos.json")
 
 	// Create registry
 	reg := &Registry{
@@ -214,19 +212,18 @@ func TestRegistrySaveLoad(t *testing.T) {
 		},
 	}
 
-	// Save
-	if err := reg.Save(); err != nil {
+	// Save to explicit path
+	if err := reg.Save(regPath); err != nil {
 		t.Fatalf("Save() failed: %v", err)
 	}
 
 	// Verify file exists
-	path := filepath.Join(tmpDir, ".wt", "repos.json")
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	if _, err := os.Stat(regPath); os.IsNotExist(err) {
 		t.Error("registry file was not created")
 	}
 
-	// Load
-	loaded, err := Load()
+	// Load from explicit path
+	loaded, err := Load(regPath)
 	if err != nil {
 		t.Fatalf("Load() failed: %v", err)
 	}

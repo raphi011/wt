@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
@@ -58,11 +59,12 @@ Worktrees are sorted by creation date (most recent first) by default.`,
   wt list --json               # Output as JSON`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			out := output.FromContext(ctx)
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -80,7 +82,7 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 				}
 			} else {
 				// Try current repo
-				repo, err := findOrRegisterCurrentRepo(ctx, reg)
+				repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
 				if err != nil {
 					// Not in a repo, show all
 					for i := range reg.Repos {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
@@ -48,6 +49,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
   wt checkout -i                          # Interactive mode`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 
 			// Apply config default if --fetch flag not explicitly set
@@ -61,7 +63,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			}
 
 			// Load registry
-			reg, err := registry.Load()
+			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
@@ -86,36 +88,10 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				// Build scope:branch if repos selected
 				if len(opts.SelectedRepos) > 0 {
 					repo, err := reg.FindByPath(opts.SelectedRepos[0])
-					if err == nil {
-						target = repo.Name + ":" + opts.Branch
+					if err != nil {
+						return fmt.Errorf("selected repo no longer registered: %s", opts.SelectedRepos[0])
 					}
-				}
-
-				// If already in worktree, just run hooks
-				if opts.IsWorktree {
-					wtPath, _ := git.GetBranchWorktree(ctx, opts.Branch)
-					if wtPath != "" {
-						fmt.Printf("Branch %s already checked out at: %s\n", opts.Branch, wtPath)
-						// Run hooks if any
-						if len(hookNames) > 0 {
-							repo, _ := findOrRegisterCurrentRepo(ctx, reg)
-							hookEnv, _ := hooks.ParseEnvWithStdin(env)
-							hookMatches, _ := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout)
-							if len(hookMatches) > 0 {
-								hookCtx := hooks.Context{
-									WorktreeDir: wtPath,
-									RepoDir:     repo.Path,
-									Branch:      opts.Branch,
-									Repo:        repo.Name,
-									Origin:      git.GetRepoDisplayName(repo.Path),
-									Trigger:     "checkout",
-									Env:         hookEnv,
-								}
-								hooks.RunAllNonFatal(hookMatches, hookCtx, wtPath)
-							}
-						}
-						return nil
-					}
+					target = repo.Name + ":" + opts.Branch
 				}
 			}
 
@@ -133,7 +109,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				repos = parsed.Repos
 			} else if newBranch {
 				// New branch without scope - use current repo
-				repo, err := findOrRegisterCurrentRepo(ctx, reg)
+				repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
 				if err != nil {
 					return fmt.Errorf("not in a repo, use scope:branch to specify target")
 				}
@@ -145,16 +121,20 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 					// Check if this repo has a worktree for this branch
 					wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 					if err != nil {
+						l.Debug("skipping repo", "repo", repo.Name, "error", err)
 						continue
 					}
 					for _, wt := range wts {
 						if wt.Branch == parsed.Branch {
-							fmt.Printf("Found existing worktree: %s (%s)\n", wt.Path, repo.Name)
-							return nil
+							return fmt.Errorf("branch %q already checked out at %s", parsed.Branch, wt.Path)
 						}
 					}
 					// Check if branch exists locally
-					branches, _ := git.ListLocalBranches(ctx, repo.Path)
+					branches, err := git.ListLocalBranches(ctx, repo.Path)
+					if err != nil {
+						l.Debug("failed to list branches", "repo", repo.Name, "error", err)
+						continue
+					}
 					for _, b := range branches {
 						if b == parsed.Branch {
 							repos = append(repos, repo)
@@ -165,7 +145,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 
 				if len(repos) == 0 {
 					// Try current repo as fallback
-					repo, err := findOrRegisterCurrentRepo(ctx, reg)
+					repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
 					if err != nil {
 						return fmt.Errorf("branch %q not found in any repo", parsed.Branch)
 					}
@@ -213,6 +193,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 }
 
 func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, newBranch bool, base string, fetch, autoStash bool, note string, hookNames []string, noHook bool, env []string) error {
+	cfg := config.FromContext(ctx)
 	l := log.FromContext(ctx)
 
 	// Get effective worktree format
@@ -321,6 +302,7 @@ func resolveWorktreePath(repo *registry.Repo, branch, format string) string {
 
 // completeHooks provides completion for hook flags
 func completeHooks(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg := config.FromContext(cmd.Context())
 	var hooks []string
 	for name := range cfg.Hooks.Hooks {
 		hooks = append(hooks, name)
@@ -330,6 +312,9 @@ func completeHooks(cmd *cobra.Command, args []string, toComplete string) ([]stri
 
 // runCheckoutWizard runs the interactive checkout wizard
 func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []string, cliNoHook bool) (flows.CheckoutOptions, error) {
+	cfg := config.FromContext(ctx)
+	l := log.FromContext(ctx)
+
 	// Build available repos list
 	var repoPaths, repoNames []string
 	var preSelectedRepos []int
@@ -353,6 +338,7 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 		// Get all local branches
 		branches, err := git.ListLocalBranches(ctx, repoPath)
 		if err != nil {
+			l.Debug("failed to list branches for wizard", "repo", repoPath, "error", err)
 			return flows.BranchFetchResult{}
 		}
 

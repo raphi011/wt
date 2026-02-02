@@ -16,32 +16,28 @@ import (
 // Scenario: User runs `wt label add backend myrepo`
 // Expected: Label is added to the repo
 func TestLabel_Add(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath, Labels: []string{}},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
 
-	ctx := testContext(t)
 	cmd := newLabelCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"add", "backend", "myrepo"})
@@ -51,7 +47,7 @@ func TestLabel_Add(t *testing.T) {
 	}
 
 	// Reload registry and verify
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -79,32 +75,28 @@ func TestLabel_Add(t *testing.T) {
 // Scenario: User runs `wt label remove backend myrepo`
 // Expected: Label is removed from the repo
 func TestLabel_Remove(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath, Labels: []string{"backend", "api"}},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
 
-	ctx := testContext(t)
 	cmd := newLabelCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"remove", "backend", "myrepo"})
@@ -114,7 +106,7 @@ func TestLabel_Remove(t *testing.T) {
 	}
 
 	// Reload registry and verify
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -147,32 +139,30 @@ func TestLabel_Remove(t *testing.T) {
 // Scenario: User runs `wt label list myrepo`
 // Expected: Labels are listed
 func TestLabel_List(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath, Labels: []string{"backend", "api"}},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
-
+	cfg := &config.Config{RegistryPath: regFile}
 	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, repoPath)
+
 	cmd := newLabelCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"list", "myrepo"})
@@ -192,32 +182,28 @@ func TestLabel_List(t *testing.T) {
 // Scenario: User runs `wt label clear myrepo`
 // Expected: All labels are removed
 func TestLabel_Clear(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath, Labels: []string{"backend", "api"}},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
 
-	ctx := testContext(t)
 	cmd := newLabelCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"clear", "myrepo"})
@@ -227,7 +213,7 @@ func TestLabel_Clear(t *testing.T) {
 	}
 
 	// Reload registry and verify
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}

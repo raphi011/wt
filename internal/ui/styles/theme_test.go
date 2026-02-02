@@ -115,7 +115,7 @@ func TestPresetNames(t *testing.T) {
 	names := PresetNames()
 
 	// Theme families (not individual variants)
-	expected := []string{"default", "dracula", "nord", "gruvbox", "catppuccin"}
+	expected := []string{"none", "default", "dracula", "nord", "gruvbox", "catppuccin"}
 
 	if len(names) != len(expected) {
 		t.Errorf("expected %d preset names, got %d", len(expected), len(names))
@@ -222,6 +222,49 @@ func TestInit_InvalidModeFallsBackToAuto(t *testing.T) {
 	// Should be one of the nord variants (test passes if it doesn't crash)
 	if theme.Primary != lipgloss.Color("#88c0d0") && theme.Primary != lipgloss.Color("#5e81ac") {
 		t.Errorf("expected nord theme color, got %v", theme.Primary)
+	}
+
+	// Reset to default
+	Init(config.ThemeConfig{})
+}
+
+func TestInit_NoneTheme(t *testing.T) {
+	// None theme should use NoColor{} for all colors
+	Init(config.ThemeConfig{Name: "none"})
+
+	theme := Current()
+
+	// All colors should be lipgloss.NoColor{}
+	if theme.Primary != (lipgloss.NoColor{}) {
+		t.Errorf("expected NoColor for primary, got %v", theme.Primary)
+	}
+	if theme.Accent != (lipgloss.NoColor{}) {
+		t.Errorf("expected NoColor for accent, got %v", theme.Accent)
+	}
+	if theme.Success != (lipgloss.NoColor{}) {
+		t.Errorf("expected NoColor for success, got %v", theme.Success)
+	}
+	if theme.Error != (lipgloss.NoColor{}) {
+		t.Errorf("expected NoColor for error, got %v", theme.Error)
+	}
+	if theme.Muted != (lipgloss.NoColor{}) {
+		t.Errorf("expected NoColor for muted, got %v", theme.Muted)
+	}
+	if theme.Normal != (lipgloss.NoColor{}) {
+		t.Errorf("expected NoColor for normal, got %v", theme.Normal)
+	}
+	if theme.Info != (lipgloss.NoColor{}) {
+		t.Errorf("expected NoColor for info, got %v", theme.Info)
+	}
+
+	// Mode shouldn't matter - both light and dark resolve to same theme
+	Init(config.ThemeConfig{Name: "none", Mode: "light"})
+	themeLight := Current()
+	Init(config.ThemeConfig{Name: "none", Mode: "dark"})
+	themeDark := Current()
+
+	if themeLight.Primary != themeDark.Primary {
+		t.Errorf("expected same theme for light and dark modes")
 	}
 
 	// Reset to default

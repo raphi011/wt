@@ -12,13 +12,14 @@ import (
 
 // TextInputStep allows entering free-form text.
 type TextInputStep struct {
-	id          string
-	title       string
-	prompt      string
-	input       textinput.Model
-	validate    func(string) error
-	submitted   bool
-	submitValue string
+	id              string
+	title           string
+	prompt          string
+	input           textinput.Model
+	validate        func(string) error
+	submitted       bool
+	submitValue     string
+	validationError string // Error message to display
 }
 
 // NewTextInput creates a new text input step.
@@ -30,9 +31,10 @@ func NewTextInput(id, title, prompt, placeholder string) *TextInputStep {
 	ti.SetWidth(40)
 
 	// Set default cursor style: bar with blink
-	cursor := ti.Cursor()
-	cursor.Shape = tea.CursorBar
-	cursor.Blink = true
+	styles := ti.Styles()
+	styles.Cursor.Shape = tea.CursorBar
+	styles.Cursor.Blink = true
+	ti.SetStyles(styles)
 
 	return &TextInputStep{
 		id:     id,
@@ -55,33 +57,41 @@ func (s *TextInputStep) Update(msg tea.KeyPressMsg) (framework.Step, tea.Cmd, fr
 	case "enter":
 		value := strings.TrimSpace(s.input.Value())
 		if value == "" {
+			s.validationError = "Value cannot be empty"
 			return s, nil, framework.StepContinue
 		}
 		if s.validate != nil {
 			if err := s.validate(value); err != nil {
-				// Could show error, for now just don't advance
+				s.validationError = err.Error()
 				return s, nil, framework.StepContinue
 			}
 		}
+		s.validationError = ""
 		s.submitted = true
 		s.submitValue = value
 		return s, nil, framework.StepSubmitIfReady
 	case "right":
 		value := strings.TrimSpace(s.input.Value())
 		if value == "" {
+			s.validationError = "Value cannot be empty"
 			return s, nil, framework.StepContinue
 		}
 		if s.validate != nil {
 			if err := s.validate(value); err != nil {
+				s.validationError = err.Error()
 				return s, nil, framework.StepContinue
 			}
 		}
+		s.validationError = ""
 		s.submitted = true
 		s.submitValue = value
 		return s, nil, framework.StepAdvance
 	case "left":
 		return s, nil, framework.StepBack
 	}
+
+	// Clear error when user types
+	s.validationError = ""
 
 	// Let textinput handle other keys
 	var cmd tea.Cmd
@@ -93,6 +103,9 @@ func (s *TextInputStep) View() string {
 	var b strings.Builder
 	b.WriteString(s.prompt + "\n\n")
 	b.WriteString(s.input.View())
+	if s.validationError != "" {
+		b.WriteString("\n" + framework.ErrorStyle().Render(s.validationError))
+	}
 	return b.String()
 }
 
@@ -122,8 +135,10 @@ func (s *TextInputStep) HasClearableInput() bool {
 	return s.input.Value() != ""
 }
 
-func (s *TextInputStep) ClearInput() {
+func (s *TextInputStep) ClearInput() tea.Cmd {
 	s.input.SetValue("")
+	s.validationError = ""
+	return nil
 }
 
 // SetValidate sets a validation function for the input.
@@ -176,9 +191,10 @@ func (s *TextInputStep) SetCharLimit(limit int) {
 // WithCursor configures the cursor shape and blink behavior.
 // Available shapes: tea.CursorBar, tea.CursorBlock, tea.CursorUnderline.
 func (s *TextInputStep) WithCursor(shape tea.CursorShape, blink bool) *TextInputStep {
-	cursor := s.input.Cursor()
-	cursor.Shape = shape
-	cursor.Blink = blink
+	styles := s.input.Styles()
+	styles.Cursor.Shape = shape
+	styles.Cursor.Blink = blink
+	s.input.SetStyles(styles)
 	return s
 }
 

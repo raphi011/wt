@@ -20,10 +20,6 @@ var (
 	// Global flags
 	verbose bool
 	quiet   bool
-
-	// Shared state injected into commands
-	cfg     *config.Config
-	workDir string
 )
 
 // Command group IDs for organizing help output
@@ -70,13 +66,13 @@ func Execute() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 	}
-	cfg = &loadedCfg
+	cfg := &loadedCfg
 
 	// Initialize theme from config
 	styles.Init(cfg.Theme)
 
 	// Get working directory
-	workDir, err = os.Getwd()
+	workDir, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "wt: failed to get working directory: %v\n", err)
 		os.Exit(1)
@@ -92,6 +88,10 @@ func Execute() {
 
 	// Add output printer (stdout for primary data)
 	ctx = output.WithPrinter(ctx, os.Stdout)
+
+	// Add config and workDir to context
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, workDir)
 
 	// Store context for commands to use
 	rootCmd.SetContext(ctx)

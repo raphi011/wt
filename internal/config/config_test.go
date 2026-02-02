@@ -340,6 +340,7 @@ func TestIsValidThemeName(t *testing.T) {
 		name  string
 		valid bool
 	}{
+		{"none", true},
 		{"default", true},
 		{"dracula", true},
 		{"nord", true},
@@ -430,7 +431,7 @@ info = "#777777"`,
 
 func TestValidThemeNames(t *testing.T) {
 	// Verify ValidThemeNames contains expected theme families
-	expected := []string{"default", "dracula", "nord", "gruvbox", "catppuccin"}
+	expected := []string{"none", "default", "dracula", "nord", "gruvbox", "catppuccin"}
 
 	if len(ValidThemeNames) != len(expected) {
 		t.Errorf("len(ValidThemeNames) = %d, want %d", len(ValidThemeNames), len(expected))

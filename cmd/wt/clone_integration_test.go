@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -15,7 +16,7 @@ import (
 // Scenario: User runs `wt repo clone file:///path/to/repo`
 // Expected: Bare repo is cloned into .git directory and registered in registry
 func TestRepoClone_BareRepo(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
@@ -23,19 +24,13 @@ func TestRepoClone_BareRepo(t *testing.T) {
 	// Create a source repo to clone from
 	sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
 
-	// Setup registry directory
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	// Setup registry file
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 
-	oldDir, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
 	cmd := newRepoCloneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"file://" + sourceRepo, "cloned-repo"})
@@ -62,7 +57,7 @@ func TestRepoClone_BareRepo(t *testing.T) {
 	}
 
 	// Verify repo was registered
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -81,25 +76,19 @@ func TestRepoClone_BareRepo(t *testing.T) {
 // Scenario: User runs `wt repo clone file:///repo -l backend -l api`
 // Expected: Repo is cloned and registered with labels
 func TestRepoClone_WithLabels(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 
-	oldDir, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
 	cmd := newRepoCloneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"file://" + sourceRepo, "labeled-repo", "-l", "backend", "-l", "api"})
@@ -108,7 +97,7 @@ func TestRepoClone_WithLabels(t *testing.T) {
 		t.Fatalf("clone command failed: %v", err)
 	}
 
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -138,25 +127,19 @@ func TestRepoClone_WithLabels(t *testing.T) {
 // Scenario: User runs `wt repo clone file:///repo --name my-app`
 // Expected: Repo is cloned and registered with custom name
 func TestRepoClone_WithCustomName(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 
-	oldDir, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
 	cmd := newRepoCloneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"file://" + sourceRepo, "actual-dir", "--name", "my-app"})
@@ -170,7 +153,7 @@ func TestRepoClone_WithCustomName(t *testing.T) {
 		t.Error("directory should be named 'actual-dir'")
 	}
 
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}
@@ -186,7 +169,7 @@ func TestRepoClone_WithCustomName(t *testing.T) {
 // Scenario: User runs `wt repo clone file:///repo existing-dir`
 // Expected: Command fails with error
 func TestRepoClone_DestinationExists(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
@@ -197,18 +180,12 @@ func TestRepoClone_DestinationExists(t *testing.T) {
 	existingDir := filepath.Join(tmpDir, "existing-dir")
 	os.MkdirAll(existingDir, 0755)
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
 
-	oldDir, _ := os.Getwd()
-	os.Chdir(tmpDir)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
 	cmd := newRepoCloneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"file://" + sourceRepo, "existing-dir"})
@@ -223,7 +200,7 @@ func TestRepoClone_DestinationExists(t *testing.T) {
 // Scenario: User runs `wt repo clone file:///path/to/myrepo`
 // Expected: Clones to ./myrepo
 func TestRepoClone_AutoName(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
@@ -231,22 +208,16 @@ func TestRepoClone_AutoName(t *testing.T) {
 	// Create source repo with specific name
 	sourceRepo := setupTestRepo(t, tmpDir, "my-project")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	// Create a work subdirectory for cloning
-	workDir := filepath.Join(tmpDir, "work")
-	os.MkdirAll(workDir, 0755)
+	otherDir := filepath.Join(tmpDir, "work")
+	os.MkdirAll(otherDir, 0755)
 
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, otherDir)
 
-	oldDir, _ := os.Getwd()
-	os.Chdir(workDir)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
 	cmd := newRepoCloneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"file://" + sourceRepo})
@@ -256,11 +227,11 @@ func TestRepoClone_AutoName(t *testing.T) {
 	}
 
 	// Should clone to ./my-project
-	if _, err := os.Stat(filepath.Join(workDir, "my-project")); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(otherDir, "my-project")); os.IsNotExist(err) {
 		t.Error("expected repo to be cloned to 'my-project'")
 	}
 
-	reg, err := registry.Load()
+	reg, err := registry.Load(regFile)
 	if err != nil {
 		t.Fatalf("failed to load registry: %v", err)
 	}

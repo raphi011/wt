@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/registry"
 )
 
 // findOrRegisterCurrentRepo finds the repo for cwd, auto-registering if needed.
 // Returns error if not in a git repository.
-func findOrRegisterCurrentRepo(ctx context.Context, reg *registry.Registry) (*registry.Repo, error) {
-	// Get main repo path from current directory
-	repoPath := git.GetCurrentRepoMainPath(ctx)
+func findOrRegisterCurrentRepo(ctx context.Context, reg *registry.Registry, cfg *config.Config) (*registry.Repo, error) {
+	// Get main repo path from working directory (may be set in context for tests)
+	workDir := config.WorkDirFromContext(ctx)
+	repoPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
 	if repoPath == "" {
 		return nil, fmt.Errorf("not in a git repository")
 	}
@@ -35,11 +37,17 @@ func findOrRegisterCurrentRepo(ctx context.Context, reg *registry.Registry) (*re
 		return nil, err
 	}
 
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(cfg.RegistryPath); err != nil {
 		return nil, err
 	}
 
 	return reg.FindByPath(repoPath)
+}
+
+// findOrRegisterCurrentRepoFromContext is a convenience wrapper that gets cfg from context.
+func findOrRegisterCurrentRepoFromContext(ctx context.Context, reg *registry.Registry) (*registry.Repo, error) {
+	cfg := config.FromContext(ctx)
+	return findOrRegisterCurrentRepo(ctx, reg, cfg)
 }
 
 // parseBranchTarget parses "repo:branch" or "branch" format.

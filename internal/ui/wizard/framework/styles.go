@@ -14,8 +14,8 @@ func BorderStyle() lipgloss.Style {
 		BorderLeft(true).
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(styles.Primary).
-		PaddingTop(1).
-		PaddingBottom(1).
+		MarginTop(1).
+		MarginBottom(1).
 		PaddingLeft(2).
 		PaddingRight(2)
 }
@@ -126,4 +126,10 @@ func MatchHighlightStyle() lipgloss.Style {
 		Foreground(styles.Accent).
 		Bold(true).
 		Underline(true)
+}
+
+// ErrorStyle for validation error messages
+func ErrorStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(styles.Error)
 }

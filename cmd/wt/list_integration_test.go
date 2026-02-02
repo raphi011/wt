@@ -17,36 +17,28 @@ import (
 // Scenario: User runs `wt list` in a repo with no worktrees
 // Expected: Only shows the main worktree
 func TestList_EmptyRepo(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
+	cfg := &config.Config{RegistryPath: regFile}
 	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, repoPath)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{})
@@ -67,6 +59,7 @@ func TestList_EmptyRepo(t *testing.T) {
 // Scenario: User runs `wt list` in a repo with worktrees
 // Expected: Shows all worktrees
 func TestList_WithWorktrees(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
@@ -76,31 +69,22 @@ func TestList_WithWorktrees(t *testing.T) {
 	wtPath := filepath.Join(tmpDir, "test-repo-feature")
 	createTestWorktree(t, repoPath, "feature")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
+	cfg := &config.Config{RegistryPath: regFile}
 	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, repoPath)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{})
@@ -122,41 +106,34 @@ func TestList_WithWorktrees(t *testing.T) {
 // Scenario: User runs `wt list myrepo` from any directory
 // Expected: Shows worktrees for the specified repo
 func TestList_ByRepoName(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"develop"})
 	createTestWorktree(t, repoPath, "develop")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Work from a different directory
-	workDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(workDir, 0755)
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(workDir)
-	defer os.Chdir(oldDir)
+	otherDir := filepath.Join(tmpDir, "other")
+	os.MkdirAll(otherDir, 0755)
 
 	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, otherDir)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"myrepo"})
@@ -183,35 +160,27 @@ func TestList_ByLabel(t *testing.T) {
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
 	createTestWorktree(t, repoPath, "feature")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath, Labels: []string{"backend"}},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Work from a different directory
-	workDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(workDir, 0755)
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(workDir)
-	defer os.Chdir(oldDir)
+	otherDir := filepath.Join(tmpDir, "other")
+	os.MkdirAll(otherDir, 0755)
 
 	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, otherDir)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"backend"})
@@ -242,12 +211,8 @@ func TestList_MultipleScopes(t *testing.T) {
 	repo2Path := setupTestRepoWithBranches(t, tmpDir, "repo2", []string{"feat2"})
 	createTestWorktree(t, repo2Path, "feat2")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -255,23 +220,19 @@ func TestList_MultipleScopes(t *testing.T) {
 			{Name: "repo2", Path: repo2Path, Labels: []string{"backend"}},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Work from a different directory
-	workDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(workDir, 0755)
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(workDir)
-	defer os.Chdir(oldDir)
+	otherDir := filepath.Join(tmpDir, "other")
+	os.MkdirAll(otherDir, 0755)
 
 	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, otherDir)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"repo1", "backend"})
@@ -298,33 +259,25 @@ func TestList_ScopeNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
+	cfg := &config.Config{RegistryPath: regFile}
 
 	// Work from a different directory
-	workDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(workDir, 0755)
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(workDir)
-	defer os.Chdir(oldDir)
+	otherDir := filepath.Join(tmpDir, "other")
+	os.MkdirAll(otherDir, 0755)
 
 	ctx, _ := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, otherDir)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"nonexistent"})
@@ -343,36 +296,28 @@ func TestList_ScopeNotFound(t *testing.T) {
 // Scenario: User runs `wt list --json`
 // Expected: Output is valid JSON
 func TestList_JSON(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{}
-	defer func() { cfg = oldCfg }()
-
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
+	cfg := &config.Config{RegistryPath: regFile}
 	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, repoPath)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"--json"})

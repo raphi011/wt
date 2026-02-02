@@ -17,32 +17,30 @@ import (
 // Scenario: User runs `wt hook myhook` from inside a repo
 // Expected: Hook command is executed in repo directory
 func TestHook_RunHook(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
 	// Create a marker file that the hook will create
 	markerPath := filepath.Join(tmpDir, "hook-ran")
 
-	oldCfg := cfg
-	cfg = &config.Config{
+	cfg := &config.Config{
+		RegistryPath: regFile,
 		Hooks: config.HooksConfig{
 			Hooks: map[string]config.Hook{
 				"myhook": {
@@ -52,14 +50,8 @@ func TestHook_RunHook(t *testing.T) {
 			},
 		},
 	}
-	defer func() { cfg = oldCfg }()
+	ctx := testContextWithConfig(t, cfg, repoPath)
 
-	// Work from inside the repo
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
 	cmd := newHookCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"myhook"})
@@ -79,40 +71,33 @@ func TestHook_RunHook(t *testing.T) {
 // Scenario: User runs `wt hook nonexistent`
 // Expected: Command fails with error
 func TestHook_UnknownHook(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{
+	cfg := &config.Config{
+		RegistryPath: regFile,
 		Hooks: config.HooksConfig{
 			Hooks: map[string]config.Hook{},
 		},
 	}
-	defer func() { cfg = oldCfg }()
+	ctx := testContextWithConfig(t, cfg, repoPath)
 
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
 	cmd := newHookCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"nonexistent"})
@@ -127,31 +112,29 @@ func TestHook_UnknownHook(t *testing.T) {
 // Scenario: User runs `wt hook myhook -d` from inside a repo
 // Expected: Hook command is printed but not executed
 func TestHook_DryRun(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
 	markerPath := filepath.Join(tmpDir, "hook-ran")
 
-	oldCfg := cfg
-	cfg = &config.Config{
+	cfg := &config.Config{
+		RegistryPath: regFile,
 		Hooks: config.HooksConfig{
 			Hooks: map[string]config.Hook{
 				"myhook": {
@@ -161,14 +144,8 @@ func TestHook_DryRun(t *testing.T) {
 			},
 		},
 	}
-	defer func() { cfg = oldCfg }()
+	ctx := testContextWithConfig(t, cfg, repoPath)
 
-	// Work from inside the repo
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
 	cmd := newHookCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"myhook", "-d"})
@@ -188,31 +165,29 @@ func TestHook_DryRun(t *testing.T) {
 // Scenario: User runs `wt hook myhook -a myvar=value` from inside a repo
 // Expected: Hook command has access to the variable
 func TestHook_WithEnvVar(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
 	outputPath := filepath.Join(tmpDir, "output.txt")
 
-	oldCfg := cfg
-	cfg = &config.Config{
+	cfg := &config.Config{
+		RegistryPath: regFile,
 		Hooks: config.HooksConfig{
 			Hooks: map[string]config.Hook{
 				"myhook": {
@@ -222,14 +197,8 @@ func TestHook_WithEnvVar(t *testing.T) {
 			},
 		},
 	}
-	defer func() { cfg = oldCfg }()
+	ctx := testContextWithConfig(t, cfg, repoPath)
 
-	// Work from inside the repo
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
 	cmd := newHookCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"myhook", "-a", "myvar=hello"})
@@ -254,6 +223,8 @@ func TestHook_WithEnvVar(t *testing.T) {
 // Scenario: User has two repos with same branch name, runs `wt hook myhook -- repo1:feature`
 // Expected: Hook runs only in the specified repo's worktree
 func TestHook_WithRepoBranchFormat(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
@@ -265,12 +236,8 @@ func TestHook_WithRepoBranchFormat(t *testing.T) {
 	wt1Path := createTestWorktree(t, repo1Path, "feature")
 	createTestWorktree(t, repo2Path, "feature")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -278,15 +245,15 @@ func TestHook_WithRepoBranchFormat(t *testing.T) {
 			{Name: "repo2", Path: repo2Path},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
 	// Create marker file that will record the worktree path
 	markerPath := filepath.Join(tmpDir, "hook-ran-in")
 
-	oldCfg := cfg
-	cfg = &config.Config{
+	cfg := &config.Config{
+		RegistryPath: regFile,
 		Hooks: config.HooksConfig{
 			Hooks: map[string]config.Hook{
 				"myhook": {
@@ -297,17 +264,12 @@ func TestHook_WithRepoBranchFormat(t *testing.T) {
 			},
 		},
 	}
-	defer func() { cfg = oldCfg }()
 
 	// Work from a different directory
-	workDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(workDir, 0755)
+	otherDir := filepath.Join(tmpDir, "other")
+	os.MkdirAll(otherDir, 0755)
 
-	oldDir, _ := os.Getwd()
-	os.Chdir(workDir)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
+	ctx := testContextWithConfig(t, cfg, otherDir)
 	cmd := newHookCmd()
 	cmd.SetContext(ctx)
 	// Use -- repo:branch format to target only repo1's worktree
@@ -334,30 +296,28 @@ func TestHook_WithRepoBranchFormat(t *testing.T) {
 // Scenario: User runs `wt hook myhook -- myrepo:nonexistent`
 // Expected: Command fails with informative error
 func TestHook_RepoBranchFormat_BranchNotFound(t *testing.T) {
+	t.Parallel()
+
 	tmpDir := t.TempDir()
 	tmpDir = resolvePath(t, tmpDir)
 
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
 	createTestWorktree(t, repoPath, "feature")
 
-	regPath := filepath.Join(tmpDir, ".wt")
-	os.MkdirAll(regPath, 0755)
-
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", oldHome)
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(); err != nil {
+	if err := reg.Save(regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	oldCfg := cfg
-	cfg = &config.Config{
+	cfg := &config.Config{
+		RegistryPath: regFile,
 		Hooks: config.HooksConfig{
 			Hooks: map[string]config.Hook{
 				"myhook": {
@@ -367,13 +327,8 @@ func TestHook_RepoBranchFormat_BranchNotFound(t *testing.T) {
 			},
 		},
 	}
-	defer func() { cfg = oldCfg }()
+	ctx := testContextWithConfig(t, cfg, repoPath)
 
-	oldDir, _ := os.Getwd()
-	os.Chdir(repoPath)
-	defer os.Chdir(oldDir)
-
-	ctx := testContext(t)
 	cmd := newHookCmd()
 	cmd.SetContext(ctx)
 	// Use nonexistent branch name with -- format
