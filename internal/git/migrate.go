@@ -20,11 +20,12 @@ func getWorktreeMetadataName(ctx context.Context, wtPath string) (string, error)
 
 // MigrationPlan describes what will be done during migration
 type MigrationPlan struct {
-	RepoPath       string // Original repo path
-	GitDir         string // Current .git directory path
-	CurrentBranch  string // Branch to use for main worktree
-	WorktreesToFix []WorktreeMigration
-	HasSubmodules  bool
+	RepoPath           string // Original repo path
+	GitDir             string // Current .git directory path
+	CurrentBranch      string // Branch to use for main worktree
+	MainBranchUpstream string // Upstream for the main branch (e.g., "main" for origin/main)
+	WorktreesToFix     []WorktreeMigration
+	HasSubmodules      bool
 }
 
 // WorktreeMigration describes a worktree that needs to be updated
@@ -32,6 +33,7 @@ type WorktreeMigration struct {
 	OldPath   string // Current worktree path
 	NewPath   string // New path after migration (may be same)
 	Branch    string
+	Upstream  string // Upstream branch (e.g., "feature" for origin/feature)
 	OldName   string // Name in .git/worktrees/
 	NewName   string // Name after migration (may be same)
 	NeedsMove bool   // Whether the worktree folder needs to be moved
@@ -81,6 +83,9 @@ func ValidateMigration(ctx context.Context, repoPath string) (*MigrationPlan, er
 		return nil, fmt.Errorf("get current branch: %w", err)
 	}
 
+	// Capture upstream for main branch
+	mainUpstream := GetUpstreamBranch(ctx, absPath, branch)
+
 	// Check for submodules
 	submodulePath := filepath.Join(absPath, ".gitmodules")
 	hasSubmodules := false
@@ -99,10 +104,11 @@ func ValidateMigration(ctx context.Context, repoPath string) (*MigrationPlan, er
 	}
 
 	plan := &MigrationPlan{
-		RepoPath:      absPath,
-		GitDir:        gitDir,
-		CurrentBranch: branch,
-		HasSubmodules: hasSubmodules,
+		RepoPath:           absPath,
+		GitDir:             gitDir,
+		CurrentBranch:      branch,
+		MainBranchUpstream: mainUpstream,
+		HasSubmodules:      hasSubmodules,
 	}
 
 	repoName := filepath.Base(absPath)
@@ -143,10 +149,14 @@ func ValidateMigration(ctx context.Context, repoPath string) (*MigrationPlan, er
 			}
 		}
 
+		// Capture upstream for this worktree's branch
+		upstream := GetUpstreamBranch(ctx, wt.Path, wt.Branch)
+
 		plan.WorktreesToFix = append(plan.WorktreesToFix, WorktreeMigration{
 			OldPath:   wt.Path,
 			NewPath:   newPath,
 			Branch:    wt.Branch,
+			Upstream:  upstream,
 			OldName:   metadataName,
 			NewName:   newName,
 			NeedsMove: needsMove,
@@ -306,6 +316,22 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 	if err := runGit(ctx, oldGitDir, "worktree", "repair"); err != nil {
 		// Log warning but don't fail
 		// This can happen if worktrees have issues, but they might still work
+	}
+
+	// Phase 10: Restore upstream tracking
+	// Only restore if origin remote exists and the remote branch exists
+	if plan.MainBranchUpstream != "" && HasRemote(ctx, oldGitDir, "origin") {
+		if RemoteBranchExists(ctx, mainWorktreePath, plan.MainBranchUpstream) {
+			_ = SetUpstreamBranch(ctx, mainWorktreePath, plan.CurrentBranch, plan.MainBranchUpstream)
+		}
+	}
+
+	for _, wt := range plan.WorktreesToFix {
+		if wt.Upstream != "" {
+			if RemoteBranchExists(ctx, wt.NewPath, wt.Upstream) {
+				_ = SetUpstreamBranch(ctx, wt.NewPath, wt.Branch, wt.Upstream)
+			}
+		}
 	}
 
 	return &MigrateToBareResult{

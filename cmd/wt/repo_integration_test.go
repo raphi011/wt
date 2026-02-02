@@ -1227,3 +1227,189 @@ func TestRepoMakeBare_WorktreeMetadataNameMismatch(t *testing.T) {
 		t.Fatalf("git status in worktree failed: %v\n%s", err, out)
 	}
 }
+
+// TestRepoMakeBare_PreservesUpstream tests that upstream tracking is preserved during migration.
+//
+// Scenario: User runs `wt repo make-bare` on repo with upstream tracking configured
+// Expected: Main branch and worktrees retain their upstream tracking after migration
+func TestRepoMakeBare_PreservesUpstream(t *testing.T) {
+	// Not parallel - modifies HOME
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Create a "remote" repo to clone from (so we have a proper origin)
+	remoteDir := filepath.Join(tmpDir, "remote")
+	if err := os.MkdirAll(remoteDir, 0755); err != nil {
+		t.Fatalf("failed to create remote dir: %v", err)
+	}
+
+	// Initialize bare remote
+	cmd := exec.Command("git", "init", "--bare", "origin.git")
+	cmd.Dir = remoteDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to init remote: %v\n%s", err, out)
+	}
+	remotePath := filepath.Join(remoteDir, "origin.git")
+
+	// Clone from remote
+	repoPath := filepath.Join(tmpDir, "local-repo")
+	cmd = exec.Command("git", "clone", remotePath, repoPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to clone: %v\n%s", err, out)
+	}
+
+	// Configure git user for commits
+	for _, args := range [][]string{
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "Test User"},
+	} {
+		cmd = exec.Command("git", args...)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to configure git: %v\n%s", err, out)
+		}
+	}
+
+	// Create initial commit on main
+	testFile := filepath.Join(repoPath, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+	cmd = exec.Command("git", "add", "test.txt")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to git add: %v\n%s", err, out)
+	}
+	cmd = exec.Command("git", "commit", "-m", "initial commit")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to commit: %v\n%s", err, out)
+	}
+
+	// Push main to origin
+	cmd = exec.Command("git", "push", "-u", "origin", "main")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to push main: %v\n%s", err, out)
+	}
+
+	// Create feature branch with upstream
+	cmd = exec.Command("git", "checkout", "-b", "feature")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to create feature branch: %v\n%s", err, out)
+	}
+
+	// Make a commit on feature
+	if err := os.WriteFile(filepath.Join(repoPath, "feature.txt"), []byte("feature"), 0644); err != nil {
+		t.Fatalf("failed to write feature file: %v", err)
+	}
+	cmd = exec.Command("git", "add", "feature.txt")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to git add feature: %v\n%s", err, out)
+	}
+	cmd = exec.Command("git", "commit", "-m", "feature commit")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to commit feature: %v\n%s", err, out)
+	}
+
+	// Push feature with upstream tracking
+	cmd = exec.Command("git", "push", "-u", "origin", "feature")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to push feature: %v\n%s", err, out)
+	}
+
+	// Go back to main
+	cmd = exec.Command("git", "checkout", "main")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to checkout main: %v\n%s", err, out)
+	}
+
+	// Create worktree for feature branch
+	wtPath := filepath.Join(tmpDir, "local-repo-feature")
+	cmd = exec.Command("git", "worktree", "add", wtPath, "feature")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to create worktree: %v\n%s", err, out)
+	}
+
+	// Verify upstream is set before migration
+	cmd = exec.Command("git", "config", "branch.main.merge")
+	cmd.Dir = repoPath
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("main branch should have upstream before migration: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "refs/heads/main") {
+		t.Fatalf("expected main upstream to be refs/heads/main, got %s", out)
+	}
+
+	cmd = exec.Command("git", "config", "branch.feature.merge")
+	cmd.Dir = wtPath
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("feature branch should have upstream before migration: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "refs/heads/feature") {
+		t.Fatalf("expected feature upstream to be refs/heads/feature, got %s", out)
+	}
+
+	// Setup registry
+	regPath := filepath.Join(tmpDir, ".wt")
+	if err := os.MkdirAll(regPath, 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	// Run make-bare
+	ctx := testContext(t)
+	makeBareCmd := newRepoMakeBareCmd()
+	makeBareCmd.SetContext(ctx)
+	makeBareCmd.SetArgs([]string{repoPath})
+
+	if err := makeBareCmd.Execute(); err != nil {
+		t.Fatalf("make-bare command failed: %v", err)
+	}
+
+	// Verify main worktree was created
+	mainWorktree := filepath.Join(repoPath, "main")
+	if _, err := os.Stat(mainWorktree); os.IsNotExist(err) {
+		t.Fatal("main worktree should exist")
+	}
+
+	// Verify upstream is preserved for main branch
+	cmd = exec.Command("git", "config", "branch.main.merge")
+	cmd.Dir = mainWorktree
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("main branch should have upstream after migration: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "refs/heads/main") {
+		t.Errorf("expected main upstream to be refs/heads/main, got %s", out)
+	}
+
+	// Feature worktree gets renamed (prefix stripped)
+	featureWorktree := filepath.Join(tmpDir, "feature")
+	if _, err := os.Stat(featureWorktree); os.IsNotExist(err) {
+		t.Fatal("feature worktree should exist")
+	}
+
+	// Verify upstream is preserved for feature branch
+	cmd = exec.Command("git", "config", "branch.feature.merge")
+	cmd.Dir = featureWorktree
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("feature branch should have upstream after migration: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "refs/heads/feature") {
+		t.Errorf("expected feature upstream to be refs/heads/feature, got %s", out)
+	}
+}
