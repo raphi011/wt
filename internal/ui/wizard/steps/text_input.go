@@ -118,6 +118,14 @@ func (s *TextInputStep) Reset() {
 	s.submitValue = ""
 }
 
+func (s *TextInputStep) HasClearableInput() bool {
+	return s.input.Value() != ""
+}
+
+func (s *TextInputStep) ClearInput() {
+	s.input.SetValue("")
+}
+
 // SetValidate sets a validation function for the input.
 // If validation fails, the step won't advance.
 func (s *TextInputStep) SetValidate(fn func(string) error) {

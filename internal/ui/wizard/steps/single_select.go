@@ -131,6 +131,14 @@ func (s *SingleSelectStep) Reset() {
 	s.cursor = s.findFirstEnabled()
 }
 
+func (s *SingleSelectStep) HasClearableInput() bool {
+	return false // SingleSelect has no text input
+}
+
+func (s *SingleSelectStep) ClearInput() {
+	// No-op: SingleSelect has no text input to clear
+}
+
 // SetOptions updates the options list (useful for dynamic content).
 func (s *SingleSelectStep) SetOptions(options []framework.Option) {
 	s.options = options

@@ -521,6 +521,15 @@ func (s *FilterableListStep) Reset() {
 	// Note: filter is intentionally NOT reset to preserve user input when navigating back
 }
 
+func (s *FilterableListStep) HasClearableInput() bool {
+	return s.filter != ""
+}
+
+func (s *FilterableListStep) ClearInput() {
+	s.filter = ""
+	s.applyFilter()
+}
+
 // SetOptions updates the options list.
 func (s *FilterableListStep) SetOptions(options []framework.Option) {
 	s.options = options
