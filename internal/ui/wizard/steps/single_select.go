@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
 )
@@ -47,7 +47,7 @@ func (s *SingleSelectStep) Init() tea.Cmd {
 	return nil
 }
 
-func (s *SingleSelectStep) Update(msg tea.KeyMsg) (framework.Step, tea.Cmd, framework.StepResult) {
+func (s *SingleSelectStep) Update(msg tea.KeyPressMsg) (framework.Step, tea.Cmd, framework.StepResult) {
 	switch msg.String() {
 	case "up", "k":
 		s.moveCursorUp()

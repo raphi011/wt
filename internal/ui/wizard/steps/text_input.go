@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
 )
@@ -22,11 +22,17 @@ type TextInputStep struct {
 }
 
 // NewTextInput creates a new text input step.
+// By default, uses a blinking bar cursor for better visibility.
 func NewTextInput(id, title, prompt, placeholder string) *TextInputStep {
 	ti := textinput.New()
 	ti.Placeholder = placeholder
 	ti.CharLimit = 156
-	ti.Width = 40
+	ti.SetWidth(40)
+
+	// Set default cursor style: bar with blink
+	cursor := ti.Cursor()
+	cursor.Shape = tea.CursorBar
+	cursor.Blink = true
 
 	return &TextInputStep{
 		id:     id,
@@ -44,7 +50,7 @@ func (s *TextInputStep) Init() tea.Cmd {
 	return textinput.Blink
 }
 
-func (s *TextInputStep) Update(msg tea.KeyMsg) (framework.Step, tea.Cmd, framework.StepResult) {
+func (s *TextInputStep) Update(msg tea.KeyPressMsg) (framework.Step, tea.Cmd, framework.StepResult) {
 	switch msg.String() {
 	case "enter":
 		value := strings.TrimSpace(s.input.Value())
@@ -151,12 +157,21 @@ func (s *TextInputStep) SetPlaceholder(placeholder string) {
 
 // SetWidth sets the input width.
 func (s *TextInputStep) SetWidth(width int) {
-	s.input.Width = width
+	s.input.SetWidth(width)
 }
 
 // SetCharLimit sets the character limit.
 func (s *TextInputStep) SetCharLimit(limit int) {
 	s.input.CharLimit = limit
+}
+
+// WithCursor configures the cursor shape and blink behavior.
+// Available shapes: tea.CursorBar, tea.CursorBlock, tea.CursorUnderline.
+func (s *TextInputStep) WithCursor(shape tea.CursorShape, blink bool) *TextInputStep {
+	cursor := s.input.Cursor()
+	cursor.Shape = shape
+	cursor.Blink = blink
+	return s
 }
 
 // String implements fmt.Stringer for debugging.

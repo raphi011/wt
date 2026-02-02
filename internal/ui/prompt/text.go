@@ -3,8 +3,8 @@ package prompt
 import (
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 )
 
 // TextInputResult holds the result of a text input prompt.
@@ -26,7 +26,7 @@ func (m textInputModel) Init() tea.Cmd {
 
 func (m textInputModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "enter":
 			m.done = true
@@ -42,11 +42,11 @@ func (m textInputModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m textInputModel) View() string {
+func (m textInputModel) View() tea.View {
 	if m.done {
-		return ""
+		return tea.NewView("")
 	}
-	return fmt.Sprintf("%s\n%s", m.prompt, m.textInput.View())
+	return tea.NewView(fmt.Sprintf("%s\n%s", m.prompt, m.textInput.View()))
 }
 
 // TextInput shows a text input prompt and returns the user's input.
@@ -55,7 +55,7 @@ func TextInput(prompt, placeholder string) (TextInputResult, error) {
 	ti.Placeholder = placeholder
 	ti.Focus()
 	ti.CharLimit = 156
-	ti.Width = 50
+	ti.SetWidth(50)
 
 	model := textInputModel{
 		textInput: ti,

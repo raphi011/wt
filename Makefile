@@ -5,11 +5,11 @@ LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.dat
 
 .PHONY: build install test test-integration clean snapshot testdoc
 
-build:
-	go build -ldflags "$(LDFLAGS)" -o wt ./cmd/wt
-
-install:
-	go install -ldflags "$(LDFLAGS)" ./cmd/wt
+build:                                                                                                                                                       
+	go build -buildvcs=false -ldflags "$(LDFLAGS)" -o wt ./cmd/wt                                                                                          
+																																																																															
+install:                                                                                                                                                     
+	go install -buildvcs=false -ldflags "$(LDFLAGS)" ./cmd/wt    
 
 test:
 	go test ./...

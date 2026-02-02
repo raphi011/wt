@@ -406,7 +406,8 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 	return nil
 }
 
-// refreshPRStatusForPrune fetches PR status for worktrees in parallel
+// refreshPRStatusForPrune fetches PR status for worktrees in parallel.
+// Uses a progress bar to show determinate progress during fetching.
 func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, prCache *prcache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig, sp *progress.Spinner) {
 	// Filter to worktrees that need PR status fetched
 	var toFetch []pruneWorktree
@@ -426,12 +427,16 @@ func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, prC
 		return
 	}
 
-	sp.UpdateMessage(fmt.Sprintf("Fetching PR status (%d branches)...", len(toFetch)))
+	// Stop spinner and switch to progress bar for determinate progress
+	sp.Stop()
+	pb := progress.NewProgressBar(len(toFetch), "Fetching PR status...")
+	pb.Start()
+	defer pb.Stop()
 
 	var prMutex sync.Mutex
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, maxConcurrentPRFetches)
-	var fetchedCount, failedCount int
+	var completedCount, failedCount int
 	var countMutex sync.Mutex
 
 	for _, wt := range toFetch {
@@ -445,7 +450,9 @@ func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, prC
 
 			if err := f.Check(ctx); err != nil {
 				countMutex.Lock()
+				completedCount++
 				failedCount++
+				pb.SetProgress(completedCount, fmt.Sprintf("Fetching PR status... (%d failed)", failedCount))
 				countMutex.Unlock()
 				return
 			}
@@ -459,7 +466,9 @@ func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, prC
 			pr, err := f.GetPRForBranch(ctx, wt.OriginURL, upstreamBranch)
 			if err != nil {
 				countMutex.Lock()
+				completedCount++
 				failedCount++
+				pb.SetProgress(completedCount, fmt.Sprintf("Fetching PR status... (%d failed)", failedCount))
 				countMutex.Unlock()
 				return
 			}
@@ -470,16 +479,17 @@ func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, prC
 			prMutex.Unlock()
 
 			countMutex.Lock()
-			fetchedCount++
+			completedCount++
+			if failedCount > 0 {
+				pb.SetProgress(completedCount, fmt.Sprintf("Fetching PR status... (%d failed)", failedCount))
+			} else {
+				pb.SetProgress(completedCount, "Fetching PR status...")
+			}
 			countMutex.Unlock()
 		}(wt)
 	}
 
 	wg.Wait()
-
-	if failedCount > 0 {
-		sp.UpdateMessage(fmt.Sprintf("Fetched: %d, Failed: %d", fetchedCount, failedCount))
-	}
 }
 
 // convertForgePR converts forge.PRInfo to prcache.PRInfo

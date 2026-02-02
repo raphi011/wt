@@ -55,7 +55,8 @@ type CheckoutConfig struct {
 
 // ThemeConfig holds theme/color configuration for interactive UI
 type ThemeConfig struct {
-	Name     string `toml:"name"`     // preset name: "default", "dracula", "nord", "gruvbox"
+	Name     string `toml:"name"`     // preset name: "default", "dracula", "nord", "gruvbox", "catppuccin"
+	Mode     string `toml:"mode"`     // theme mode: "auto", "light", "dark" (default: "auto")
 	Primary  string `toml:"primary"`  // main accent color (borders, titles)
 	Accent   string `toml:"accent"`   // highlight color (selected items)
 	Success  string `toml:"success"`  // success indicators (checkmarks)
@@ -393,8 +394,11 @@ func (c *ForgeConfig) GetUserForRepo(repoSpec string) string {
 	return ""
 }
 
-// ValidThemeNames is the list of supported theme presets
-var ValidThemeNames = []string{"default", "dracula", "nord", "gruvbox", "catppuccin-frappe", "catppuccin-mocha"}
+// ValidThemeNames is the list of supported theme presets (families)
+var ValidThemeNames = []string{"default", "dracula", "nord", "gruvbox", "catppuccin"}
+
+// ValidThemeModes is the list of supported theme modes
+var ValidThemeModes = []string{"auto", "light", "dark"}
 
 // isValidThemeName checks if the theme name is a known preset
 func isValidThemeName(name string) bool {
@@ -592,11 +596,12 @@ worktree_format = "{repo}-{branch}"
 #   glab auth login --hostname gitlab.internal.corp
 
 # Theme settings - customize colors for interactive wizards
-# Available presets: "default", "dracula", "nord", "gruvbox",
-#                    "catppuccin-frappe", "catppuccin-mocha"
+# Available presets: "default", "dracula", "nord", "gruvbox", "catppuccin"
+# Some themes have light/dark variants that are auto-selected based on terminal
 #
 # [theme]
-# name = "dracula"  # use a preset theme
+# name = "catppuccin"  # use a preset theme family
+# mode = "auto"        # "auto" (detect terminal), "light", or "dark"
 #
 # Or customize individual colors (hex or 256-color codes):
 # [theme]
@@ -611,6 +616,7 @@ worktree_format = "{repo}-{branch}"
 # You can also use a preset and override specific colors:
 # [theme]
 # name = "nord"
+# mode = "dark"        # force dark variant
 # accent = "#ff79c6"   # override just the accent color
 #
 # Enable nerd font symbols for enhanced icons (requires a nerd font):

@@ -10,8 +10,8 @@ import (
 	"os"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 )
 
 // Wizard orchestrates a multi-step interactive flow.
@@ -150,11 +150,15 @@ func (w *Wizard) Run() (*Wizard, error) {
 		return w, fmt.Errorf("wizard has no steps")
 	}
 
-	// Set lipgloss output to stderr so colors work even when stdout is piped
-	// (e.g., cd $(wt cd -i) redirects stdout but stderr remains a TTY)
-	lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(os.Stderr))
+	// Detect color profile for stderr (handles piped output, NO_COLOR, etc.)
+	profile := colorprofile.Detect(os.Stderr, os.Environ())
 
-	p := tea.NewProgram(w, tea.WithOutput(os.Stderr))
+	// Run with output to stderr so stdout can be piped
+	// (e.g., cd $(wt cd -i) redirects stdout but stderr remains a TTY)
+	p := tea.NewProgram(w,
+		tea.WithOutput(os.Stderr),
+		tea.WithColorProfile(profile),
+	)
 	finalModel, err := p.Run()
 	if err != nil {
 		return nil, err
@@ -200,7 +204,7 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		w.height = msg.Height
 		return w, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			w.cancelled = true
@@ -278,9 +282,9 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return w, nil
 }
 
-func (w *Wizard) View() string {
+func (w *Wizard) View() tea.View {
 	if w.done {
-		return ""
+		return tea.NewView("")
 	}
 
 	var b strings.Builder
@@ -318,10 +322,10 @@ func (w *Wizard) View() string {
 		b.WriteString(HelpStyle().Render(w.steps[w.currentStep].Help()))
 	}
 
-	return BorderStyle().Render(b.String())
+	return tea.NewView(BorderStyle().Render(b.String()))
 }
 
-func (w *Wizard) handleSummaryInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (w *Wizard) handleSummaryInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "enter":
 		w.done = true

@@ -1,9 +1,10 @@
 package styles
 
 import (
+	"image/color"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/raphi011/wt/internal/config"
 )
 
@@ -26,23 +27,26 @@ func TestInit_PresetTheme(t *testing.T) {
 	tests := []struct {
 		name          string
 		preset        string
-		expectedColor lipgloss.TerminalColor // primary color to check
+		mode          string      // theme mode ("dark", "light", or empty for auto)
+		expectedColor color.Color // primary color to check
 	}{
-		{"dracula", "dracula", lipgloss.Color("#bd93f9")},
-		{"nord", "nord", lipgloss.Color("#88c0d0")},
-		{"gruvbox", "gruvbox", lipgloss.Color("#83a598")},
-		{"catppuccin-frappe", "catppuccin-frappe", lipgloss.Color("#8caaee")},
-		{"catppuccin-mocha", "catppuccin-mocha", lipgloss.Color("#89b4fa")},
+		{"dracula dark", "dracula", "dark", lipgloss.Color("#bd93f9")},
+		{"nord dark", "nord", "dark", lipgloss.Color("#88c0d0")},
+		{"nord light", "nord", "light", lipgloss.Color("#5e81ac")},
+		{"gruvbox dark", "gruvbox", "dark", lipgloss.Color("#83a598")},
+		{"gruvbox light", "gruvbox", "light", lipgloss.Color("#076678")},
+		{"catppuccin dark", "catppuccin", "dark", lipgloss.Color("#89b4fa")},
+		{"catppuccin light", "catppuccin", "light", lipgloss.Color("#1e66f5")},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			Init(config.ThemeConfig{Name: tt.preset})
+			Init(config.ThemeConfig{Name: tt.preset, Mode: tt.mode})
 
 			theme := Current()
 			if theme.Primary != tt.expectedColor {
-				t.Errorf("expected primary color %v for theme %s, got %v",
-					tt.expectedColor, tt.preset, theme.Primary)
+				t.Errorf("expected primary color %v for theme %s mode %s, got %v",
+					tt.expectedColor, tt.preset, tt.mode, theme.Primary)
 			}
 		})
 	}
@@ -110,7 +114,8 @@ func TestGetPreset(t *testing.T) {
 func TestPresetNames(t *testing.T) {
 	names := PresetNames()
 
-	expected := []string{"default", "dracula", "nord", "gruvbox", "catppuccin-frappe", "catppuccin-mocha"}
+	// Theme families (not individual variants)
+	expected := []string{"default", "dracula", "nord", "gruvbox", "catppuccin"}
 
 	if len(names) != len(expected) {
 		t.Errorf("expected %d preset names, got %d", len(expected), len(names))
@@ -154,6 +159,69 @@ func TestInit_UnknownThemeFallsBackToDefault(t *testing.T) {
 	}
 	if theme.Accent != lipgloss.Color("212") {
 		t.Errorf("expected default accent color 212 for unknown theme, got %v", theme.Accent)
+	}
+
+	// Reset to default
+	Init(config.ThemeConfig{})
+}
+
+func TestInit_DarkOnlyThemeFallsBackToDark(t *testing.T) {
+	// Dracula only has dark mode - requesting light should fall back to dark
+	Init(config.ThemeConfig{Name: "dracula", Mode: "light"})
+
+	theme := Current()
+
+	// Should use dracula dark colors (no light variant available)
+	if theme.Primary != lipgloss.Color("#bd93f9") {
+		t.Errorf("expected dracula primary color for dark fallback, got %v", theme.Primary)
+	}
+
+	// Reset to default
+	Init(config.ThemeConfig{})
+}
+
+func TestInit_ThemeModeVariants(t *testing.T) {
+	// Test that themes with both variants properly select based on mode
+	tests := []struct {
+		name          string
+		themeName     string
+		mode          string
+		expectedColor color.Color // expected primary color
+	}{
+		{"nord dark", "nord", "dark", lipgloss.Color("#88c0d0")},
+		{"nord light", "nord", "light", lipgloss.Color("#5e81ac")},
+		{"gruvbox dark", "gruvbox", "dark", lipgloss.Color("#83a598")},
+		{"gruvbox light", "gruvbox", "light", lipgloss.Color("#076678")},
+		{"catppuccin dark", "catppuccin", "dark", lipgloss.Color("#89b4fa")},
+		{"catppuccin light", "catppuccin", "light", lipgloss.Color("#1e66f5")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Init(config.ThemeConfig{Name: tt.themeName, Mode: tt.mode})
+
+			theme := Current()
+			if theme.Primary != tt.expectedColor {
+				t.Errorf("expected %s %s primary %v, got %v",
+					tt.themeName, tt.mode, tt.expectedColor, theme.Primary)
+			}
+		})
+	}
+
+	// Reset to default
+	Init(config.ThemeConfig{})
+}
+
+func TestInit_InvalidModeFallsBackToAuto(t *testing.T) {
+	// Invalid mode should log warning and use auto (falls back to dark in non-TTY)
+	Init(config.ThemeConfig{Name: "nord", Mode: "invalid"})
+
+	theme := Current()
+
+	// In test environment (non-TTY), auto detects as dark
+	// Should be one of the nord variants (test passes if it doesn't crash)
+	if theme.Primary != lipgloss.Color("#88c0d0") && theme.Primary != lipgloss.Color("#5e81ac") {
+		t.Errorf("expected nord theme color, got %v", theme.Primary)
 	}
 
 	// Reset to default

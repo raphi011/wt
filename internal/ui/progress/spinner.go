@@ -6,11 +6,12 @@ package progress
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
 )
 
 // messageUpdate is sent to update the spinner message
@@ -57,7 +58,7 @@ func (m spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case messageUpdate:
 		m.message = string(msg)
 		return m, m.waitForMessage()
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m, tea.Quit
 	default:
 		var cmd tea.Cmd
@@ -66,11 +67,11 @@ func (m spinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m spinnerModel) View() string {
+func (m spinnerModel) View() tea.View {
 	if m.quit || m.message == "" {
-		return ""
+		return tea.NewView("")
 	}
-	return fmt.Sprintf("%s %s", m.spinner.View(), m.message)
+	return tea.NewView(fmt.Sprintf("%s %s", m.spinner.View(), m.message))
 }
 
 // NewSpinner creates a new spinner with the given message
@@ -100,7 +101,8 @@ func (s *Spinner) Start() {
 		msgChan: s.msgChan,
 	}
 
-	s.program = tea.NewProgram(model, tea.WithoutSignalHandler())
+	// Write to stderr so stdout remains clean for piping (e.g., cd $(wt cd ...))
+	s.program = tea.NewProgram(model, tea.WithoutSignalHandler(), tea.WithOutput(os.Stderr))
 	s.isRunning = true
 
 	go func() {
@@ -112,15 +114,16 @@ func (s *Spinner) Start() {
 // UpdateMessage changes the spinner message
 func (s *Spinner) UpdateMessage(message string) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if !s.isRunning {
 		s.lastMsg = message
-		s.mu.Unlock()
 		return
 	}
-	s.mu.Unlock()
 
 	// Non-blocking send - intentionally drops messages if channel is full
 	// to avoid blocking the main operation for UI updates
+	// Safe because channel close happens under same mutex
 	select {
 	case s.msgChan <- message:
 	default:
@@ -136,10 +139,9 @@ func (s *Spinner) Stop() {
 		return
 	}
 	s.isRunning = false
-	s.mu.Unlock()
-
-	// Close channel to signal quit
+	// Close channel inside mutex to prevent race with UpdateMessage
 	close(s.msgChan)
+	s.mu.Unlock()
 
 	// Quit the program
 	if s.program != nil {
@@ -152,6 +154,6 @@ func (s *Spinner) Stop() {
 	case <-time.After(500 * time.Millisecond):
 	}
 
-	// Clear the spinner line
-	fmt.Print("\r\033[K")
+	// Clear to stderr (UI output shouldn't pollute stdout for piping)
+	fmt.Fprint(os.Stderr, "\r\033[K")
 }

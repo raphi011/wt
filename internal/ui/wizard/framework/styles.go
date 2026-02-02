@@ -1,7 +1,7 @@
 package framework
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/raphi011/wt/internal/ui/styles"
 )
 
