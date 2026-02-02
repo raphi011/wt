@@ -127,3 +127,9 @@ func MatchHighlightStyle() lipgloss.Style {
 		Bold(true).
 		Underline(true)
 }
+
+// ErrorStyle for validation error messages
+func ErrorStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(styles.Error)
+}

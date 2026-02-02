@@ -58,7 +58,8 @@ type Step interface {
 	HasClearableInput() bool
 
 	// ClearInput clears any user input (filter, text field, etc).
-	ClearInput()
+	// Returns a command to run (e.g., textinput.Blink for cursor).
+	ClearInput() tea.Cmd
 }
 
 // Option represents a selectable item in list-based steps.

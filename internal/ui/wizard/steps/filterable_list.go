@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/sahilm/fuzzy"
@@ -34,7 +35,11 @@ type FilterableListStep struct {
 	filtered []fuzzy.Match // fuzzy matches with indices and matched positions
 	cursor   int           // position in filtered list (0 = create option if shown)
 	selected int           // selected index in filtered list, -1 if none (single-select mode)
-	filter   string
+	filter   string        // current filter value (synced from filterInput)
+
+	// Filter input with cursor - focus state is derived from filterInput.Focused()
+	// When filterInput.Focused() is true, filter has focus; otherwise list has focus
+	filterInput textinput.Model
 
 	// Create-from-filter functionality
 	allowCreate   bool                                                        // Enable "Create {filter}" option
@@ -75,14 +80,30 @@ func NewFilterableList(id, title, prompt string, options []framework.Option) *Fi
 		}
 	}
 
+	// Initialize filter text input with bar cursor and blink
+	ti := textinput.New()
+	ti.Prompt = ""      // No prompt prefix (we render "Filter: " ourselves)
+	ti.Placeholder = ""
+	ti.CharLimit = 256
+	ti.SetWidth(40)
+	// Style the text and cursor
+	styles := ti.Styles()
+	styles.Focused.Text = framework.FilterStyle()
+	styles.Blurred.Text = framework.FilterStyle()
+	styles.Cursor.Shape = tea.CursorBar
+	styles.Cursor.Blink = true
+	ti.SetStyles(styles)
+	ti.Blur() // Ensure filter starts unfocused (list has initial focus)
+
 	return &FilterableListStep{
-		id:       id,
-		title:    title,
-		prompt:   prompt,
-		options:  options,
-		filtered: filtered,
-		cursor:   cursor,
-		selected: -1,
+		id:          id,
+		title:       title,
+		prompt:      prompt,
+		options:     options,
+		filtered:    filtered,
+		cursor:      cursor,
+		selected:    -1,
+		filterInput: ti,
 	}
 }
 
@@ -188,15 +209,74 @@ func (s *FilterableListStep) shouldShowCreate() bool {
 }
 
 func (s *FilterableListStep) Init() tea.Cmd {
+	// List starts with focus, no blink cmd needed until filter is focused
 	return nil
 }
 
 func (s *FilterableListStep) Update(msg tea.KeyPressMsg) (framework.Step, tea.Cmd, framework.StepResult) {
+	// Handle global navigation keys regardless of focus
+	switch msg.String() {
+	case "left":
+		return s, nil, framework.StepBack
+	case "right":
+		return s.handleSelect(framework.StepAdvance)
+	case "enter":
+		return s.handleSelect(framework.StepSubmitIfReady)
+	}
+
+	// Delegate to focus-specific handler based on textinput focus state
+	if s.filterInput.Focused() {
+		return s.updateFilterFocused(msg)
+	}
+	return s.updateListFocused(msg)
+}
+
+// updateFilterFocused handles input when the filter text input has focus.
+func (s *FilterableListStep) updateFilterFocused(msg tea.KeyPressMsg) (framework.Step, tea.Cmd, framework.StepResult) {
+	switch msg.String() {
+	case "down":
+		// Move focus to list
+		s.filterInput.Blur()
+		return s, nil, framework.StepContinue
+	case "up":
+		// No-op when at filter (can't go higher)
+		return s, nil, framework.StepContinue
+	}
+
+	// Apply rune filter before forwarding to textinput
+	if text := msg.Key().Text; text != "" {
+		filtered := framework.FilterRunes([]rune(text), s.runeFilter)
+		if filtered == "" {
+			// Rune was filtered out, don't forward to textinput
+			return s, nil, framework.StepContinue
+		}
+	}
+
+	// Let textinput handle typing, backspace, etc.
+	var cmd tea.Cmd
+	s.filterInput, cmd = s.filterInput.Update(msg)
+
+	// Sync filter value and apply fuzzy matching
+	newFilter := s.filterInput.Value()
+	if newFilter != s.filter {
+		s.filter = newFilter
+		s.applyFilter()
+	}
+
+	return s, cmd, framework.StepContinue
+}
+
+// updateListFocused handles input when the list has focus.
+func (s *FilterableListStep) updateListFocused(msg tea.KeyPressMsg) (framework.Step, tea.Cmd, framework.StepResult) {
 	key := msg.String()
-	showCreate := s.shouldShowCreate()
 
 	switch key {
 	case "up":
+		// At top of list, move focus to filter
+		if s.cursor == s.findFirstEnabled() {
+			s.filterInput.Focus()
+			return s, textinput.Blink, framework.StepContinue
+		}
 		s.moveCursorUp()
 	case "down":
 		s.moveCursorDown()
@@ -204,93 +284,94 @@ func (s *FilterableListStep) Update(msg tea.KeyPressMsg) (framework.Step, tea.Cm
 		s.cursor = s.findFirstEnabled()
 	case "end", "pgdown":
 		s.cursor = s.findLastEnabled()
-	case " ": // Space toggles selection in multi-select mode
-		if s.multiSelect && len(s.filtered) > 0 {
-			idx := s.filtered[s.cursor].Index
-			if s.multiSelected[idx] {
-				delete(s.multiSelected, idx)
-			} else {
-				// Check max selection constraint
-				if s.maxSelect == 0 || len(s.multiSelected) < s.maxSelect {
-					s.multiSelected[idx] = true
+	default:
+		// Space toggles selection in multi-select mode
+		if key == "space" && s.multiSelect && len(s.filtered) > 0 {
+			showCreate := s.shouldShowCreate()
+			// Adjust cursor for create option
+			optionCursor := s.cursor
+			if showCreate {
+				if s.cursor == 0 {
+					// Can't toggle create option
+					return s, nil, framework.StepContinue
+				}
+				optionCursor = s.cursor - 1
+			}
+			if optionCursor >= 0 && optionCursor < len(s.filtered) {
+				idx := s.filtered[optionCursor].Index
+				if s.multiSelected[idx] {
+					delete(s.multiSelected, idx)
+				} else {
+					// Check max selection constraint
+					if s.maxSelect == 0 || len(s.multiSelected) < s.maxSelect {
+						s.multiSelected[idx] = true
+					}
 				}
 			}
-		}
-	case "enter":
-		// Multi-select mode: submit if constraints are met
-		if s.multiSelect {
-			if s.canAdvanceMulti() {
-				return s, nil, framework.StepSubmitIfReady
-			}
 			return s, nil, framework.StepContinue
 		}
-		// Single-select mode
-		// Check if selecting create option (cursor 0 when create is shown)
-		if showCreate && s.cursor == 0 {
-			s.selected = 0
-			s.selectedIsNew = true
-			return s, nil, framework.StepSubmitIfReady
-		}
-		// Adjust cursor for option selection when create is shown
-		optionCursor := s.cursor
-		if showCreate {
-			optionCursor = s.cursor - 1
-		}
-		if len(s.filtered) > 0 && optionCursor >= 0 && optionCursor < len(s.filtered) {
-			idx := s.filtered[optionCursor].Index
-			if !s.options[idx].Disabled {
-				s.selected = s.cursor
-				s.selectedIsNew = false
-				return s, nil, framework.StepSubmitIfReady
-			}
-		}
-	case "right":
-		// Multi-select mode: advance if constraints are met
-		if s.multiSelect {
-			if s.canAdvanceMulti() {
-				return s, nil, framework.StepAdvance
-			}
-			return s, nil, framework.StepContinue
-		}
-		// Single-select mode
-		// Check if selecting create option (cursor 0 when create is shown)
-		if showCreate && s.cursor == 0 {
-			s.selected = 0
-			s.selectedIsNew = true
-			return s, nil, framework.StepAdvance
-		}
-		// Adjust cursor for option selection when create is shown
-		optionCursor := s.cursor
-		if showCreate {
-			optionCursor = s.cursor - 1
-		}
-		if len(s.filtered) > 0 && optionCursor >= 0 && optionCursor < len(s.filtered) {
-			idx := s.filtered[optionCursor].Index
-			if !s.options[idx].Disabled {
-				s.selected = s.cursor
-				s.selectedIsNew = false
-				return s, nil, framework.StepAdvance
-			}
-		}
-	case "left":
-		return s, nil, framework.StepBack
-	case "backspace":
-		if len(s.filter) > 0 {
-			s.filter = s.filter[:len(s.filter)-1]
-			s.applyFilter()
-		}
-	case "alt+backspace":
-		if len(s.filter) > 0 {
-			s.filter = framework.DeleteLastWord(s.filter)
-			s.applyFilter()
-		}
-	default:
-		// Handle typing/pasting for filter (v2: use Key().Text for printable chars)
+
+		// Typing while list focused: focus filter and type (includes space in single-select)
 		if text := msg.Key().Text; text != "" {
-			if filtered := framework.FilterRunes([]rune(text), s.runeFilter); filtered != "" {
-				s.filter += filtered
+			filtered := framework.FilterRunes([]rune(text), s.runeFilter)
+			if filtered != "" {
+				s.filterInput.Focus()
+				// Forward the key to textinput
+				var cmd tea.Cmd
+				s.filterInput, cmd = s.filterInput.Update(msg)
+				// Sync filter
+				s.filter = s.filterInput.Value()
 				s.applyFilter()
+				return s, cmd, framework.StepContinue
 			}
+		}
+		// Handle backspace when list focused - move to filter
+		if key == "backspace" || key == "alt+backspace" {
+			if s.filter != "" {
+				s.filterInput.Focus()
+				var cmd tea.Cmd
+				s.filterInput, cmd = s.filterInput.Update(msg)
+				s.filter = s.filterInput.Value()
+				s.applyFilter()
+				return s, cmd, framework.StepContinue
+			}
+		}
+	}
+
+	return s, nil, framework.StepContinue
+}
+
+// handleSelect handles enter/right key selection.
+func (s *FilterableListStep) handleSelect(result framework.StepResult) (framework.Step, tea.Cmd, framework.StepResult) {
+	showCreate := s.shouldShowCreate()
+
+	// Multi-select mode: check constraints
+	if s.multiSelect {
+		if s.canAdvanceMulti() {
+			return s, nil, result
+		}
+		return s, nil, framework.StepContinue
+	}
+
+	// Single-select mode
+	// Check if selecting create option (cursor 0 when create is shown)
+	if showCreate && s.cursor == 0 {
+		s.selected = 0
+		s.selectedIsNew = true
+		return s, nil, result
+	}
+
+	// Adjust cursor for option selection when create is shown
+	optionCursor := s.cursor
+	if showCreate {
+		optionCursor = s.cursor - 1
+	}
+	if len(s.filtered) > 0 && optionCursor >= 0 && optionCursor < len(s.filtered) {
+		idx := s.filtered[optionCursor].Index
+		if !s.options[idx].Disabled {
+			s.selected = s.cursor
+			s.selectedIsNew = false
+			return s, nil, result
 		}
 	}
 
@@ -308,11 +389,18 @@ func (s *FilterableListStep) canAdvanceMulti() bool {
 func (s *FilterableListStep) View() string {
 	var b strings.Builder
 	if s.multiSelect {
-		b.WriteString(fmt.Sprintf("%s (%d selected):\n", s.prompt, len(s.multiSelected)))
+		fmt.Fprintf(&b, "%s (%d selected):\n", s.prompt, len(s.multiSelected))
 	} else {
 		b.WriteString(s.prompt + ":\n")
 	}
-	b.WriteString(framework.FilterLabelStyle().Render("Filter: ") + framework.FilterStyle().Render(s.filter) + "\n\n")
+
+	// Render filter line: show textinput view when focused (includes cursor), plain text otherwise
+	filterLabel := framework.FilterLabelStyle().Render("Filter: ")
+	if s.filterInput.Focused() {
+		b.WriteString(filterLabel + s.filterInput.View() + "\n\n")
+	} else {
+		b.WriteString(filterLabel + framework.FilterStyle().Render(s.filter) + "\n\n")
+	}
 
 	showCreate := s.shouldShowCreate()
 
@@ -334,12 +422,16 @@ func (s *FilterableListStep) View() string {
 		b.WriteString(framework.OptionNormalStyle().Render("  ↑ more above") + "\n")
 	}
 
+	// Show > cursor: always in single-select (indicates what will be selected),
+	// only when list focused in multi-select (checkbox shows selection state)
+	showListCursor := !s.multiSelect || !s.filterInput.Focused()
+
 	for i := start; i < end; i++ {
 		// Handle create option at position 0 when shown
 		if showCreate && i == 0 {
 			cursor := "  "
 			style := framework.OptionNormalStyle()
-			if s.cursor == 0 {
+			if showListCursor && s.cursor == 0 {
 				cursor = "> "
 				style = framework.OptionSelectedStyle()
 			}
@@ -374,7 +466,7 @@ func (s *FilterableListStep) View() string {
 			continue
 		}
 
-		if i == s.cursor {
+		if showListCursor && i == s.cursor {
 			cursor = "> "
 			style = framework.OptionSelectedStyle()
 		}
@@ -525,9 +617,12 @@ func (s *FilterableListStep) HasClearableInput() bool {
 	return s.filter != ""
 }
 
-func (s *FilterableListStep) ClearInput() {
+func (s *FilterableListStep) ClearInput() tea.Cmd {
 	s.filter = ""
+	s.filterInput.SetValue("")
+	s.filterInput.Focus() // Focus filter after clearing
 	s.applyFilter()
+	return textinput.Blink
 }
 
 // SetOptions updates the options list.

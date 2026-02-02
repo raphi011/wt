@@ -211,8 +211,8 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if w.currentStep < len(w.steps) {
 				step := w.steps[w.currentStep]
 				if step.HasClearableInput() {
-					step.ClearInput()
-					return w, nil
+					cmd := step.ClearInput()
+					return w, cmd
 				}
 			}
 			// No input to clear, cancel wizard
@@ -239,19 +239,15 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if cb, ok := w.onComplete[step.ID()]; ok {
 				cb(w)
 			}
-			// Check if all steps are now complete - submit immediately
-			if w.AllStepsComplete() {
-				w.done = true
-				return w, tea.Quit
-			}
-			// Otherwise advance to next step (same as StepAdvance)
+			// Find next incomplete step or go to summary
 			next := w.findNextStep(w.currentStep)
 			if next < 0 {
+				// No more steps - go to summary or submit if skipSummary
 				if w.skipSummary {
 					w.done = true
 					return w, tea.Quit
 				}
-				w.currentStep = len(w.steps)
+				w.currentStep = len(w.steps) // Go to summary
 			} else {
 				w.currentStep = next
 				return w, w.steps[w.currentStep].Init()

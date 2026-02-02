@@ -83,6 +83,19 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 		}
 
 		w.AddStep(repoStep)
+
+		// Track previous repo selection to detect changes
+		var prevRepoSelection string
+		w.OnComplete("repos", func(wiz *framework.Wizard) {
+			currentSelection := wiz.GetStep("repos").Value().Label
+			if prevRepoSelection != "" && currentSelection != prevRepoSelection {
+				// Repo selection changed, reset branch step
+				if branchStep := wiz.GetStep("branch"); branchStep != nil {
+					branchStep.Reset()
+				}
+			}
+			prevRepoSelection = currentSelection
+		})
 	}
 
 	// Step 2: Branch (combined mode + branch selection)
@@ -167,21 +180,6 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 			branchStepUpdate := wiz.GetStep("branch").(*steps.FilterableListStep)
 			branchOpts := buildBranchOptions(result.Branches)
 			branchStepUpdate.SetOptions(branchOpts)
-		})
-	}
-
-	// Info line showing selected repos
-	if hasRepos {
-		w.WithInfoLine(func(wiz *framework.Wizard) string {
-			repoStep := wiz.GetStep("repos")
-			if repoStep == nil || !repoStep.IsComplete() {
-				return ""
-			}
-			v := repoStep.Value()
-			if v.Label == "" {
-				return ""
-			}
-			return "Selected: " + v.Label
 		})
 	}
 

@@ -135,8 +135,9 @@ func (s *SingleSelectStep) HasClearableInput() bool {
 	return false // SingleSelect has no text input
 }
 
-func (s *SingleSelectStep) ClearInput() {
+func (s *SingleSelectStep) ClearInput() tea.Cmd {
 	// No-op: SingleSelect has no text input to clear
+	return nil
 }
 
 // SetOptions updates the options list (useful for dynamic content).
