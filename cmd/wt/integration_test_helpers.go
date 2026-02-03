@@ -242,12 +242,12 @@ func setupTestRepoWithOrigin(t *testing.T, dir, name string) (string, string) {
 
 	dir = resolvePath(t, dir)
 
-	// Create a bare "origin" repository
+	// Create a bare "origin" repository with main as default branch
 	originPath := filepath.Join(dir, name+"-origin.git")
 	if err := os.MkdirAll(originPath, 0755); err != nil {
 		t.Fatalf("failed to create origin dir: %v", err)
 	}
-	cmd := exec.Command("git", "init", "--bare")
+	cmd := exec.Command("git", "init", "--bare", "-b", "main")
 	cmd.Dir = originPath
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to init bare origin: %v\n%s", err, out)
