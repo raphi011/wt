@@ -74,7 +74,6 @@ func TestCheckoutOptions_Structure(t *testing.T) {
 	opts := CheckoutOptions{
 		Branch:        "feature-x",
 		NewBranch:     true,
-		Fetch:         true,
 		Cancelled:     false,
 		SelectedRepos: []string{"/path/to/repo1", "/path/to/repo2"},
 		SelectedHooks: []string{"build", "test"},
@@ -86,9 +85,6 @@ func TestCheckoutOptions_Structure(t *testing.T) {
 	}
 	if !opts.NewBranch {
 		t.Error("NewBranch should be true")
-	}
-	if !opts.Fetch {
-		t.Error("Fetch should be true")
 	}
 	if opts.Cancelled {
 		t.Error("Cancelled should be false")
