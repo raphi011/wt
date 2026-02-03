@@ -6,7 +6,7 @@ import (
 
 func TestBuildBranchOptions_FiltersCheckedOutBranches(t *testing.T) {
 	branches := []BranchInfo{
-		{Name: "main", InWorktree: true},      // Should be filtered
+		{Name: "main", InWorktree: true},       // Should be filtered
 		{Name: "feature-a", InWorktree: false}, // Should be included
 		{Name: "feature-b", InWorktree: true},  // Should be filtered
 		{Name: "develop", InWorktree: false},   // Should be included
@@ -74,7 +74,6 @@ func TestCheckoutOptions_Structure(t *testing.T) {
 	opts := CheckoutOptions{
 		Branch:        "feature-x",
 		NewBranch:     true,
-		Fetch:         true,
 		Cancelled:     false,
 		SelectedRepos: []string{"/path/to/repo1", "/path/to/repo2"},
 		SelectedHooks: []string{"build", "test"},
@@ -86,9 +85,6 @@ func TestCheckoutOptions_Structure(t *testing.T) {
 	}
 	if !opts.NewBranch {
 		t.Error("NewBranch should be true")
-	}
-	if !opts.Fetch {
-		t.Error("Fetch should be true")
 	}
 	if opts.Cancelled {
 		t.Error("Cancelled should be false")

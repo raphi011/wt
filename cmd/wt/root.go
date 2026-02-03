@@ -43,7 +43,7 @@ and streamline your development workflow.`,
 	SilenceErrors:              true,
 	SuggestionsMinimumDistance: 2, // Enable typo suggestions
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip git check for completion and help commands
+		// Skip for completion and help commands
 		if cmd.Name() == "completion" || cmd.Name() == "__complete" || cmd.Name() == "help" {
 			return nil
 		}
@@ -54,7 +54,17 @@ and streamline your development workflow.`,
 		}
 
 		// Check git is available
-		return git.CheckGit()
+		if err := git.CheckGit(); err != nil {
+			return err
+		}
+
+		// Create logger NOW (after flags are parsed)
+		l := log.New(os.Stderr, verbose, quiet)
+		ctx := cmd.Context()
+		ctx = log.WithLogger(ctx, l)
+		cmd.SetContext(ctx)
+
+		return nil
 	},
 	// Run is not set - shows help when no subcommand provided
 }
@@ -81,10 +91,6 @@ func Execute() {
 	// Create context with signal handling
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-
-	// Create logger (stderr for diagnostics)
-	l := log.New(os.Stderr, verbose, quiet)
-	ctx = log.WithLogger(ctx, l)
 
 	// Add output printer (stdout for primary data)
 	ctx = output.WithPrinter(ctx, os.Stdout)

@@ -11,7 +11,6 @@ import (
 type CheckoutOptions struct {
 	Branch        string
 	NewBranch     bool
-	Fetch         bool
 	Cancelled     bool
 	SelectedRepos []string // Selected repo paths (when outside a repo)
 	SelectedHooks []string // Hook names to run (empty if NoHook is true)
@@ -106,18 +105,11 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 			}
 			return value
 		}).
-		WithRuneFilter(framework.RuneFilterNoSpaces)
+		WithRuneFilter(framework.RuneFilterNoSpaces).
+		WithEmptyMessage("No matching branches")
 	w.AddStep(branchStep)
 
-	// Step 3: Options (fetch) - only for new branches
-	fetchOptions := []framework.Option{
-		{Label: "Yes", Value: true},
-		{Label: "No", Value: false},
-	}
-	fetchStep := steps.NewSingleSelect("fetch", "Fetch", "Fetch from origin first?", fetchOptions)
-	w.AddStep(fetchStep)
-
-	// Step 4: Hooks (only when available and not set via CLI)
+	// Step 3: Hooks (only when available and not set via CLI)
 	hasHooks := len(params.AvailableHooks) > 0 && !params.HooksFromCLI
 	if hasHooks {
 		hookOptions := make([]framework.Option, len(params.AvailableHooks))
@@ -143,16 +135,6 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 		}
 		w.AddStep(hookStep)
 	}
-
-	// Skip conditions
-	// Skip "fetch" step when checking out existing branch (not creating new)
-	w.SkipWhen("fetch", func(wiz *framework.Wizard) bool {
-		step, ok := wiz.GetStep("branch").(*steps.FilterableListStep)
-		if !ok {
-			return true // Skip if step not found or wrong type
-		}
-		return !step.IsCreateSelected()
-	})
 
 	// Callbacks
 	// When repos selection completes, fetch branches from first selected repo
@@ -203,11 +185,6 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	opts.Branch = result.GetString("branch")
 	if branchStepResult, ok := result.GetStep("branch").(*steps.FilterableListStep); ok {
 		opts.NewBranch = branchStepResult.IsCreateSelected()
-	}
-
-	// Fetch (only relevant for new branches)
-	if opts.NewBranch {
-		opts.Fetch = result.GetBool("fetch")
 	}
 
 	// Hooks

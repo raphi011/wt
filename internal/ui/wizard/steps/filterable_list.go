@@ -58,6 +58,9 @@ type FilterableListStep struct {
 
 	// Custom description renderer
 	descriptionRenderer func(opt framework.Option, isSelected bool) string
+
+	// Custom empty message
+	emptyMessage string
 }
 
 // NewFilterableList creates a new filterable single-select step.
@@ -82,7 +85,7 @@ func NewFilterableList(id, title, prompt string, options []framework.Option) *Fi
 
 	// Initialize filter text input with bar cursor and blink
 	ti := textinput.New()
-	ti.Prompt = ""      // No prompt prefix (we render "Filter: " ourselves)
+	ti.Prompt = "" // No prompt prefix (we render "Filter: " ourselves)
 	ti.Placeholder = ""
 	ti.CharLimit = 256
 	ti.SetWidth(40)
@@ -138,6 +141,13 @@ func (s *FilterableListStep) WithRuneFilter(f framework.RuneFilter) *FilterableL
 // and should return a pre-styled string (using lipgloss).
 func (s *FilterableListStep) WithDescriptionRenderer(fn func(opt framework.Option, isSelected bool) string) *FilterableListStep {
 	s.descriptionRenderer = fn
+	return s
+}
+
+// WithEmptyMessage sets a custom message shown when no items match the filter.
+// Defaults to "No matching items" if not set.
+func (s *FilterableListStep) WithEmptyMessage(msg string) *FilterableListStep {
+	s.emptyMessage = msg
 	return s
 }
 
@@ -516,7 +526,11 @@ func (s *FilterableListStep) View() string {
 	}
 
 	if totalItems == 0 {
-		b.WriteString(framework.OptionNormalStyle().Render("  No matching items") + "\n")
+		msg := "No matching items"
+		if s.emptyMessage != "" {
+			msg = s.emptyMessage
+		}
+		b.WriteString(framework.OptionNormalStyle().Render("  "+msg) + "\n")
 	}
 
 	return b.String()

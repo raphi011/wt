@@ -26,7 +26,6 @@ type WorktreeDisplay struct {
 	Path       string    `json:"path"`
 	CommitHash string    `json:"commit"`
 	CreatedAt  time.Time `json:"created_at"`
-	IsDirty    bool      `json:"is_dirty"`
 	Note       string    `json:"note,omitempty"`
 }
 
@@ -139,19 +138,15 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 			}
 
 			// Build table rows
-			headers := []string{"REPO", "BRANCH", "COMMIT", "DIRTY", "CREATED"}
+			headers := []string{"REPO", "BRANCH", "COMMIT", "CREATED", "NOTE"}
 			var rows [][]string
 			for _, wt := range allWorktrees {
-				dirty := ""
-				if wt.IsDirty {
-					dirty = "*"
-				}
 				created := format.RelativeTime(wt.CreatedAt)
 				commit := wt.CommitHash
 				if len(commit) > 7 {
 					commit = commit[:7]
 				}
-				rows = append(rows, []string{wt.RepoName, wt.Branch, commit, dirty, created})
+				rows = append(rows, []string{wt.RepoName, wt.Branch, commit, created, wt.Note})
 			}
 
 			out.Print(static.RenderTable(headers, rows))
@@ -197,7 +192,6 @@ func listWorktreesForRepo(ctx context.Context, repo *registry.Repo) ([]WorktreeD
 			Path:       wt.Path,
 			CommitHash: wt.CommitHash,
 			CreatedAt:  createdAt,
-			IsDirty:    git.IsDirty(ctx, wt.Path),
 			Note:       notes[wt.Branch],
 		})
 	}
