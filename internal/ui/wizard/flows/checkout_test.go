@@ -6,7 +6,7 @@ import (
 
 func TestBuildBranchOptions_FiltersCheckedOutBranches(t *testing.T) {
 	branches := []BranchInfo{
-		{Name: "main", InWorktree: true},      // Should be filtered
+		{Name: "main", InWorktree: true},       // Should be filtered
 		{Name: "feature-a", InWorktree: false}, // Should be included
 		{Name: "feature-b", InWorktree: true},  // Should be filtered
 		{Name: "develop", InWorktree: false},   // Should be included

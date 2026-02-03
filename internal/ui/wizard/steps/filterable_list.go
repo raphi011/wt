@@ -85,7 +85,7 @@ func NewFilterableList(id, title, prompt string, options []framework.Option) *Fi
 
 	// Initialize filter text input with bar cursor and blink
 	ti := textinput.New()
-	ti.Prompt = ""      // No prompt prefix (we render "Filter: " ourselves)
+	ti.Prompt = "" // No prompt prefix (we render "Filter: " ourselves)
 	ti.Placeholder = ""
 	ti.CharLimit = 256
 	ti.SetWidth(40)
