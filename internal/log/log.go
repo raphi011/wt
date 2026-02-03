@@ -56,12 +56,17 @@ func (l *Logger) Println(args ...any) {
 // Command returns a function that logs an external command execution with duration.
 // Call the returned function after the command completes.
 // Only prints when verbose mode is enabled and quiet mode is disabled.
-func (l *Logger) Command(name string, args ...string) func(time.Duration) {
+// If dir is non-empty, it's shown as a prefix: [dir] $ cmd args (duration)
+func (l *Logger) Command(dir, name string, args ...string) func(time.Duration) {
 	if !l.verbose || l.quiet {
 		return func(time.Duration) {}
 	}
 	return func(d time.Duration) {
-		fmt.Fprintf(l.out, "$ %s %s (%s)\n", name, strings.Join(args, " "), d.Round(time.Millisecond))
+		if dir != "" {
+			fmt.Fprintf(l.out, "[%s] $ %s %s (%s)\n", dir, name, strings.Join(args, " "), d.Round(time.Millisecond))
+		} else {
+			fmt.Fprintf(l.out, "$ %s %s (%s)\n", name, strings.Join(args, " "), d.Round(time.Millisecond))
+		}
 	}
 }
 

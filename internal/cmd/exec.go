@@ -14,7 +14,7 @@ import (
 // RunContext executes a command with context support and verbose logging.
 func RunContext(ctx context.Context, dir, name string, args ...string) error {
 	start := time.Now()
-	logCmd := log.FromContext(ctx).Command(name, args...)
+	logCmd := log.FromContext(ctx).Command(dir, name, args...)
 	defer func() { logCmd(time.Since(start)) }()
 
 	cmd := exec.CommandContext(ctx, name, args...)
@@ -39,7 +39,7 @@ func RunContext(ctx context.Context, dir, name string, args ...string) error {
 // returning stdout.
 func OutputContext(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
 	start := time.Now()
-	logCmd := log.FromContext(ctx).Command(name, args...)
+	logCmd := log.FromContext(ctx).Command(dir, name, args...)
 	defer func() { logCmd(time.Since(start)) }()
 
 	cmd := exec.CommandContext(ctx, name, args...)
