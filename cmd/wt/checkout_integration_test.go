@@ -794,6 +794,16 @@ func TestCheckout_Fetch(t *testing.T) {
 	addCommit(t, clonePath, "origin-only.txt", "Origin commit")
 	runGitCommand(clonePath, "push", "origin", "main")
 
+	// Verify push succeeded by checking origin has the commit
+	originLog, _ := runGitCommand(originPath, "log", "--oneline", "-1")
+	t.Logf("Origin HEAD: %s", strings.TrimSpace(string(originLog)))
+
+	// Verify local repo doesn't have the file yet
+	localFile := filepath.Join(repoPath, "origin-only.txt")
+	if _, err := os.Stat(localFile); err == nil {
+		t.Log("WARNING: local repo unexpectedly has origin-only.txt before fetch")
+	}
+
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
 	os.MkdirAll(filepath.Dir(regFile), 0755)
 
@@ -830,6 +840,20 @@ func TestCheckout_Fetch(t *testing.T) {
 	// Verify the branch was created from the fetched origin/main (should have origin-only.txt)
 	originFile := filepath.Join(wtPath, "origin-only.txt")
 	if _, err := os.Stat(originFile); os.IsNotExist(err) {
+		// Debug: show what's in the worktree and its history
+		files, _ := os.ReadDir(wtPath)
+		var fileNames []string
+		for _, f := range files {
+			fileNames = append(fileNames, f.Name())
+		}
+		t.Logf("Files in worktree: %v", fileNames)
+
+		wtLog, _ := runGitCommand(wtPath, "log", "--oneline", "-3")
+		t.Logf("Worktree history: %s", strings.TrimSpace(string(wtLog)))
+
+		originMainLog, _ := runGitCommand(repoPath, "log", "--oneline", "-1", "origin/main")
+		t.Logf("origin/main in local repo: %s", strings.TrimSpace(string(originMainLog)))
+
 		t.Error("feature branch should have origin-only.txt (created from fetched origin/main)")
 	}
 }
