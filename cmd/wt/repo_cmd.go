@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
@@ -30,7 +31,7 @@ func newRepoCmd() *cobra.Command {
 Use subcommands to list, add, clone, or remove repositories from the registry.`,
 		Example: `  wt repo list                  # List all repos
   wt repo add ~/work/my-project # Register a repo
-  wt repo clone <url>           # Clone and register a repo
+  wt repo clone <url|org/repo>  # Clone and register a repo
   wt repo remove my-project     # Unregister a repo
   wt repo make-bare ./myrepo    # Migrate to bare structure`,
 	}
@@ -359,7 +360,7 @@ func newRepoCloneCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:     "clone <url> [destination]",
+		Use:     "clone <url|org/repo> [destination]",
 		Short:   "Clone a repository as bare",
 		Aliases: []string{"cl"},
 		Args:    cobra.RangeArgs(1, 2),
@@ -372,27 +373,39 @@ Clones directly into .git (no working tree):
 This allows worktrees to be created as siblings to .git.
 Use -b to create an initial worktree for a branch.
 
+Supports both full URLs and short-form org/repo format:
+  - Full URLs use git clone directly
+  - org/repo format uses gh/glab CLI (determined by forge config)
+  - repo-only format uses default_org from config
+
 If destination is not specified, clones into the current directory.`,
-		Example: `  wt repo clone https://github.com/org/repo           # Clone to ./repo
-  wt repo clone https://github.com/org/repo myrepo    # Clone to ./myrepo
-  wt repo clone https://github.com/org/repo -b main   # Clone and create worktree for main
-  wt repo clone git@github.com:org/repo.git -l work   # Clone with label`,
+		Example: `  wt repo clone https://github.com/org/repo           # Clone via git URL
+  wt repo clone git@github.com:org/repo.git           # Clone via SSH URL
+  wt repo clone org/repo                              # Clone via gh/glab (uses forge config)
+  wt repo clone myrepo                                # Clone with default_org
+  wt repo clone org/repo -b main                      # Clone and create worktree for main
+  wt repo clone org/repo -l work                      # Clone with label`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			workDir := config.WorkDirFromContext(ctx)
 
-			url := args[0]
+			input := args[0]
 
-			// Determine destination
+			// Determine destination name
 			dest := destination
 			if len(args) > 1 {
 				dest = args[1]
 			}
 			if dest == "" {
-				// Extract repo name from URL
-				dest = extractRepoNameFromURL(url)
+				if isGitURL(input) {
+					dest = extractRepoNameFromURL(input)
+				} else {
+					// org/repo or just repo → extract last part
+					parts := strings.Split(input, "/")
+					dest = parts[len(parts)-1]
+				}
 			}
 
 			// Resolve to absolute path relative to working directory
@@ -408,11 +421,40 @@ If destination is not specified, clones into the current directory.`,
 				return fmt.Errorf("destination already exists: %s", absPath)
 			}
 
-			l.Debug("cloning repo", "url", url, "dest", absPath)
+			// Clone based on input type
+			if isGitURL(input) {
+				// Full URL: use git clone directly
+				l.Debug("cloning repo via git", "url", input, "dest", absPath)
+				if err := git.CloneBareWithWorktreeSupport(ctx, input, absPath); err != nil {
+					return fmt.Errorf("clone failed: %w", err)
+				}
+			} else {
+				// Short-form: org/repo or just repo - use forge CLI
+				orgRepo := input
+				if !strings.Contains(orgRepo, "/") {
+					if cfg.Forge.DefaultOrg == "" {
+						return fmt.Errorf("no organization specified and forge.default_org not configured")
+					}
+					orgRepo = cfg.Forge.DefaultOrg + "/" + orgRepo
+				}
 
-			// Clone the repository as bare
-			if err := git.CloneBareWithWorktreeSupport(ctx, url, absPath); err != nil {
-				return fmt.Errorf("clone failed: %w", err)
+				// Determine forge type from config rules
+				forgeName := cfg.Forge.GetForgeTypeForRepo(orgRepo)
+				f := forge.ByNameWithConfig(forgeName, &cfg.Forge)
+
+				// Check forge CLI is available
+				if err := f.Check(ctx); err != nil {
+					return err
+				}
+
+				l.Debug("cloning repo via forge", "spec", orgRepo, "forge", forgeName, "dest", absPath)
+
+				// CloneBareRepo creates destPath/repoName, so pass parent dir
+				clonedPath, err := f.CloneBareRepo(ctx, orgRepo, filepath.Dir(absPath))
+				if err != nil {
+					return fmt.Errorf("clone failed: %w", err)
+				}
+				absPath = clonedPath // Update to actual path created
 			}
 
 			// Determine display name
@@ -478,6 +520,14 @@ If destination is not specified, clones into the current directory.`,
 	cmd.MarkFlagDirname("destination")
 
 	return cmd
+}
+
+// isGitURL returns true if input looks like a full git URL
+// (has protocol prefix or SSH format with @)
+func isGitURL(input string) bool {
+	return strings.Contains(input, "://") || // https://, git://, ssh://
+		strings.HasPrefix(input, "git@") || // git@github.com:org/repo
+		strings.HasPrefix(input, "file://") // file:///path
 }
 
 // extractRepoNameFromURL extracts the repository name from a git URL

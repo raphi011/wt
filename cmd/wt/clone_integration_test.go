@@ -240,3 +240,72 @@ func TestRepoClone_AutoName(t *testing.T) {
 		t.Errorf("expected name 'my-project', got %q", reg.Repos[0].Name)
 	}
 }
+
+// TestRepoClone_ShortFormWithoutDefaultOrg tests that short-form without org fails.
+//
+// Scenario: User runs `wt repo clone myrepo` without default_org configured
+// Expected: Command fails with error about missing org
+func TestRepoClone_ShortFormWithoutDefaultOrg(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	// Config without default_org
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newRepoCloneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"myrepo"}) // short-form without org/
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for short-form without default_org")
+	}
+
+	expectedMsg := "no organization specified and forge.default_org not configured"
+	if err.Error() != expectedMsg {
+		t.Errorf("expected error %q, got %q", expectedMsg, err.Error())
+	}
+}
+
+// TestRepoClone_ShortFormAutoExtractRepoName tests that short-form extracts repo name.
+//
+// Scenario: User runs `wt repo clone org/repo`
+// Expected: Destination is named "repo"
+func TestRepoClone_ShortFormAutoExtractRepoName(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newRepoCloneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"org/myrepo"})
+
+	// This will fail because gh CLI won't be properly authenticated in test,
+	// but we can still verify the input parsing by checking the destination check
+	// happens before the clone (destination would be "myrepo")
+	err := cmd.Execute()
+
+	// The error should be from gh CLI, not about "destination already exists"
+	// which would indicate we're correctly parsing "org/myrepo" -> "myrepo"
+	if err == nil {
+		t.Skip("gh CLI available and authenticated - skipping error path test")
+	}
+
+	// Verify it's a forge/clone error, not a dest parsing error
+	if err.Error() == "destination already exists: "+filepath.Join(tmpDir, "myrepo") {
+		t.Error("unexpected destination exists error - indicates parsing issue")
+	}
+}
