@@ -41,6 +41,19 @@ func testContextWithConfig(t *testing.T, cfg *config.Config, workDir string) con
 	return ctx
 }
 
+// testContextWithConfigAndOutput creates a context with config, workDir, and captured output.
+// Returns the context and the output builder for assertions.
+func testContextWithConfigAndOutput(t *testing.T, cfg *config.Config, workDir string) (context.Context, *strings.Builder) {
+	t.Helper()
+	var out strings.Builder
+	ctx := context.Background()
+	ctx = log.WithLogger(ctx, log.New(io.Discard, false, false))
+	ctx = output.WithPrinter(ctx, &out)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, workDir)
+	return ctx, &out
+}
+
 // testContextWithOutput creates a context and returns the output writer for assertions.
 func testContextWithOutput(t *testing.T) (context.Context, *strings.Builder) {
 	t.Helper()

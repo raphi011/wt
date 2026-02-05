@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -1210,5 +1211,130 @@ func TestCheckout_DefaultHookRuns(t *testing.T) {
 	// Verify default hook ran automatically
 	if _, err := os.Stat(markerPath); os.IsNotExist(err) {
 		t.Error("default hook should have run automatically")
+	}
+}
+
+// TestCheckout_RecordsHistory tests that checkout records to history.
+//
+// Scenario: User runs `wt checkout -b feature`
+// Expected: History is updated with the new worktree path
+func TestCheckout_RecordsHistory(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	historyFile := filepath.Join(tmpDir, ".wt", "history.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create .wt dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		HistoryPath:  historyFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify history was recorded
+	mostRecent, err := history.GetMostRecent(historyFile)
+	if err != nil {
+		t.Fatalf("failed to get most recent from history: %v", err)
+	}
+	if mostRecent != wtPath {
+		t.Errorf("expected history to contain %q, got %q", wtPath, mostRecent)
+	}
+}
+
+// TestCheckout_HistoryEnablesCdNoArgs tests that wt cd (no args) works after checkout.
+//
+// Scenario: User runs `wt checkout -b feature`, then `wt cd` with no args
+// Expected: wt cd returns the newly created worktree path
+func TestCheckout_HistoryEnablesCdNoArgs(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	historyFile := filepath.Join(tmpDir, ".wt", "history.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create .wt dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		HistoryPath:  historyFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	// First, run checkout
+	checkoutCmd := newCheckoutCmd()
+	checkoutCmd.SetContext(ctx)
+	checkoutCmd.SetArgs([]string{"-b", "feature"})
+
+	if err := checkoutCmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+
+	// Now run wt cd with no args and capture output
+	cdCtx, cdOut := testContextWithConfigAndOutput(t, cfg, repoPath)
+	cdCmd := newCdCmd()
+	cdCmd.SetContext(cdCtx)
+	cdCmd.SetArgs([]string{})
+
+	if err := cdCmd.Execute(); err != nil {
+		t.Fatalf("cd command failed: %v", err)
+	}
+
+	// Verify the output is the worktree path
+	output := strings.TrimSpace(cdOut.String())
+	if output != wtPath {
+		t.Errorf("expected cd output %q, got %q", wtPath, output)
 	}
 }

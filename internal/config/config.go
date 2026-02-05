@@ -104,6 +104,7 @@ type ThemeConfig struct {
 // Config holds the wt configuration
 type Config struct {
 	RegistryPath  string            `toml:"-"` // Override ~/.wt/repos.json path (for testing)
+	HistoryPath   string            `toml:"-"` // Override ~/.wt/history.json path (for testing)
 	WorktreeDir   string            `toml:"worktree_dir"`
 	RepoDir       string            `toml:"repo_dir"`       // optional: where to find repos for -r/-l
 	DefaultSort   string            `toml:"default_sort"`   // "id", "repo", "branch", "commit" (default: "id")
@@ -137,6 +138,16 @@ func (c *Config) GetAbsWorktreeDir() (string, error) {
 
 // DefaultWorktreeFormat is the default format for worktree folder names
 const DefaultWorktreeFormat = "{repo}-{branch}"
+
+// GetHistoryPath returns the effective history file path.
+// Returns HistoryPath if set (for testing), otherwise returns default ~/.wt/history.json.
+func (c *Config) GetHistoryPath() string {
+	if c.HistoryPath != "" {
+		return c.HistoryPath
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".wt", "history.json")
+}
 
 // ShouldSetUpstream returns true if upstream tracking should be set (default: false)
 func (c *CheckoutConfig) ShouldSetUpstream() bool {

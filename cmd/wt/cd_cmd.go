@@ -101,7 +101,7 @@ With no arguments, returns the most recently accessed worktree.`,
 				targetPath = result.SelectedPath
 			} else if len(args) == 0 {
 				// No arguments: return most recently accessed worktree
-				mostRecent, err := history.GetMostRecent()
+				mostRecent, err := history.GetMostRecent(cfg.GetHistoryPath())
 				if err != nil {
 					return fmt.Errorf("load history: %w", err)
 				}
@@ -193,8 +193,11 @@ With no arguments, returns the most recently accessed worktree.`,
 				}
 			}
 
-			// Record access to history (ignore errors - best effort)
-			_ = history.RecordAccess(targetPath)
+			// Record access to history for wt cd
+			if err := history.RecordAccess(targetPath, cfg.GetHistoryPath()); err != nil {
+				l := log.FromContext(ctx)
+				l.Debug("failed to record history", "error", err)
+			}
 
 			// Copy to clipboard if requested
 			if copyToClipboard {
