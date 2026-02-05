@@ -78,6 +78,11 @@ func parseScopedTarget(reg *registry.Registry, target string) (ScopedTargetResul
 		return ScopedTargetResult{Branch: branch}, nil
 	}
 
+	// Scope provided but no branch name
+	if branch == "" {
+		return ScopedTargetResult{}, fmt.Errorf("branch name required after %q", scope+":")
+	}
+
 	// Try repo name first
 	repo, err := reg.FindByName(scope)
 	if err == nil {
