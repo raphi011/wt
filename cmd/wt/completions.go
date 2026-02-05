@@ -378,8 +378,7 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 	cmd.RegisterFlagCompletionFunc("base", completeBranches)
 
 	// Positional arg completion for [scope:]branch
-	// With -b flag: only suggest repo prefixes (creating new branch)
-	// Without -b flag: suggest both repo prefixes and existing branches
+	// Suggests repo/label prefixes and existing branches (even with -b, as branch name inspiration)
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) > 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -387,7 +386,6 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 
 		cfg := config.FromContext(cmd.Context())
 		ctx := context.Background()
-		newBranch, _ := cmd.Flags().GetBool("new-branch")
 
 		// If user is typing scope:branch format, complete the branch part
 		if idx := strings.Index(toComplete, ":"); idx >= 0 {
@@ -402,11 +400,6 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 			// Try repo name first
 			repo, err := reg.FindByName(scopeName)
 			if err == nil {
-				// For -b, don't suggest existing branches (user is creating new)
-				if newBranch {
-					return nil, cobra.ShellCompDirectiveNoFileComp
-				}
-
 				// Suggest local branches, excluding checked-out ones
 				branches, err := git.ListLocalBranches(ctx, repo.Path)
 				if err != nil {
@@ -426,11 +419,6 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 			// Try label
 			labelRepos := reg.FindByLabel(scopeName)
 			if len(labelRepos) > 0 {
-				// For -b, don't suggest existing branches
-				if newBranch {
-					return nil, cobra.ShellCompDirectiveNoFileComp
-				}
-
 				// Collect unique branches across all labeled repos, excluding checked-out ones
 				branchSet := make(map[string]bool)
 				for _, r := range labelRepos {
@@ -481,33 +469,32 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 			}
 		}
 
-		// Without -b flag, also suggest existing branches (excluding checked-out ones)
-		if !newBranch {
-			currentRepoPath := git.GetCurrentRepoMainPath(ctx)
-			if currentRepoPath != "" {
-				wtBranches := git.GetWorktreeBranches(ctx, currentRepoPath)
+		// Also suggest existing branches (excluding checked-out ones)
+		// Even with -b, users may want to base new branch names on existing ones
+		currentRepoPath := git.GetCurrentRepoMainPath(ctx)
+		if currentRepoPath != "" {
+			wtBranches := git.GetWorktreeBranches(ctx, currentRepoPath)
 
-				// Local branches
-				branches, err := git.ListLocalBranches(ctx, currentRepoPath)
-				if err == nil {
-					for _, b := range branches {
-						if strings.HasPrefix(b, toComplete) && !wtBranches[b] {
-							matches = append(matches, b)
-						}
+			// Local branches
+			branches, err := git.ListLocalBranches(ctx, currentRepoPath)
+			if err == nil {
+				for _, b := range branches {
+					if strings.HasPrefix(b, toComplete) && !wtBranches[b] {
+						matches = append(matches, b)
 					}
 				}
+			}
 
-				// Remote branches (exclude those matching checked-out local branches)
-				remoteBranches, err := git.ListRemoteBranches(ctx, currentRepoPath)
-				if err == nil {
-					seen := make(map[string]bool)
-					for _, b := range matches {
-						seen[b] = true
-					}
-					for _, b := range remoteBranches {
-						if strings.HasPrefix(b, toComplete) && !seen[b] && !wtBranches[b] {
-							matches = append(matches, b)
-						}
+			// Remote branches (exclude those matching checked-out local branches)
+			remoteBranches, err := git.ListRemoteBranches(ctx, currentRepoPath)
+			if err == nil {
+				seen := make(map[string]bool)
+				for _, b := range matches {
+					seen[b] = true
+				}
+				for _, b := range remoteBranches {
+					if strings.HasPrefix(b, toComplete) && !seen[b] && !wtBranches[b] {
+						matches = append(matches, b)
 					}
 				}
 			}
