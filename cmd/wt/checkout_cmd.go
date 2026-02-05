@@ -8,6 +8,7 @@ import (
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/registry"
@@ -266,6 +267,11 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 	}
 
 	fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
+
+	// Record to history for wt cd
+	if err := history.RecordAccess(wtPath, cfg.GetHistoryPath()); err != nil {
+		l.Debug("failed to record history", "error", err)
+	}
 
 	// Apply stashed changes to new worktree
 	if autoStash {

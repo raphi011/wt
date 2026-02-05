@@ -14,16 +14,16 @@ type History struct {
 	MostRecent string `json:"most_recent"`
 }
 
-// Path returns the path to the history file
-func Path() string {
+// DefaultPath returns the default path to the history file
+func DefaultPath() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".wt", "history.json")
 }
 
-// Load reads the history from disk
-func Load() (*History, error) {
+// Load reads the history from disk at the given path
+func Load(path string) (*History, error) {
 	var h History
-	if err := storage.LoadJSON(Path(), &h); err != nil {
+	if err := storage.LoadJSON(path, &h); err != nil {
 		if os.IsNotExist(err) {
 			return &History{}, nil
 		}
@@ -32,21 +32,21 @@ func Load() (*History, error) {
 	return &h, nil
 }
 
-// Save writes the history to disk atomically
-func (h *History) Save() error {
-	return storage.SaveJSON(Path(), h)
+// Save writes the history to disk atomically at the given path
+func (h *History) Save(path string) error {
+	return storage.SaveJSON(path, h)
 }
 
-// RecordAccess saves the given path as the most recently accessed worktree
-func RecordAccess(path string) error {
+// RecordAccess saves the given worktree path as the most recently accessed
+func RecordAccess(path, historyPath string) error {
 	h := &History{MostRecent: path}
-	return h.Save()
+	return h.Save(historyPath)
 }
 
 // GetMostRecent returns the most recently accessed worktree path
 // Returns empty string if no history exists
-func GetMostRecent() (string, error) {
-	h, err := Load()
+func GetMostRecent(historyPath string) (string, error) {
+	h, err := Load(historyPath)
 	if err != nil {
 		return "", err
 	}

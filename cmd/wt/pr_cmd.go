@@ -14,6 +14,7 @@ import (
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
@@ -218,6 +219,11 @@ Otherwise, it's looked up in the local registry.`,
 			}
 
 			fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
+
+			// Record to history for wt cd
+			if err := history.RecordAccess(wtPath, cfg.GetHistoryPath()); err != nil {
+				l.Debug("failed to record history", "error", err)
+			}
 
 			// Set note if provided
 			if note != "" {
