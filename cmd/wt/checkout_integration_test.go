@@ -1274,6 +1274,68 @@ func TestCheckout_RecordsHistory(t *testing.T) {
 	}
 }
 
+// TestCheckout_NewBranchEmptyRepo tests creating a new branch on an empty (no commits) repo.
+//
+// Scenario: User clones an empty repo, then runs `wt checkout -b repo:new-branch`
+// Expected: Worktree is created using orphan branch (git worktree add --orphan)
+func TestCheckout_NewBranchEmptyRepo(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Create a bare-in-.git repo (simulating wt repo clone of an empty repo)
+	repoPath := setupBareInGitRepo(t, tmpDir, "empty-repo")
+
+	// Add an origin remote (so GetDefaultBranch/GetRepoName work)
+	gitDir := filepath.Join(repoPath, ".git")
+	runGitCommand(gitDir, "remote", "add", "origin", "https://github.com/test/empty-repo.git")
+
+	// Setup registry
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "empty-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+
+	workDir := filepath.Join(tmpDir, "work")
+	os.MkdirAll(workDir, 0755)
+
+	ctx := testContextWithConfig(t, cfg, workDir)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "empty-repo:initial-branch"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "empty-repo-initial-branch")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Errorf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify it's on the correct branch
+	branch := getGitBranch(t, wtPath)
+	if branch != "initial-branch" {
+		t.Errorf("expected branch 'initial-branch', got %q", branch)
+	}
+}
+
 // TestCheckout_HistoryEnablesCdNoArgs tests that wt cd (no args) works after checkout.
 //
 // Scenario: User runs `wt checkout -b feature`, then `wt cd` with no args

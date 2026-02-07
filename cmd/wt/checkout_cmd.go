@@ -219,14 +219,19 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 		}
 	}
 
-	// Fetch if requested
-	if fetch && base != "" {
-		if err := git.FetchBranch(ctx, gitDir, base); err != nil {
-			l.Printf("Warning: fetch failed: %v\n", err)
-		}
-	} else if fetch {
-		if err := git.FetchDefaultBranch(ctx, gitDir); err != nil {
-			l.Printf("Warning: fetch failed: %v\n", err)
+	// Check if repo has any commits (empty repo detection)
+	repoHasCommits := git.RefExists(ctx, gitDir, "HEAD")
+
+	// Fetch if requested (skip for empty repos — nothing to fetch)
+	if fetch && repoHasCommits {
+		if base != "" {
+			if err := git.FetchBranch(ctx, gitDir, base); err != nil {
+				l.Printf("Warning: fetch failed: %v\n", err)
+			}
+		} else {
+			if err := git.FetchDefaultBranch(ctx, gitDir); err != nil {
+				l.Printf("Warning: fetch failed: %v\n", err)
+			}
 		}
 	}
 
@@ -240,8 +245,23 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 		if cfg.Checkout.BaseRef != "local" {
 			baseRef = "origin/" + baseRef
 		}
-		if err := git.CreateWorktreeNewBranch(ctx, gitDir, wtPath, branch, baseRef); err != nil {
-			return err
+
+		if !git.RefExists(ctx, gitDir, baseRef) {
+			if repoHasCommits {
+				// Repo has commits but baseRef is invalid — let git report the error
+				if err := git.CreateWorktreeNewBranch(ctx, gitDir, wtPath, branch, baseRef); err != nil {
+					return err
+				}
+			} else {
+				// Repo is truly empty — create orphan worktree
+				if err := git.CreateWorktreeOrphan(ctx, gitDir, wtPath, branch); err != nil {
+					return err
+				}
+			}
+		} else {
+			if err := git.CreateWorktreeNewBranch(ctx, gitDir, wtPath, branch, baseRef); err != nil {
+				return err
+			}
 		}
 	} else {
 		if err := git.CreateWorktree(ctx, gitDir, wtPath, branch); err != nil {
