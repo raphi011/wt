@@ -73,8 +73,11 @@ wt checkout -b feature-login
 # Create from a different base branch
 wt checkout -b feature-login --base develop
 
-# Fetch latest before creating (ensures up-to-date base)
+# Fetch base branch before creating (ensures up-to-date base)
 wt checkout -b feature-login -f
+
+# Fetch target branch from origin before checkout
+wt checkout feature-login -f
 
 # Stash local changes and apply them to the new worktree
 wt checkout -b feature-login -s

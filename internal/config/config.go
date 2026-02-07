@@ -518,7 +518,7 @@ worktree_format = "{repo}-{branch}"
 # base_ref = "remote"
 
 # Auto-fetch from origin before checkout
-# For new branches (-b): fetches the base branch
+# For new branches (-b): fetches the base branch (or --base if specified)
 # For existing branches: fetches the target branch
 # Same as always passing --fetch flag
 # auto_fetch = false

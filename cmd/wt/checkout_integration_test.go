@@ -903,6 +903,68 @@ func TestCheckout_FetchExistingBranch(t *testing.T) {
 	}
 }
 
+// TestCheckout_FetchWithBase tests that --fetch with --base fetches the specified base branch.
+//
+// Scenario: User runs `wt checkout -b feature --fetch --base develop`
+// Expected: Fetch pulls the develop branch (not default), worktree is created from it
+func TestCheckout_FetchWithBase(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath, originPath := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
+
+	// Clone origin to create a develop branch with unique content
+	clonePath := filepath.Join(tmpDir, "origin-clone")
+	runGitCommand(tmpDir, "clone", originPath, clonePath)
+	runGitCommand(clonePath, "config", "user.email", "test@test.com")
+	runGitCommand(clonePath, "config", "user.name", "Test User")
+	runGitCommand(clonePath, "config", "commit.gpgsign", "false")
+	runGitCommand(clonePath, "checkout", "-b", "develop")
+	addCommit(t, clonePath, "develop-file.txt", "Develop commit")
+	runGitCommand(clonePath, "push", "origin", "develop")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--fetch", "--base", "develop"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the branch was created from the fetched develop branch (should have develop-file.txt)
+	developFile := filepath.Join(wtPath, "develop-file.txt")
+	if _, err := os.Stat(developFile); os.IsNotExist(err) {
+		t.Error("feature branch should have develop-file.txt (created from fetched develop)")
+	}
+}
+
 // TestCheckout_AutoStash tests that --autostash stashes and applies changes.
 //
 // Scenario: User has uncommitted changes, runs `wt checkout feature --autostash`
