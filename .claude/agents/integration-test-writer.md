@@ -31,6 +31,12 @@ Never modify these in tests - they affect all goroutines:
 - `os.Setenv()` - especially `HOME`
 - `os.Chdir()` - changes working directory globally
 
+### History Isolation
+
+`testContextWithConfig` and `testContextWithConfigAndOutput` auto-set `cfg.HistoryPath` to a temp file if it's empty. This prevents tests from writing to the real `~/.wt/history.json`.
+
+Tests that create configs manually (without these helpers) **MUST** set `cfg.HistoryPath` to a temp path to avoid polluting the real history file.
+
 ### Registry Isolation Pattern
 
 Use `cfg.RegistryPath` to give each test its own isolated registry file:
@@ -160,6 +166,8 @@ func TestCommand_Scenario(t *testing.T) {
 Available in `integration_test_helpers.go`:
 
 - `testContext(t)` - Creates context with test logger/output
+- `testContextWithConfig(t, cfg, workDir)` - Creates context with config/workDir; auto-sets `HistoryPath` to temp file if empty
+- `testContextWithConfigAndOutput(t, cfg, workDir)` - Same as above but returns output buffer; auto-sets `HistoryPath` to temp file if empty
 - `testContextWithOutput(t)` - Returns context and output buffer for verification
 - `resolvePath(t, path)` - Resolves symlinks (required on macOS)
 - `setupTestRepo(t, dir, name)` - Creates a git repo with initial commit
