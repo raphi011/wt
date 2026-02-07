@@ -315,7 +315,7 @@ worktree_format = "{repo}-{branch}"
 # Base ref for new branches: "remote" (default) or "local"
 base_ref = "remote"
 
-# Auto-fetch base branch before creating new branches (default: false)
+# Auto-fetch from origin before checkout (default: false)
 auto_fetch = true
 ```
 

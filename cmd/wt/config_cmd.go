@@ -196,7 +196,7 @@ worktree_format = "{branch}"
 # "local" = use local <branch>
 # base_ref = "remote"
 
-# Auto-fetch before creating new branches
+# Auto-fetch from origin before checkout
 # auto_fetch = false
 
 # Hooks - run commands after worktree creation/removal

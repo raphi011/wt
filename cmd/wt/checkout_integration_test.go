@@ -835,6 +835,74 @@ func TestCheckout_Fetch(t *testing.T) {
 	}
 }
 
+// TestCheckout_FetchExistingBranch tests that --fetch fetches the target branch for existing branches.
+//
+// Scenario: Branch exists on remote but not locally, user runs `wt checkout feature --fetch`
+// Expected: Fetch pulls the target branch, worktree is created via git DWIM
+func TestCheckout_FetchExistingBranch(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath, originPath := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
+
+	// Clone origin to push a new branch with unique content
+	clonePath := filepath.Join(tmpDir, "origin-clone")
+	runGitCommand(tmpDir, "clone", originPath, clonePath)
+	runGitCommand(clonePath, "config", "user.email", "test@test.com")
+	runGitCommand(clonePath, "config", "user.name", "Test User")
+	runGitCommand(clonePath, "config", "commit.gpgsign", "false")
+	runGitCommand(clonePath, "checkout", "-b", "feature")
+	addCommit(t, clonePath, "feature-file.txt", "Feature commit")
+	runGitCommand(clonePath, "push", "origin", "feature")
+
+	// Verify the local repo does NOT have the feature branch
+	out, _ := runGitCommand(repoPath, "branch", "--list", "feature")
+	if strings.TrimSpace(out) != "" {
+		t.Fatalf("feature branch should not exist locally yet")
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "--fetch"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the branch has content from the fetched remote branch
+	featureFile := filepath.Join(wtPath, "feature-file.txt")
+	if _, err := os.Stat(featureFile); os.IsNotExist(err) {
+		t.Error("worktree should have feature-file.txt from the fetched remote branch")
+	}
+}
+
 // TestCheckout_AutoStash tests that --autostash stashes and applies changes.
 //
 // Scenario: User has uncommitted changes, runs `wt checkout feature --autostash`

@@ -83,7 +83,7 @@ type PruneConfig struct {
 type CheckoutConfig struct {
 	WorktreeFormat string `toml:"worktree_format"` // Template for worktree folder names
 	BaseRef        string `toml:"base_ref"`        // "local" or "remote" (default: "remote")
-	AutoFetch      bool   `toml:"auto_fetch"`      // Fetch before creating new branches
+	AutoFetch      bool   `toml:"auto_fetch"`      // Fetch from origin before checkout
 	SetUpstream    *bool  `toml:"set_upstream"`    // Auto-set upstream tracking (default: true)
 }
 
@@ -517,8 +517,9 @@ worktree_format = "{repo}-{branch}"
 #   "local"  - use local <branch> (faster, but may be stale)
 # base_ref = "remote"
 
-# Auto-fetch before creating new branches (wt checkout -b)
-# When true, fetches the base branch from origin before creating worktree
+# Auto-fetch from origin before checkout
+# For new branches (-b): fetches the base branch
+# For existing branches: fetches the target branch
 # Same as always passing --fetch flag
 # auto_fetch = false
 
