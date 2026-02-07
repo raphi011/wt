@@ -262,6 +262,7 @@ func SetUpstreamBranch(ctx context.Context, repoPath, localBranch, upstream stri
 }
 
 // RefExists checks if a git ref resolves to a valid object.
+// Returns false for unborn HEAD (empty repos with no commits).
 // Works for any ref: HEAD, origin/main, refs/heads/branch, etc.
 func RefExists(ctx context.Context, repoPath, ref string) bool {
 	return runGit(ctx, repoPath, "rev-parse", "--verify", ref) == nil

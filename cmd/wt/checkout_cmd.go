@@ -212,15 +212,15 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 
 	gitDir := git.GetGitDir(repo.Path, repoType)
 
-	// Stash changes if autostash is enabled
-	if autoStash {
+	// Check if repo has any commits (empty repo detection)
+	repoHasCommits := git.RefExists(ctx, gitDir, "HEAD")
+
+	// Stash changes if autostash is enabled (skip for empty repos — no commits to stash)
+	if autoStash && repoHasCommits {
 		if err := git.Stash(ctx, repo.Path); err != nil {
 			l.Debug("stash failed (may have no changes)", "error", err)
 		}
 	}
-
-	// Check if repo has any commits (empty repo detection)
-	repoHasCommits := git.RefExists(ctx, gitDir, "HEAD")
 
 	// Fetch if requested (skip for empty repos — nothing to fetch)
 	if fetch && repoHasCommits {
@@ -269,8 +269,8 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 		}
 	}
 
-	// Set upstream tracking if enabled and origin exists
-	if cfg.Checkout.ShouldSetUpstream() && git.HasRemote(ctx, gitDir, "origin") {
+	// Set upstream tracking if enabled and origin exists (skip for empty repos — nothing to push)
+	if repoHasCommits && cfg.Checkout.ShouldSetUpstream() && git.HasRemote(ctx, gitDir, "origin") {
 		if newBranch {
 			// New branches: push to origin first, then set upstream
 			if err := git.PushBranch(ctx, gitDir, branch); err != nil {

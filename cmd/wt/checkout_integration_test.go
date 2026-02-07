@@ -4,6 +4,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1333,6 +1334,174 @@ func TestCheckout_NewBranchEmptyRepo(t *testing.T) {
 	branch := getGitBranch(t, wtPath)
 	if branch != "initial-branch" {
 		t.Errorf("expected branch 'initial-branch', got %q", branch)
+	}
+
+	// Verify it's an orphan branch (no commits)
+	logCmd := exec.Command("git", "log", "--oneline")
+	logCmd.Dir = wtPath
+	logOut, err := logCmd.CombinedOutput()
+	if err == nil && len(strings.TrimSpace(string(logOut))) > 0 {
+		t.Errorf("expected orphan branch with no commits, got: %s", string(logOut))
+	}
+}
+
+// TestCheckout_NewBranchEmptyRepoWithFetch tests that --fetch is safely skipped on empty repos.
+//
+// Scenario: User runs `wt checkout -b -f repo:branch` on an empty repo
+// Expected: Worktree is created, fetch is skipped without errors
+func TestCheckout_NewBranchEmptyRepoWithFetch(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupBareInGitRepo(t, tmpDir, "empty-repo-fetch")
+
+	gitDir := filepath.Join(repoPath, ".git")
+	runGitCommand(gitDir, "remote", "add", "origin", "https://github.com/test/empty-repo.git")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "empty-repo-fetch", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+
+	workDir := filepath.Join(tmpDir, "work")
+	os.MkdirAll(workDir, 0755)
+
+	ctx := testContextWithConfig(t, cfg, workDir)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "-f", "empty-repo-fetch:feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout with --fetch on empty repo should succeed, got: %v", err)
+	}
+
+	wtPath := filepath.Join(tmpDir, "empty-repo-fetch-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Errorf("worktree should exist at %s", wtPath)
+	}
+
+	branch := getGitBranch(t, wtPath)
+	if branch != "feature" {
+		t.Errorf("expected branch 'feature', got %q", branch)
+	}
+}
+
+// TestCheckout_NewBranchEmptyRepoLocalBaseRef tests empty repo with BaseRef="local" config.
+//
+// Scenario: User has BaseRef="local" configured and runs checkout -b on empty repo
+// Expected: Worktree is created as orphan (local ref doesn't exist either)
+func TestCheckout_NewBranchEmptyRepoLocalBaseRef(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupBareInGitRepo(t, tmpDir, "empty-repo-local")
+
+	gitDir := filepath.Join(repoPath, ".git")
+	runGitCommand(gitDir, "remote", "add", "origin", "https://github.com/test/empty-repo.git")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "empty-repo-local", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+	}
+
+	workDir := filepath.Join(tmpDir, "work")
+	os.MkdirAll(workDir, 0755)
+
+	ctx := testContextWithConfig(t, cfg, workDir)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "empty-repo-local:feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout on empty repo with BaseRef=local should succeed, got: %v", err)
+	}
+
+	wtPath := filepath.Join(tmpDir, "empty-repo-local-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Errorf("worktree should exist at %s", wtPath)
+	}
+
+	branch := getGitBranch(t, wtPath)
+	if branch != "feature" {
+		t.Errorf("expected branch 'feature', got %q", branch)
+	}
+}
+
+// TestCheckout_NewBranchInvalidBaseRef tests that an invalid base ref on a non-empty repo returns an error.
+//
+// Scenario: User runs `wt checkout -b --base nonexistent repo:branch` on a repo with commits
+// Expected: Command fails with a git error about the invalid ref
+func TestCheckout_NewBranchInvalidBaseRef(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "valid-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "valid-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+
+	workDir := filepath.Join(tmpDir, "work")
+	os.MkdirAll(workDir, 0755)
+
+	ctx := testContextWithConfig(t, cfg, workDir)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "--base", "nonexistent-branch", "valid-repo:feature"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for invalid base ref on non-empty repo, got nil")
 	}
 }
 
