@@ -14,6 +14,7 @@ Manual testing reference for pre-release verification. Test each command and fla
 | ❌ | `wt checkout -b <branch>` | Creates new branch + worktree from main/master | Base branch detection |
 | ❌ | `wt checkout -b <branch> --base develop` | Creates from specified base | Custom base branch |
 | ❌ | `wt checkout -b <branch> -f` | Fetches base before creating | Network errors |
+| ❌ | `wt checkout <branch> -f` | Fetches target branch from origin | Network errors |
 | ❌ | `wt checkout -b <branch> -s` | Stashes changes, applies to new worktree | Stash apply conflicts |
 | ❌ | `wt checkout -r repo1 -r repo2 <branch>` | Multi-repo by name | All repos found |
 | ❌ | `wt checkout -l backend <branch>` | Multi-repo by label | Label matching |
