@@ -16,7 +16,7 @@
 //   - repo_dir: Optional separate directory for repo scanning
 //   - checkout.worktree_format: Template for worktree folder names (default: "{repo}-{branch}")
 //   - checkout.base_ref: "local" or "remote" for new branch base (default: "remote")
-//   - checkout.auto_fetch: Fetch base branch before creating new branches (default: false)
+//   - checkout.auto_fetch: Fetch from origin before checkout (default: false)
 //   - default_sort: Default sort order for "wt list"
 //
 // # Hooks Configuration

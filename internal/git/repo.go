@@ -195,12 +195,6 @@ func IsDirty(ctx context.Context, path string) bool {
 	return strings.TrimSpace(string(output)) != ""
 }
 
-// FetchDefaultBranch fetches the default branch (main/master) from origin
-func FetchDefaultBranch(ctx context.Context, repoPath string) error {
-	defaultBranch := GetDefaultBranch(ctx, repoPath)
-	return FetchBranch(ctx, repoPath, defaultBranch)
-}
-
 // FetchBranch fetches a specific branch from origin
 func FetchBranch(ctx context.Context, repoPath, branch string) error {
 	if err := runGit(ctx, repoPath, "fetch", "origin", branch, "--quiet"); err != nil {

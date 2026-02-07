@@ -175,7 +175,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 
 	cmd.Flags().BoolVarP(&newBranch, "new-branch", "b", false, "Create a new branch")
 	cmd.Flags().StringVar(&base, "base", "", "Base branch to create from")
-	cmd.Flags().BoolVarP(&fetch, "fetch", "f", false, "Fetch base branch first")
+	cmd.Flags().BoolVarP(&fetch, "fetch", "f", false, "Fetch from origin before checkout")
 	cmd.Flags().BoolVarP(&autoStash, "autostash", "s", false, "Stash changes and apply to new worktree")
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
 	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
@@ -224,14 +224,16 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 
 	// Fetch if requested (skip for empty repos — nothing to fetch)
 	if fetch && repoHasCommits {
+		var fetchBranch string
 		if base != "" {
-			if err := git.FetchBranch(ctx, gitDir, base); err != nil {
-				l.Printf("Warning: fetch failed: %v\n", err)
-			}
+			fetchBranch = base
+		} else if newBranch {
+			fetchBranch = git.GetDefaultBranch(ctx, gitDir)
 		} else {
-			if err := git.FetchDefaultBranch(ctx, gitDir); err != nil {
-				l.Printf("Warning: fetch failed: %v\n", err)
-			}
+			fetchBranch = branch
+		}
+		if err := git.FetchBranch(ctx, gitDir, fetchBranch); err != nil {
+			l.Printf("Warning: fetch failed: %v\n", err)
 		}
 	}
 
