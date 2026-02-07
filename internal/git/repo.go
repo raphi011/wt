@@ -255,6 +255,13 @@ func SetUpstreamBranch(ctx context.Context, repoPath, localBranch, upstream stri
 	return runGit(ctx, repoPath, "branch", "--set-upstream-to="+upstream, localBranch)
 }
 
+// RefExists checks if a git ref resolves to a valid object.
+// Returns false for unborn HEAD (empty repos with no commits).
+// Works for any ref: HEAD, origin/main, refs/heads/branch, etc.
+func RefExists(ctx context.Context, repoPath, ref string) bool {
+	return runGit(ctx, repoPath, "rev-parse", "--verify", ref) == nil
+}
+
 // RemoteBranchExists checks if a remote tracking branch exists.
 func RemoteBranchExists(ctx context.Context, repoPath, branch string) bool {
 	ref := "refs/remotes/origin/" + branch

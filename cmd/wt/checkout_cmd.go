@@ -212,15 +212,18 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 
 	gitDir := git.GetGitDir(repo.Path, repoType)
 
-	// Stash changes if autostash is enabled
-	if autoStash {
+	// Check if repo has any commits (empty repo detection)
+	repoHasCommits := git.RefExists(ctx, gitDir, "HEAD")
+
+	// Stash changes if autostash is enabled (skip for empty repos — no commits to stash)
+	if autoStash && repoHasCommits {
 		if err := git.Stash(ctx, repo.Path); err != nil {
 			l.Debug("stash failed (may have no changes)", "error", err)
 		}
 	}
 
-	// Fetch if requested
-	if fetch {
+	// Fetch if requested (skip for empty repos — nothing to fetch)
+	if fetch && repoHasCommits {
 		var fetchBranch string
 		if base != "" {
 			fetchBranch = base
@@ -244,8 +247,23 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 		if cfg.Checkout.BaseRef != "local" {
 			baseRef = "origin/" + baseRef
 		}
-		if err := git.CreateWorktreeNewBranch(ctx, gitDir, wtPath, branch, baseRef); err != nil {
-			return err
+
+		if !git.RefExists(ctx, gitDir, baseRef) {
+			if repoHasCommits {
+				// Repo has commits but baseRef is invalid — let git report the error
+				if err := git.CreateWorktreeNewBranch(ctx, gitDir, wtPath, branch, baseRef); err != nil {
+					return err
+				}
+			} else {
+				// Repo is truly empty — create orphan worktree
+				if err := git.CreateWorktreeOrphan(ctx, gitDir, wtPath, branch); err != nil {
+					return err
+				}
+			}
+		} else {
+			if err := git.CreateWorktreeNewBranch(ctx, gitDir, wtPath, branch, baseRef); err != nil {
+				return err
+			}
 		}
 	} else {
 		if err := git.CreateWorktree(ctx, gitDir, wtPath, branch); err != nil {
@@ -253,8 +271,8 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 		}
 	}
 
-	// Set upstream tracking if enabled and origin exists
-	if cfg.Checkout.ShouldSetUpstream() && git.HasRemote(ctx, gitDir, "origin") {
+	// Set upstream tracking if enabled and origin exists (skip for empty repos — nothing to push)
+	if repoHasCommits && cfg.Checkout.ShouldSetUpstream() && git.HasRemote(ctx, gitDir, "origin") {
 		if newBranch {
 			// New branches: push to origin first, then set upstream
 			if err := git.PushBranch(ctx, gitDir, branch); err != nil {

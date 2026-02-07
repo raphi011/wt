@@ -663,3 +663,9 @@ func CreateWorktreeNewBranch(ctx context.Context, gitDir, wtPath, branch, baseRe
 	}
 	return runGit(ctx, gitDir, args...)
 }
+
+// CreateWorktreeOrphan creates a worktree with a new orphan branch.
+// Used for empty repos (no commits) where there's no valid ref to branch from.
+func CreateWorktreeOrphan(ctx context.Context, gitDir, wtPath, branch string) error {
+	return runGit(ctx, gitDir, "worktree", "add", "--orphan", "-b", branch, wtPath)
+}
