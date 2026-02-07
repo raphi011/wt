@@ -32,9 +32,13 @@ func testContext(t *testing.T) context.Context {
 }
 
 // testContextWithConfig creates a context with config and workDir set.
+// If cfg.HistoryPath is empty, it is set to a temp file to prevent test pollution.
 // This is the standard way to set up test context for command execution.
 func testContextWithConfig(t *testing.T, cfg *config.Config, workDir string) context.Context {
 	t.Helper()
+	if cfg.HistoryPath == "" {
+		cfg.HistoryPath = filepath.Join(t.TempDir(), "history.json")
+	}
 	ctx := testContext(t)
 	ctx = config.WithConfig(ctx, cfg)
 	ctx = config.WithWorkDir(ctx, workDir)
@@ -42,9 +46,13 @@ func testContextWithConfig(t *testing.T, cfg *config.Config, workDir string) con
 }
 
 // testContextWithConfigAndOutput creates a context with config, workDir, and captured output.
+// If cfg.HistoryPath is empty, it is set to a temp file to prevent test pollution.
 // Returns the context and the output builder for assertions.
 func testContextWithConfigAndOutput(t *testing.T, cfg *config.Config, workDir string) (context.Context, *strings.Builder) {
 	t.Helper()
+	if cfg.HistoryPath == "" {
+		cfg.HistoryPath = filepath.Join(t.TempDir(), "history.json")
+	}
 	var out strings.Builder
 	ctx := context.Background()
 	ctx = log.WithLogger(ctx, log.New(io.Discard, false, false))

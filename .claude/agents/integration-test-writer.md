@@ -31,9 +31,17 @@ Never modify these in tests - they affect all goroutines:
 - `os.Setenv()` - especially `HOME`
 - `os.Chdir()` - changes working directory globally
 
+### History Isolation
+
+`testContextWithConfig` and `testContextWithConfigAndOutput` auto-set `cfg.HistoryPath` to a temp file if it's empty. This prevents tests from writing to the real `~/.wt/history.json`.
+
+Tests that create configs manually (without these helpers) **MUST** set `cfg.HistoryPath` to a temp path to avoid polluting the real history file.
+
+**Note:** Unlike `HistoryPath`, `RegistryPath` is NOT auto-set by these helpers — tests must always set it explicitly.
+
 ### Registry Isolation Pattern
 
-Use `cfg.RegistryPath` to give each test its own isolated registry file:
+Set `cfg.RegistryPath` to give each test its own isolated registry file, then pass the config via `testContextWithConfig`:
 
 ```go
 func TestSomething(t *testing.T) {
@@ -42,16 +50,13 @@ func TestSomething(t *testing.T) {
     tmpDir := t.TempDir()
     tmpDir = resolvePath(t, tmpDir)  // Required on macOS for symlink resolution
 
+    // Setup test repo
+    repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
     // Create isolated registry file
     regFile := filepath.Join(tmpDir, ".wt", "repos.json")
     os.MkdirAll(filepath.Dir(regFile), 0755)
 
-    // Set config with isolated registry path
-    oldCfg := cfg
-    cfg = &config.Config{RegistryPath: regFile}
-    defer func() { cfg = oldCfg }()
-
-    // Create and save test registry
     reg := &registry.Registry{
         Repos: []registry.Repo{
             {Name: "test-repo", Path: repoPath},
@@ -61,37 +66,14 @@ func TestSomething(t *testing.T) {
         t.Fatalf("failed to save registry: %v", err)
     }
 
-    // ... test logic ...
+    // Create config with isolated registry
+    cfg := &config.Config{RegistryPath: regFile}
+
+    // Create context (auto-sets HistoryPath, injects config + workDir)
+    ctx := testContextWithConfig(t, cfg, repoPath)
+
+    // ... test logic using ctx ...
 }
-```
-
-### Working Directory Isolation Pattern
-
-Use the package-level `workDir` variable instead of `os.Chdir()`:
-
-```go
-func TestSomething(t *testing.T) {
-    t.Parallel()
-
-    // ... setup ...
-
-    // Set isolated working directory
-    oldWorkDir := workDir
-    workDir = repoPath
-    defer func() { workDir = oldWorkDir }()
-
-    // ... test logic ...
-}
-```
-
-For tests that need to simulate being outside a repo:
-```go
-otherDir := filepath.Join(tmpDir, "other")
-os.MkdirAll(otherDir, 0755)
-
-oldWorkDir := workDir
-workDir = otherDir  // Not inside a git repo
-defer func() { workDir = oldWorkDir }()
 ```
 
 ## Complete Test Template
@@ -126,21 +108,16 @@ func TestCommand_Scenario(t *testing.T) {
         t.Fatalf("failed to save registry: %v", err)
     }
 
-    // 4. Set config with any needed options
-    oldCfg := cfg
-    cfg = &config.Config{
+    // 4. Create config with any needed options
+    cfg := &config.Config{
         RegistryPath: regFile,
         // Add other config as needed
     }
-    defer func() { cfg = oldCfg }()
 
-    // 5. Set working directory
-    oldWorkDir := workDir
-    workDir = repoPath
-    defer func() { workDir = oldWorkDir }()
+    // 5. Create context (auto-sets HistoryPath, injects config + workDir)
+    ctx := testContextWithConfig(t, cfg, repoPath)
 
     // 6. Create and execute command
-    ctx := testContext(t)
     cmd := newSomeCmd()
     cmd.SetContext(ctx)
     cmd.SetArgs([]string{"arg1", "arg2"})
@@ -160,6 +137,8 @@ func TestCommand_Scenario(t *testing.T) {
 Available in `integration_test_helpers.go`:
 
 - `testContext(t)` - Creates context with test logger/output
+- `testContextWithConfig(t, cfg, workDir)` - Creates context with config/workDir; auto-sets `HistoryPath` to temp file if empty
+- `testContextWithConfigAndOutput(t, cfg, workDir)` - Same as above but returns output buffer; auto-sets `HistoryPath` to temp file if empty
 - `testContextWithOutput(t)` - Returns context and output buffer for verification
 - `resolvePath(t, path)` - Resolves symlinks (required on macOS)
 - `setupTestRepo(t, dir, name)` - Creates a git repo with initial commit
