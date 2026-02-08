@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -15,8 +16,10 @@ import (
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
+	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/static"
+	"github.com/raphi011/wt/internal/ui/styles"
 )
 
 // WorktreeDisplay holds worktree info for display
@@ -27,6 +30,10 @@ type WorktreeDisplay struct {
 	CommitHash string    `json:"commit"`
 	CreatedAt  time.Time `json:"created_at"`
 	Note       string    `json:"note,omitempty"`
+	PRNumber   int       `json:"pr_number,omitempty"`
+	PRState    string    `json:"pr_state,omitempty"`
+	PRURL      string    `json:"pr_url,omitempty"`
+	PRDraft    bool      `json:"pr_draft,omitempty"`
 }
 
 func newListCmd() *cobra.Command {
@@ -49,12 +56,14 @@ Inside a repo: shows only that repo's worktrees. Use --global for all.
 Use positional args to filter by repo name(s) or label(s).
 Resolution order: repo name → label.
 
-Worktrees are sorted by creation date (most recent first) by default.`,
+Worktrees are sorted by creation date (most recent first) by default.
+Use --refresh/-R to fetch PR status from GitHub/GitLab.`,
 		Example: `  wt list                      # List worktrees for current repo
   wt list --global             # List all worktrees (all repos)
   wt list myrepo               # Filter by repository name
   wt list backend              # Filter by label (if no repo named 'backend')
   wt list myrepo backend       # Filter by multiple scopes
+  wt list -R                   # Refresh PR status before listing
   wt list --json               # Output as JSON`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -88,9 +97,10 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 				}
 			}
 
+			repos = filterOrphanedRepos(l, repos)
+
 			l.Debug("listing worktrees", "repos", len(repos))
 
-			// Collect all worktrees
 			var allWorktrees []WorktreeDisplay
 			for _, repo := range repos {
 				worktrees, err := listWorktreesForRepo(ctx, repo)
@@ -101,7 +111,32 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 				allWorktrees = append(allWorktrees, worktrees...)
 			}
 
-			// Sort worktrees
+			// Load PR cache
+			prCache, err := prcache.Load()
+			if err != nil {
+				l.Printf("Warning: failed to load PR cache: %v\n", err)
+				prCache = prcache.New()
+			}
+
+			// Refresh PR status if requested
+			if refresh {
+				refreshPRStatusForList(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge)
+				if err := prCache.Save(); err != nil {
+					l.Printf("Warning: failed to save PR cache: %v\n", err)
+				}
+			}
+
+			// Populate PR fields from cache
+			for i := range allWorktrees {
+				folderName := filepath.Base(allWorktrees[i].Path)
+				if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.Number > 0 {
+					allWorktrees[i].PRNumber = pr.Number
+					allWorktrees[i].PRState = pr.State
+					allWorktrees[i].PRURL = pr.URL
+					allWorktrees[i].PRDraft = pr.IsDraft
+				}
+			}
+
 			switch sortBy {
 			case "repo":
 				sort.Slice(allWorktrees, func(i, j int) bool {
@@ -120,7 +155,6 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 				})
 			}
 
-			// Output
 			if jsonOutput {
 				enc := json.NewEncoder(out.Writer())
 				enc.SetIndent("", "  ")
@@ -134,7 +168,7 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 			}
 
 			// Build table rows
-			headers := []string{"REPO", "BRANCH", "COMMIT", "CREATED", "NOTE"}
+			headers := []string{"REPO", "BRANCH", "PR", "COMMIT", "CREATED", "NOTE"}
 			var rows [][]string
 			for _, wt := range allWorktrees {
 				created := format.RelativeTime(wt.CreatedAt)
@@ -142,7 +176,8 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 				if len(commit) > 7 {
 					commit = commit[:7]
 				}
-				rows = append(rows, []string{wt.RepoName, wt.Branch, commit, created, wt.Note})
+				pr := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.PRDraft, wt.PRURL)
+				rows = append(rows, []string{wt.RepoName, wt.Branch, pr, commit, created, wt.Note})
 			}
 
 			out.Print(static.RenderTable(headers, rows))
@@ -193,4 +228,55 @@ func listWorktreesForRepo(ctx context.Context, repo registry.Repo) ([]WorktreeDi
 	}
 
 	return display, nil
+}
+
+// refreshPRStatusForList fetches PR status for worktrees in parallel.
+func refreshPRStatusForList(ctx context.Context, worktrees []WorktreeDisplay, prCache *prcache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig) {
+	l := log.FromContext(ctx)
+
+	// Build a map of repo name -> origin URL (deduplicate per repo)
+	type repoInfo struct {
+		path      string
+		originURL string
+	}
+	repoOrigins := make(map[string]repoInfo)
+
+	for i := range worktrees {
+		wt := &worktrees[i]
+		if _, ok := repoOrigins[wt.RepoName]; ok {
+			continue
+		}
+		originURL, err := git.GetOriginURL(ctx, wt.Path)
+		if err != nil {
+			l.Debug("failed to get origin URL", "path", wt.Path, "err", err)
+			continue
+		}
+		repoOrigins[wt.RepoName] = repoInfo{path: wt.Path, originURL: originURL}
+	}
+
+	// Build fetch items
+	var items []prFetchItem
+	for i := range worktrees {
+		wt := &worktrees[i]
+		ri, ok := repoOrigins[wt.RepoName]
+		if !ok || ri.originURL == "" {
+			continue
+		}
+		folderName := filepath.Base(wt.Path)
+		// Skip already-merged entries (stable state)
+		if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.State == "MERGED" {
+			continue
+		}
+		items = append(items, prFetchItem{
+			originURL: ri.originURL,
+			repoPath:  ri.path,
+			branch:    wt.Branch,
+			cacheKey:  folderName,
+		})
+	}
+
+	_, failed := refreshPRStatuses(ctx, items, prCache, hosts, forgeConfig)
+	if failed > 0 {
+		l.Printf("Warning: failed to fetch PR status for %d branch(es)\n", failed)
+	}
 }

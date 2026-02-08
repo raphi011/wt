@@ -56,12 +56,15 @@ With no arguments, returns the most recently accessed worktree.`,
 
 			if interactive {
 				// Interactive mode: show fuzzy list of all worktrees
+				l := log.FromContext(ctx)
 				var allWorktrees []flows.CdWorktreeInfo
 
-				for i := range reg.Repos {
-					repo := &reg.Repos[i]
+				allRepos := filterOrphanedRepos(l, reg.Repos)
+
+				for _, repo := range allRepos {
 					worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 					if err != nil {
+						l.Debug("skipping repo", "repo", repo.Name, "error", err)
 						continue
 					}
 					notes, _ := git.GetAllBranchConfig(ctx, repo.Path)
@@ -135,6 +138,13 @@ With no arguments, returns the most recently accessed worktree.`,
 					if err != nil {
 						return err
 					}
+					exists, pathErr := repo.PathExists()
+					if pathErr != nil {
+						return fmt.Errorf("%s: cannot access path (%s): %w", repo.Name, repo.Path, pathErr)
+					}
+					if !exists {
+						return fmt.Errorf("%s: path no longer exists (%s)\n  Update with: wt repo add <new-path> --name %s", repo.Name, repo.Path, repo.Name)
+					}
 
 					worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 					if err != nil {
@@ -153,16 +163,19 @@ With no arguments, returns the most recently accessed worktree.`,
 					}
 				} else {
 					// Search all repos for matching branch
+					l := log.FromContext(ctx)
 					type match struct {
 						repoName string
 						path     string
 					}
 					var matches []match
 
-					for i := range reg.Repos {
-						repo := &reg.Repos[i]
+					searchRepos := filterOrphanedRepos(l, reg.Repos)
+
+					for _, repo := range searchRepos {
 						worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 						if err != nil {
+							l.Debug("skipping repo", "repo", repo.Name, "error", err)
 							continue
 						}
 

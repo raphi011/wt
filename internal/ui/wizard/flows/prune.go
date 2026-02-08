@@ -27,9 +27,8 @@ type PruneWorktreeInfo struct {
 	ID         int
 	RepoName   string
 	Branch     string
-	Reason     string // "Merged PR", "Merged branch", "Clean", "Dirty", "Not merged", "Has commits"
-	IsDirty    bool   // Whether worktree has uncommitted changes
-	IsPrunable bool   // Whether worktree can be auto-pruned (merged PR, not dirty)
+	Reason     string // PR state display string (e.g. "● Merged", "○ Open")
+	IsPrunable bool   // Whether worktree can be auto-pruned (merged PR)
 	Worktree   git.Worktree
 }
 
@@ -87,7 +86,7 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 	// Customize summary
 	w.WithSummary("Confirm removal")
 
-	// Add info line showing count and any warnings
+	// Add info line showing count
 	w.WithInfoLine(func(wiz *framework.Wizard) string {
 		step := wiz.GetStep("worktrees")
 		if step == nil {
@@ -97,19 +96,6 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 		count := fl.SelectedCount()
 		if count == 0 {
 			return "No worktrees selected"
-		}
-
-		// Check if any dirty worktrees are selected
-		indices := fl.GetSelectedIndices()
-		dirtyCount := 0
-		for _, idx := range indices {
-			if params.Worktrees[idx].IsDirty {
-				dirtyCount++
-			}
-		}
-
-		if dirtyCount > 0 {
-			return fmt.Sprintf("%d selected (%d with uncommitted changes)", count, dirtyCount)
 		}
 		return fmt.Sprintf("%d selected", count)
 	})

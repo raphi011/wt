@@ -290,6 +290,19 @@ func (repo *Repo) MatchesLabels(labels []string) bool {
 	return false
 }
 
+// PathExists returns true if the repo path exists on disk.
+// Returns an error for non-existence errors (e.g. permission denied).
+func (repo *Repo) PathExists() (bool, error) {
+	_, err := os.Stat(repo.Path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}
+
 // GetEffectiveWorktreeFormat returns the worktree format to use for this repo
 func (repo *Repo) GetEffectiveWorktreeFormat(defaultFormat string) string {
 	if repo.WorktreeFormat != "" {

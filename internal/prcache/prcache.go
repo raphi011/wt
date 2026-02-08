@@ -1,5 +1,5 @@
-// Package prcache provides a simple PR cache stored in ~/.wt/prs.json.
-// Unlike the previous cache system, this stores PRs independently of worktree entries,
+// Package prcache provides PR status caching stored in ~/.wt/prs.json.
+// PRs are stored independently of worktree entries, keyed by folder name,
 // allowing PR info to be cached before worktrees are created.
 package prcache
 
@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/storage"
 )
 
@@ -41,6 +42,11 @@ type Cache struct {
 	PRs map[string]*PRInfo `json:"prs"`
 }
 
+// New returns an empty, initialized cache.
+func New() *Cache {
+	return &Cache{PRs: make(map[string]*PRInfo)}
+}
+
 // Path returns the path to the PR cache file
 func Path() string {
 	home, _ := os.UserHomeDir()
@@ -51,11 +57,8 @@ func Path() string {
 func Load() (*Cache, error) {
 	var cache Cache
 	if err := storage.LoadJSON(Path(), &cache); err != nil {
-		if os.IsNotExist(err) {
-			return &Cache{PRs: make(map[string]*PRInfo)}, nil
-		}
-		// Corrupted - start fresh
-		return &Cache{PRs: make(map[string]*PRInfo)}, nil
+		// Not found or corrupted - start fresh
+		return New(), nil
 	}
 
 	// Initialize nil map
@@ -89,4 +92,25 @@ func (c *Cache) Delete(folder string) {
 // Reset clears all cached data
 func (c *Cache) Reset() {
 	c.PRs = make(map[string]*PRInfo)
+}
+
+// FromForge converts a forge.PRInfo to a prcache.PRInfo.
+// Returns nil if pr is nil.
+func FromForge(pr *forge.PRInfo) *PRInfo {
+	if pr == nil {
+		return nil
+	}
+
+	return &PRInfo{
+		Number:       pr.Number,
+		State:        pr.State,
+		IsDraft:      pr.IsDraft,
+		URL:          pr.URL,
+		Author:       pr.Author,
+		CommentCount: pr.CommentCount,
+		HasReviews:   pr.HasReviews,
+		IsApproved:   pr.IsApproved,
+		CachedAt:     pr.CachedAt,
+		Fetched:      pr.Fetched,
+	}
 }

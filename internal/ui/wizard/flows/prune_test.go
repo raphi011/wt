@@ -130,7 +130,6 @@ func TestPruneWorktreeInfo_Structure(t *testing.T) {
 		RepoName:   "my-repo",
 		Branch:     "feature-branch",
 		Reason:     "Merged PR",
-		IsDirty:    false,
 		IsPrunable: true,
 	}
 
@@ -146,9 +145,6 @@ func TestPruneWorktreeInfo_Structure(t *testing.T) {
 	if info.Reason != "Merged PR" {
 		t.Errorf("Reason = %q, want 'Merged PR'", info.Reason)
 	}
-	if info.IsDirty {
-		t.Error("IsDirty should be false")
-	}
 	if !info.IsPrunable {
 		t.Error("IsPrunable should be true")
 	}
@@ -161,5 +157,5 @@ func TestPruneWorktreeInfo_Structure(t *testing.T) {
 // The wizard:
 // - Pre-selects prunable worktrees automatically
 // - Shows custom description with colored status
-// - Has info line showing count and dirty warnings
+// - Has info line showing selected count
 // - Uses "Confirm removal" as summary title

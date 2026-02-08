@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"fmt"
+	"os"
 
 	tea "charm.land/bubbletea/v2"
 )
@@ -60,7 +61,7 @@ func (m confirmModel) View() tea.View {
 // The default answer is "no" if the user presses enter without input.
 func Confirm(prompt string) (ConfirmResult, error) {
 	model := confirmModel{prompt: prompt}
-	p := tea.NewProgram(model)
+	p := tea.NewProgram(model, tea.WithOutput(os.Stderr))
 	finalModel, err := p.Run()
 	if err != nil {
 		return ConfirmResult{}, err

@@ -1,5 +1,12 @@
 package styles
 
+import (
+	"fmt"
+
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+)
+
 // Symbols holds the icon/symbol set based on nerdfont configuration
 type Symbols struct {
 	PRMerged string
@@ -87,6 +94,38 @@ func FormatPRState(state string, isDraft bool) string {
 	default:
 		return ""
 	}
+}
+
+// FormatPRRef returns a colored #<number> string with an OSC 8 hyperlink.
+// Returns empty string if number == 0.
+func FormatPRRef(number int, state string, isDraft bool, url string) string {
+	if number == 0 {
+		return ""
+	}
+
+	var style lipgloss.Style
+	switch state {
+	case "OPEN":
+		if isDraft {
+			style = MutedStyle
+		} else {
+			style = SuccessStyle
+		}
+	case "MERGED":
+		style = MergedStyle
+	case "CLOSED":
+		style = ErrorStyle
+	default:
+		style = NormalStyle
+	}
+
+	text := fmt.Sprintf("#%d", number)
+
+	if url != "" {
+		styled := style.Underline(true).Render(text)
+		return ansi.SetHyperlink(url) + styled + ansi.ResetHyperlink()
+	}
+	return style.Render(text)
 }
 
 // PRStateSymbol returns just the symbol for a PR state
