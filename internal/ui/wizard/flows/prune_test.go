@@ -130,7 +130,6 @@ func TestPruneWorktreeInfo_Structure(t *testing.T) {
 		RepoName:   "my-repo",
 		Branch:     "feature-branch",
 		Reason:     "Merged PR",
-		IsDirty:    false,
 		IsPrunable: true,
 	}
 
@@ -145,9 +144,6 @@ func TestPruneWorktreeInfo_Structure(t *testing.T) {
 	}
 	if info.Reason != "Merged PR" {
 		t.Errorf("Reason = %q, want 'Merged PR'", info.Reason)
-	}
-	if info.IsDirty {
-		t.Error("IsDirty should be false")
 	}
 	if !info.IsPrunable {
 		t.Error("IsPrunable should be true")

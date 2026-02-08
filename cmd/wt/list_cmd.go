@@ -7,20 +7,17 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
-	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
-	"github.com/raphi011/wt/internal/ui/progress"
 	"github.com/raphi011/wt/internal/ui/static"
 	"github.com/raphi011/wt/internal/ui/styles"
 )
@@ -123,7 +120,7 @@ Use --refresh/-R to fetch PR status from GitHub/GitLab.`,
 			if refresh {
 				refreshPRStatusForList(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge)
 				if err := prCache.Save(); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to save PR cache: %v\n", err)
+					l.Printf("Warning: failed to save PR cache: %v\n", err)
 				}
 			}
 
@@ -237,16 +234,13 @@ func listWorktreesForRepo(ctx context.Context, repo registry.Repo) ([]WorktreeDi
 func refreshPRStatusForList(ctx context.Context, worktrees []WorktreeDisplay, prCache *prcache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig) {
 	l := log.FromContext(ctx)
 
-	// Build a map of repo path -> origin URL (deduplicate per repo)
+	// Build a map of repo name -> origin URL (deduplicate per repo)
 	type repoInfo struct {
 		path      string
 		originURL string
 	}
-	repoOrigins := make(map[string]repoInfo) // repoName -> info
+	repoOrigins := make(map[string]repoInfo)
 
-	// We need to find the repo path for each worktree to get origin URL.
-	// The worktree path's parent structure tells us the repo.
-	// We get origin URL from the worktree path via git.
 	for i := range worktrees {
 		wt := &worktrees[i]
 		if _, ok := repoOrigins[wt.RepoName]; ok {
@@ -260,14 +254,8 @@ func refreshPRStatusForList(ctx context.Context, worktrees []WorktreeDisplay, pr
 		repoOrigins[wt.RepoName] = repoInfo{path: wt.Path, originURL: originURL}
 	}
 
-	// Filter worktrees that need fetching
-	type fetchItem struct {
-		index     int
-		originURL string
-		repoPath  string
-		branch    string
-	}
-	var toFetch []fetchItem
+	// Build fetch items
+	var items []prFetchItem
 	for i := range worktrees {
 		wt := &worktrees[i]
 		ri, ok := repoOrigins[wt.RepoName]
@@ -279,77 +267,16 @@ func refreshPRStatusForList(ctx context.Context, worktrees []WorktreeDisplay, pr
 		if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.State == "MERGED" {
 			continue
 		}
-		toFetch = append(toFetch, fetchItem{
-			index:     i,
+		items = append(items, prFetchItem{
 			originURL: ri.originURL,
 			repoPath:  ri.path,
 			branch:    wt.Branch,
+			cacheKey:  folderName,
 		})
 	}
 
-	if len(toFetch) == 0 {
-		return
+	_, failed := refreshPRStatuses(ctx, items, prCache, hosts, forgeConfig)
+	if failed > 0 {
+		l.Printf("Warning: failed to fetch PR status for %d branch(es)\n", failed)
 	}
-
-	pb := progress.NewProgressBar(len(toFetch), "Fetching PR status...")
-	pb.Start()
-	defer pb.Stop()
-
-	var prMutex sync.Mutex
-	var wg sync.WaitGroup
-	semaphore := make(chan struct{}, forge.MaxConcurrentFetches)
-	var completedCount, failedCount int
-	var countMutex sync.Mutex
-
-	for _, item := range toFetch {
-		wg.Add(1)
-		go func(item fetchItem) {
-			defer wg.Done()
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
-
-			f := forge.Detect(item.originURL, hosts, forgeConfig)
-
-			if err := f.Check(ctx); err != nil {
-				countMutex.Lock()
-				completedCount++
-				failedCount++
-				pb.SetProgress(completedCount, fmt.Sprintf("Fetching PR status... (%d failed)", failedCount))
-				countMutex.Unlock()
-				return
-			}
-
-			// Get upstream branch name (may differ from local branch name)
-			upstreamBranch := git.GetUpstreamBranch(ctx, item.repoPath, item.branch)
-			if upstreamBranch == "" {
-				upstreamBranch = item.branch
-			}
-
-			pr, err := f.GetPRForBranch(ctx, item.originURL, upstreamBranch)
-			if err != nil {
-				countMutex.Lock()
-				completedCount++
-				failedCount++
-				pb.SetProgress(completedCount, fmt.Sprintf("Fetching PR status... (%d failed)", failedCount))
-				countMutex.Unlock()
-				return
-			}
-
-			prMutex.Lock()
-			folderName := filepath.Base(worktrees[item.index].Path)
-			prCache.Set(folderName, prcache.FromForge(pr))
-			prMutex.Unlock()
-
-			countMutex.Lock()
-			completedCount++
-			if failedCount > 0 {
-				pb.SetProgress(completedCount, fmt.Sprintf("Fetching PR status... (%d failed)", failedCount))
-			} else {
-				pb.SetProgress(completedCount, "Fetching PR status...")
-			}
-			countMutex.Unlock()
-		}(item)
-	}
-
-	wg.Wait()
 }

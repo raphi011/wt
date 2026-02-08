@@ -33,6 +33,9 @@ var (
 
 	// Info is used for informational text (gray)
 	Info color.Color = lipgloss.Color("244")
+
+	// Merged is used for merged PR indicators (purple)
+	Merged color.Color = lipgloss.Color("135")
 )
 
 // Common styles
@@ -67,6 +70,9 @@ var (
 	InfoStyle = lipgloss.NewStyle().
 			Foreground(Info).
 			Italic(true)
+
+	// MergedStyle applies the merged color
+	MergedStyle = lipgloss.NewStyle().Foreground(Merged)
 )
 
 // Border styles

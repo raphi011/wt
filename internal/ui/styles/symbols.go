@@ -112,7 +112,7 @@ func FormatPRRef(number int, state string, isDraft bool, url string) string {
 			style = SuccessStyle
 		}
 	case "MERGED":
-		style = lipgloss.NewStyle().Foreground(lipgloss.Color("135")).Bold(true)
+		style = MergedStyle
 	case "CLOSED":
 		style = ErrorStyle
 	default:
