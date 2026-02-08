@@ -298,10 +298,12 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 			}
 
 			// Find repo
-			repo, err := reg.Find(nameOrPath)
+			repoPtr, err := reg.Find(nameOrPath)
 			if err != nil {
 				return err
 			}
+			// Copy before Remove() shifts the slice and invalidates the pointer
+			repo := *repoPtr
 
 			l.Debug("removing repo", "name", repo.Name, "path", repo.Path)
 
@@ -312,7 +314,7 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 					return err
 				}
 				if result.Cancelled || !result.Confirmed {
-					fmt.Println("Cancelled")
+					fmt.Fprintln(cmd.OutOrStdout(), "Cancelled")
 					return nil
 				}
 			}
@@ -333,10 +335,10 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 				if err := os.RemoveAll(repo.Path); err != nil {
 					return fmt.Errorf("delete repo: %w", err)
 				}
-				fmt.Printf("Deleted: %s\n", repo.Path)
+				fmt.Fprintf(cmd.OutOrStdout(), "Deleted: %s\n", repo.Path)
 			}
 
-			fmt.Printf("Unregistered: %s (%s)\n", repo.Name, filepath.Base(repo.Path))
+			fmt.Fprintf(cmd.OutOrStdout(), "Unregistered: %s (%s)\n", repo.Name, filepath.Base(repo.Path))
 			return nil
 		},
 	}
