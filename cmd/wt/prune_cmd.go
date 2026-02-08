@@ -148,7 +148,10 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 					continue
 				}
 				// Get origin URL and branch notes once per repo
-				originURL, _ := git.GetOriginURL(ctx, repo.Path)
+				originURL, err := git.GetOriginURL(ctx, repo.Path)
+				if err != nil {
+					l.Debug("failed to get origin URL", "repo", repo.Name, "error", err)
+				}
 				notes, _ := git.GetAllBranchConfig(ctx, repo.Path)
 				for _, wti := range wtInfos {
 					var createdAt time.Time

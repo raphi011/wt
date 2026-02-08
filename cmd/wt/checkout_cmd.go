@@ -116,7 +116,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				repos = []registry.Repo{repo}
 			} else {
 				// Existing branch without scope - search all repos
-				for _, repo := range reg.Repos {
+				for _, repo := range filterOrphanedRepos(l, reg.Repos) {
 					// Check if this repo has a worktree for this branch
 					wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 					if err != nil {

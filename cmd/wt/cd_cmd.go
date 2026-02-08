@@ -64,6 +64,7 @@ With no arguments, returns the most recently accessed worktree.`,
 				for _, repo := range allRepos {
 					worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 					if err != nil {
+						l.Debug("skipping repo", "repo", repo.Name, "error", err)
 						continue
 					}
 					notes, _ := git.GetAllBranchConfig(ctx, repo.Path)
@@ -137,7 +138,11 @@ With no arguments, returns the most recently accessed worktree.`,
 					if err != nil {
 						return err
 					}
-					if !repo.PathExists() {
+					exists, pathErr := repo.PathExists()
+					if pathErr != nil {
+						return fmt.Errorf("%s: cannot access path (%s): %w", repo.Name, repo.Path, pathErr)
+					}
+					if !exists {
 						return fmt.Errorf("%s: path no longer exists (%s)\n  Update with: wt repo add <new-path> --name %s", repo.Name, repo.Path, repo.Name)
 					}
 
@@ -170,6 +175,7 @@ With no arguments, returns the most recently accessed worktree.`,
 					for _, repo := range searchRepos {
 						worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 						if err != nil {
+							l.Debug("skipping repo", "repo", repo.Name, "error", err)
 							continue
 						}
 

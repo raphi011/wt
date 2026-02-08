@@ -90,7 +90,11 @@ With no targets, runs in the current worktree.`,
 						if err != nil {
 							return err
 						}
-						if !repo.PathExists() {
+						exists, pathErr := repo.PathExists()
+						if pathErr != nil {
+							return fmt.Errorf("%s: cannot access path (%s): %w", repo.Name, repo.Path, pathErr)
+						}
+						if !exists {
 							return fmt.Errorf("%s: path no longer exists (%s)\n  Update with: wt repo add <new-path> --name %s", repo.Name, repo.Path, repo.Name)
 						}
 

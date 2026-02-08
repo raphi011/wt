@@ -101,7 +101,6 @@ Use --refresh/-R to fetch PR status from GitHub/GitLab.`,
 
 			l.Debug("listing worktrees", "repos", len(repos))
 
-			// Collect all worktrees
 			var allWorktrees []WorktreeDisplay
 			for _, repo := range repos {
 				worktrees, err := listWorktreesForRepo(ctx, repo)
@@ -115,7 +114,8 @@ Use --refresh/-R to fetch PR status from GitHub/GitLab.`,
 			// Load PR cache
 			prCache, err := prcache.Load()
 			if err != nil {
-				return fmt.Errorf("load PR cache: %w", err)
+				l.Printf("Warning: failed to load PR cache: %v\n", err)
+				prCache = prcache.New()
 			}
 
 			// Refresh PR status if requested
@@ -137,7 +137,6 @@ Use --refresh/-R to fetch PR status from GitHub/GitLab.`,
 				}
 			}
 
-			// Sort worktrees
 			switch sortBy {
 			case "repo":
 				sort.Slice(allWorktrees, func(i, j int) bool {
@@ -156,7 +155,6 @@ Use --refresh/-R to fetch PR status from GitHub/GitLab.`,
 				})
 			}
 
-			// Output
 			if jsonOutput {
 				enc := json.NewEncoder(out.Writer())
 				enc.SetIndent("", "  ")

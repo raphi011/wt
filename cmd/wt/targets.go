@@ -7,6 +7,7 @@ import (
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -155,10 +156,12 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 			}
 		} else {
 			// No scope - search all repos
+			l := log.FromContext(ctx)
 			var matches []WorktreeTarget
-			for _, repo := range reg.Repos {
+			for _, repo := range filterOrphanedRepos(l, reg.Repos) {
 				wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 				if err != nil {
+					l.Debug("skipping repo", "repo", repo.Name, "error", err)
 					continue
 				}
 				for _, wt := range wts {

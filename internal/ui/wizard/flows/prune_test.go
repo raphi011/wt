@@ -157,5 +157,5 @@ func TestPruneWorktreeInfo_Structure(t *testing.T) {
 // The wizard:
 // - Pre-selects prunable worktrees automatically
 // - Shows custom description with colored status
-// - Has info line showing count and dirty warnings
+// - Has info line showing selected count
 // - Uses "Confirm removal" as summary title
