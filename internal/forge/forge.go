@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// MaxConcurrentFetches limits parallel forge API calls to avoid rate limiting
+const MaxConcurrentFetches = 5
+
 // PRInfo represents pull request information
 type PRInfo struct {
 	Number       int       `json:"number"`

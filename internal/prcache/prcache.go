@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/storage"
 )
 
@@ -89,4 +90,20 @@ func (c *Cache) Delete(folder string) {
 // Reset clears all cached data
 func (c *Cache) Reset() {
 	c.PRs = make(map[string]*PRInfo)
+}
+
+// FromForge converts a forge.PRInfo to a prcache.PRInfo
+func FromForge(pr *forge.PRInfo) *PRInfo {
+	return &PRInfo{
+		Number:       pr.Number,
+		State:        pr.State,
+		IsDraft:      pr.IsDraft,
+		URL:          pr.URL,
+		Author:       pr.Author,
+		CommentCount: pr.CommentCount,
+		HasReviews:   pr.HasReviews,
+		IsApproved:   pr.IsApproved,
+		CachedAt:     pr.CachedAt,
+		Fetched:      pr.Fetched,
+	}
 }

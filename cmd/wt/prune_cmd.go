@@ -24,8 +24,6 @@ import (
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
 
-// maxConcurrentPRFetches limits parallel gh API calls to avoid rate limiting
-const maxConcurrentPRFetches = 5
 
 // pruneReason describes why a worktree is being pruned or skipped
 type pruneReason string
@@ -432,7 +430,7 @@ func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, prC
 
 	var prMutex sync.Mutex
 	var wg sync.WaitGroup
-	semaphore := make(chan struct{}, maxConcurrentPRFetches)
+	semaphore := make(chan struct{}, forge.MaxConcurrentFetches)
 	var completedCount, failedCount int
 	var countMutex sync.Mutex
 
@@ -472,7 +470,7 @@ func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, prC
 
 			prMutex.Lock()
 			folderName := filepath.Base(wt.Path)
-			prCache.Set(folderName, convertForgePR(pr))
+			prCache.Set(folderName, prcache.FromForge(pr))
 			prMutex.Unlock()
 
 			countMutex.Lock()
@@ -487,22 +485,6 @@ func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, prC
 	}
 
 	wg.Wait()
-}
-
-// convertForgePR converts forge.PRInfo to prcache.PRInfo
-func convertForgePR(pr *forge.PRInfo) *prcache.PRInfo {
-	return &prcache.PRInfo{
-		Number:       pr.Number,
-		State:        pr.State,
-		IsDraft:      pr.IsDraft,
-		URL:          pr.URL,
-		Author:       pr.Author,
-		CommentCount: pr.CommentCount,
-		HasReviews:   pr.HasReviews,
-		IsApproved:   pr.IsApproved,
-		CachedAt:     pr.CachedAt,
-		Fetched:      pr.Fetched,
-	}
 }
 
 // pruneWorktrees removes the given worktrees and runs hooks.

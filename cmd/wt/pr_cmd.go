@@ -213,7 +213,7 @@ Otherwise, it's looked up in the local registry.`,
 			// Cache PR info for the new worktree
 			if cache, err := prcache.Load(); err == nil {
 				if prInfo, err := f.GetPRForBranch(ctx, originURL, branch); err == nil {
-					cache.Set(filepath.Base(wtPath), convertForgePR(prInfo))
+					cache.Set(filepath.Base(wtPath), prcache.FromForge(prInfo))
 					_ = cache.Save()
 				}
 			}
@@ -488,7 +488,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 
 				// Update cache with merged state
 				pr.State = "MERGED"
-				cache.Set(cacheKey, convertForgePR(pr))
+				cache.Set(cacheKey, prcache.FromForge(pr))
 				_ = cache.Save()
 			}
 
