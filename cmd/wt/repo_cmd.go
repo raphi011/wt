@@ -298,12 +298,10 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 			}
 
 			// Find repo
-			repoPtr, err := reg.Find(nameOrPath)
+			repo, err := reg.Find(nameOrPath)
 			if err != nil {
 				return err
 			}
-			// Copy before Remove() shifts the slice and invalidates the pointer
-			repo := *repoPtr
 
 			l.Debug("removing repo", "name", repo.Name, "path", repo.Path)
 
@@ -621,11 +619,8 @@ The migration:
 				return fmt.Errorf("load registry: %w", err)
 			}
 
-			alreadyRegistered := false
-			existingRepo, _ := reg.FindByPath(absPath)
-			if existingRepo != nil {
-				alreadyRegistered = true
-			}
+			existingRepo, findErr := reg.FindByPath(absPath)
+			alreadyRegistered := findErr == nil
 
 			// Check for name conflicts (only if not already registered)
 			if !alreadyRegistered {
@@ -637,7 +632,7 @@ The migration:
 			// Determine effective worktree format
 			// Priority: flag → existing repo config → default "{branch}" (nested)
 			effectiveFormat := worktreeFormat
-			if effectiveFormat == "" && existingRepo != nil {
+			if effectiveFormat == "" && alreadyRegistered {
 				effectiveFormat = existingRepo.WorktreeFormat
 			}
 			if effectiveFormat == "" {

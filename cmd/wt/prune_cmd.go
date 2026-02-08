@@ -126,21 +126,17 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 			}
 
 			// Determine target repos for auto-prune
-			var repos []*registry.Repo
+			var repos []registry.Repo
 			if global {
-				for i := range reg.Repos {
-					repos = append(repos, &reg.Repos[i])
-				}
+				repos = reg.Repos
 			} else {
 				// Try current repo
 				repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
 				if err != nil {
 					// Not in a repo, prune all
-					for i := range reg.Repos {
-						repos = append(repos, &reg.Repos[i])
-					}
+					repos = reg.Repos
 				} else {
-					repos = []*registry.Repo{repo}
+					repos = []registry.Repo{repo}
 				}
 			}
 

@@ -98,7 +98,7 @@ Otherwise, it's looked up in the local registry.`,
 			}
 
 			// Determine target repo
-			var repo *registry.Repo
+			var repo registry.Repo
 			var repoPath string
 			var f forge.Forge
 
@@ -131,12 +131,12 @@ Otherwise, it's looked up in the local registry.`,
 				}
 
 				// Register in registry
-				repo = &registry.Repo{
+				repo = registry.Repo{
 					Path:   repoPath,
 					Name:   repoName,
 					Labels: cfg.DefaultLabels,
 				}
-				if err := reg.Add(*repo); err != nil {
+				if err := reg.Add(repo); err != nil {
 					return fmt.Errorf("register repo: %w", err)
 				}
 				if err := reg.Save(cfg.RegistryPath); err != nil {
@@ -308,7 +308,7 @@ func newPrCreateCmd() *cobra.Command {
 			}
 
 			// Determine target repo
-			var repo *registry.Repo
+			var repo registry.Repo
 			if len(args) > 0 {
 				repo, err = reg.FindByName(args[0])
 				if err != nil {
@@ -431,7 +431,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 			}
 
 			// Determine target repo
-			var repo *registry.Repo
+			var repo registry.Repo
 			if len(args) > 0 {
 				repo, err = reg.FindByName(args[0])
 				if err != nil {
@@ -575,7 +575,7 @@ func newPrViewCmd() *cobra.Command {
 			}
 
 			// Determine target repo
-			var repo *registry.Repo
+			var repo registry.Repo
 			if len(args) > 0 {
 				repo, err = reg.FindByName(args[0])
 				if err != nil {

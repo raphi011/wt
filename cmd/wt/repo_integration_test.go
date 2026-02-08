@@ -540,7 +540,9 @@ func TestRepoRemove_OutputShowsCorrectName(t *testing.T) {
 	repo2Path := setupTestRepo(t, tmpDir, "second-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 

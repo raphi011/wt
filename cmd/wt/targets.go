@@ -12,12 +12,12 @@ import (
 
 // findOrRegisterCurrentRepo finds the repo for cwd, auto-registering if needed.
 // Returns error if not in a git repository.
-func findOrRegisterCurrentRepo(ctx context.Context, reg *registry.Registry, cfg *config.Config) (*registry.Repo, error) {
+func findOrRegisterCurrentRepo(ctx context.Context, reg *registry.Registry, cfg *config.Config) (registry.Repo, error) {
 	// Get main repo path from working directory (may be set in context for tests)
 	workDir := config.WorkDirFromContext(ctx)
 	repoPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
 	if repoPath == "" {
-		return nil, fmt.Errorf("not in a git repository")
+		return registry.Repo{}, fmt.Errorf("not in a git repository")
 	}
 
 	// Try to find in registry
@@ -34,18 +34,18 @@ func findOrRegisterCurrentRepo(ctx context.Context, reg *registry.Registry, cfg 
 	}
 
 	if err := reg.Add(newRepo); err != nil {
-		return nil, err
+		return registry.Repo{}, err
 	}
 
 	if err := reg.Save(cfg.RegistryPath); err != nil {
-		return nil, err
+		return registry.Repo{}, err
 	}
 
 	return reg.FindByPath(repoPath)
 }
 
 // findOrRegisterCurrentRepoFromContext is a convenience wrapper that gets cfg from context.
-func findOrRegisterCurrentRepoFromContext(ctx context.Context, reg *registry.Registry) (*registry.Repo, error) {
+func findOrRegisterCurrentRepoFromContext(ctx context.Context, reg *registry.Registry) (registry.Repo, error) {
 	cfg := config.FromContext(ctx)
 	return findOrRegisterCurrentRepo(ctx, reg, cfg)
 }
@@ -62,9 +62,9 @@ func parseBranchTarget(target string) (repo, branch string) {
 
 // ScopedTargetResult holds the result of parsing a scoped target
 type ScopedTargetResult struct {
-	Repos   []*registry.Repo // Matched repos (1 for repo name, multiple for label)
-	Branch  string           // The branch part
-	IsLabel bool             // True if scope matched a label (not a repo name)
+	Repos   []registry.Repo // Matched repos (1 for repo name, multiple for label)
+	Branch  string          // The branch part
+	IsLabel bool            // True if scope matched a label (not a repo name)
 }
 
 // parseScopedTarget parses "scope:branch" where scope can be repo name or label.
@@ -87,7 +87,7 @@ func parseScopedTarget(reg *registry.Registry, target string) (ScopedTargetResul
 	repo, err := reg.FindByName(scope)
 	if err == nil {
 		return ScopedTargetResult{
-			Repos:   []*registry.Repo{repo},
+			Repos:   []registry.Repo{repo},
 			Branch:  branch,
 			IsLabel: false,
 		}, nil
@@ -156,8 +156,7 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 		} else {
 			// No scope - search all repos
 			var matches []WorktreeTarget
-			for i := range reg.Repos {
-				repo := &reg.Repos[i]
+			for _, repo := range reg.Repos {
 				wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 				if err != nil {
 					continue
@@ -196,7 +195,7 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 // resolveScopedRepos resolves scope (repo name or label) to repos.
 // If scope is empty, returns error asking for explicit scope.
 // Used when targeting repos (not worktrees) like for checkout -b.
-func resolveScopedRepos(reg *registry.Registry, scope string) ([]*registry.Repo, error) {
+func resolveScopedRepos(reg *registry.Registry, scope string) ([]registry.Repo, error) {
 	if scope == "" {
 		return nil, fmt.Errorf("repo or label required")
 	}
@@ -204,7 +203,7 @@ func resolveScopedRepos(reg *registry.Registry, scope string) ([]*registry.Repo,
 	// Try repo name first
 	repo, err := reg.FindByName(scope)
 	if err == nil {
-		return []*registry.Repo{repo}, nil
+		return []registry.Repo{repo}, nil
 	}
 
 	// Try label
@@ -219,7 +218,7 @@ func resolveScopedRepos(reg *registry.Registry, scope string) ([]*registry.Repo,
 // resolveScopeArgsOrCurrent resolves scope arguments, falling back to current repo.
 // If scopes provided: resolves each as repo name → label.
 // If no scopes: uses current repo (errors if not in a registered repo).
-func resolveScopeArgsOrCurrent(ctx context.Context, reg *registry.Registry, scopes []string) ([]*registry.Repo, error) {
+func resolveScopeArgsOrCurrent(ctx context.Context, reg *registry.Registry, scopes []string) ([]registry.Repo, error) {
 	if len(scopes) > 0 {
 		return resolveScopeArgs(reg, scopes)
 	}
@@ -235,14 +234,14 @@ func resolveScopeArgsOrCurrent(ctx context.Context, reg *registry.Registry, scop
 		return nil, fmt.Errorf("repo not registered: %s", repoPath)
 	}
 
-	return []*registry.Repo{repo}, nil
+	return []registry.Repo{repo}, nil
 }
 
 // resolveScopeArgs resolves multiple scope arguments to repos.
 // Each scope is tried as repo name first, then label.
 // Results are deduplicated by path.
-func resolveScopeArgs(reg *registry.Registry, scopes []string) ([]*registry.Repo, error) {
-	var repos []*registry.Repo
+func resolveScopeArgs(reg *registry.Registry, scopes []string) ([]registry.Repo, error) {
+	var repos []registry.Repo
 
 	for _, scope := range scopes {
 		resolved, err := resolveScopedRepos(reg, scope)
@@ -254,7 +253,7 @@ func resolveScopeArgs(reg *registry.Registry, scopes []string) ([]*registry.Repo
 
 	// Deduplicate by path
 	seen := make(map[string]bool)
-	var unique []*registry.Repo
+	var unique []registry.Repo
 	for _, r := range repos {
 		if !seen[r.Path] {
 			seen[r.Path] = true

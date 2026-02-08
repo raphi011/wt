@@ -238,10 +238,10 @@ func resolveNoteTargets(ctx context.Context, cfg *config.Config, workDir string,
 }
 
 // getCurrentRepoBranch gets the repo and current branch from current directory
-func getCurrentRepoBranch(ctx context.Context, cfg *config.Config, workDir string, reg *registry.Registry) (*registry.Repo, string, error) {
+func getCurrentRepoBranch(ctx context.Context, cfg *config.Config, workDir string, reg *registry.Registry) (registry.Repo, string, error) {
 	repoPath := git.GetCurrentRepoMainPath(ctx)
 	if repoPath == "" {
-		return nil, "", fmt.Errorf("not in a git repository")
+		return registry.Repo{}, "", fmt.Errorf("not in a git repository")
 	}
 
 	repo, err := reg.FindByPath(repoPath)
@@ -253,20 +253,20 @@ func getCurrentRepoBranch(ctx context.Context, cfg *config.Config, workDir strin
 			Labels: cfg.DefaultLabels,
 		}
 		if err := reg.Add(newRepo); err != nil {
-			return nil, "", err
+			return registry.Repo{}, "", err
 		}
 		if err := reg.Save(cfg.RegistryPath); err != nil {
-			return nil, "", err
+			return registry.Repo{}, "", err
 		}
 		repo, err = reg.FindByPath(repoPath)
 		if err != nil {
-			return nil, "", err
+			return registry.Repo{}, "", err
 		}
 	}
 
 	branch, err := git.GetCurrentBranch(ctx, workDir)
 	if err != nil {
-		return nil, "", err
+		return registry.Repo{}, "", err
 	}
 
 	return repo, branch, nil
