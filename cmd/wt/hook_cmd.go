@@ -111,7 +111,7 @@ func splitHookArgs(args []string, dashIdx int) (hookNames, targets []string) {
 }
 
 // runHooksInRepo runs hooks in the repo's current worktree or main repo
-func runHooksInRepo(ctx context.Context, repo *registry.Repo, hookNames []string, env map[string]string, dryRun bool, cfg *config.Config, workDir string) error {
+func runHooksInRepo(ctx context.Context, repo registry.Repo, hookNames []string, env map[string]string, dryRun bool, cfg *config.Config, workDir string) error {
 	// Get current branch if in a worktree
 	branch, _ := git.GetCurrentBranch(ctx, workDir)
 

@@ -69,11 +69,9 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 			}
 
 			// Determine which repos to list
-			var repos []*registry.Repo
+			var repos []registry.Repo
 			if global {
-				for i := range reg.Repos {
-					repos = append(repos, &reg.Repos[i])
-				}
+				repos = reg.Repos
 			} else if len(args) > 0 {
 				repos, err = resolveScopeArgs(reg, args)
 				if err != nil {
@@ -84,11 +82,9 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 				repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
 				if err != nil {
 					// Not in a repo, show all
-					for i := range reg.Repos {
-						repos = append(repos, &reg.Repos[i])
-					}
+					repos = reg.Repos
 				} else {
-					repos = []*registry.Repo{repo}
+					repos = []registry.Repo{repo}
 				}
 			}
 
@@ -169,7 +165,7 @@ Worktrees are sorted by creation date (most recent first) by default.`,
 	return cmd
 }
 
-func listWorktreesForRepo(ctx context.Context, repo *registry.Repo) ([]WorktreeDisplay, error) {
+func listWorktreesForRepo(ctx context.Context, repo registry.Repo) ([]WorktreeDisplay, error) {
 	worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 	if err != nil {
 		return nil, err

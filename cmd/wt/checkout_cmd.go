@@ -102,7 +102,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			}
 
 			// Determine repos to operate on
-			var repos []*registry.Repo
+			var repos []registry.Repo
 
 			if len(parsed.Repos) > 0 {
 				// Scoped target
@@ -113,11 +113,10 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				if err != nil {
 					return fmt.Errorf("not in a repo, use scope:branch to specify target")
 				}
-				repos = []*registry.Repo{repo}
+				repos = []registry.Repo{repo}
 			} else {
 				// Existing branch without scope - search all repos
-				for i := range reg.Repos {
-					repo := &reg.Repos[i]
+				for _, repo := range reg.Repos {
 					// Check if this repo has a worktree for this branch
 					wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 					if err != nil {
@@ -149,7 +148,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 					if err != nil {
 						return fmt.Errorf("branch %q not found in any repo", parsed.Branch)
 					}
-					repos = []*registry.Repo{repo}
+					repos = []registry.Repo{repo}
 				}
 
 				if len(repos) > 1 {
@@ -192,7 +191,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 	return cmd
 }
 
-func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, newBranch bool, base string, fetch, autoStash bool, note string, hookNames []string, noHook bool, env []string) error {
+func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newBranch bool, base string, fetch, autoStash bool, note string, hookNames []string, noHook bool, env []string) error {
 	cfg := config.FromContext(ctx)
 	l := log.FromContext(ctx)
 
@@ -337,7 +336,7 @@ func checkoutInRepo(ctx context.Context, repo *registry.Repo, branch string, new
 }
 
 // resolveWorktreePath computes the worktree path based on format
-func resolveWorktreePath(repo *registry.Repo, branch, format string) string {
+func resolveWorktreePath(repo registry.Repo, branch, format string) string {
 	return resolveWorktreePathWithConfig(repo.Path, repo.Name, branch, format)
 }
 

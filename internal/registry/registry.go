@@ -111,18 +111,27 @@ func (r *Registry) Remove(nameOrPath string) error {
 }
 
 // Find looks up a repo by name or path
-func (r *Registry) Find(ref string) (*Repo, error) {
-	for i := range r.Repos {
-		repo := &r.Repos[i]
+func (r *Registry) Find(ref string) (Repo, error) {
+	for _, repo := range r.Repos {
 		if repo.Name == ref || repo.Path == ref {
 			return repo, nil
 		}
 	}
-	return nil, fmt.Errorf("repo not found: %s", ref)
+	return Repo{}, fmt.Errorf("repo not found: %s", ref)
 }
 
 // FindByName looks up a repo by name only
-func (r *Registry) FindByName(name string) (*Repo, error) {
+func (r *Registry) FindByName(name string) (Repo, error) {
+	for _, repo := range r.Repos {
+		if repo.Name == name {
+			return repo, nil
+		}
+	}
+	return Repo{}, fmt.Errorf("repo not found: %s", name)
+}
+
+// findByName is an internal helper that returns a pointer for mutation.
+func (r *Registry) findByName(name string) (*Repo, error) {
 	for i := range r.Repos {
 		if r.Repos[i].Name == name {
 			return &r.Repos[i], nil
@@ -132,27 +141,27 @@ func (r *Registry) FindByName(name string) (*Repo, error) {
 }
 
 // FindByPath looks up a repo by path
-func (r *Registry) FindByPath(path string) (*Repo, error) {
+func (r *Registry) FindByPath(path string) (Repo, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, err
+		return Repo{}, err
 	}
 
-	for i := range r.Repos {
-		if r.Repos[i].Path == absPath {
-			return &r.Repos[i], nil
+	for _, repo := range r.Repos {
+		if repo.Path == absPath {
+			return repo, nil
 		}
 	}
-	return nil, fmt.Errorf("repo not registered: %s", path)
+	return Repo{}, fmt.Errorf("repo not registered: %s", path)
 }
 
 // FindByLabel returns all repos with the given label
-func (r *Registry) FindByLabel(label string) []*Repo {
-	var matches []*Repo
-	for i := range r.Repos {
-		for _, l := range r.Repos[i].Labels {
+func (r *Registry) FindByLabel(label string) []Repo {
+	var matches []Repo
+	for _, repo := range r.Repos {
+		for _, l := range repo.Labels {
 			if l == label {
-				matches = append(matches, &r.Repos[i])
+				matches = append(matches, repo)
 				break
 			}
 		}
@@ -161,17 +170,17 @@ func (r *Registry) FindByLabel(label string) []*Repo {
 }
 
 // FindByLabels returns repos matching any of the given labels
-func (r *Registry) FindByLabels(labels []string) []*Repo {
+func (r *Registry) FindByLabels(labels []string) []Repo {
 	labelSet := make(map[string]bool)
 	for _, l := range labels {
 		labelSet[l] = true
 	}
 
-	var matches []*Repo
-	for i := range r.Repos {
-		for _, l := range r.Repos[i].Labels {
+	var matches []Repo
+	for _, repo := range r.Repos {
+		for _, l := range repo.Labels {
 			if labelSet[l] {
-				matches = append(matches, &r.Repos[i])
+				matches = append(matches, repo)
 				break
 			}
 		}
@@ -208,7 +217,7 @@ func (r *Registry) AllRepoNames() []string {
 
 // AddLabel adds a label to a repo
 func (r *Registry) AddLabel(repoName, label string) error {
-	repo, err := r.FindByName(repoName)
+	repo, err := r.findByName(repoName)
 	if err != nil {
 		return err
 	}
@@ -227,7 +236,7 @@ func (r *Registry) AddLabel(repoName, label string) error {
 
 // RemoveLabel removes a label from a repo
 func (r *Registry) RemoveLabel(repoName, label string) error {
-	repo, err := r.FindByName(repoName)
+	repo, err := r.findByName(repoName)
 	if err != nil {
 		return err
 	}
@@ -243,7 +252,7 @@ func (r *Registry) RemoveLabel(repoName, label string) error {
 
 // ClearLabels removes all labels from a repo
 func (r *Registry) ClearLabels(repoName string) error {
-	repo, err := r.FindByName(repoName)
+	repo, err := r.findByName(repoName)
 	if err != nil {
 		return err
 	}
@@ -253,11 +262,11 @@ func (r *Registry) ClearLabels(repoName string) error {
 
 // Update updates a repo's configuration
 func (r *Registry) Update(name string, fn func(*Repo)) error {
-	repo, err := r.FindByName(name)
+	repoPtr, err := r.findByName(name)
 	if err != nil {
 		return err
 	}
-	fn(repo)
+	fn(repoPtr)
 	return nil
 }
 

@@ -525,6 +525,67 @@ func TestRepoRemove_NonExistent(t *testing.T) {
 	}
 }
 
+// TestRepoRemove_OutputShowsCorrectName tests that the output message shows the
+// name of the removed repo, not the repo that shifted into its slice position.
+//
+// Scenario: Two repos registered, user removes the first
+// Expected: Output contains the first repo's name, not the second
+func TestRepoRemove_OutputShowsCorrectName(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repo1Path := setupTestRepo(t, tmpDir, "first-repo")
+	repo2Path := setupTestRepo(t, tmpDir, "second-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	// Register both repos
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "first-repo", Path: repo1Path},
+			{Name: "second-repo", Path: repo2Path},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+	cmd := newRepoRemoveCmd()
+
+	output, err := executeCommand(ctx, cmd, "first-repo")
+	if err != nil {
+		t.Fatalf("repo remove command failed: %v", err)
+	}
+
+	if !strings.Contains(output, "first-repo") {
+		t.Errorf("expected output to contain 'first-repo', got: %s", output)
+	}
+	if strings.Contains(output, "second-repo") {
+		t.Errorf("output should not contain 'second-repo', got: %s", output)
+	}
+
+	// Verify only second-repo remains
+	reg, err = registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	if len(reg.Repos) != 1 {
+		t.Fatalf("expected 1 repo, got %d", len(reg.Repos))
+	}
+	if reg.Repos[0].Name != "second-repo" {
+		t.Errorf("expected remaining repo to be 'second-repo', got %q", reg.Repos[0].Name)
+	}
+}
+
 // TestRepoMakeBare_BasicMigration tests basic migration from regular repo to bare-in-.git.
 //
 // Scenario: User runs `wt repo make-bare` in a regular git repo

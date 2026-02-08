@@ -312,7 +312,7 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 					return err
 				}
 				if result.Cancelled || !result.Confirmed {
-					fmt.Println("Cancelled")
+					fmt.Fprintln(cmd.OutOrStdout(), "Cancelled")
 					return nil
 				}
 			}
@@ -333,10 +333,10 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 				if err := os.RemoveAll(repo.Path); err != nil {
 					return fmt.Errorf("delete repo: %w", err)
 				}
-				fmt.Printf("Deleted: %s\n", repo.Path)
+				fmt.Fprintf(cmd.OutOrStdout(), "Deleted: %s\n", repo.Path)
 			}
 
-			fmt.Printf("Unregistered: %s (%s)\n", repo.Name, filepath.Base(repo.Path))
+			fmt.Fprintf(cmd.OutOrStdout(), "Unregistered: %s (%s)\n", repo.Name, filepath.Base(repo.Path))
 			return nil
 		},
 	}
@@ -619,11 +619,8 @@ The migration:
 				return fmt.Errorf("load registry: %w", err)
 			}
 
-			alreadyRegistered := false
-			existingRepo, _ := reg.FindByPath(absPath)
-			if existingRepo != nil {
-				alreadyRegistered = true
-			}
+			existingRepo, findErr := reg.FindByPath(absPath)
+			alreadyRegistered := findErr == nil
 
 			// Check for name conflicts (only if not already registered)
 			if !alreadyRegistered {
@@ -635,7 +632,7 @@ The migration:
 			// Determine effective worktree format
 			// Priority: flag → existing repo config → default "{branch}" (nested)
 			effectiveFormat := worktreeFormat
-			if effectiveFormat == "" && existingRepo != nil {
+			if effectiveFormat == "" && alreadyRegistered {
 				effectiveFormat = existingRepo.WorktreeFormat
 			}
 			if effectiveFormat == "" {
