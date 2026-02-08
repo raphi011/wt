@@ -90,6 +90,9 @@ With no targets, runs in the current worktree.`,
 						if err != nil {
 							return err
 						}
+						if !repo.PathExists() {
+							return fmt.Errorf("%s: path no longer exists (%s)\n  Update with: wt repo add <new-path> --name %s", repo.Name, repo.Path, repo.Name)
+						}
 
 						wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 						if err != nil {
@@ -115,8 +118,9 @@ With no targets, runs in the current worktree.`,
 						// No repo specified - search all repos
 						var matches []worktreeTarget
 
-						for i := range reg.Repos {
-							repo := &reg.Repos[i]
+						searchRepos := filterOrphanedRepos(l, reg.Repos)
+
+						for _, repo := range searchRepos {
 							wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 							if err != nil {
 								continue

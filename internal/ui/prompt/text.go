@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"fmt"
+	"os"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -61,7 +62,7 @@ func TextInput(prompt, placeholder string) (TextInputResult, error) {
 		textInput: ti,
 		prompt:    prompt,
 	}
-	p := tea.NewProgram(model)
+	p := tea.NewProgram(model, tea.WithOutput(os.Stderr))
 	finalModel, err := p.Run()
 	if err != nil {
 		return TextInputResult{}, err

@@ -130,6 +130,8 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				}
 			}
 
+			repos = filterOrphanedRepos(l, repos)
+
 			if len(repos) == 0 {
 				out.Println("No repos found")
 				return nil

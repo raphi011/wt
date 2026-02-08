@@ -1,6 +1,8 @@
 package prompt
 
 import (
+	"os"
+
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -98,7 +100,7 @@ func Select(prompt string, options []string) (SelectResult, error) {
 		list:     l,
 		selected: -1,
 	}
-	p := tea.NewProgram(model)
+	p := tea.NewProgram(model, tea.WithOutput(os.Stderr))
 	finalModel, err := p.Run()
 	if err != nil {
 		return SelectResult{}, err

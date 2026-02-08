@@ -136,7 +136,7 @@ Use positional args to filter by label(s).`,
 			headers := []string{"NAME", "PATH", "LABELS"}
 			var rows [][]string
 			for _, repo := range repos {
-				labels := "-"
+				labels := ""
 				if len(repo.Labels) > 0 {
 					labels = strings.Join(repo.Labels, ", ")
 				}

@@ -97,6 +97,8 @@ Use --refresh/-R to fetch PR status from GitHub/GitLab.`,
 				}
 			}
 
+			repos = filterOrphanedRepos(l, repos)
+
 			l.Debug("listing worktrees", "repos", len(repos))
 
 			// Collect all worktrees
