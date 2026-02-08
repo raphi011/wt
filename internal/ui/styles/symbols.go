@@ -112,7 +112,7 @@ func FormatPRRef(number int, state string, isDraft bool, url string) string {
 			style = SuccessStyle
 		}
 	case "MERGED":
-		style = AccentStyle
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("135")).Bold(true)
 	case "CLOSED":
 		style = ErrorStyle
 	default:
@@ -120,12 +120,12 @@ func FormatPRRef(number int, state string, isDraft bool, url string) string {
 	}
 
 	text := fmt.Sprintf("#%d", number)
-	styled := style.Render(text)
 
 	if url != "" {
+		styled := style.Underline(true).Render(text)
 		return ansi.SetHyperlink(url) + styled + ansi.ResetHyperlink()
 	}
-	return styled
+	return style.Render(text)
 }
 
 // PRStateSymbol returns just the symbol for a PR state

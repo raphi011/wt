@@ -7,11 +7,13 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
+	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
@@ -49,14 +51,30 @@ func formatPruneReason(wt pruneWorktree) string {
 
 // pruneWorktree holds worktree info for prune operations
 type pruneWorktree struct {
-	Path      string
-	Branch    string
-	RepoName  string
-	RepoPath  string
-	OriginURL string
-	IsDirty   bool
-	PRState   string
-	IsDraft   bool
+	Path       string
+	Branch     string
+	RepoName   string
+	RepoPath   string
+	OriginURL  string
+	IsDirty    bool
+	PRState    string
+	IsDraft    bool
+	CommitHash string
+	CreatedAt  time.Time
+	Note       string
+	PRNumber   int
+	PRURL      string
+}
+
+// pruneTableRow formats a pruneWorktree as a table row matching `wt list` columns.
+func pruneTableRow(wt pruneWorktree) []string {
+	commit := wt.CommitHash
+	if len(commit) > 7 {
+		commit = commit[:7]
+	}
+	created := format.RelativeTime(wt.CreatedAt)
+	pr := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.IsDraft, wt.PRURL)
+	return []string{wt.RepoName, wt.Branch, pr, commit, created, wt.Note}
 }
 
 func newPruneCmd() *cobra.Command {
@@ -153,16 +171,24 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 					l.Printf("Warning: %s: %v\n", repo.Name, err)
 					continue
 				}
-				// Get origin URL once per repo
+				// Get origin URL and branch notes once per repo
 				originURL, _ := git.GetOriginURL(ctx, repo.Path)
+				notes, _ := git.GetAllBranchConfig(ctx, repo.Path)
 				for _, wti := range wtInfos {
+					var createdAt time.Time
+					if info, err := os.Stat(wti.Path); err == nil {
+						createdAt = info.ModTime()
+					}
 					allWorktrees = append(allWorktrees, pruneWorktree{
-						Path:      wti.Path,
-						Branch:    wti.Branch,
-						RepoName:  repo.Name,
-						RepoPath:  repo.Path,
-						OriginURL: originURL,
-						IsDirty:   git.IsDirty(ctx, wti.Path),
+						Path:       wti.Path,
+						Branch:     wti.Branch,
+						RepoName:   repo.Name,
+						RepoPath:   repo.Path,
+						OriginURL:  originURL,
+						IsDirty:    git.IsDirty(ctx, wti.Path),
+						CommitHash: wti.CommitHash,
+						CreatedAt:  createdAt,
+						Note:       notes[wti.Branch],
 					})
 				}
 			}
@@ -195,12 +221,14 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				refreshPRStatusForPrune(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge, sp)
 			}
 
-			// Update PR state from cache
+			// Update PR fields from cache
 			for i := range allWorktrees {
 				folderName := filepath.Base(allWorktrees[i].Path)
 				if pr := prCache.Get(folderName); pr != nil && pr.Fetched {
 					allWorktrees[i].PRState = pr.State
 					allWorktrees[i].IsDraft = pr.IsDraft
+					allWorktrees[i].PRNumber = pr.Number
+					allWorktrees[i].PRURL = pr.URL
 				}
 			}
 
@@ -299,10 +327,10 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				} else {
 					fmt.Println("Removed:")
 				}
-				headers := []string{"REPO", "BRANCH", "REASON"}
+				headers := []string{"REPO", "BRANCH", "PR", "COMMIT", "CREATED", "NOTE"}
 				var rows [][]string
 				for _, wt := range removed {
-					rows = append(rows, []string{wt.RepoName, wt.Branch, formatPruneReason(wt)})
+					rows = append(rows, pruneTableRow(wt))
 				}
 				out.Print(static.RenderTable(headers, rows))
 
@@ -310,7 +338,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 					fmt.Println("Skipped:")
 					rows = nil
 					for _, wt := range toSkip {
-						rows = append(rows, []string{wt.RepoName, wt.Branch, formatPruneReason(wt)})
+						rows = append(rows, pruneTableRow(wt))
 					}
 					out.Print(static.RenderTable(headers, rows))
 				}

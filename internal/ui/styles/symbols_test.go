@@ -3,6 +3,8 @@ package styles
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestSetNerdfont(t *testing.T) {
@@ -157,8 +159,9 @@ func TestFormatPRRef(t *testing.T) {
 				}
 				return
 			}
-			if !strings.Contains(got, tt.contains) {
-				t.Errorf("FormatPRRef() = %q, want to contain %q", got, tt.contains)
+			stripped := ansi.Strip(got)
+			if !strings.Contains(stripped, tt.contains) {
+				t.Errorf("FormatPRRef() stripped = %q, want to contain %q", stripped, tt.contains)
 			}
 		})
 	}
@@ -176,10 +179,18 @@ func TestFormatPRRef_Hyperlink(t *testing.T) {
 		t.Errorf("FormatPRRef with URL should contain the URL, got %q", got)
 	}
 
-	// Without URL, no OSC 8
+	// With URL, should be underlined (SGR 4 = underline, combined with color codes)
+	if !strings.Contains(got, "\x1b[4;") {
+		t.Errorf("FormatPRRef with URL should be underlined, got %q", got)
+	}
+
+	// Without URL, no OSC 8 and no underline
 	noURL := FormatPRRef(42, "OPEN", false, "")
 	if strings.Contains(noURL, "\x1b]8;;") {
 		t.Errorf("FormatPRRef without URL should not contain OSC 8 sequence, got %q", noURL)
+	}
+	if strings.Contains(noURL, "\x1b[4;") {
+		t.Errorf("FormatPRRef without URL should not be underlined, got %q", noURL)
 	}
 }
 
