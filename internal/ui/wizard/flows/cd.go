@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/colorprofile"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
 	"github.com/raphi011/wt/internal/ui/wizard/steps"
 )
@@ -23,11 +22,10 @@ type CdOptions struct {
 
 // CdWorktreeInfo contains worktree data for display in the list.
 type CdWorktreeInfo struct {
-	RepoName    string
-	Branch      string
-	Path        string
-	LastAccess  time.Time
-	AccessCount int
+	RepoName   string
+	Branch     string
+	Path       string
+	LastAccess time.Time
 }
 
 // CdWizardParams contains parameters for the cd interactive list.
@@ -102,14 +100,9 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 	options := make([]framework.Option, len(params.Worktrees))
 
 	for i, wt := range params.Worktrees {
-		label := fmt.Sprintf("%s:%s", wt.RepoName, wt.Branch)
-
-		description := buildDescription(wt)
-
 		options[i] = framework.Option{
-			Label:       label,
-			Value:       i,
-			Description: description,
+			Label: fmt.Sprintf("%s:%s", wt.RepoName, wt.Branch),
+			Value: i,
 		}
 	}
 
@@ -145,10 +138,3 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 	}, nil
 }
 
-// buildDescription creates the option description from history data.
-func buildDescription(wt CdWorktreeInfo) string {
-	if !wt.LastAccess.IsZero() {
-		return format.RelativeTime(wt.LastAccess)
-	}
-	return ""
-}
