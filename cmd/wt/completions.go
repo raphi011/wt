@@ -96,6 +96,68 @@ func completeRemoteBranches(cmd *cobra.Command, args []string, toComplete string
 	return matches, cobra.ShellCompDirectiveNoFileComp
 }
 
+// completeBaseBranches provides completion for the --base flag.
+// Supports both local branches and explicit remote refs (origin/branch, upstream/branch).
+func completeBaseBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg := config.FromContext(cmd.Context())
+	ctx := context.Background()
+
+	repoPath := repoPathFromArgs(ctx, cfg, args)
+	if repoPath == "" {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	var matches []string
+
+	// Check if user is typing a remote prefix (e.g., "origin/", "upstream/")
+	if idx := strings.Index(toComplete, "/"); idx >= 0 {
+		remoteName := toComplete[:idx]
+		branchPrefix := toComplete[idx+1:]
+
+		// Verify remote exists
+		if git.HasRemote(ctx, repoPath, remoteName) {
+			// List remote branches and filter by prefix
+			remoteBranches, err := git.ListRemoteBranches(ctx, repoPath)
+			if err == nil {
+				prefix := remoteName + "/"
+				for _, b := range remoteBranches {
+					// Remote branches are already prefixed with remote name
+					if strings.HasPrefix(b, prefix) {
+						branchPart := strings.TrimPrefix(b, prefix)
+						if strings.HasPrefix(branchPart, branchPrefix) {
+							matches = append(matches, b)
+						}
+					}
+				}
+			}
+			return matches, cobra.ShellCompDirectiveNoFileComp
+		}
+	}
+
+	// Local branches (simple branch names)
+	localBranches, err := git.ListLocalBranches(ctx, repoPath)
+	if err == nil {
+		for _, b := range localBranches {
+			if strings.HasPrefix(b, toComplete) {
+				matches = append(matches, b)
+			}
+		}
+	}
+
+	// Also suggest remote prefixes if user might want explicit remote refs
+	remotes, err := git.ListRemotes(ctx, repoPath)
+	if err == nil {
+		for _, remote := range remotes {
+			prefix := remote + "/"
+			if strings.HasPrefix(prefix, toComplete) {
+				matches = append(matches, prefix)
+			}
+		}
+	}
+
+	return matches, cobra.ShellCompDirectiveNoFileComp
+}
+
 // completeWorktrees provides worktree completion for the specified repo.
 // Supports "branch", "repo:branch", and "label:branch" formats.
 func completeWorktrees(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -374,8 +436,8 @@ func completeScopeArgs(cmd *cobra.Command, args []string, toComplete string) ([]
 
 // Register completions for checkout command
 func registerCheckoutCompletions(cmd *cobra.Command) {
-	// Branch argument completion for --base flag
-	cmd.RegisterFlagCompletionFunc("base", completeBranches)
+	// Branch argument completion for --base flag (supports both local and remote refs)
+	cmd.RegisterFlagCompletionFunc("base", completeBaseBranches)
 
 	// Positional arg completion for [scope:]branch
 	// Suggests repo/label prefixes and existing branches (even with -b, as branch name inspiration)

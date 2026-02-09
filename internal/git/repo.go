@@ -226,6 +226,22 @@ func HasRemote(ctx context.Context, repoPath, remoteName string) bool {
 	return runGit(ctx, repoPath, "remote", "get-url", remoteName) == nil
 }
 
+// ListRemotes returns all remote names for a repository.
+func ListRemotes(ctx context.Context, repoPath string) ([]string, error) {
+	output, err := outputGit(ctx, repoPath, "remote")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list remotes: %v", err)
+	}
+
+	var remotes []string
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			remotes = append(remotes, line)
+		}
+	}
+	return remotes, nil
+}
+
 // GetMainRepoPath returns the main repository path from a worktree path.
 // Uses git commands rather than reading .git files directly.
 func GetMainRepoPath(worktreePath string) (string, error) {

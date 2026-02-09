@@ -26,7 +26,9 @@ func TestRepoClone_BareRepo(t *testing.T) {
 
 	// Setup registry file
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -84,7 +86,9 @@ func TestRepoClone_WithLabels(t *testing.T) {
 	sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -135,7 +139,9 @@ func TestRepoClone_WithCustomName(t *testing.T) {
 	sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -178,10 +184,14 @@ func TestRepoClone_DestinationExists(t *testing.T) {
 
 	// Create destination directory
 	existingDir := filepath.Join(tmpDir, "existing-dir")
-	os.MkdirAll(existingDir, 0755)
+	if err := os.MkdirAll(existingDir, 0755); err != nil {
+		t.Fatalf("failed to create existing dir: %v", err)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -209,11 +219,15 @@ func TestRepoClone_AutoName(t *testing.T) {
 	sourceRepo := setupTestRepo(t, tmpDir, "my-project")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	// Create a work subdirectory for cloning
 	otherDir := filepath.Join(tmpDir, "work")
-	os.MkdirAll(otherDir, 0755)
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create work dir: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, otherDir)
@@ -252,7 +266,9 @@ func TestRepoClone_ShortFormWithoutDefaultOrg(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	// Config without default_org
 	cfg := &config.Config{RegistryPath: regFile}
@@ -284,7 +300,9 @@ func TestRepoClone_ShortFormAutoExtractRepoName(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)

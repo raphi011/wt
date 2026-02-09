@@ -248,7 +248,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 
 		if fetchBranch != "" {
 			if err := git.FetchBranchFromRemote(ctx, gitDir, fetchRemote, fetchBranch); err != nil {
-				l.Printf("Warning: fetch failed: %v\n", err)
+				l.Printf("Warning: fetch failed for %s/%s: %v (continuing with local refs)\n", fetchRemote, fetchBranch, err)
 			}
 		}
 	}
