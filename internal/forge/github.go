@@ -322,7 +322,7 @@ func (g *GitHub) FormatState(state string) string {
 		return "merged"
 	case PRStateOpen:
 		return "open"
-	case "DRAFT":
+	case PRStateDraft:
 		return "draft"
 	case PRStateClosed:
 		return "closed"

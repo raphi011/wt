@@ -78,9 +78,9 @@ func PRDraftSymbol() string {
 	return currentSymbols.PRDraft
 }
 
-// FormatPRState returns a formatted string with symbol and state
-// state should be "MERGED", "OPEN", "CLOSED", or empty
-// isDraft indicates if the PR is a draft (only applies to OPEN state)
+// FormatPRState returns a formatted string with symbol and state.
+// state should be forge.PRStateMerged, forge.PRStateOpen, forge.PRStateClosed, or empty.
+// isDraft indicates if the PR is a draft (only applies to OPEN state).
 func FormatPRState(state string, isDraft bool) string {
 	switch state {
 	case forge.PRStateMerged:

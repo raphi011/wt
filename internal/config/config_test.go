@@ -444,6 +444,46 @@ func TestValidThemeNames(t *testing.T) {
 	}
 }
 
+func TestDefaultSortValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		sort    string
+		wantErr bool
+	}{
+		{"empty", "", false},
+		{"created", "created", false},
+		{"repo", "repo", false},
+		{"branch", "branch", false},
+		{"invalid name", "name", true},
+		{"old value id", "id", true},
+		{"old value commit", "commit", true},
+		{"date", "date", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Replicate Load()'s validation for default_sort
+			isInvalid := tt.sort != "" && tt.sort != "created" && tt.sort != "repo" && tt.sort != "branch"
+			if isInvalid != tt.wantErr {
+				t.Errorf("default_sort %q: isInvalid=%v, wantErr=%v", tt.sort, isInvalid, tt.wantErr)
+			}
+
+			// Also verify TOML round-trip maps the field correctly
+			input := `default_sort = "` + tt.sort + `"`
+			if tt.sort == "" {
+				input = `worktree_dir = "/tmp"`
+			}
+			var raw rawConfig
+			if _, err := toml.Decode(input, &raw); err != nil {
+				t.Fatalf("failed to parse TOML: %v", err)
+			}
+			if raw.DefaultSort != tt.sort {
+				t.Errorf("TOML round-trip: got %q, want %q", raw.DefaultSort, tt.sort)
+			}
+		})
+	}
+}
+
 func TestValidThemeModes(t *testing.T) {
 	// Verify ValidThemeModes contains expected modes
 	expected := []string{"auto", "light", "dark"}

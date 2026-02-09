@@ -89,7 +89,7 @@ type CheckoutConfig struct {
 
 // ThemeConfig holds theme/color configuration for interactive UI
 type ThemeConfig struct {
-	Name     string `toml:"name"`     // preset name: "default", "dracula", "nord", "gruvbox", "catppuccin"
+	Name     string `toml:"name"`     // preset name: "none", "default", "dracula", "nord", "gruvbox", "catppuccin"
 	Mode     string `toml:"mode"`     // theme mode: "auto", "light", "dark" (default: "auto")
 	Primary  string `toml:"primary"`  // main accent color (borders, titles)
 	Accent   string `toml:"accent"`   // highlight color (selected items)
@@ -543,7 +543,7 @@ worktree_format = "{repo}-{branch}"
 # Hooks with "on" run automatically for matching commands.
 # Hooks without "on" only run when explicitly called with --hook=name.
 #
-# Available "on" values: "checkout", "pr", "prune", "merge", "cd", "all"
+# Available "on" values: "checkout", "pr", "prune", "merge", "all"
 #
 # Hooks run with working directory set to the worktree path.
 # For "prune" hooks, working directory is the main repo (worktree is deleted).
@@ -654,7 +654,7 @@ worktree_format = "{repo}-{branch}"
 #   glab auth login --hostname gitlab.internal.corp
 
 # Theme settings - customize colors for interactive wizards
-# Available presets: "default", "dracula", "nord", "gruvbox", "catppuccin"
+# Available presets: "none", "default", "dracula", "nord", "gruvbox", "catppuccin"
 # Some themes have light/dark variants that are auto-selected based on terminal
 #
 # [theme]

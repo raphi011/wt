@@ -349,7 +349,7 @@ worktree_format = "{repo}-{branch}"
 base_ref = "remote"
 
 # Auto-fetch from origin before checkout (default: false)
-# Note: with base_ref="local", --fetch is skipped (warns) since fetch doesn't affect local refs
+# Note: with base_ref="local" and an explicit --base, --fetch is skipped (warns) since fetch doesn't affect local refs
 auto_fetch = true
 
 # Auto-set upstream tracking (default: false)
@@ -368,8 +368,8 @@ auto_fetch = true
 | (none) | local | local default branch |
 | `develop` | remote | `origin/develop` |
 | `develop` | local | local `develop` |
-| `origin/develop` | (ignored) | `origin/develop` |
-| `upstream/main` | (ignored) | `upstream/main` |
+| `origin/develop` | (overridden) | `origin/develop` |
+| `upstream/main` | (overridden) | `upstream/main` |
 
 Explicit remote refs (`origin/branch`, `upstream/branch`) always override `base_ref` config.
 
@@ -405,7 +405,7 @@ description = "Open Claude with prompt"
 # No "on" = only runs via: wt hook claude --arg prompt="..."
 ```
 
-**Hook triggers:** `checkout`, `pr`, `prune`, `merge`, `all`
+**Hook triggers:** `checkout`, `pr`, `prune`, `merge`, `all` (see `on` field in config)
 
 **Placeholders:** `{worktree-dir}`, `{repo-dir}`, `{branch}`, `{repo}`, `{origin}`, `{trigger}`, `{key}`, `{key:-default}`
 

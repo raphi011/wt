@@ -28,7 +28,7 @@
 //	description = "Open VS Code"
 //	on = ["checkout"]  # auto-run for checkout command
 //
-// Hooks with "on" run automatically for matching commands (checkout, pr, prune, merge).
+// Hooks with "on" run automatically for matching commands (checkout, pr, prune, merge, all).
 // Hooks without "on" only run via explicit --hook=name flag.
 //
 // # Forge Configuration

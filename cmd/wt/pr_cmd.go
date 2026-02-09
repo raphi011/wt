@@ -476,7 +476,10 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 			}
 
 			// Load PR cache for updates
-			cache, _ := prcache.Load()
+			cache, cacheErr := prcache.Load()
+			if cacheErr != nil {
+				l.Printf("Warning: failed to load PR cache: %v\n", cacheErr)
+			}
 			cacheKey := filepath.Base(cwd)
 
 			if pr.State == forge.PRStateMerged {
@@ -492,10 +495,12 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 				out.Printf("Merged PR #%d\n", pr.Number)
 
 				// Update cache with merged state
-				pr.State = forge.PRStateMerged
-				cache.Set(cacheKey, prcache.FromForge(pr))
-				if err := cache.Save(); err != nil {
-					l.Printf("Warning: failed to save PR cache: %v\n", err)
+				if cache != nil {
+					pr.State = forge.PRStateMerged
+					cache.Set(cacheKey, prcache.FromForge(pr))
+					if err := cache.Save(); err != nil {
+						l.Printf("Warning: failed to save PR cache: %v\n", err)
+					}
 				}
 			}
 

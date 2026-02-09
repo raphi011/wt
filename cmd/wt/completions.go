@@ -116,12 +116,11 @@ func completeBaseBranches(cmd *cobra.Command, args []string, toComplete string) 
 
 		// Verify remote exists
 		if git.HasRemote(ctx, repoPath, remoteName) {
-			// List remote branches and filter by prefix
+			// List remote branches (returned with remote prefix, e.g. "origin/main")
 			remoteBranches, err := git.ListRemoteBranches(ctx, repoPath)
 			if err == nil {
 				prefix := remoteName + "/"
 				for _, b := range remoteBranches {
-					// Remote branches are already prefixed with remote name
 					if strings.HasPrefix(b, prefix) {
 						branchPart := strings.TrimPrefix(b, prefix)
 						if strings.HasPrefix(branchPart, branchPrefix) {

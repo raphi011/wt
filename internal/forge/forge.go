@@ -13,6 +13,7 @@ const (
 	PRStateMerged = "MERGED"
 	PRStateOpen   = "OPEN"
 	PRStateClosed = "CLOSED"
+	PRStateDraft  = "DRAFT"
 )
 
 // PRInfo represents pull request information

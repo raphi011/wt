@@ -25,7 +25,6 @@ import (
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
 
-
 // pruneWorktree holds worktree info for prune operations
 type pruneWorktree struct {
 	Path       string
@@ -485,7 +484,9 @@ func pruneWorktrees(ctx context.Context, toRemove []pruneWorktree, force, dryRun
 		// Delete local branch if enabled
 		if deleteBranches {
 			// Force delete if forge confirmed merge (handles squash merges),
-			// safe delete (-d) otherwise
+			// safe delete (-d) otherwise.
+			// Note: PRState is empty for targeted prune (no forge lookup),
+			// so forceDelete is always false in that path — this is intentional.
 			forceDelete := wt.PRState == forge.PRStateMerged
 			if err := git.DeleteLocalBranch(ctx, wt.RepoPath, wt.Branch, forceDelete); err != nil {
 				l.Printf("Warning: failed to delete branch %s: %v\n", wt.Branch, err)
@@ -513,7 +514,9 @@ func pruneWorktrees(ctx context.Context, toRemove []pruneWorktree, force, dryRun
 	processedRepos := make(map[string]bool)
 	for _, wt := range removed {
 		if !processedRepos[wt.RepoPath] {
-			git.PruneWorktrees(ctx, wt.RepoPath)
+			if err := git.PruneWorktrees(ctx, wt.RepoPath); err != nil {
+				l.Printf("Warning: failed to prune stale references in %s: %v\n", wt.RepoPath, err)
+			}
 			processedRepos[wt.RepoPath] = true
 		}
 	}
