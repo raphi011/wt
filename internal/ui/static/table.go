@@ -10,7 +10,25 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+
+	"github.com/raphi011/wt/internal/format"
+	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/ui/styles"
 )
+
+// WorktreeTableHeaders are the column headers for worktree tables used by list and prune.
+var WorktreeTableHeaders = []string{"REPO", "BRANCH", "COMMIT", "CREATED", "PR", "NOTE"}
+
+// WorktreeTableRow formats a git.Worktree as a table row matching WorktreeTableHeaders.
+func WorktreeTableRow(wt git.Worktree) []string {
+	commit := wt.CommitHash
+	if len(commit) > 7 {
+		commit = commit[:7]
+	}
+	created := format.RelativeTime(wt.CreatedAt)
+	pr := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.PRDraft, wt.PRURL)
+	return []string{wt.RepoName, wt.Branch, commit, created, pr, wt.Note}
+}
 
 // RenderTable creates a formatted table with proper column alignment.
 // Headers and rows are rendered using lipgloss/table which automatically

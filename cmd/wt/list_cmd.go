@@ -8,14 +8,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
-	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/static"
-	"github.com/raphi011/wt/internal/ui/styles"
 )
 
 func newListCmd() *cobra.Command {
@@ -136,19 +134,12 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 			}
 
 			// Build table rows
-			headers := []string{"REPO", "BRANCH", "PR", "COMMIT", "CREATED", "NOTE"}
 			var rows [][]string
 			for _, wt := range allWorktrees {
-				created := format.RelativeTime(wt.CreatedAt)
-				commit := wt.CommitHash
-				if len(commit) > 7 {
-					commit = commit[:7]
-				}
-				pr := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.PRDraft, wt.PRURL)
-				rows = append(rows, []string{wt.RepoName, wt.Branch, pr, commit, created, wt.Note})
+				rows = append(rows, static.WorktreeTableRow(wt))
 			}
 
-			out.Print(static.RenderTable(headers, rows))
+			out.Print(static.RenderTable(static.WorktreeTableHeaders, rows))
 
 			return nil
 		},
