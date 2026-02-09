@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/charmbracelet/colorprofile"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
 	"github.com/raphi011/wt/internal/ui/wizard/steps"
@@ -137,4 +137,3 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 		Branch:       wt.Branch,
 	}, nil
 }
-

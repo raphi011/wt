@@ -137,7 +137,12 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 						}
 					}
 					if len(repos) == 0 {
-						return fmt.Errorf("branch %q not found in repo %s", parsed.Branch, repo.Name)
+						if fetch {
+							// Branch not found locally but --fetch may pull it from remote
+							repos = append(repos, repo)
+						} else {
+							return fmt.Errorf("branch %q not found in repo %s", parsed.Branch, repo.Name)
+						}
 					}
 				} else {
 					// Not in a repo — search all repos
