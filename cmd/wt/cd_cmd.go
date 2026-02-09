@@ -83,7 +83,6 @@ With no arguments, returns the most recently accessed worktree.`,
 						}
 						if entry := hist.FindByPath(wt.Path); entry != nil {
 							info.LastAccess = entry.LastAccess
-							info.AccessCount = entry.AccessCount
 						}
 						allWorktrees = append(allWorktrees, info)
 					}
