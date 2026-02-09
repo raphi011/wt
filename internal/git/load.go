@@ -2,8 +2,8 @@ package git
 
 import (
 	"context"
+	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -35,8 +35,6 @@ func LoadWorktreesForRepos(ctx context.Context, repos []RepoRef) ([]Worktree, []
 	}
 
 	results := make([]repoResult, len(repos))
-	var mu sync.Mutex
-	var warnings []LoadWarning
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(8) // Bound concurrent git operations
@@ -44,23 +42,21 @@ func LoadWorktreesForRepos(ctx context.Context, repos []RepoRef) ([]Worktree, []
 	for i, repo := range repos {
 		g.Go(func() error {
 			wts, warn := loadWorktreesForRepo(ctx, repo)
-			results[i] = repoResult{worktrees: wts}
-			if warn != nil {
-				results[i].warning = warn
-				mu.Lock()
-				warnings = append(warnings, *warn)
-				mu.Unlock()
-			}
+			results[i] = repoResult{worktrees: wts, warning: warn}
 			return nil // Never fail — warnings are non-fatal
 		})
 	}
 
-	g.Wait()
+	_ = g.Wait() // Always nil — goroutines collect errors as warnings
 
-	// Flatten results in stable order
+	// Flatten results in stable order, collect warnings
 	var all []Worktree
+	var warnings []LoadWarning
 	for _, r := range results {
 		all = append(all, r.worktrees...)
+		if r.warning != nil {
+			warnings = append(warnings, *r.warning)
+		}
 	}
 
 	return all, warnings
@@ -76,8 +72,15 @@ func loadWorktreesForRepo(ctx context.Context, repo RepoRef) ([]Worktree, *LoadW
 	// Batch-fetch branch config (notes + upstreams) in one git call
 	notes, upstreams := GetAllBranchConfig(ctx, repo.Path)
 
-	// Get origin URL once per repo
-	originURL, _ := GetOriginURL(ctx, repo.Path)
+	// Get origin URL once per repo (non-fatal: PR refresh will skip repos without origin)
+	var warn *LoadWarning
+	originURL, err := GetOriginURL(ctx, repo.Path)
+	if err != nil {
+		warn = &LoadWarning{
+			RepoName: repo.Name,
+			Err:      fmt.Errorf("get origin URL: %w", err),
+		}
+	}
 
 	worktrees := make([]Worktree, 0, len(wtInfos))
 	for _, wti := range wtInfos {
@@ -99,5 +102,5 @@ func loadWorktreesForRepo(ctx context.Context, repo RepoRef) ([]Worktree, *LoadW
 		})
 	}
 
-	return worktrees, nil
+	return worktrees, warn
 }

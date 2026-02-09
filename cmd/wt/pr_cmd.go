@@ -536,7 +536,9 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 					out.Printf("Removed worktree: %s\n", cwd)
 					// Remove from cache since worktree no longer exists
 					cache.Delete(cacheKey)
-					_ = cache.Save()
+					if err := cache.SaveIfDirty(); err != nil {
+						l.Printf("Warning: failed to save cache: %v\n", err)
+					}
 				}
 			}
 

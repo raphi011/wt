@@ -98,11 +98,6 @@ func (c *Cache) Reset() {
 	c.dirty = true
 }
 
-// Dirty returns true if the cache has been modified since last save
-func (c *Cache) Dirty() bool {
-	return c.dirty
-}
-
 // SaveIfDirty saves the cache to disk only if it has been modified.
 // Resets the dirty flag after a successful save.
 func (c *Cache) SaveIfDirty() error {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -171,13 +172,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 
 			// Sort by repo name
 			slices.SortFunc(allWorktrees, func(a, b git.Worktree) int {
-				if a.RepoName < b.RepoName {
-					return -1
-				}
-				if a.RepoName > b.RepoName {
-					return 1
-				}
-				return 0
+				return strings.Compare(a.RepoName, b.RepoName)
 			})
 
 			// Determine which to remove and why
