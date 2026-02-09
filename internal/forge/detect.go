@@ -1,12 +1,10 @@
 package forge
 
 import (
-	"context"
 	"net/url"
 	"strings"
 
 	"github.com/raphi011/wt/internal/config"
-	"github.com/raphi011/wt/internal/git"
 )
 
 // Detect returns the appropriate Forge implementation based on the remote URL.
@@ -28,30 +26,6 @@ func Detect(remoteURL string, hostMap map[string]string, forgeConfig *config.For
 	}
 	// Default to GitHub (most common, backwards compatible)
 	return &GitHub{ForgeConfig: forgeConfig}
-}
-
-// DetectFromRepo detects the forge for a repository by reading its origin URL.
-// Returns GitHub as default if detection fails.
-func DetectFromRepo(ctx context.Context, repoPath string, hostMap map[string]string, forgeConfig *config.ForgeConfig) Forge {
-	url, err := git.GetOriginURL(ctx, repoPath)
-	if err != nil {
-		return &GitHub{ForgeConfig: forgeConfig}
-	}
-	return Detect(url, hostMap, forgeConfig)
-}
-
-// DetectAndCheck detects the forge for a repo and verifies the CLI is available.
-// Returns the forge, origin URL, and any error encountered.
-func DetectAndCheck(ctx context.Context, repoPath string, hostMap map[string]string, forgeConfig *config.ForgeConfig) (Forge, string, error) {
-	originURL, err := git.GetOriginURL(ctx, repoPath)
-	if err != nil {
-		return nil, "", err
-	}
-	f := Detect(originURL, hostMap, forgeConfig)
-	if err := f.Check(ctx); err != nil {
-		return nil, "", err
-	}
-	return f, originURL, nil
 }
 
 // extractHost parses the hostname from a git remote URL.
@@ -81,13 +55,6 @@ func extractHost(remoteURL string) string {
 	}
 
 	return ""
-}
-
-// ByName returns a Forge implementation by name.
-// Supported names: "github", "gitlab"
-// Returns GitHub as default for unknown names.
-func ByName(name string) Forge {
-	return ByNameWithConfig(name, nil)
 }
 
 // ByNameWithConfig returns a Forge implementation by name with config.

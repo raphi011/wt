@@ -76,12 +76,6 @@ func (s *mockStep) setValue(v StepValue) *mockStep {
 	return s
 }
 
-func (s *mockStep) setValueComplete(v StepValue) *mockStep {
-	s.value = v
-	s.complete = true
-	return s
-}
-
 // keyMsg creates a KeyPressMsg for testing.
 func keyMsg(key string) tea.KeyPressMsg {
 	switch key {

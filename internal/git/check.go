@@ -1,7 +1,6 @@
 package git
 
 import (
-	"context"
 	"fmt"
 	"os/exec"
 )
@@ -16,10 +15,4 @@ func CheckGit() error {
 		return ErrGitNotFound
 	}
 	return nil
-}
-
-// IsInsideRepoPath returns true if the given path is inside a git repository
-func IsInsideRepoPath(ctx context.Context, path string) bool {
-	err := runGit(ctx, path, "rev-parse", "--is-inside-work-tree")
-	return err == nil
 }

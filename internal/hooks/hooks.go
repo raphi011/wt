@@ -93,28 +93,6 @@ func hookMatchesCommand(hook config.Hook, cmdType CommandType) bool {
 	return false
 }
 
-// RunAll runs all matched hooks with the given context.
-// Prints "No hooks matched" if matches is empty, otherwise runs each hook.
-// Returns on first error.
-func RunAll(matches []HookMatch, ctx Context) error {
-	return runAll(matches, ctx, ctx.WorktreeDir)
-}
-
-// runAll runs all matched hooks with a custom working directory.
-func runAll(matches []HookMatch, ctx Context, workDir string) error {
-	if len(matches) == 0 {
-		fmt.Println("No hooks matched")
-		return nil
-	}
-
-	for _, match := range matches {
-		if err := runHook(match.Name, match.Hook, ctx, workDir); err != nil {
-			return fmt.Errorf("hook %q failed: %w", match.Name, err)
-		}
-	}
-	return nil
-}
-
 // RunAllNonFatal runs all matched hooks, logging failures as warnings instead of returning errors.
 // Prints "No hooks matched" if matches is empty.
 func RunAllNonFatal(matches []HookMatch, ctx Context, workDir string) {
