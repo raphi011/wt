@@ -58,7 +58,7 @@ Use positional args to filter by repo name(s) or label(s).
 Resolution order: repo name → label.
 
 Worktrees are sorted by creation date (most recent first) by default.
-Use --refresh/-R to fetch PR status from GitHub/GitLab.`,
+Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 		Example: `  wt list                      # List worktrees for current repo
   wt list --global             # List all worktrees (all repos)
   wt list myrepo               # Filter by repository name
@@ -190,7 +190,7 @@ Use --refresh/-R to fetch PR status from GitHub/GitLab.`,
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "Show all worktrees (not just current repo)")
 	cmd.Flags().StringVarP(&sortBy, "sort", "s", "", "Sort by: created, repo, branch")
-	cmd.Flags().BoolVarP(&refresh, "refresh", "R", false, "Refresh PR status before listing")
+	cmd.Flags().BoolVarP(&refresh, "refresh-pr", "R", false, "Refresh PR status before listing")
 
 	// Completions
 	cmd.ValidArgsFunction = completeScopeArgs

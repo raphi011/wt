@@ -331,7 +331,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Preview without removing")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force remove (required for targeted prune)")
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "Prune all repos")
-	cmd.Flags().BoolVarP(&refresh, "refresh", "R", false, "Refresh PR status first")
+	cmd.Flags().BoolVarP(&refresh, "refresh-pr", "R", false, "Refresh PR status first")
 	cmd.Flags().BoolVar(&resetCache, "reset-cache", false, "Clear all cached data")
 	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
 	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-removal hooks")
