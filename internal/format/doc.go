@@ -7,7 +7,7 @@
 //
 // Available placeholders for worktree_format config:
 //
-//   - {repo}: Folder name of git repo (matches -r flag)
+//   - {repo}: Folder name of git repo
 //   - {branch}: Branch name as provided to the command
 //   - {origin}: Repository name from git origin URL (falls back to {repo})
 //

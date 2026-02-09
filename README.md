@@ -42,15 +42,6 @@ wt config init            # Create ~/.wt/config.toml
 wt config init -s         # Print default config to stdout (for review)
 ```
 
-Then edit `~/.wt/config.toml` to set your worktree directory:
-
-```toml
-worktree_dir = "~/Git/worktrees"
-
-# Optional: separate directory where repos live
-# repo_dir = "~/Code"
-```
-
 ### 2. Register Repos
 
 ```bash
@@ -327,12 +318,6 @@ wt config hooks              # List configured hooks
 ### Basic Settings
 
 ```toml
-# Directory for new worktrees (must be absolute or start with ~)
-worktree_dir = "~/Git/worktrees"
-
-# Where repos live (for repo: lookups, defaults to worktree_dir)
-repo_dir = "~/Git"
-
 # Default sort order for list: "created", "repo", "branch"
 default_sort = "created"
 
@@ -496,31 +481,6 @@ wt completion bash > ~/.local/share/bash-completion/completions/wt
 # Zsh (add ~/.zfunc to fpath in .zshrc)
 wt completion zsh > ~/.zfunc/_wt
 ```
-
-## Command Reference
-
-Common commands have short aliases (shown in `wt --help`): `co`, `ls`, `p`, `r`, `x`.
-
-| Command | Description |
-|---------|-------------|
-| `wt checkout` | Checkout worktree for branch |
-| `wt list` | List worktrees |
-| `wt prune` | Remove merged worktrees |
-| `wt repo` | Manage repositories |
-| `wt pr checkout` | Checkout PR (clones if needed) |
-| `wt pr create` | Create PR for current branch |
-| `wt pr view` | View PR details or open in browser |
-| `wt pr merge` | Merge PR and clean up |
-| `wt exec` | Run command in worktree |
-| `wt cd` | Print worktree/repo path |
-| `wt note` | Manage branch notes |
-| `wt label` | Manage repo labels |
-| `wt hook` | Run configured hook |
-| `wt config` | Manage configuration |
-| `wt init` | Output shell wrapper for cd |
-| `wt completion` | Generate shell completions |
-
-Run `wt <command> --help` for detailed usage.
 
 ## Development
 

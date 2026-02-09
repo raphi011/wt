@@ -27,7 +27,7 @@ type Context struct {
 	WorktreeDir string            // absolute worktree path
 	RepoDir     string            // absolute main repo path
 	Branch      string            // branch name
-	Repo        string            // folder name of git repo (matches -r flag)
+	Repo        string            // folder name of git repo
 	Origin      string            // repo name from git origin URL (falls back to Repo)
 	Trigger     string            // command that triggered the hook (checkout, pr, prune, merge)
 	Env         map[string]string // custom variables from --arg key=value flags

@@ -28,7 +28,7 @@
 //   - {worktree-dir}: Absolute worktree path
 //   - {repo-dir}: Absolute main repo path
 //   - {branch}: Branch name
-//   - {repo}: Folder name of git repo (matches -r flag)
+//   - {repo}: Folder name of git repo
 //   - {origin}: Repository name from git origin (falls back to {repo})
 //   - {trigger}: Command that triggered the hook (checkout, pr, prune, merge)
 //

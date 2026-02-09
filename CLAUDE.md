@@ -66,12 +66,7 @@ internal/ui/             - Terminal UI components
 
 **Worktree naming convention** - Worktrees are created as `<repo-name>-<branch>` (e.g., `wt-feature-branch`). The repo name is extracted from git origin URL.
 
-**Path handling** - Directory configuration is done via config file or environment variables (no `-d` flag). The tool fails if the directory doesn't exist (no automatic mkdir). Configuration sources (highest priority first):
-- `WT_WORKTREE_DIR` env var - target directory for worktrees
-- `WT_REPO_DIR` env var - directory to scan for repos
-- `worktree_dir` in config file
-- `repo_dir` in config file
-- Falls back to current directory if unset
+**Path handling** - Worktree placement is controlled by `checkout.worktree_format` (template with `{repo}`, `{branch}`, `{origin}` placeholders). Repos are explicitly registered via `wt repo add` and tracked in the registry (`~/.wt/repos.json`).
 
 **MR/PR status** - Uses `gh pr list` or `glab mr list` to fetch merge request info (auto-detected). States: merged, open, closed.
 

@@ -8,12 +8,6 @@ import (
 
 func TestDefault(t *testing.T) {
 	cfg := Default()
-	if cfg.WorktreeDir != "" {
-		t.Errorf("expected worktree dir '', got %q", cfg.WorktreeDir)
-	}
-	if cfg.RepoDir != "" {
-		t.Errorf("expected repo dir '', got %q", cfg.RepoDir)
-	}
 	if cfg.Checkout.WorktreeFormat != DefaultWorktreeFormat {
 		t.Errorf("expected checkout.worktree_format %q, got %q", DefaultWorktreeFormat, cfg.Checkout.WorktreeFormat)
 	}
@@ -29,59 +23,6 @@ func TestLoadNonexistent(t *testing.T) {
 	}
 	// Empty DefaultPath is valid (means not configured)
 	_ = cfg
-}
-
-func TestValidatePath(t *testing.T) {
-	tests := []struct {
-		path    string
-		wantErr bool
-	}{
-		{"", false},                // empty is allowed
-		{"~/Git/worktrees", false}, // tilde path
-		{"~", false},               // just tilde
-		{"/absolute/path", false},  // absolute path
-		{".", true},                // relative - not allowed
-		{"..", true},               // relative - not allowed
-		{"relative/path", true},    // relative - not allowed
-		{"./foo", true},            // relative - not allowed
-		{"../foo", true},           // relative - not allowed
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
-			err := ValidatePath(tt.path, "test_field")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidatePath(%q) error = %v, wantErr %v", tt.path, err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestRepoScanDir(t *testing.T) {
-	tests := []struct {
-		name        string
-		worktreeDir string
-		repoDir     string
-		expected    string
-	}{
-		{"both empty", "", "", ""},
-		{"only worktree_dir", "/worktrees", "", "/worktrees"},
-		{"only repo_dir", "", "/repos", "/repos"},
-		{"both set - repo_dir takes precedence", "/worktrees", "/repos", "/repos"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := Config{
-				WorktreeDir: tt.worktreeDir,
-				RepoDir:     tt.repoDir,
-			}
-			result := cfg.RepoScanDir()
-			if result != tt.expected {
-				t.Errorf("RepoScanDir() = %q, want %q", result, tt.expected)
-			}
-		})
-	}
 }
 
 func TestParseHooksConfig(t *testing.T) {
@@ -236,53 +177,6 @@ func TestDefaultConfigIsValidTOML(t *testing.T) {
 	}
 }
 
-func TestDefaultConfigWithDirIsValidTOML(t *testing.T) {
-	content := DefaultConfigWithDir("~/Git/worktrees")
-	var raw rawConfig
-	if _, err := toml.Decode(content, &raw); err != nil {
-		t.Errorf("DefaultConfigWithDir() produces invalid TOML: %v\nContent:\n%s", err, content)
-	}
-
-	// Verify the worktree_dir was set correctly
-	if raw.WorktreeDir != "~/Git/worktrees" {
-		t.Errorf("worktree_dir = %q, want %q", raw.WorktreeDir, "~/Git/worktrees")
-	}
-}
-
-func TestDefaultConfigWithDirsIsValidTOML(t *testing.T) {
-	content := DefaultConfigWithDirs("~/Git/worktrees", "~/Code")
-	var raw rawConfig
-	if _, err := toml.Decode(content, &raw); err != nil {
-		t.Errorf("DefaultConfigWithDirs() produces invalid TOML: %v\nContent:\n%s", err, content)
-	}
-
-	// Verify both dirs were set correctly
-	if raw.WorktreeDir != "~/Git/worktrees" {
-		t.Errorf("worktree_dir = %q, want %q", raw.WorktreeDir, "~/Git/worktrees")
-	}
-	if raw.RepoDir != "~/Code" {
-		t.Errorf("repo_dir = %q, want %q", raw.RepoDir, "~/Code")
-	}
-}
-
-func TestDefaultConfigWithDirsNoRepoDir(t *testing.T) {
-	// When repo_dir is empty, it should not appear in the output
-	content := DefaultConfigWithDirs("~/Git/worktrees", "")
-	var raw rawConfig
-	if _, err := toml.Decode(content, &raw); err != nil {
-		t.Errorf("DefaultConfigWithDirs() produces invalid TOML: %v\nContent:\n%s", err, content)
-	}
-
-	// Verify worktree_dir was set
-	if raw.WorktreeDir != "~/Git/worktrees" {
-		t.Errorf("worktree_dir = %q, want %q", raw.WorktreeDir, "~/Git/worktrees")
-	}
-	// Verify repo_dir is empty (not set)
-	if raw.RepoDir != "" {
-		t.Errorf("repo_dir = %q, want empty", raw.RepoDir)
-	}
-}
-
 func TestAutoFetchParsing(t *testing.T) {
 	// Verify auto_fetch is parsed correctly from TOML under [checkout] section
 	tests := []struct {
@@ -306,30 +200,6 @@ auto_fetch = false`, false},
 			}
 			if raw.Checkout.AutoFetch != tt.expected {
 				t.Errorf("Checkout.AutoFetch = %v, want %v", raw.Checkout.AutoFetch, tt.expected)
-			}
-		})
-	}
-}
-
-func TestDefaultConfigWithDirSpecialChars(t *testing.T) {
-	// Test with paths containing special characters that need TOML escaping
-	paths := []string{
-		"/path/with spaces/worktrees",
-		`/path/with\backslash`,
-		"/path/with'quotes",
-		`/path/with"doublequotes`,
-	}
-
-	for _, path := range paths {
-		t.Run(path, func(t *testing.T) {
-			content := DefaultConfigWithDir(path)
-			var raw rawConfig
-			if _, err := toml.Decode(content, &raw); err != nil {
-				t.Errorf("DefaultConfigWithDir(%q) produces invalid TOML: %v", path, err)
-				return
-			}
-			if raw.WorktreeDir != path {
-				t.Errorf("worktree_dir = %q, want %q", raw.WorktreeDir, path)
 			}
 		})
 	}
@@ -471,7 +341,7 @@ func TestDefaultSortValidation(t *testing.T) {
 			// Also verify TOML round-trip maps the field correctly
 			input := `default_sort = "` + tt.sort + `"`
 			if tt.sort == "" {
-				input = `worktree_dir = "/tmp"`
+				input = `default_sort = ""`
 			}
 			var raw rawConfig
 			if _, err := toml.Decode(input, &raw); err != nil {

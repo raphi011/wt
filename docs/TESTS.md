@@ -103,7 +103,7 @@ Generated: 2026-02-01
 | `TestCheckout_ByRepoName` | Tests checkout in a specific repo by name. |
 | `TestCheckout_ByLabel` | Tests checkout in repos by label. |
 | `TestCheckout_SlashBranchName` | Tests checkout with slash in branch name. |
-| `TestCheckout_NotInRepo` | Tests that checkout fails when not in repo and no -r flag. |
+| `TestCheckout_NotInRepo` | Tests that checkout fails when not in repo. |
 
 ## wt label
 

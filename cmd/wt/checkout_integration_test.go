@@ -281,7 +281,7 @@ func TestCheckout_SlashBranchName(t *testing.T) {
 	}
 }
 
-// TestCheckout_NotInRepo tests that checkout fails when not in repo and no -r flag.
+// TestCheckout_NotInRepo tests that checkout fails when not in repo.
 //
 // Scenario: User runs `wt checkout branch` outside of any git repo
 // Expected: Command fails with error
