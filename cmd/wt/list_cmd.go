@@ -3,20 +3,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"sort"
 
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
-	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/static"
-	"github.com/raphi011/wt/internal/ui/styles"
 )
 
 func newListCmd() *cobra.Command {
@@ -90,27 +87,16 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 			}
 
 			// Load PR cache
-			prCache, err := prcache.Load()
-			if err != nil {
-				l.Printf("Warning: failed to load PR cache: %v\n", err)
-				prCache = prcache.New()
-			}
+			prCache := prcache.Load()
 
 			// Refresh PR status if requested
 			if refresh {
-				refreshPRStatusForWorktrees(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge, nil)
-			}
-
-			// Populate PR fields from cache
-			for i := range allWorktrees {
-				folderName := filepath.Base(allWorktrees[i].Path)
-				if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.Number > 0 {
-					allWorktrees[i].PRNumber = pr.Number
-					allWorktrees[i].PRState = pr.State
-					allWorktrees[i].PRURL = pr.URL
-					allWorktrees[i].PRDraft = pr.IsDraft
+				if f := refreshPRs(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge); f > 0 {
+					l.Printf("Warning: failed to fetch PR status for %d branch(es)\n", f)
 				}
 			}
+
+			populatePRFields(allWorktrees, prCache)
 
 			// Save PR cache if modified
 			if err := prCache.SaveIfDirty(); err != nil {
@@ -148,19 +134,12 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 			}
 
 			// Build table rows
-			headers := []string{"REPO", "BRANCH", "PR", "COMMIT", "CREATED", "NOTE"}
 			var rows [][]string
 			for _, wt := range allWorktrees {
-				created := format.RelativeTime(wt.CreatedAt)
-				commit := wt.CommitHash
-				if len(commit) > 7 {
-					commit = commit[:7]
-				}
-				pr := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.PRDraft, wt.PRURL)
-				rows = append(rows, []string{wt.RepoName, wt.Branch, pr, commit, created, wt.Note})
+				rows = append(rows, static.WorktreeTableRow(wt))
 			}
 
-			out.Print(static.RenderTable(headers, rows))
+			out.Print(static.RenderTable(static.WorktreeTableHeaders, rows))
 
 			return nil
 		},

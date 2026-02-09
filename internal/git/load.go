@@ -2,7 +2,6 @@ package git
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
@@ -72,15 +71,9 @@ func loadWorktreesForRepo(ctx context.Context, repo RepoRef) ([]Worktree, *LoadW
 	// Batch-fetch branch config (notes + upstreams) in one git call
 	notes, upstreams := GetAllBranchConfig(ctx, repo.Path)
 
-	// Get origin URL once per repo (non-fatal: PR refresh will skip repos without origin)
-	var warn *LoadWarning
-	originURL, err := GetOriginURL(ctx, repo.Path)
-	if err != nil {
-		warn = &LoadWarning{
-			RepoName: repo.Name,
-			Err:      fmt.Errorf("get origin URL: %w", err),
-		}
-	}
+	// Get origin URL once per repo. Non-fatal: repos without an "origin"
+	// remote get originURL="" and simply skip PR refresh downstream.
+	originURL, _ := GetOriginURL(ctx, repo.Path) //nolint:errcheck
 
 	worktrees := make([]Worktree, 0, len(wtInfos))
 	for _, wti := range wtInfos {
@@ -102,5 +95,5 @@ func loadWorktreesForRepo(ctx context.Context, repo RepoRef) ([]Worktree, *LoadW
 		})
 	}
 
-	return worktrees, warn
+	return worktrees, nil
 }
