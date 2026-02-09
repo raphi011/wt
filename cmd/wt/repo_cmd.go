@@ -371,7 +371,9 @@ Clones directly into .git (no working tree):
   └── .git/    # bare git repo contents (HEAD, objects/, refs/, etc.)
 
 This allows worktrees to be created as siblings to .git.
-Use -b to create an initial worktree for a branch.
+
+By default, creates a worktree for the default branch (main/master).
+Use -b to specify a different branch instead.
 
 Supports both full URLs and short-form org/repo format:
   - Full URLs use git clone directly
@@ -489,21 +491,31 @@ If destination is not specified, clones into the current directory.`,
 
 			fmt.Printf("Cloned repo: %s (%s)\n", repoName, absPath)
 
-			// Create an initial worktree if branch specified
-			if branch != "" {
+			// Determine which branch to create worktree for
+			worktreeBranch := branch
+			gitDir := filepath.Join(absPath, ".git")
+			if branch == "" {
+				// Auto-detect default branch if no explicit branch specified
+				if git.RefExists(ctx, gitDir, "HEAD") {
+					worktreeBranch = git.GetDefaultBranch(ctx, gitDir)
+					l.Debug("auto-detected default branch", "branch", worktreeBranch)
+				}
+			}
+
+			// Create worktree if we have a branch
+			if worktreeBranch != "" {
 				format := worktreeFormat
 				if format == "" {
 					format = cfg.Checkout.WorktreeFormat
 				}
-				wtPath := resolveWorktreePathWithConfig(absPath, repoName, branch, format)
+				wtPath := resolveWorktreePathWithConfig(absPath, repoName, worktreeBranch, format)
 
-				l.Debug("creating initial worktree", "path", wtPath, "branch", branch)
+				l.Debug("creating initial worktree", "path", wtPath, "branch", worktreeBranch)
 
-				gitDir := filepath.Join(absPath, ".git")
-				if err := git.CreateWorktree(ctx, gitDir, wtPath, branch); err != nil {
+				if err := git.CreateWorktree(ctx, gitDir, wtPath, worktreeBranch); err != nil {
 					l.Printf("Warning: failed to create initial worktree: %v\n", err)
 				} else {
-					fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
+					fmt.Printf("Created worktree: %s (%s)\n", wtPath, worktreeBranch)
 				}
 			}
 
