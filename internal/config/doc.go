@@ -5,15 +5,11 @@
 //
 // # Configuration Sources (highest priority first)
 //
-//   - WT_WORKTREE_DIR env var: Target directory for worktrees
-//   - WT_REPO_DIR env var: Directory to scan for repositories
 //   - Config file settings
 //   - Default values
 //
 // # Key Settings
 //
-//   - worktree_dir: Base directory for new worktrees (must be absolute or ~/...)
-//   - repo_dir: Optional separate directory for repo scanning
 //   - checkout.worktree_format: Template for worktree folder names (default: "{repo}-{branch}")
 //   - checkout.base_ref: "local" or "remote" for new branch base (default: "remote")
 //   - checkout.auto_fetch: Fetch from origin before checkout (default: false)

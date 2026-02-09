@@ -16,7 +16,7 @@ var ValidPlaceholders = []string{"{repo}", "{branch}", "{origin}"}
 
 // FormatParams contains the values for placeholder substitution
 type FormatParams struct {
-	RepoName   string // folder name of git repo (matches -r flag)
+	RepoName   string // folder name of git repo
 	BranchName string // branch name as provided
 	Origin     string // repo name from git origin URL (falls back to RepoName if empty)
 }

@@ -105,8 +105,6 @@ type ThemeConfig struct {
 type Config struct {
 	RegistryPath  string            `toml:"-"` // Override ~/.wt/repos.json path (for testing)
 	HistoryPath   string            `toml:"-"` // Override ~/.wt/history.json path (for testing)
-	WorktreeDir   string            `toml:"worktree_dir"`
-	RepoDir       string            `toml:"repo_dir"`       // optional: where to find repos for -r/-l
 	DefaultSort   string            `toml:"default_sort"`   // "created", "repo", "branch" (default: "created")
 	DefaultLabels []string          `toml:"default_labels"` // labels for newly registered repos
 	Hooks         HooksConfig       `toml:"-"`              // custom parsing needed
@@ -116,24 +114,6 @@ type Config struct {
 	Prune         PruneConfig       `toml:"prune"`
 	Hosts         map[string]string `toml:"hosts"` // domain -> forge type mapping
 	Theme         ThemeConfig       `toml:"theme"` // UI theme/colors for interactive mode
-}
-
-// RepoScanDir returns the directory to scan for repositories.
-// Returns RepoDir if set, otherwise falls back to WorktreeDir.
-func (c *Config) RepoScanDir() string {
-	if c.RepoDir != "" {
-		return c.RepoDir
-	}
-	return c.WorktreeDir
-}
-
-// GetAbsWorktreeDir returns the absolute worktree directory, defaulting to cwd.
-func (c *Config) GetAbsWorktreeDir() (string, error) {
-	dir := c.WorktreeDir
-	if dir == "" {
-		dir = "."
-	}
-	return filepath.Abs(dir)
 }
 
 // DefaultWorktreeFormat is the default format for worktree folder names
@@ -160,8 +140,6 @@ func (c *CheckoutConfig) ShouldSetUpstream() bool {
 // Default returns the default configuration
 func Default() Config {
 	return Config{
-		WorktreeDir: "",
-		RepoDir:     "",
 		Checkout: CheckoutConfig{
 			WorktreeFormat: DefaultWorktreeFormat,
 		},
@@ -169,41 +147,6 @@ func Default() Config {
 			Default: "github",
 		},
 	}
-}
-
-// ValidatePath checks that the path is absolute or starts with ~
-// Returns error if path is relative (like "." or "..")
-func ValidatePath(path, fieldName string) error {
-	if path == "" {
-		return nil // Empty is allowed (means not configured)
-	}
-	// Allow ~ paths
-	if len(path) >= 1 && path[0] == '~' {
-		return nil
-	}
-	// Must be absolute
-	if !filepath.IsAbs(path) {
-		return fmt.Errorf("%s must be absolute or start with ~, got: %q", fieldName, path)
-	}
-	return nil
-}
-
-// expandPath expands ~ to the user's home directory
-func expandPath(path string) (string, error) {
-	if path == "" {
-		return "", nil
-	}
-	if len(path) >= 2 && path[:2] == "~/" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("expand ~: %w", err)
-		}
-		return filepath.Join(home, path[2:]), nil
-	}
-	if path == "~" {
-		return os.UserHomeDir()
-	}
-	return path, nil
 }
 
 // configPath returns the path to the config file
@@ -217,8 +160,6 @@ func configPath() (string, error) {
 
 // rawConfig is used for initial TOML parsing before processing hooks
 type rawConfig struct {
-	WorktreeDir   string                 `toml:"worktree_dir"`
-	RepoDir       string                 `toml:"repo_dir"`
 	DefaultSort   string                 `toml:"default_sort"`
 	DefaultLabels []string               `toml:"default_labels"`
 	Hooks         map[string]interface{} `toml:"hooks"`
@@ -234,8 +175,6 @@ type rawConfig struct {
 // Returns Default() if file doesn't exist (no error)
 // Returns error only if file exists but is invalid
 // Environment variables override config file values:
-// - WT_WORKTREE_DIR overrides worktree_dir
-// - WT_REPO_DIR overrides repo_dir
 // - WT_THEME overrides theme.name
 // - WT_THEME_MODE overrides theme.mode (auto, light, dark)
 func Load() (Config, error) {
@@ -263,8 +202,6 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		WorktreeDir:   raw.WorktreeDir,
-		RepoDir:       raw.RepoDir,
 		DefaultSort:   raw.DefaultSort,
 		DefaultLabels: raw.DefaultLabels,
 		Hooks:         parseHooksConfig(raw.Hooks),
@@ -274,34 +211,6 @@ func Load() (Config, error) {
 		Prune:         raw.Prune,
 		Hosts:         raw.Hosts,
 		Theme:         raw.Theme,
-	}
-
-	// Validate worktree_dir (must be absolute or start with ~)
-	if err := ValidatePath(cfg.WorktreeDir, "worktree_dir"); err != nil {
-		return Default(), err
-	}
-
-	// Validate repo_dir (must be absolute or start with ~)
-	if err := ValidatePath(cfg.RepoDir, "repo_dir"); err != nil {
-		return Default(), err
-	}
-
-	// Expand ~ in worktree_dir (shell doesn't expand in config files)
-	if cfg.WorktreeDir != "" {
-		expanded, err := expandPath(cfg.WorktreeDir)
-		if err != nil {
-			return Default(), fmt.Errorf("expand worktree_dir: %w", err)
-		}
-		cfg.WorktreeDir = expanded
-	}
-
-	// Expand ~ in repo_dir
-	if cfg.RepoDir != "" {
-		expanded, err := expandPath(cfg.RepoDir)
-		if err != nil {
-			return Default(), fmt.Errorf("expand repo_dir: %w", err)
-		}
-		cfg.RepoDir = expanded
 	}
 
 	// Validate forge.default (only "github", "gitlab", or empty allowed)
@@ -358,30 +267,6 @@ func Load() (Config, error) {
 
 // applyEnvOverrides applies environment variable overrides to config
 func applyEnvOverrides(cfg *Config) error {
-	// WT_WORKTREE_DIR overrides worktree_dir
-	if envDir := os.Getenv("WT_WORKTREE_DIR"); envDir != "" {
-		if err := ValidatePath(envDir, "WT_WORKTREE_DIR"); err != nil {
-			return err
-		}
-		expanded, err := expandPath(envDir)
-		if err != nil {
-			return fmt.Errorf("expand WT_WORKTREE_DIR: %w", err)
-		}
-		cfg.WorktreeDir = expanded
-	}
-
-	// WT_REPO_DIR overrides repo_dir
-	if envDir := os.Getenv("WT_REPO_DIR"); envDir != "" {
-		if err := ValidatePath(envDir, "WT_REPO_DIR"); err != nil {
-			return err
-		}
-		expanded, err := expandPath(envDir)
-		if err != nil {
-			return fmt.Errorf("expand WT_REPO_DIR: %w", err)
-		}
-		cfg.RepoDir = expanded
-	}
-
 	// WT_THEME overrides theme.name
 	if envTheme := os.Getenv("WT_THEME"); envTheme != "" {
 		cfg.Theme.Name = envTheme
@@ -493,19 +378,14 @@ func matchPattern(pattern, repoSpec string) bool {
 	return pattern == repoSpec
 }
 
-// defaultConfigAfterWorktreeDir is the config content after the worktree_dir line
-const defaultConfigAfterWorktreeDir = `
-# Optional: directory where repositories are stored (for -r/-l repo lookup)
-# If not set, uses worktree_dir for repo scanning
-# Useful when repos live in ~/Code but worktrees go to ~/Git/worktrees
-# Can also be set via WT_REPO_DIR env var (env overrides config)
-# repo_dir = "~/Code"
+// defaultConfig is the full default config template
+const defaultConfig = `# wt configuration
 
 # Checkout settings - controls worktree creation behavior
 [checkout]
 # Worktree folder naming format
 # Available placeholders:
-#   {repo}    - folder name of git repo (matches -r flag)
+#   {repo}    - folder name of git repo
 #   {branch}  - the branch name as provided
 #   {origin}  - repo name from git origin URL (falls back to {repo})
 # Example: "{origin}_{branch}" creates "origin-name_feature-branch"
@@ -552,7 +432,7 @@ worktree_format = "{repo}-{branch}"
 #   {worktree-dir} - absolute worktree path
 #   {repo-dir}     - absolute main repo path
 #   {branch}       - branch name
-#   {repo}         - folder name of git repo (matches -r flag)
+#   {repo}         - folder name of git repo
 #   {origin}       - repo name from git origin (falls back to {repo})
 #   {trigger}      - command that triggered the hook (checkout, pr, prune, merge)
 #   {key}          - custom variable passed via --arg key=value
@@ -681,35 +561,8 @@ worktree_format = "{repo}-{branch}"
 # nerdfont = true
 `
 
-// defaultConfig is the full default config template with worktree_dir commented out
-const defaultConfig = `# wt configuration
-
-# Base directory for new worktrees
-# Must be an absolute path or start with ~ (no relative paths like "." or "..")
-# Examples: "/Users/you/Git/worktrees" or "~/Git/worktrees"
-# Can also be set via WT_WORKTREE_DIR env var (env overrides config)
-# worktree_dir = "~/Git/worktrees"
-` + defaultConfigAfterWorktreeDir
-
 // DefaultConfig returns the default configuration content.
 func DefaultConfig() string {
 	return defaultConfig
 }
 
-// DefaultConfigWithDir returns the default configuration with worktree_dir set.
-func DefaultConfigWithDir(worktreeDir string) string {
-	return DefaultConfigWithDirs(worktreeDir, "")
-}
-
-// DefaultConfigWithDirs returns the default configuration with worktree_dir and optional repo_dir set.
-func DefaultConfigWithDirs(worktreeDir, repoDir string) string {
-	repoDirLine := ""
-	if repoDir != "" {
-		repoDirLine = fmt.Sprintf("\n# Directory where repositories are stored\nrepo_dir = %q\n", repoDir)
-	}
-	return fmt.Sprintf(`# wt configuration
-
-# Base directory for new worktrees
-worktree_dir = %q
-%s`+defaultConfigAfterWorktreeDir, worktreeDir, repoDirLine)
-}
