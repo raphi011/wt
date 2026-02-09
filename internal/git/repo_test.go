@@ -109,3 +109,52 @@ func TestCreateWorktreeResult(t *testing.T) {
 		t.Error("expected AlreadyExists to be true")
 	}
 }
+
+func TestParseRemoteRef(t *testing.T) {
+	// Create a git repo with origin remote
+	tmpDir := t.TempDir()
+	tmpDir, _ = filepath.EvalSymlinks(tmpDir)
+	repoPath := filepath.Join(tmpDir, "test-repo")
+	ctx := context.Background()
+
+	if err := runGit(ctx, "", "init", repoPath); err != nil {
+		t.Fatalf("failed to init repo: %v", err)
+	}
+	// Add origin remote
+	if err := runGit(ctx, repoPath, "remote", "add", "origin", "https://github.com/test/repo.git"); err != nil {
+		t.Fatalf("failed to add origin: %v", err)
+	}
+	// Add upstream remote
+	if err := runGit(ctx, repoPath, "remote", "add", "upstream", "https://github.com/upstream/repo.git"); err != nil {
+		t.Fatalf("failed to add upstream: %v", err)
+	}
+
+	tests := []struct {
+		ref              string
+		wantRemote       string
+		wantBranch       string
+		wantIsRemote     bool
+	}{
+		{"main", "", "main", false},                    // Simple branch, no remote
+		{"feature/test", "", "feature/test", false},    // Branch with slash, no matching remote
+		{"origin/main", "origin", "main", true},        // Origin remote ref
+		{"origin/feature/test", "origin", "feature/test", true}, // Origin with nested branch
+		{"upstream/develop", "upstream", "develop", true}, // Upstream remote ref
+		{"nonexistent/branch", "", "nonexistent/branch", false}, // Non-existent remote
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.ref, func(t *testing.T) {
+			remote, branch, isRemote := ParseRemoteRef(ctx, repoPath, tt.ref)
+			if remote != tt.wantRemote {
+				t.Errorf("remote: got %q, want %q", remote, tt.wantRemote)
+			}
+			if branch != tt.wantBranch {
+				t.Errorf("branch: got %q, want %q", branch, tt.wantBranch)
+			}
+			if isRemote != tt.wantIsRemote {
+				t.Errorf("isRemote: got %v, want %v", isRemote, tt.wantIsRemote)
+			}
+		})
+	}
+}

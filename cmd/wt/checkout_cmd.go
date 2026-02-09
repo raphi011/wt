@@ -223,16 +223,33 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 
 	// Fetch if requested (skip for empty repos — nothing to fetch)
 	if fetch && repoHasCommits {
-		var fetchBranch string
+		var fetchRemote, fetchBranch string
 		if base != "" {
-			fetchBranch = base
+			// Check if base is an explicit remote ref (e.g., origin/develop, upstream/main)
+			remote, branchPart, isRemote := git.ParseRemoteRef(ctx, gitDir, base)
+			if isRemote {
+				fetchRemote = remote
+				fetchBranch = branchPart
+			} else if cfg.Checkout.BaseRef == "local" {
+				// Local base ref + --fetch: skip fetch and warn
+				l.Printf("Warning: --fetch has no effect with local base ref %q\n", base)
+				fetchBranch = "" // skip fetch
+			} else {
+				fetchRemote = "origin"
+				fetchBranch = base
+			}
 		} else if newBranch {
+			fetchRemote = "origin"
 			fetchBranch = git.GetDefaultBranch(ctx, gitDir)
 		} else {
+			fetchRemote = "origin"
 			fetchBranch = branch
 		}
-		if err := git.FetchBranch(ctx, gitDir, fetchBranch); err != nil {
-			l.Printf("Warning: fetch failed: %v\n", err)
+
+		if fetchBranch != "" {
+			if err := git.FetchBranchFromRemote(ctx, gitDir, fetchRemote, fetchBranch); err != nil {
+				l.Printf("Warning: fetch failed for %s/%s: %v (continuing with local refs)\n", fetchRemote, fetchBranch, err)
+			}
 		}
 	}
 
@@ -242,8 +259,11 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 		if baseRef == "" {
 			baseRef = git.GetDefaultBranch(ctx, gitDir)
 		}
-		// Use remote ref by default
-		if cfg.Checkout.BaseRef != "local" {
+
+		// Check if base is an explicit remote ref (e.g., origin/develop, upstream/main)
+		_, _, isRemote := git.ParseRemoteRef(ctx, gitDir, baseRef)
+		// Use remote ref by default, unless already explicit or config says local
+		if !isRemote && cfg.Checkout.BaseRef != "local" {
 			baseRef = "origin/" + baseRef
 		}
 

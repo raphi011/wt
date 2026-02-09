@@ -316,11 +316,36 @@ default_sort = "id"
 worktree_format = "{repo}-{branch}"
 
 # Base ref for new branches: "remote" (default) or "local"
+# - "remote": branches from origin/<base> (ensures latest remote state)
+# - "local": branches from local <base> (useful for offline work)
 base_ref = "remote"
 
 # Auto-fetch from origin before checkout (default: false)
+# Note: with base_ref="local", --fetch is skipped (warns) since fetch doesn't affect local refs
 auto_fetch = true
 ```
+
+**Base branch resolution (`--base` flag):**
+
+| `--base` value | `base_ref` config | Branch created from |
+|----------------|-------------------|---------------------|
+| (none) | remote | `origin/<default>` (main/master) |
+| (none) | local | local default branch |
+| `develop` | remote | `origin/develop` |
+| `develop` | local | local `develop` |
+| `origin/develop` | (ignored) | `origin/develop` |
+| `upstream/main` | (ignored) | `upstream/main` |
+
+Explicit remote refs (`origin/branch`, `upstream/branch`) always override `base_ref` config.
+
+**Fetch behavior (`--fetch` / `auto_fetch`):**
+
+| Scenario | Fetch behavior |
+|----------|----------------|
+| `--base origin/develop` | Fetches `develop` from `origin` |
+| `--base upstream/main` | Fetches `main` from `upstream` |
+| `--base develop` + `base_ref=remote` | Fetches `develop` from `origin` |
+| `--base develop` + `base_ref=local` | **Skipped with warning** |
 
 ### Hooks
 

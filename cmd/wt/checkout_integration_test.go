@@ -1699,3 +1699,202 @@ func TestCheckout_HistoryEnablesCdNoArgs(t *testing.T) {
 		t.Errorf("expected cd output %q, got %q", wtPath, output)
 	}
 }
+
+// TestCheckout_ExplicitUpstreamRemoteRef tests --base with upstream/branch syntax.
+//
+// Scenario: User runs `wt checkout -b feature --fetch --base upstream/develop`
+// Expected: Fetch pulls develop from upstream (not origin), worktree created from it
+func TestCheckout_ExplicitUpstreamRemoteRef(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Create the main repo with origin
+	repoPath, originPath := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
+
+	// Create a second remote (upstream) with different content
+	upstreamPath := filepath.Join(tmpDir, "upstream-repo")
+	runGitCommand(tmpDir, "clone", "--bare", originPath, upstreamPath)
+
+	// Clone upstream to add a unique commit
+	upstreamClone := filepath.Join(tmpDir, "upstream-clone")
+	runGitCommand(tmpDir, "clone", upstreamPath, upstreamClone)
+	runGitCommand(upstreamClone, "config", "user.email", "test@test.com")
+	runGitCommand(upstreamClone, "config", "user.name", "Test User")
+	runGitCommand(upstreamClone, "checkout", "-b", "develop")
+	addCommit(t, upstreamClone, "upstream-only.txt", "Upstream commit")
+	runGitCommand(upstreamClone, "push", "origin", "develop")
+
+	// Add upstream as remote to main repo
+	runGitCommand(repoPath, "remote", "add", "upstream", upstreamPath)
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--fetch", "--base", "upstream/develop"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the branch was created from upstream/develop (should have upstream-only.txt)
+	upstreamFile := filepath.Join(wtPath, "upstream-only.txt")
+	if _, err := os.Stat(upstreamFile); os.IsNotExist(err) {
+		t.Error("feature branch should have upstream-only.txt (created from upstream/develop)")
+	}
+}
+
+// TestCheckout_LocalBaseRefWithFetchWarning tests that --fetch with local base_ref prints warning.
+//
+// Scenario: User runs `wt checkout -b feature --fetch --base develop` with base_ref=local
+// Expected: Warning is printed, fetch is skipped, branch is created from local develop
+func TestCheckout_LocalBaseRefWithFetchWarning(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	// Create a local develop branch
+	runGitCommand(repoPath, "checkout", "-b", "develop")
+	addCommit(t, repoPath, "local-develop.txt", "Local develop commit")
+	runGitCommand(repoPath, "checkout", "main")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local", // Key: local base ref
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--fetch", "--base", "develop"})
+
+	// Command should succeed (fetch is skipped with warning)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify branch was created from LOCAL develop (has local-develop.txt)
+	localFile := filepath.Join(wtPath, "local-develop.txt")
+	if _, err := os.Stat(localFile); os.IsNotExist(err) {
+		t.Error("feature branch should have local-develop.txt (created from local develop)")
+	}
+}
+
+// TestCheckout_ExplicitOriginRemoteRef tests --base with origin/branch syntax.
+//
+// Scenario: User runs `wt checkout -b feature --base origin/develop` (even with base_ref=local)
+// Expected: Explicit remote ref overrides base_ref config
+func TestCheckout_ExplicitOriginRemoteRef(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath, originPath := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
+
+	// Create and push develop to origin with unique content
+	clonePath := filepath.Join(tmpDir, "origin-clone")
+	runGitCommand(tmpDir, "clone", originPath, clonePath)
+	runGitCommand(clonePath, "config", "user.email", "test@test.com")
+	runGitCommand(clonePath, "config", "user.name", "Test User")
+	runGitCommand(clonePath, "checkout", "-b", "develop")
+	addCommit(t, clonePath, "origin-develop.txt", "Origin develop commit")
+	runGitCommand(clonePath, "push", "origin", "develop")
+
+	// Fetch in main repo so origin/develop exists
+	runGitCommand(repoPath, "fetch", "origin", "develop")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local", // Even with local, explicit remote ref should be used
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--base", "origin/develop"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify branch was created from origin/develop (has origin-develop.txt)
+	originFile := filepath.Join(wtPath, "origin-develop.txt")
+	if _, err := os.Stat(originFile); os.IsNotExist(err) {
+		t.Error("feature branch should have origin-develop.txt (explicit origin/develop overrides base_ref=local)")
+	}
+}
