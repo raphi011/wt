@@ -5,7 +5,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-
 	"github.com/atotto/clipboard"
 	"github.com/spf13/cobra"
 
@@ -52,11 +51,19 @@ With no arguments, returns the most recently accessed worktree.`,
 				return fmt.Errorf("load registry: %w", err)
 			}
 
-			var targetPath string
+			var targetPath, repoName, branchName string
 
 			if interactive {
 				// Interactive mode: show fuzzy list of all worktrees
 				l := log.FromContext(ctx)
+
+				// Load history for recency ranking
+				hist, err := history.Load(cfg.GetHistoryPath())
+				if err != nil {
+					l.Debug("failed to load history", "error", err)
+					hist = &history.History{}
+				}
+
 				var allWorktrees []flows.CdWorktreeInfo
 
 				allRepos := filterOrphanedRepos(l, reg.Repos)
@@ -69,13 +76,17 @@ With no arguments, returns the most recently accessed worktree.`,
 					}
 					notes, _ := git.GetAllBranchConfig(ctx, repo.Path)
 					for _, wt := range worktrees {
-						allWorktrees = append(allWorktrees, flows.CdWorktreeInfo{
+						info := flows.CdWorktreeInfo{
 							RepoName: repo.Name,
 							Branch:   wt.Branch,
 							Path:     wt.Path,
-							IsDirty:  git.IsDirty(ctx, wt.Path),
 							Note:     notes[wt.Branch],
-						})
+						}
+						if entry := hist.FindByPath(wt.Path); entry != nil {
+							info.LastAccess = entry.LastAccess
+							info.AccessCount = entry.AccessCount
+						}
+						allWorktrees = append(allWorktrees, info)
 					}
 				}
 
@@ -83,8 +94,26 @@ With no arguments, returns the most recently accessed worktree.`,
 					return fmt.Errorf("no worktrees found")
 				}
 
-				// Sort by repo/branch for consistent ordering
+				// Clean stale history entries while we have the data
+				if removed := hist.RemoveStale(); removed > 0 {
+					if err := hist.Save(cfg.GetHistoryPath()); err != nil {
+						l.Debug("failed to save history after cleanup", "error", err)
+					}
+				}
+
+				// Sort: worktrees with history first (by LastAccess desc),
+				// then worktrees without history (alphabetical by repo:branch)
 				sort.Slice(allWorktrees, func(i, j int) bool {
+					iHasHistory := !allWorktrees[i].LastAccess.IsZero()
+					jHasHistory := !allWorktrees[j].LastAccess.IsZero()
+
+					if iHasHistory && jHasHistory {
+						return allWorktrees[i].LastAccess.After(allWorktrees[j].LastAccess)
+					}
+					if iHasHistory != jHasHistory {
+						return iHasHistory
+					}
+					// Both without history: alphabetical
 					if allWorktrees[i].RepoName != allWorktrees[j].RepoName {
 						return allWorktrees[i].RepoName < allWorktrees[j].RepoName
 					}
@@ -102,26 +131,38 @@ With no arguments, returns the most recently accessed worktree.`,
 				}
 
 				targetPath = result.SelectedPath
+				repoName = result.RepoName
+				branchName = result.Branch
 			} else if len(args) == 0 {
 				// No arguments: return most recently accessed worktree
-				mostRecent, err := history.GetMostRecent(cfg.GetHistoryPath())
+				hist, err := history.Load(cfg.GetHistoryPath())
 				if err != nil {
 					return fmt.Errorf("load history: %w", err)
 				}
-				if mostRecent == "" {
+				if len(hist.Entries) == 0 {
 					return fmt.Errorf("no worktree history (use wt cd <branch> first)")
 				}
 
-				// Verify the path still exists
-				if _, err := os.Stat(mostRecent); os.IsNotExist(err) {
-					return fmt.Errorf("most recent worktree no longer exists: %s", mostRecent)
+				// Clean stale entries and find first valid
+				if removed := hist.RemoveStale(); removed > 0 {
+					if err := hist.Save(cfg.GetHistoryPath()); err != nil {
+						l := log.FromContext(ctx)
+						l.Debug("failed to save history after cleanup", "error", err)
+					}
 				}
 
-				targetPath = mostRecent
+				if len(hist.Entries) == 0 {
+					return fmt.Errorf("no worktree history (all entries stale)")
+				}
+
+				hist.SortByRecency()
+				entry := hist.Entries[0]
+				targetPath = entry.Path
+				repoName = entry.RepoName
+				branchName = entry.Branch
 			} else {
 				// Parse positional argument
 				arg := args[0]
-				var repoName, branchName string
 
 				if idx := strings.Index(arg, ":"); idx >= 0 {
 					// repo:branch format
@@ -203,11 +244,12 @@ With no arguments, returns the most recently accessed worktree.`,
 					}
 
 					targetPath = matches[0].path
+					repoName = matches[0].repoName
 				}
 			}
 
 			// Record access to history for wt cd
-			if err := history.RecordAccess(targetPath, cfg.GetHistoryPath()); err != nil {
+			if err := history.RecordAccess(targetPath, repoName, branchName, cfg.GetHistoryPath()); err != nil {
 				l := log.FromContext(ctx)
 				l.Debug("failed to record history", "error", err)
 			}

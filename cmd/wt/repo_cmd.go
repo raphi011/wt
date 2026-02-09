@@ -13,6 +13,7 @@ import (
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
@@ -525,6 +526,11 @@ If destination is not specified, clones into the current directory.`,
 					l.Printf("Warning: failed to create initial worktree: %v\n", err)
 				} else {
 					fmt.Printf("Created worktree: %s (%s)\n", wtPath, worktreeBranch)
+
+					// Record to history for wt cd
+					if err := history.RecordAccess(wtPath, repoName, worktreeBranch, cfg.GetHistoryPath()); err != nil {
+						l.Debug("failed to record history", "error", err)
+					}
 				}
 			}
 

@@ -46,11 +46,9 @@ func TestCdWorktreeInfo_Structure(t *testing.T) {
 		RepoName: "my-repo",
 		Branch:   "feature-branch",
 		Path:     "/path/to/worktree",
-		IsDirty:  true,
 		Note:     "WIP: implementing feature",
 	}
 
-	// Verify all fields are accessible
 	if info.RepoName != "my-repo" {
 		t.Errorf("RepoName = %q, want my-repo", info.RepoName)
 	}
@@ -59,9 +57,6 @@ func TestCdWorktreeInfo_Structure(t *testing.T) {
 	}
 	if info.Path != "/path/to/worktree" {
 		t.Errorf("Path = %q, want /path/to/worktree", info.Path)
-	}
-	if !info.IsDirty {
-		t.Error("IsDirty should be true")
 	}
 	if info.Note != "WIP: implementing feature" {
 		t.Errorf("Note = %q, want 'WIP: implementing feature'", info.Note)
