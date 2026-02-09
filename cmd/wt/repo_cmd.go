@@ -498,7 +498,16 @@ If destination is not specified, clones into the current directory.`,
 				// Auto-detect default branch if no explicit branch specified
 				if git.RefExists(ctx, gitDir, "HEAD") {
 					worktreeBranch = git.GetDefaultBranch(ctx, gitDir)
-					l.Debug("auto-detected default branch", "branch", worktreeBranch)
+					// Verify the detected branch actually exists before attempting worktree creation
+					// Use LocalBranchExists since bare clones have refs/heads/* but not refs/remotes/origin/*
+					if !git.LocalBranchExists(ctx, gitDir, worktreeBranch) {
+						l.Printf("Warning: default branch %q not found, skipping worktree creation\n", worktreeBranch)
+						worktreeBranch = ""
+					} else {
+						l.Debug("auto-detected default branch", "branch", worktreeBranch)
+					}
+				} else {
+					l.Debug("skipping worktree creation: repo has no commits")
 				}
 			}
 

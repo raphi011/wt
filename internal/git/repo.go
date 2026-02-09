@@ -84,13 +84,23 @@ func GetDefaultBranch(ctx context.Context, repoPath string) string {
 		}
 	}
 
-	// Fallback: check if origin/main exists
+	// Fallback: check if origin/main exists (remote tracking ref)
 	if runGit(ctx, repoPath, "rev-parse", "--verify", "origin/main") == nil {
 		return "main"
 	}
 
-	// Fallback: check if origin/master exists
+	// Fallback: check if origin/master exists (remote tracking ref)
 	if runGit(ctx, repoPath, "rev-parse", "--verify", "origin/master") == nil {
+		return "master"
+	}
+
+	// For bare clones, remote tracking refs may not exist yet.
+	// Check local branches as fallback.
+	if runGit(ctx, repoPath, "rev-parse", "--verify", "refs/heads/main") == nil {
+		return "main"
+	}
+
+	if runGit(ctx, repoPath, "rev-parse", "--verify", "refs/heads/master") == nil {
 		return "master"
 	}
 
@@ -265,6 +275,12 @@ func RefExists(ctx context.Context, repoPath, ref string) bool {
 // RemoteBranchExists checks if a remote tracking branch exists.
 func RemoteBranchExists(ctx context.Context, repoPath, branch string) bool {
 	ref := "refs/remotes/origin/" + branch
+	return runGit(ctx, repoPath, "rev-parse", "--verify", ref) == nil
+}
+
+// LocalBranchExists checks if a local branch exists in the given repo.
+func LocalBranchExists(ctx context.Context, repoPath, branch string) bool {
+	ref := "refs/heads/" + branch
 	return runGit(ctx, repoPath, "rev-parse", "--verify", ref) == nil
 }
 

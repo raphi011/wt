@@ -27,7 +27,9 @@ func TestRepoClone_BareRepo(t *testing.T) {
 
 	// Setup registry file
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	cfg := testConfig()
 	cfg.RegistryPath = regFile
@@ -80,6 +82,58 @@ func TestRepoClone_BareRepo(t *testing.T) {
 	}
 }
 
+// TestRepoClone_MasterDefaultBranch tests cloning a repo with master as default branch.
+//
+// Scenario: User runs `wt repo clone file:///repo` where repo uses master
+// Expected: Worktree is created for master branch (not main)
+func TestRepoClone_MasterDefaultBranch(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Create a source repo with master as default branch
+	sourceRepo := filepath.Join(tmpDir, "source-repo")
+	if err := os.MkdirAll(sourceRepo, 0755); err != nil {
+		t.Fatalf("failed to create source repo dir: %v", err)
+	}
+	mustExecGit(t, sourceRepo, "init", "-b", "master")
+	mustExecGit(t, sourceRepo, "config", "user.email", "test@test.com")
+	mustExecGit(t, sourceRepo, "config", "user.name", "Test")
+	mustExecGit(t, sourceRepo, "commit", "--allow-empty", "-m", "initial commit")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	cfg := testConfig()
+	cfg.RegistryPath = regFile
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newRepoCloneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"file://" + sourceRepo, "cloned-repo"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("clone command failed: %v", err)
+	}
+
+	clonedPath := filepath.Join(tmpDir, "cloned-repo")
+
+	// Verify worktree was created for master (not main)
+	masterWorktree := filepath.Join(clonedPath, "cloned-repo-master")
+	if _, err := os.Stat(masterWorktree); os.IsNotExist(err) {
+		t.Error("worktree for master branch should be created")
+	}
+
+	// Verify main worktree was NOT created
+	mainWorktree := filepath.Join(clonedPath, "cloned-repo-main")
+	if _, err := os.Stat(mainWorktree); !os.IsNotExist(err) {
+		t.Error("worktree for main should NOT be created when repo uses master")
+	}
+}
+
 // TestRepoClone_WithLabels tests cloning with labels.
 //
 // Scenario: User runs `wt repo clone file:///repo -l backend -l api`
@@ -93,7 +147,9 @@ func TestRepoClone_WithLabels(t *testing.T) {
 	sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	cfg := testConfig()
 	cfg.RegistryPath = regFile
@@ -145,7 +201,9 @@ func TestRepoClone_WithCustomName(t *testing.T) {
 	sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	cfg := testConfig()
 	cfg.RegistryPath = regFile
@@ -189,10 +247,14 @@ func TestRepoClone_DestinationExists(t *testing.T) {
 
 	// Create destination directory
 	existingDir := filepath.Join(tmpDir, "existing-dir")
-	os.MkdirAll(existingDir, 0755)
+	if err := os.MkdirAll(existingDir, 0755); err != nil {
+		t.Fatalf("failed to create existing dir: %v", err)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	cfg := testConfig()
 	cfg.RegistryPath = regFile
@@ -221,11 +283,15 @@ func TestRepoClone_AutoName(t *testing.T) {
 	sourceRepo := setupTestRepo(t, tmpDir, "my-project")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	// Create a work subdirectory for cloning
 	otherDir := filepath.Join(tmpDir, "work")
-	os.MkdirAll(otherDir, 0755)
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create work dir: %v", err)
+	}
 
 	cfg := testConfig()
 	cfg.RegistryPath = regFile
@@ -265,7 +331,9 @@ func TestRepoClone_ShortFormWithoutDefaultOrg(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	// Config without default_org
 	cfg := testConfig()
@@ -298,7 +366,9 @@ func TestRepoClone_ShortFormAutoExtractRepoName(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	cfg := testConfig()
 	cfg.RegistryPath = regFile
@@ -342,7 +412,9 @@ func TestRepoClone_ExplicitBranchSkipsAutoDetect(t *testing.T) {
 	mustExecGit(t, sourceRepo, "checkout", "main")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	cfg := testConfig()
 	cfg.RegistryPath = regFile
@@ -383,13 +455,17 @@ func TestRepoClone_EmptyRepoSkipsWorktree(t *testing.T) {
 
 	// Create an empty source repo (initialized but no commits)
 	emptyRepo := filepath.Join(tmpDir, "empty-repo")
-	os.MkdirAll(emptyRepo, 0755)
+	if err := os.MkdirAll(emptyRepo, 0755); err != nil {
+		t.Fatalf("failed to create empty repo dir: %v", err)
+	}
 	mustExecGit(t, emptyRepo, "init")
 	mustExecGit(t, emptyRepo, "config", "user.email", "test@test.com")
 	mustExecGit(t, emptyRepo, "config", "user.name", "Test")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	cfg := testConfig()
 	cfg.RegistryPath = regFile
