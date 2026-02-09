@@ -39,8 +39,6 @@
 //	import "github.com/raphi011/wt/internal/ui/prompt"
 //
 //	result, err := prompt.Confirm("Continue?")
-//	result, err := prompt.TextInput("Name:", "placeholder")
-//	result, err := prompt.Select("Choose:", options)
 //
 // # Wizard Flows
 //

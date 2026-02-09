@@ -443,12 +443,3 @@ func updateWorktreeLinks(_ context.Context, repoPath string, wt WorktreeMigratio
 	return nil
 }
 
-// StripRepoPrefix removes the "repo-" prefix from worktree names if present.
-// For example, if repoName is "myapp" and wtName is "myapp-feature", returns "feature".
-func StripRepoPrefix(repoName, wtName string) string {
-	prefix := repoName + "-"
-	if strings.HasPrefix(wtName, prefix) {
-		return strings.TrimPrefix(wtName, prefix)
-	}
-	return wtName
-}

@@ -85,16 +85,6 @@ func (l *Logger) Debug(msg string, keyvals ...any) {
 	}
 }
 
-// Verbose returns true if verbose mode is enabled.
-func (l *Logger) Verbose() bool {
-	return l.verbose
-}
-
-// Quiet returns true if quiet mode is enabled.
-func (l *Logger) Quiet() bool {
-	return l.quiet
-}
-
 // Writer returns the underlying writer.
 func (l *Logger) Writer() io.Writer {
 	return l.out
