@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/raphi011/wt/internal/forge"
+	"github.com/raphi011/wt/internal/git"
 )
 
 func TestParseBranchTarget(t *testing.T) {
@@ -33,7 +34,7 @@ func TestParseBranchTarget(t *testing.T) {
 func TestPruneTableRow(t *testing.T) {
 	t.Parallel()
 
-	wt := pruneWorktree{
+	wt := git.Worktree{
 		RepoName:   "my-repo",
 		Branch:     "feature-x",
 		CommitHash: "abc1234def5678",

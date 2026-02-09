@@ -65,27 +65,24 @@ With no arguments, returns the most recently accessed worktree.`,
 					hist = &history.History{}
 				}
 
-				var allWorktrees []flows.CdWorktreeInfo
-
 				allRepos := filterOrphanedRepos(l, reg.Repos)
 
-				for _, repo := range allRepos {
-					worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-					if err != nil {
-						l.Debug("skipping repo", "repo", repo.Name, "error", err)
-						continue
+				loaded, warnings := git.LoadWorktreesForRepos(ctx, reposToRefs(allRepos))
+				for _, w := range warnings {
+					l.Debug("skipping repo", "repo", w.RepoName, "error", w.Err)
+				}
+
+				var allWorktrees []flows.CdWorktreeInfo
+				for _, wt := range loaded {
+					info := flows.CdWorktreeInfo{
+						RepoName: wt.RepoName,
+						Branch:   wt.Branch,
+						Path:     wt.Path,
 					}
-					for _, wt := range worktrees {
-						info := flows.CdWorktreeInfo{
-							RepoName: repo.Name,
-							Branch:   wt.Branch,
-							Path:     wt.Path,
-						}
-						if entry := hist.FindByPath(wt.Path); entry != nil {
-							info.LastAccess = entry.LastAccess
-						}
-						allWorktrees = append(allWorktrees, info)
+					if entry := hist.FindByPath(wt.Path); entry != nil {
+						info.LastAccess = entry.LastAccess
 					}
+					allWorktrees = append(allWorktrees, info)
 				}
 
 				if len(allWorktrees) == 0 {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
+	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -701,8 +702,8 @@ func TestPrune_ForceDeleteBranch_MergedPRState(t *testing.T) {
 	cfg := &config.Config{}
 	ctx := testContextWithConfig(t, cfg, repoPath)
 
-	// Construct pruneWorktree with PRState = MERGED (as if forge confirmed merge)
-	toRemove := []pruneWorktree{
+	// Construct git.Worktree with PRState = MERGED (as if forge confirmed merge)
+	toRemove := []git.Worktree{
 		{
 			Path:     wtPath,
 			Branch:   "feature",

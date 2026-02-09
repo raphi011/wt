@@ -11,94 +11,23 @@ import (
 	"github.com/raphi011/wt/internal/format"
 )
 
-// Worktree represents a git worktree with its status
+// Worktree represents a git worktree with its metadata.
+// Used as the unified struct across all commands (list, prune, cd, exec).
+// Fields tagged json:"-" are internal and excluded from user-facing JSON output.
 type Worktree struct {
-	Path           string    `json:"path"`
-	Branch         string    `json:"branch"`
-	MainRepo       string    `json:"main_repo"`
-	RepoName       string    `json:"repo_name"`
-	OriginURL      string    `json:"origin_url"`
-	IsMerged       bool      `json:"is_merged"`
-	CommitCount    int       `json:"commit_count"`
-	HasUpstream    bool      `json:"has_upstream"`
-	LastCommit     string    `json:"last_commit"`
-	LastCommitTime time.Time `json:"last_commit_time"` // for sorting by commit date
-	Note           string    `json:"note,omitempty"`
-}
-
-// Status returns a human-readable status string for the worktree.
-// Priority: merged/prunable > commits ahead > clean
-func (w *Worktree) Status() string {
-	if w.IsMerged {
-		return "prunable"
-	}
-	if w.CommitCount > 0 {
-		return fmt.Sprintf("%d ahead", w.CommitCount)
-	}
-	return "clean"
-}
-
-// GetWorktreeInfo returns info for a single worktree at the given path
-func GetWorktreeInfo(ctx context.Context, path string) (*Worktree, error) {
-	gitFile := filepath.Join(path, ".git")
-
-	// Check if it's a worktree (has .git file, not directory)
-	info, err := os.Stat(gitFile)
-	if err != nil {
-		return nil, fmt.Errorf("not a git worktree: %w", err)
-	}
-	if info.IsDir() {
-		return nil, fmt.Errorf("not a worktree (main repo)")
-	}
-
-	// Get main repo path
-	mainRepo, err := GetMainRepoPath(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get main repo: %w", err)
-	}
-
-	// Get branch
-	branch, err := GetCurrentBranch(ctx, path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get branch: %w", err)
-	}
-
-	// Get repo name from main repo
-	repoName := filepath.Base(mainRepo)
-
-	// Get origin URL (errors treated as empty string)
-	originURL, _ := GetOriginURL(ctx, mainRepo)
-
-	// Get commit count (errors treated as 0 commits)
-	commitCount, _ := GetCommitCount(ctx, mainRepo, branch)
-
-	// Get last commit time (errors treated as empty/zero values)
-	var lastCommit string
-	var lastCommitTime time.Time
-	if commitInfo, err := GetLastCommitInfo(ctx, path); err == nil {
-		lastCommit = commitInfo.Relative
-		lastCommitTime = commitInfo.Time
-	}
-
-	// Get branch note (errors treated as empty string)
-	note, _ := GetBranchNote(ctx, mainRepo, branch)
-
-	// Check if branch has upstream
-	hasUpstream := GetUpstreamBranch(ctx, mainRepo, branch) != ""
-
-	return &Worktree{
-		Path:           path,
-		Branch:         branch,
-		MainRepo:       mainRepo,
-		RepoName:       repoName,
-		OriginURL:      originURL,
-		IsMerged:       false, // Set later based on PR status
-		CommitCount:    commitCount,
-		HasUpstream:    hasUpstream,
-		LastCommit:     lastCommit,
-		LastCommitTime: lastCommitTime,
-		Note:           note,
-	}, nil
+	Path        string    `json:"path"`
+	Branch      string    `json:"branch"`
+	CommitHash  string    `json:"commit"`
+	RepoName    string    `json:"repo"`
+	RepoPath    string    `json:"-"`
+	OriginURL   string    `json:"-"`
+	Note        string    `json:"note,omitempty"`
+	HasUpstream bool      `json:"-"`
+	CreatedAt   time.Time `json:"created_at"`
+	PRNumber    int       `json:"pr_number,omitempty"`
+	PRState     string    `json:"pr_state,omitempty"`
+	PRURL       string    `json:"pr_url,omitempty"`
+	PRDraft     bool      `json:"pr_draft,omitempty"`
 }
 
 // CreateWorktreeResult contains the result of creating a worktree
@@ -327,7 +256,7 @@ func RemoveWorktree(ctx context.Context, worktree Worktree, force bool) error {
 		args = append(args, "--force")
 	}
 
-	return runGit(ctx, worktree.MainRepo, args...)
+	return runGit(ctx, worktree.RepoPath, args...)
 }
 
 // MoveWorktree moves a git worktree to a new path
@@ -337,7 +266,7 @@ func MoveWorktree(ctx context.Context, worktree Worktree, newPath string, force 
 		args = append(args, "--force")
 	}
 
-	return runGit(ctx, worktree.MainRepo, args...)
+	return runGit(ctx, worktree.RepoPath, args...)
 }
 
 // PruneWorktrees prunes stale worktree references
@@ -358,7 +287,7 @@ func GroupWorktreesByRepo(worktrees []Worktree) map[string][]Worktree {
 func FilterWorktreesByRepo(worktrees []Worktree, mainRepoPath string) []Worktree {
 	var filtered []Worktree
 	for _, wt := range worktrees {
-		if wt.MainRepo == mainRepoPath {
+		if wt.RepoPath == mainRepoPath {
 			filtered = append(filtered, wt)
 		}
 	}
