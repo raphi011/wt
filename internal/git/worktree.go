@@ -20,7 +20,6 @@ type Worktree struct {
 	OriginURL      string    `json:"origin_url"`
 	IsMerged       bool      `json:"is_merged"`
 	CommitCount    int       `json:"commit_count"`
-	IsDirty        bool      `json:"is_dirty"` // only populated when includeDirty=true
 	HasUpstream    bool      `json:"has_upstream"`
 	LastCommit     string    `json:"last_commit"`
 	LastCommitTime time.Time `json:"last_commit_time"` // for sorting by commit date
@@ -28,11 +27,8 @@ type Worktree struct {
 }
 
 // Status returns a human-readable status string for the worktree.
-// Priority: dirty > merged/prunable > commits ahead > clean
+// Priority: merged/prunable > commits ahead > clean
 func (w *Worktree) Status() string {
-	if w.IsDirty {
-		return "dirty"
-	}
 	if w.IsMerged {
 		return "prunable"
 	}
@@ -76,9 +72,6 @@ func GetWorktreeInfo(ctx context.Context, path string) (*Worktree, error) {
 	// Get commit count (errors treated as 0 commits)
 	commitCount, _ := GetCommitCount(ctx, mainRepo, branch)
 
-	// Check dirty status via git status --porcelain
-	isDirty := IsDirty(ctx, path)
-
 	// Get last commit time (errors treated as empty/zero values)
 	var lastCommit string
 	var lastCommitTime time.Time
@@ -101,7 +94,6 @@ func GetWorktreeInfo(ctx context.Context, path string) (*Worktree, error) {
 		OriginURL:      originURL,
 		IsMerged:       false, // Set later based on PR status
 		CommitCount:    commitCount,
-		IsDirty:        isDirty,
 		HasUpstream:    hasUpstream,
 		LastCommit:     lastCommit,
 		LastCommitTime: lastCommitTime,
@@ -110,9 +102,8 @@ func GetWorktreeInfo(ctx context.Context, path string) (*Worktree, error) {
 }
 
 // ListWorktrees scans a directory for git worktrees with batched git calls per repo.
-// If includeDirty is true, checks each worktree for dirty status (adds subprocess calls).
-// For 10 worktrees across 2 repos: ~8 calls (list) or ~18 calls with dirty checks (prune).
-func ListWorktrees(ctx context.Context, worktreeDir string, includeDirty bool) ([]Worktree, error) {
+// For 10 worktrees across 2 repos: ~8 subprocess calls.
+func ListWorktrees(ctx context.Context, worktreeDir string) ([]Worktree, error) {
 	entries, err := os.ReadDir(worktreeDir)
 	if err != nil {
 		return nil, err
@@ -232,12 +223,6 @@ func ListWorktrees(ctx context.Context, worktreeDir string, includeDirty bool) (
 			lastCommitTime = commitInfo.Time
 		}
 
-		// Phase 4: Only check dirty status if requested
-		var isDirty bool
-		if includeDirty {
-			isDirty = IsDirty(ctx, p.path)
-		}
-
 		worktrees = append(worktrees, Worktree{
 			Path:           p.path,
 			Branch:         branch,
@@ -246,7 +231,6 @@ func ListWorktrees(ctx context.Context, worktreeDir string, includeDirty bool) (
 			OriginURL:      repoOrigins[p.mainRepo],
 			IsMerged:       false, // Set later based on PR status
 			CommitCount:    commitCount,
-			IsDirty:        isDirty,
 			HasUpstream:    hasUpstream,
 			LastCommit:     lastCommit,
 			LastCommitTime: lastCommitTime,

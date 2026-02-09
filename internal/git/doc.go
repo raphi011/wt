@@ -47,5 +47,5 @@
 // [ListWorktrees] uses batched git calls to minimize subprocess overhead:
 // one "git worktree list --porcelain" per repo instead of individual calls
 // per worktree. For 10 worktrees across 2 repos, this reduces calls from
-// ~40 to ~8 (or ~18 with dirty checks enabled).
+// ~40 to ~8.
 package git

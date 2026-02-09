@@ -67,8 +67,8 @@ func TestCdWorktreeInfo_Structure(t *testing.T) {
 // 1. Refactoring to separate wizard building from wizard.Run()
 // 2. Or using teatest with golden files for full TUI testing
 //
-// The wizard builds options like "repo:branch *" for dirty worktrees
-// and uses the Note as description. To test this, we would need to:
+// The wizard builds options like "repo:branch" with Note as description.
+// To test this, we would need to:
 // - Build the wizard without calling Run()
 // - Inspect the step options to verify formatting
 // - Simulate key events to test selection
