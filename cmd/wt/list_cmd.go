@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"sort"
 
 	"github.com/spf13/cobra"
@@ -98,19 +97,12 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 
 			// Refresh PR status if requested
 			if refresh {
-				refreshPRStatusForWorktrees(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge, nil)
-			}
-
-			// Populate PR fields from cache
-			for i := range allWorktrees {
-				folderName := filepath.Base(allWorktrees[i].Path)
-				if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.Number > 0 {
-					allWorktrees[i].PRNumber = pr.Number
-					allWorktrees[i].PRState = pr.State
-					allWorktrees[i].PRURL = pr.URL
-					allWorktrees[i].PRDraft = pr.IsDraft
+				if f := refreshPRs(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge); f > 0 {
+					l.Printf("Warning: failed to fetch PR status for %d branch(es)\n", f)
 				}
 			}
+
+			populatePRFields(allWorktrees, prCache)
 
 			// Save PR cache if modified
 			if err := prCache.SaveIfDirty(); err != nil {

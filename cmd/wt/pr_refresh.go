@@ -22,10 +22,9 @@ type prFetchItem struct {
 	cacheKey  string // key for prCache (typically filepath.Base(path))
 }
 
-// refreshPRStatusForWorktrees fetches PR status for worktrees in parallel.
-// If spinner is non-nil it is stopped before the progress bar starts.
-// OriginURL is read from each worktree (populated by the loader).
-func refreshPRStatusForWorktrees(ctx context.Context, worktrees []git.Worktree, prCache *prcache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig, sp *progress.Spinner) {
+// refreshPRs fetches PR status for the given worktrees in parallel with a
+// progress bar. It updates prCache in-place and returns the number of failed fetches.
+func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig) (failed int) {
 	l := log.FromContext(ctx)
 
 	// Build fetch items, skipping worktrees without origin or already merged
@@ -47,29 +46,8 @@ func refreshPRStatusForWorktrees(ctx context.Context, worktrees []git.Worktree, 
 	}
 
 	if len(items) == 0 {
-		return
+		return 0
 	}
-
-	// Stop spinner before starting progress bar (if provided)
-	if sp != nil {
-		sp.Stop()
-	}
-
-	_, failed := refreshPRStatuses(ctx, items, prCache, hosts, forgeConfig)
-	if failed > 0 {
-		l.Printf("Warning: failed to fetch PR status for %d branch(es)\n", failed)
-	}
-}
-
-// refreshPRStatuses fetches PR status for the given items in parallel using a
-// progress bar. It updates prCache in-place and returns the number of
-// successfully fetched and failed items.
-func refreshPRStatuses(ctx context.Context, items []prFetchItem, prCache *prcache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig) (fetched, failed int) {
-	if len(items) == 0 {
-		return 0, 0
-	}
-
-	l := log.FromContext(ctx)
 
 	pb := progress.NewProgressBar(len(items), "Fetching PR status...")
 	pb.Start()
@@ -83,7 +61,7 @@ func refreshPRStatuses(ctx context.Context, items []prFetchItem, prCache *prcach
 
 	for _, item := range items {
 		wg.Add(1)
-		go func(item prFetchItem) {
+		go func() {
 			defer wg.Done()
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
@@ -129,10 +107,23 @@ func refreshPRStatuses(ctx context.Context, items []prFetchItem, prCache *prcach
 				pb.SetProgress(completedCount, "Fetching PR status...")
 			}
 			countMutex.Unlock()
-		}(item)
+		}()
 	}
 
 	wg.Wait()
 
-	return completedCount - failedCount, failedCount
+	return failedCount
+}
+
+// populatePRFields fills PR fields on worktrees from the cache.
+func populatePRFields(worktrees []git.Worktree, prCache *prcache.Cache) {
+	for i := range worktrees {
+		folderName := filepath.Base(worktrees[i].Path)
+		if pr := prCache.Get(folderName); pr != nil && pr.Fetched {
+			worktrees[i].PRNumber = pr.Number
+			worktrees[i].PRState = pr.State
+			worktrees[i].PRURL = pr.URL
+			worktrees[i].PRDraft = pr.IsDraft
+		}
+	}
 }

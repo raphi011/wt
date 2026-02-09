@@ -19,7 +19,6 @@ import (
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
-	"github.com/raphi011/wt/internal/ui/progress"
 	"github.com/raphi011/wt/internal/ui/static"
 	"github.com/raphi011/wt/internal/ui/styles"
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
@@ -123,7 +122,6 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 
 			l.Debug("pruning worktrees", "repos", len(repos), "dryRun", dryRun)
 
-			// Load worktrees from all repos in parallel
 			allWorktrees, warnings := git.LoadWorktreesForRepos(ctx, reposToRefs(repos))
 			for _, w := range warnings {
 				l.Printf("Warning: %s: %v\n", w.RepoName, w.Err)
@@ -134,14 +132,9 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				return nil
 			}
 
-			// Start spinner
-			sp := progress.NewSpinner("Scanning worktrees...")
-			sp.Start()
-
 			// Load PR cache
 			prCache, err := prcache.Load()
 			if err != nil {
-				sp.Stop()
 				return fmt.Errorf("load cache: %w", err)
 			}
 
@@ -153,22 +146,12 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 
 			// Refresh PR status if requested
 			if refresh {
-				sp.UpdateMessage(fmt.Sprintf("Fetching PR status (%d branches)...", len(allWorktrees)))
-				refreshPRStatusForWorktrees(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge, sp)
-			}
-
-			// Update PR fields from cache
-			for i := range allWorktrees {
-				folderName := filepath.Base(allWorktrees[i].Path)
-				if pr := prCache.Get(folderName); pr != nil && pr.Fetched {
-					allWorktrees[i].PRState = pr.State
-					allWorktrees[i].PRDraft = pr.IsDraft
-					allWorktrees[i].PRNumber = pr.Number
-					allWorktrees[i].PRURL = pr.URL
+				if f := refreshPRs(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge); f > 0 {
+					l.Printf("Warning: failed to fetch PR status for %d branch(es)\n", f)
 				}
 			}
 
-			sp.Stop()
+			populatePRFields(allWorktrees, prCache)
 
 			// Sort by repo name
 			slices.SortFunc(allWorktrees, func(a, b git.Worktree) int {
@@ -202,24 +185,24 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 					})
 				}
 
-				opts, err := flows.PruneInteractive(flows.PruneWizardParams{
+				pruneOpts, err := flows.PruneInteractive(flows.PruneWizardParams{
 					Worktrees: wizardInfos,
 				})
 				if err != nil {
 					return fmt.Errorf("interactive mode error: %w", err)
 				}
-				if opts.Cancelled {
+				if pruneOpts.Cancelled {
 					return nil
 				}
 
-				if len(opts.SelectedIDs) == 0 {
+				if len(pruneOpts.SelectedIDs) == 0 {
 					out.Println("No worktrees selected for removal")
 					return nil
 				}
 
 				// Rebuild based on selection (IDs are 1-indexed)
 				selectedSet := make(map[int]bool)
-				for _, id := range opts.SelectedIDs {
+				for _, id := range pruneOpts.SelectedIDs {
 					selectedSet[id] = true
 				}
 
