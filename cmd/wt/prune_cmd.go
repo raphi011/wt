@@ -11,7 +11,6 @@ import (
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
-	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/hooks"
@@ -19,22 +18,10 @@ import (
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
-	"github.com/raphi011/wt/internal/ui/progress"
 	"github.com/raphi011/wt/internal/ui/static"
 	"github.com/raphi011/wt/internal/ui/styles"
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
-
-// pruneTableRow formats a git.Worktree as a table row matching `wt list` columns.
-func pruneTableRow(wt git.Worktree) []string {
-	commit := wt.CommitHash
-	if len(commit) > 7 {
-		commit = commit[:7]
-	}
-	created := format.RelativeTime(wt.CreatedAt)
-	pr := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.PRDraft, wt.PRURL)
-	return []string{wt.RepoName, wt.Branch, pr, commit, created, wt.Note}
-}
 
 func newPruneCmd() *cobra.Command {
 	var (
@@ -123,7 +110,6 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 
 			l.Debug("pruning worktrees", "repos", len(repos), "dryRun", dryRun)
 
-			// Load worktrees from all repos in parallel
 			allWorktrees, warnings := git.LoadWorktreesForRepos(ctx, reposToRefs(repos))
 			for _, w := range warnings {
 				l.Printf("Warning: %s: %v\n", w.RepoName, w.Err)
@@ -134,16 +120,8 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				return nil
 			}
 
-			// Start spinner
-			sp := progress.NewSpinner("Scanning worktrees...")
-			sp.Start()
-
 			// Load PR cache
-			prCache, err := prcache.Load()
-			if err != nil {
-				sp.Stop()
-				return fmt.Errorf("load cache: %w", err)
-			}
+			prCache := prcache.Load()
 
 			// Reset cache if requested
 			if resetCache {
@@ -153,22 +131,12 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 
 			// Refresh PR status if requested
 			if refresh {
-				sp.UpdateMessage(fmt.Sprintf("Fetching PR status (%d branches)...", len(allWorktrees)))
-				refreshPRStatusForWorktrees(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge, sp)
-			}
-
-			// Update PR fields from cache
-			for i := range allWorktrees {
-				folderName := filepath.Base(allWorktrees[i].Path)
-				if pr := prCache.Get(folderName); pr != nil && pr.Fetched {
-					allWorktrees[i].PRState = pr.State
-					allWorktrees[i].PRDraft = pr.IsDraft
-					allWorktrees[i].PRNumber = pr.Number
-					allWorktrees[i].PRURL = pr.URL
+				if f := refreshPRs(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge); f > 0 {
+					l.Printf("Warning: failed to fetch PR status for %d branch(es)\n", f)
 				}
 			}
 
-			sp.Stop()
+			populatePRFields(allWorktrees, prCache)
 
 			// Sort by repo name
 			slices.SortFunc(allWorktrees, func(a, b git.Worktree) int {
@@ -202,24 +170,24 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 					})
 				}
 
-				opts, err := flows.PruneInteractive(flows.PruneWizardParams{
+				pruneOpts, err := flows.PruneInteractive(flows.PruneWizardParams{
 					Worktrees: wizardInfos,
 				})
 				if err != nil {
 					return fmt.Errorf("interactive mode error: %w", err)
 				}
-				if opts.Cancelled {
+				if pruneOpts.Cancelled {
 					return nil
 				}
 
-				if len(opts.SelectedIDs) == 0 {
+				if len(pruneOpts.SelectedIDs) == 0 {
 					out.Println("No worktrees selected for removal")
 					return nil
 				}
 
 				// Rebuild based on selection (IDs are 1-indexed)
 				selectedSet := make(map[int]bool)
-				for _, id := range opts.SelectedIDs {
+				for _, id := range pruneOpts.SelectedIDs {
 					selectedSet[id] = true
 				}
 
@@ -255,12 +223,11 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				} else {
 					fmt.Println("Removed:")
 				}
-				headers := []string{"REPO", "BRANCH", "PR", "COMMIT", "CREATED", "NOTE"}
 				var rows [][]string
 				for _, wt := range removed {
-					rows = append(rows, pruneTableRow(wt))
+					rows = append(rows, static.WorktreeTableRow(wt))
 				}
-				out.Print(static.RenderTable(headers, rows))
+				out.Print(static.RenderTable(static.WorktreeTableHeaders, rows))
 			}
 
 			// Save PR cache once at the end
