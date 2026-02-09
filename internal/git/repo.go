@@ -659,7 +659,7 @@ func ListLocalBranches(ctx context.Context, repoPath string) ([]string, error) {
 	return branches, nil
 }
 
-// ListRemoteBranches returns all remote branch names (without origin/ prefix) for a repository.
+// ListRemoteBranches returns all remote branch names (with remote prefix, e.g. "origin/main") for a repository.
 func ListRemoteBranches(ctx context.Context, repoPath string) ([]string, error) {
 	output, err := outputGit(ctx, repoPath, "branch", "-r", "--format=%(refname:short)")
 	if err != nil {
@@ -673,13 +673,13 @@ func ListRemoteBranches(ctx context.Context, repoPath string) ([]string, error) 
 		if line == "" {
 			continue
 		}
-		// Remove origin/ prefix and skip HEAD
-		if strings.HasPrefix(line, "origin/") {
-			branch := strings.TrimPrefix(line, "origin/")
-			if branch != "HEAD" && !seen[branch] {
-				branches = append(branches, branch)
-				seen[branch] = true
-			}
+		// Skip HEAD pointers (e.g., "origin/HEAD")
+		if strings.HasSuffix(line, "/HEAD") {
+			continue
+		}
+		if !seen[line] {
+			branches = append(branches, line)
+			seen[line] = true
 		}
 	}
 	return branches, nil

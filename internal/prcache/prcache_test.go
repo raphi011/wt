@@ -13,7 +13,7 @@ func TestFromForge(t *testing.T) {
 	now := time.Now()
 	src := &forge.PRInfo{
 		Number:       42,
-		State:        "MERGED",
+		State:        forge.PRStateMerged,
 		IsDraft:      false,
 		URL:          "https://github.com/org/repo/pull/42",
 		Author:       "alice",

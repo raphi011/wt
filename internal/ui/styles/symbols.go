@@ -5,6 +5,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/raphi011/wt/internal/forge"
 )
 
 // Symbols holds the icon/symbol set based on nerdfont configuration
@@ -77,19 +78,19 @@ func PRDraftSymbol() string {
 	return currentSymbols.PRDraft
 }
 
-// FormatPRState returns a formatted string with symbol and state
-// state should be "MERGED", "OPEN", "CLOSED", or empty
-// isDraft indicates if the PR is a draft (only applies to OPEN state)
+// FormatPRState returns a formatted string with symbol and state.
+// state should be forge.PRStateMerged, forge.PRStateOpen, forge.PRStateClosed, or empty.
+// isDraft indicates if the PR is a draft (only applies to OPEN state).
 func FormatPRState(state string, isDraft bool) string {
 	switch state {
-	case "MERGED":
+	case forge.PRStateMerged:
 		return currentSymbols.PRMerged + " Merged"
-	case "OPEN":
+	case forge.PRStateOpen:
 		if isDraft {
 			return currentSymbols.PRDraft + " Draft"
 		}
 		return currentSymbols.PROpen + " Open"
-	case "CLOSED":
+	case forge.PRStateClosed:
 		return currentSymbols.PRClosed + " Closed"
 	default:
 		return ""
@@ -105,15 +106,15 @@ func FormatPRRef(number int, state string, isDraft bool, url string) string {
 
 	var style lipgloss.Style
 	switch state {
-	case "OPEN":
+	case forge.PRStateOpen:
 		if isDraft {
 			style = MutedStyle
 		} else {
 			style = SuccessStyle
 		}
-	case "MERGED":
+	case forge.PRStateMerged:
 		style = MergedStyle
-	case "CLOSED":
+	case forge.PRStateClosed:
 		style = ErrorStyle
 	default:
 		style = NormalStyle
@@ -131,14 +132,14 @@ func FormatPRRef(number int, state string, isDraft bool, url string) string {
 // PRStateSymbol returns just the symbol for a PR state
 func PRStateSymbol(state string, isDraft bool) string {
 	switch state {
-	case "MERGED":
+	case forge.PRStateMerged:
 		return currentSymbols.PRMerged
-	case "OPEN":
+	case forge.PRStateOpen:
 		if isDraft {
 			return currentSymbols.PRDraft
 		}
 		return currentSymbols.PROpen
-	case "CLOSED":
+	case forge.PRStateClosed:
 		return currentSymbols.PRClosed
 	default:
 		return ""

@@ -130,16 +130,16 @@ func TestParseRemoteRef(t *testing.T) {
 	}
 
 	tests := []struct {
-		ref              string
-		wantRemote       string
-		wantBranch       string
-		wantIsRemote     bool
+		ref          string
+		wantRemote   string
+		wantBranch   string
+		wantIsRemote bool
 	}{
-		{"main", "", "main", false},                    // Simple branch, no remote
-		{"feature/test", "", "feature/test", false},    // Branch with slash, no matching remote
-		{"origin/main", "origin", "main", true},        // Origin remote ref
+		{"main", "", "main", false},                             // Simple branch, no remote
+		{"feature/test", "", "feature/test", false},             // Branch with slash, no matching remote
+		{"origin/main", "origin", "main", true},                 // Origin remote ref
 		{"origin/feature/test", "origin", "feature/test", true}, // Origin with nested branch
-		{"upstream/develop", "upstream", "develop", true}, // Upstream remote ref
+		{"upstream/develop", "upstream", "develop", true},       // Upstream remote ref
 		{"nonexistent/branch", "", "nonexistent/branch", false}, // Non-existent remote
 	}
 

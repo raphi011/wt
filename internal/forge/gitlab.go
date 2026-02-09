@@ -375,13 +375,13 @@ func (g *GitLab) ListOpenPRs(ctx context.Context, repoURL string) ([]OpenPR, err
 // FormatState returns a human-readable PR state
 func (g *GitLab) FormatState(state string) string {
 	switch state {
-	case "MERGED":
+	case PRStateMerged:
 		return "merged"
-	case "OPEN":
+	case PRStateOpen:
 		return "open"
-	case "DRAFT":
+	case PRStateDraft:
 		return "draft"
-	case "CLOSED":
+	case PRStateClosed:
 		return "closed"
 	default:
 		return ""
@@ -392,11 +392,11 @@ func (g *GitLab) FormatState(state string) string {
 func normalizeGitLabState(state string) string {
 	switch strings.ToLower(state) {
 	case "opened":
-		return "OPEN"
+		return PRStateOpen
 	case "merged":
-		return "MERGED"
+		return PRStateMerged
 	case "closed":
-		return "CLOSED"
+		return PRStateClosed
 	default:
 		return strings.ToUpper(state)
 	}

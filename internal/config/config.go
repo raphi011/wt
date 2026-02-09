@@ -89,7 +89,7 @@ type CheckoutConfig struct {
 
 // ThemeConfig holds theme/color configuration for interactive UI
 type ThemeConfig struct {
-	Name     string `toml:"name"`     // preset name: "default", "dracula", "nord", "gruvbox", "catppuccin"
+	Name     string `toml:"name"`     // preset name: "none", "default", "dracula", "nord", "gruvbox", "catppuccin"
 	Mode     string `toml:"mode"`     // theme mode: "auto", "light", "dark" (default: "auto")
 	Primary  string `toml:"primary"`  // main accent color (borders, titles)
 	Accent   string `toml:"accent"`   // highlight color (selected items)
@@ -107,7 +107,7 @@ type Config struct {
 	HistoryPath   string            `toml:"-"` // Override ~/.wt/history.json path (for testing)
 	WorktreeDir   string            `toml:"worktree_dir"`
 	RepoDir       string            `toml:"repo_dir"`       // optional: where to find repos for -r/-l
-	DefaultSort   string            `toml:"default_sort"`   // "id", "repo", "branch", "commit" (default: "id")
+	DefaultSort   string            `toml:"default_sort"`   // "created", "repo", "branch" (default: "created")
 	DefaultLabels []string          `toml:"default_labels"` // labels for newly registered repos
 	Hooks         HooksConfig       `toml:"-"`              // custom parsing needed
 	Checkout      CheckoutConfig    `toml:"checkout"`       // checkout settings
@@ -333,9 +333,9 @@ func Load() (Config, error) {
 		return Default(), fmt.Errorf("invalid checkout.base_ref %q: must be \"local\" or \"remote\"", cfg.Checkout.BaseRef)
 	}
 
-	// Validate default_sort (only "id", "repo", "branch", "commit", or empty allowed)
-	if cfg.DefaultSort != "" && cfg.DefaultSort != "id" && cfg.DefaultSort != "repo" && cfg.DefaultSort != "branch" && cfg.DefaultSort != "commit" {
-		return Default(), fmt.Errorf("invalid default_sort %q: must be \"id\", \"repo\", \"branch\", or \"commit\"", cfg.DefaultSort)
+	// Validate default_sort (only "created", "repo", "branch", or empty allowed)
+	if cfg.DefaultSort != "" && cfg.DefaultSort != "created" && cfg.DefaultSort != "repo" && cfg.DefaultSort != "branch" {
+		return Default(), fmt.Errorf("invalid default_sort %q: must be \"created\", \"repo\", or \"branch\"", cfg.DefaultSort)
 	}
 
 	// Note: theme.name is validated at runtime with a warning, not an error
@@ -531,12 +531,11 @@ worktree_format = "{repo}-{branch}"
 # set_upstream = false
 
 # Default sort order for 'wt list'
-# Available values: "id", "repo", "branch", "commit"
-#   "id"     - sort by stable worktree ID (default)
-#   "repo"   - sort by repository name
-#   "branch" - sort by branch name
-#   "commit" - sort by most recent commit (newest first)
-# default_sort = "id"
+# Available values: "created", "repo", "branch"
+#   "created" - sort by creation date, newest first (default)
+#   "repo"    - sort by repository name
+#   "branch"  - sort by branch name
+# default_sort = "created"
 
 # Hooks - run commands after worktree creation/removal
 # Use --hook=name to run a specific hook, --no-hook to skip all hooks
@@ -544,7 +543,7 @@ worktree_format = "{repo}-{branch}"
 # Hooks with "on" run automatically for matching commands.
 # Hooks without "on" only run when explicitly called with --hook=name.
 #
-# Available "on" values: "checkout", "pr", "prune", "merge", "cd", "all"
+# Available "on" values: "checkout", "pr", "prune", "merge", "all"
 #
 # Hooks run with working directory set to the worktree path.
 # For "prune" hooks, working directory is the main repo (worktree is deleted).
@@ -655,7 +654,7 @@ worktree_format = "{repo}-{branch}"
 #   glab auth login --hostname gitlab.internal.corp
 
 # Theme settings - customize colors for interactive wizards
-# Available presets: "default", "dracula", "nord", "gruvbox", "catppuccin"
+# Available presets: "none", "default", "dracula", "nord", "gruvbox", "catppuccin"
 # Some themes have light/dark variants that are auto-selected based on terminal
 #
 # [theme]

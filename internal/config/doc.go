@@ -1,6 +1,6 @@
 // Package config handles loading and validation of wt configuration.
 //
-// Configuration is read from ~/.config/wt/config.toml with environment
+// Configuration is read from ~/.wt/config.toml with environment
 // variable overrides for directory settings.
 //
 // # Configuration Sources (highest priority first)
@@ -28,7 +28,7 @@
 //	description = "Open VS Code"
 //	on = ["checkout"]  # auto-run for checkout command
 //
-// Hooks with "on" run automatically for matching commands (checkout, pr, prune, merge).
+// Hooks with "on" run automatically for matching commands (checkout, pr, prune, merge, all).
 // Hooks without "on" only run via explicit --hook=name flag.
 //
 // # Forge Configuration

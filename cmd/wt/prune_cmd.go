@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/hooks"
@@ -23,7 +24,6 @@ import (
 	"github.com/raphi011/wt/internal/ui/styles"
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
-
 
 // pruneWorktree holds worktree info for prune operations
 type pruneWorktree struct {
@@ -229,7 +229,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 
 			for _, wt := range allWorktrees {
 				// Only auto-prune worktrees with merged PRs
-				if wt.PRState == "MERGED" {
+				if wt.PRState == forge.PRStateMerged {
 					toRemove = append(toRemove, wt)
 				} else {
 					toSkip = append(toSkip, wt)
@@ -240,7 +240,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 			if interactive {
 				wizardInfos := make([]flows.PruneWorktreeInfo, 0, len(allWorktrees))
 				for i, wt := range allWorktrees {
-					isPrunable := wt.PRState == "MERGED"
+					isPrunable := wt.PRState == forge.PRStateMerged
 					wizardInfos = append(wizardInfos, flows.PruneWorktreeInfo{
 						ID:         i + 1, // Use index as ID
 						RepoName:   wt.RepoName,
@@ -407,7 +407,7 @@ func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, prC
 			continue
 		}
 		folderName := filepath.Base(wt.Path)
-		if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.State == "MERGED" {
+		if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.State == forge.PRStateMerged {
 			continue
 		}
 		items = append(items, prFetchItem{
@@ -483,7 +483,12 @@ func pruneWorktrees(ctx context.Context, toRemove []pruneWorktree, force, dryRun
 
 		// Delete local branch if enabled
 		if deleteBranches {
-			if err := git.DeleteLocalBranch(ctx, wt.RepoPath, wt.Branch, false); err != nil {
+			// Force delete if forge confirmed merge (handles squash merges),
+			// safe delete (-d) otherwise.
+			// Note: PRState is empty for targeted prune (no forge lookup),
+			// so forceDelete is always false in that path — this is intentional.
+			forceDelete := wt.PRState == forge.PRStateMerged
+			if err := git.DeleteLocalBranch(ctx, wt.RepoPath, wt.Branch, forceDelete); err != nil {
 				l.Printf("Warning: failed to delete branch %s: %v\n", wt.Branch, err)
 			} else {
 				l.Debug("deleted branch", "branch", wt.Branch)
@@ -509,7 +514,9 @@ func pruneWorktrees(ctx context.Context, toRemove []pruneWorktree, force, dryRun
 	processedRepos := make(map[string]bool)
 	for _, wt := range removed {
 		if !processedRepos[wt.RepoPath] {
-			git.PruneWorktrees(ctx, wt.RepoPath)
+			if err := git.PruneWorktrees(ctx, wt.RepoPath); err != nil {
+				l.Printf("Warning: failed to prune stale references in %s: %v\n", wt.RepoPath, err)
+			}
 			processedRepos[wt.RepoPath] = true
 		}
 	}

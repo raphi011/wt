@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -498,5 +499,239 @@ func TestPrune_NoDeleteBranchesOverridesConfig(t *testing.T) {
 	}
 	if strings.TrimSpace(output) == "" {
 		t.Error("branch should still exist after prune with --no-delete-branches")
+	}
+}
+
+// TestPrune_DeleteBranches_UnmergedBranch tests that unmerged branches survive safe delete.
+//
+// Scenario: User creates a branch with a unique commit (not in main), creates a worktree,
+//
+//	then runs `wt prune feature -f --delete-branches`
+//
+// Expected: Worktree is removed, but branch is kept because git branch -d refuses
+//
+//	(the branch has commits not reachable from main)
+func TestPrune_DeleteBranches_UnmergedBranch(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	// Add a unique commit on the feature branch (not in main)
+	// This makes git branch -d refuse to delete it
+	addCommit(t, wtPath, "feature-only.txt", "feature-only commit")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	// Targeted prune (no forge PR state) → safe delete (-d) is used
+	cmd.SetArgs([]string{"feature", "-f", "--delete-branches"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Verify worktree was removed
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("worktree should be removed after prune")
+	}
+
+	// Verify branch was NOT deleted (safe delete refuses because commits aren't merged)
+	output, err := runGitCommand(repoPath, "branch", "--list", "feature")
+	if err != nil {
+		t.Fatalf("failed to list branches: %v", err)
+	}
+	if strings.TrimSpace(output) == "" {
+		t.Error("branch should survive safe delete when it has unmerged commits")
+	}
+}
+
+// TestPrune_DryRun_DoesNotDeleteBranch tests that dry-run preserves both worktree and branch.
+//
+// Scenario: User runs `wt prune feature -f -d --delete-branches`
+// Expected: Neither worktree nor branch are removed (dry-run)
+func TestPrune_DryRun_DoesNotDeleteBranch(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f", "-d", "--delete-branches"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Verify worktree still exists (dry-run)
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Error("worktree should still exist after dry-run")
+	}
+
+	// Verify branch still exists (dry-run)
+	output, err := runGitCommand(repoPath, "branch", "--list", "feature")
+	if err != nil {
+		t.Fatalf("failed to list branches: %v", err)
+	}
+	if strings.TrimSpace(output) == "" {
+		t.Error("branch should still exist after dry-run")
+	}
+}
+
+// TestPrune_DeleteBranchesFlag_OverridesConfigFalse tests that --delete-branches flag
+// overrides config delete_local_branches=false.
+//
+// Scenario: Config has delete_local_branches=false, user runs `wt prune feature -f --delete-branches`
+// Expected: Branch is deleted (explicit flag wins over config)
+func TestPrune_DeleteBranchesFlag_OverridesConfigFalse(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	// Config explicitly disables branch deletion
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Prune: config.PruneConfig{
+			DeleteLocalBranches: false,
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	// Explicit --delete-branches flag should override config
+	cmd.SetArgs([]string{"feature", "-f", "--delete-branches"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Verify worktree was removed
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("worktree should be removed after prune")
+	}
+
+	// Verify branch was deleted (explicit flag overrides config=false)
+	output, err := runGitCommand(repoPath, "branch", "--list", "feature")
+	if err != nil {
+		t.Fatalf("failed to list branches: %v", err)
+	}
+	if strings.TrimSpace(output) != "" {
+		t.Error("branch should be deleted when --delete-branches flag is explicitly passed")
+	}
+}
+
+// TestPrune_ForceDeleteBranch_MergedPRState tests that branches with unmerged commits
+// are force-deleted when PRState is MERGED (the squash-merge scenario).
+//
+// Scenario: A branch has commits not reachable from main (like after a squash merge on GitHub).
+//
+//	The forge reports the PR as merged, so pruneWorktrees should use git branch -D.
+//
+// Expected: Branch is deleted despite having unmerged commits.
+func TestPrune_ForceDeleteBranch_MergedPRState(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	// Add a unique commit on the feature branch (not in main).
+	// This simulates a squash-merged PR: GitHub merged the PR, but the local
+	// branch has commits not reachable from main, so git branch -d would refuse.
+	addCommit(t, wtPath, "feature-only.txt", "feature-only commit")
+
+	cfg := &config.Config{}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	// Construct pruneWorktree with PRState = MERGED (as if forge confirmed merge)
+	toRemove := []pruneWorktree{
+		{
+			Path:     wtPath,
+			Branch:   "feature",
+			RepoName: "test-repo",
+			RepoPath: repoPath,
+			PRState:  forge.PRStateMerged,
+		},
+	}
+
+	removed, failed := pruneWorktrees(ctx, toRemove, true, false, true, nil, true, nil, nil)
+
+	if len(failed) > 0 {
+		t.Fatalf("expected no failures, got %d", len(failed))
+	}
+	if len(removed) != 1 {
+		t.Fatalf("expected 1 removed, got %d", len(removed))
+	}
+
+	// Verify worktree was removed
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("worktree should be removed after prune")
+	}
+
+	// Verify branch was force-deleted (git branch -D succeeds for unmerged commits)
+	output, err := runGitCommand(repoPath, "branch", "--list", "feature")
+	if err != nil {
+		t.Fatalf("failed to list branches: %v", err)
+	}
+	if strings.TrimSpace(output) != "" {
+		t.Error("branch should be force-deleted when PRState is MERGED (squash-merge scenario)")
 	}
 }
