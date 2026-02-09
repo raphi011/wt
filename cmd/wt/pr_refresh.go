@@ -59,6 +59,19 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 	var completedCount, failedCount int
 	var countMutex sync.Mutex
 
+	// recordProgress must be called under countMutex.
+	recordProgress := func(isFailed bool) {
+		completedCount++
+		if isFailed {
+			failedCount++
+		}
+		msg := "Fetching PR status..."
+		if failedCount > 0 {
+			msg = fmt.Sprintf("Fetching PR status... (%d failed)", failedCount)
+		}
+		pb.SetProgress(completedCount, msg)
+	}
+
 	for _, item := range items {
 		wg.Add(1)
 		go func() {
@@ -71,9 +84,7 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 			if err := f.Check(ctx); err != nil {
 				l.Debug("forge check failed", "origin", item.originURL, "err", err)
 				countMutex.Lock()
-				completedCount++
-				failedCount++
-				pb.SetProgress(completedCount, fmt.Sprintf("Fetching PR status... (%d failed)", failedCount))
+				recordProgress(true)
 				countMutex.Unlock()
 				return
 			}
@@ -88,9 +99,7 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 			if err != nil {
 				l.Debug("PR fetch failed", "branch", item.branch, "err", err)
 				countMutex.Lock()
-				completedCount++
-				failedCount++
-				pb.SetProgress(completedCount, fmt.Sprintf("Fetching PR status... (%d failed)", failedCount))
+				recordProgress(true)
 				countMutex.Unlock()
 				return
 			}
@@ -100,12 +109,7 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 			prMutex.Unlock()
 
 			countMutex.Lock()
-			completedCount++
-			if failedCount > 0 {
-				pb.SetProgress(completedCount, fmt.Sprintf("Fetching PR status... (%d failed)", failedCount))
-			} else {
-				pb.SetProgress(completedCount, "Fetching PR status...")
-			}
+			recordProgress(false)
 			countMutex.Unlock()
 		}()
 	}

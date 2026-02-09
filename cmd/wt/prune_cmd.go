@@ -133,10 +133,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 			}
 
 			// Load PR cache
-			prCache, err := prcache.Load()
-			if err != nil {
-				return fmt.Errorf("load cache: %w", err)
-			}
+			prCache := prcache.Load()
 
 			// Reset cache if requested
 			if resetCache {

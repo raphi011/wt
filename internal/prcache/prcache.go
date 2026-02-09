@@ -54,12 +54,12 @@ func Path() string {
 	return filepath.Join(home, ".wt", "prs.json")
 }
 
-// Load loads the PR cache from disk
-func Load() (*Cache, error) {
+// Load loads the PR cache from disk. Returns an empty cache if
+// the file is missing or corrupted.
+func Load() *Cache {
 	var cache Cache
 	if err := storage.LoadJSON(Path(), &cache); err != nil {
-		// Not found or corrupted - start fresh
-		return New(), nil
+		return New()
 	}
 
 	// Initialize nil map
@@ -67,7 +67,7 @@ func Load() (*Cache, error) {
 		cache.PRs = make(map[string]*PRInfo)
 	}
 
-	return &cache, nil
+	return &cache
 }
 
 // Save saves the PR cache to disk atomically

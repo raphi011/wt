@@ -211,15 +211,14 @@ Otherwise, it's looked up in the local registry.`,
 			}
 
 			// Cache PR info for the new worktree
-			if cache, err := prcache.Load(); err == nil {
-				prInfo, err := f.GetPRForBranch(ctx, originURL, branch)
-				if err != nil {
-					l.Debug("failed to fetch PR info", "branch", branch, "error", err)
-				} else {
-					cache.Set(filepath.Base(wtPath), prcache.FromForge(prInfo))
-					if err := cache.Save(); err != nil {
-						l.Printf("Warning: failed to save PR cache: %v\n", err)
-					}
+			cache := prcache.Load()
+			prInfo, err := f.GetPRForBranch(ctx, originURL, branch)
+			if err != nil {
+				l.Debug("failed to fetch PR info", "branch", branch, "error", err)
+			} else {
+				cache.Set(filepath.Base(wtPath), prcache.FromForge(prInfo))
+				if err := cache.Save(); err != nil {
+					l.Printf("Warning: failed to save PR cache: %v\n", err)
 				}
 			}
 
@@ -476,10 +475,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 			}
 
 			// Load PR cache for updates
-			cache, cacheErr := prcache.Load()
-			if cacheErr != nil {
-				l.Printf("Warning: failed to load PR cache: %v\n", cacheErr)
-			}
+			cache := prcache.Load()
 			cacheKey := filepath.Base(cwd)
 
 			if pr.State == forge.PRStateMerged {

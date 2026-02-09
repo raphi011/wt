@@ -89,11 +89,7 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 			}
 
 			// Load PR cache
-			prCache, err := prcache.Load()
-			if err != nil {
-				l.Printf("Warning: failed to load PR cache: %v\n", err)
-				prCache = prcache.New()
-			}
+			prCache := prcache.Load()
 
 			// Refresh PR status if requested
 			if refresh {
