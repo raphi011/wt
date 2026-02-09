@@ -22,14 +22,6 @@
 //   - [GetCommitCount]: Commits ahead of default branch
 //   - [GetDefaultBranch]: Detect main/master branch
 //
-// # Repository Discovery
-//
-// Finding repositories by name or label:
-//
-//   - [FindRepoByName]: Search for repo by name in a directory
-//   - [FindAllRepos]: List all git repos in a directory
-//   - [FindSimilarRepos]: Suggest similar names when repo not found
-//
 // # Link Validation and Repair
 //
 // Git worktrees have bidirectional links between the worktree's .git file

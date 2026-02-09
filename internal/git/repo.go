@@ -606,34 +606,6 @@ func GetCommitsBehindWithBase(ctx context.Context, repoPath, branch, baseBranch 
 	return count, err
 }
 
-// FindRepoInDirs searches for a repo with the given folder name across multiple directories.
-// Returns the absolute path to the repo if found, empty string otherwise.
-// Similar to FindRepoByName but checks multiple directories (stops at first match).
-func FindRepoInDirs(repoName string, searchDirs ...string) string {
-	for _, dir := range searchDirs {
-		if dir == "" {
-			continue
-		}
-		candidate := filepath.Join(dir, repoName)
-		gitPath := filepath.Join(candidate, ".git")
-		info, err := os.Stat(gitPath)
-		if err == nil && info.IsDir() {
-			return candidate
-		}
-	}
-	return ""
-}
-
-// GetRepoNameFromWorktree extracts the expected repo name from a worktree.
-// Returns the folder name of the main repository.
-func GetRepoNameFromWorktree(worktreePath string) string {
-	mainRepo, err := GetMainRepoPath(worktreePath)
-	if err != nil {
-		return ""
-	}
-	return filepath.Base(mainRepo)
-}
-
 // ListLocalBranches returns all local branch names for a repository.
 func ListLocalBranches(ctx context.Context, repoPath string) ([]string, error) {
 	output, err := outputGit(ctx, repoPath, "branch", "--format=%(refname:short)")

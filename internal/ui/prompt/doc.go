@@ -6,6 +6,4 @@
 //
 // Available prompts:
 //   - [Confirm]: Yes/No confirmation prompt
-//   - [TextInput]: Single-line text input
-//   - [Select]: Single selection from a list
 package prompt
