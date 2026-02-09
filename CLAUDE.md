@@ -121,6 +121,8 @@ internal/ui/             - Terminal UI components
 
 **Never ignore errors** - All errors must be handled explicitly. Never use `_ = someFunc()` or call functions without checking their return error. In tests, use `t.Fatalf` for setup errors. In production code, either return the error or log it with context if it's truly non-fatal.
 
+**Avoid magic strings** - Use named constants for repeated string values (e.g., PR states, merge strategies). Define constants in the package that owns the concept (e.g., `forge.PRStateMerged` for PR states). Never compare against string literals scattered across files.
+
 **Interactive Mode (`-i` flag)** - When implementing interactive wizard mode for commands:
 
 1. **Respect explicit CLI arguments** - If a flag is passed explicitly (e.g., `--hook`, `--no-hook`, `-r`), skip that wizard step entirely. Don't allow the user to change values that were explicitly set.

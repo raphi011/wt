@@ -318,13 +318,13 @@ func (g *GitHub) ListOpenPRs(ctx context.Context, repoURL string) ([]OpenPR, err
 // FormatState returns a human-readable PR state
 func (g *GitHub) FormatState(state string) string {
 	switch state {
-	case "MERGED":
+	case PRStateMerged:
 		return "merged"
-	case "OPEN":
+	case PRStateOpen:
 		return "open"
 	case "DRAFT":
 		return "draft"
-	case "CLOSED":
+	case PRStateClosed:
 		return "closed"
 	default:
 		return ""

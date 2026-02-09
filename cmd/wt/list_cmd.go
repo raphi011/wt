@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
@@ -264,7 +265,7 @@ func refreshPRStatusForList(ctx context.Context, worktrees []WorktreeDisplay, pr
 		}
 		folderName := filepath.Base(wt.Path)
 		// Skip already-merged entries (stable state)
-		if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.State == "MERGED" {
+		if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.State == forge.PRStateMerged {
 			continue
 		}
 		items = append(items, prFetchItem{

@@ -3,6 +3,8 @@ package main
 import (
 	"testing"
 	"time"
+
+	"github.com/raphi011/wt/internal/forge"
 )
 
 func TestParseBranchTarget(t *testing.T) {
@@ -38,7 +40,7 @@ func TestPruneTableRow(t *testing.T) {
 		CreatedAt:  time.Now(),
 		Note:       "wip",
 		PRNumber:   99,
-		PRState:    "OPEN",
+		PRState:    forge.PRStateOpen,
 		PRURL:      "https://github.com/org/repo/pull/99",
 	}
 

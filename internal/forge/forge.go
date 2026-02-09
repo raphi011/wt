@@ -8,6 +8,13 @@ import (
 // MaxConcurrentFetches limits parallel forge API calls to avoid rate limiting
 const MaxConcurrentFetches = 5
 
+// PR state constants (normalized across GitHub/GitLab)
+const (
+	PRStateMerged = "MERGED"
+	PRStateOpen   = "OPEN"
+	PRStateClosed = "CLOSED"
+)
+
 // PRInfo represents pull request information
 type PRInfo struct {
 	Number       int       `json:"number"`

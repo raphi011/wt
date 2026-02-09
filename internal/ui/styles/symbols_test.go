@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/raphi011/wt/internal/forge"
 )
 
 func TestSetNerdfont(t *testing.T) {
@@ -61,10 +62,10 @@ func TestFormatPRState(t *testing.T) {
 		isDraft  bool
 		expected string
 	}{
-		{"MERGED", false, "● Merged"},
-		{"OPEN", false, "○ Open"},
-		{"OPEN", true, "◌ Draft"},
-		{"CLOSED", false, "✕ Closed"},
+		{forge.PRStateMerged, false, "● Merged"},
+		{forge.PRStateOpen, false, "○ Open"},
+		{forge.PRStateOpen, true, "◌ Draft"},
+		{forge.PRStateClosed, false, "✕ Closed"},
 		{"", false, ""},
 		{"UNKNOWN", false, ""},
 	}
@@ -89,10 +90,10 @@ func TestFormatPRState_Nerdfont(t *testing.T) {
 		isDraft  bool
 		expected string
 	}{
-		{"MERGED", false, "\ueafe Merged"},
-		{"OPEN", false, "\uea64 Open"},
-		{"OPEN", true, "\uebdb Draft"},
-		{"CLOSED", false, "\uebda Closed"},
+		{forge.PRStateMerged, false, "\ueafe Merged"},
+		{forge.PRStateOpen, false, "\uea64 Open"},
+		{forge.PRStateOpen, true, "\uebdb Draft"},
+		{forge.PRStateClosed, false, "\uebda Closed"},
 	}
 
 	for _, tt := range tests {
@@ -114,10 +115,10 @@ func TestPRStateSymbol(t *testing.T) {
 		isDraft  bool
 		expected string
 	}{
-		{"MERGED", false, "●"},
-		{"OPEN", false, "○"},
-		{"OPEN", true, "◌"},
-		{"CLOSED", false, "✕"},
+		{forge.PRStateMerged, false, "●"},
+		{forge.PRStateOpen, false, "○"},
+		{forge.PRStateOpen, true, "◌"},
+		{forge.PRStateClosed, false, "✕"},
 		{"", false, ""},
 	}
 
@@ -142,12 +143,12 @@ func TestFormatPRRef(t *testing.T) {
 		contains string // substring that must appear
 		empty    bool   // expect empty string
 	}{
-		{"zero number", 0, "OPEN", false, "", "", true},
-		{"open PR", 42, "OPEN", false, "", "#42", false},
-		{"merged PR", 10, "MERGED", false, "", "#10", false},
-		{"closed PR", 5, "CLOSED", false, "", "#5", false},
-		{"draft PR", 7, "OPEN", true, "", "#7", false},
-		{"with URL", 99, "OPEN", false, "https://github.com/org/repo/pull/99", "#99", false},
+		{"zero number", 0, forge.PRStateOpen, false, "", "", true},
+		{"open PR", 42, forge.PRStateOpen, false, "", "#42", false},
+		{"merged PR", 10, forge.PRStateMerged, false, "", "#10", false},
+		{"closed PR", 5, forge.PRStateClosed, false, "", "#5", false},
+		{"draft PR", 7, forge.PRStateOpen, true, "", "#7", false},
+		{"with URL", 99, forge.PRStateOpen, false, "https://github.com/org/repo/pull/99", "#99", false},
 	}
 
 	for _, tt := range tests {
@@ -169,7 +170,7 @@ func TestFormatPRRef(t *testing.T) {
 
 func TestFormatPRRef_Hyperlink(t *testing.T) {
 	url := "https://github.com/org/repo/pull/42"
-	got := FormatPRRef(42, "OPEN", false, url)
+	got := FormatPRRef(42, forge.PRStateOpen, false, url)
 
 	// OSC 8 hyperlinks use \x1b]8;; prefix
 	if !strings.Contains(got, "\x1b]8;;") {
@@ -185,7 +186,7 @@ func TestFormatPRRef_Hyperlink(t *testing.T) {
 	}
 
 	// Without URL, no OSC 8 and no underline
-	noURL := FormatPRRef(42, "OPEN", false, "")
+	noURL := FormatPRRef(42, forge.PRStateOpen, false, "")
 	if strings.Contains(noURL, "\x1b]8;;") {
 		t.Errorf("FormatPRRef without URL should not contain OSC 8 sequence, got %q", noURL)
 	}
