@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 
 	"github.com/raphi011/wt/internal/config"
@@ -19,6 +20,45 @@ type prFetchItem struct {
 	repoPath  string
 	branch    string
 	cacheKey  string // key for prCache (typically filepath.Base(path))
+}
+
+// refreshPRStatusForWorktrees fetches PR status for worktrees in parallel.
+// If spinner is non-nil it is stopped before the progress bar starts.
+// OriginURL is read from each worktree (populated by the loader).
+func refreshPRStatusForWorktrees(ctx context.Context, worktrees []git.Worktree, prCache *prcache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig, sp *progress.Spinner) {
+	l := log.FromContext(ctx)
+
+	// Build fetch items, skipping worktrees without origin or already merged
+	var items []prFetchItem
+	for _, wt := range worktrees {
+		if wt.OriginURL == "" {
+			continue
+		}
+		folderName := filepath.Base(wt.Path)
+		if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.State == forge.PRStateMerged {
+			continue
+		}
+		items = append(items, prFetchItem{
+			originURL: wt.OriginURL,
+			repoPath:  wt.RepoPath,
+			branch:    wt.Branch,
+			cacheKey:  folderName,
+		})
+	}
+
+	if len(items) == 0 {
+		return
+	}
+
+	// Stop spinner before starting progress bar (if provided)
+	if sp != nil {
+		sp.Stop()
+	}
+
+	_, failed := refreshPRStatuses(ctx, items, prCache, hosts, forgeConfig)
+	if failed > 0 {
+		l.Printf("Warning: failed to fetch PR status for %d branch(es)\n", failed)
+	}
 }
 
 // refreshPRStatuses fetches PR status for the given items in parallel using a

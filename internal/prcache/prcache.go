@@ -39,7 +39,8 @@ func (p *PRInfo) IsStale() bool {
 
 // Cache stores PR info keyed by folder name
 type Cache struct {
-	PRs map[string]*PRInfo `json:"prs"`
+	PRs   map[string]*PRInfo `json:"prs"`
+	dirty bool
 }
 
 // New returns an empty, initialized cache.
@@ -77,6 +78,7 @@ func (c *Cache) Save() error {
 // Set stores PR info for a folder
 func (c *Cache) Set(folder string, pr *PRInfo) {
 	c.PRs[folder] = pr
+	c.dirty = true
 }
 
 // Get returns PR info for a folder, or nil if not found
@@ -87,11 +89,26 @@ func (c *Cache) Get(folder string) *PRInfo {
 // Delete removes PR info for a folder
 func (c *Cache) Delete(folder string) {
 	delete(c.PRs, folder)
+	c.dirty = true
 }
 
 // Reset clears all cached data
 func (c *Cache) Reset() {
 	c.PRs = make(map[string]*PRInfo)
+	c.dirty = true
+}
+
+// SaveIfDirty saves the cache to disk only if it has been modified.
+// Resets the dirty flag after a successful save.
+func (c *Cache) SaveIfDirty() error {
+	if !c.dirty {
+		return nil
+	}
+	if err := c.Save(); err != nil {
+		return err
+	}
+	c.dirty = false
+	return nil
 }
 
 // FromForge converts a forge.PRInfo to a prcache.PRInfo.

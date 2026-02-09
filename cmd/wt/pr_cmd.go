@@ -528,16 +528,16 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 
 			// Remove worktree unless --keep
 			if !keep {
-				wtInfo, err := git.GetWorktreeInfo(ctx, cwd)
-				if err == nil && wtInfo != nil {
-					l.Printf("Removing worktree...\n")
-					if err := git.RemoveWorktree(ctx, *wtInfo, false); err != nil {
-						l.Printf("Warning: failed to remove worktree: %v\n", err)
-					} else {
-						out.Printf("Removed worktree: %s\n", cwd)
-						// Remove from cache since worktree no longer exists
-						cache.Delete(cacheKey)
-						_ = cache.Save()
+				wt := git.Worktree{Path: cwd, RepoPath: repo.Path}
+				l.Printf("Removing worktree...\n")
+				if err := git.RemoveWorktree(ctx, wt, false); err != nil {
+					l.Printf("Warning: failed to remove worktree: %v\n", err)
+				} else {
+					out.Printf("Removed worktree: %s\n", cwd)
+					// Remove from cache since worktree no longer exists
+					cache.Delete(cacheKey)
+					if err := cache.SaveIfDirty(); err != nil {
+						l.Printf("Warning: failed to save cache: %v\n", err)
 					}
 				}
 			}

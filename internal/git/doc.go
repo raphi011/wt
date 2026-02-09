@@ -11,7 +11,7 @@
 //   - [AddWorktree]: Create worktrees for new or existing branches
 //   - [RemoveWorktree]: Remove worktrees with optional force flag
 //   - [MoveWorktree]: Relocate worktrees to new paths
-//   - [GetWorktreeInfo]: Get detailed info for a single worktree
+//   - [LoadWorktreesForRepos]: Load worktrees from multiple repos in parallel
 //
 // # Repository Operations
 //

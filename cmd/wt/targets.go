@@ -11,6 +11,15 @@ import (
 	"github.com/raphi011/wt/internal/registry"
 )
 
+// reposToRefs converts registry repos to git.RepoRef for the parallel loader.
+func reposToRefs(repos []registry.Repo) []git.RepoRef {
+	refs := make([]git.RepoRef, len(repos))
+	for i, r := range repos {
+		refs[i] = git.RepoRef{Name: r.Name, Path: r.Path}
+	}
+	return refs
+}
+
 // findOrRegisterCurrentRepo finds the repo for cwd, auto-registering if needed.
 // Returns error if not in a git repository.
 func findOrRegisterCurrentRepo(ctx context.Context, reg *registry.Registry, cfg *config.Config) (registry.Repo, error) {

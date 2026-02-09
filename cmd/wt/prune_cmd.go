@@ -3,10 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"slices"
-	"time"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -26,30 +25,14 @@ import (
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
 
-// pruneWorktree holds worktree info for prune operations
-type pruneWorktree struct {
-	Path       string
-	Branch     string
-	RepoName   string
-	RepoPath   string
-	OriginURL  string
-	PRState    string
-	IsDraft    bool
-	CommitHash string
-	CreatedAt  time.Time
-	Note       string
-	PRNumber   int
-	PRURL      string
-}
-
-// pruneTableRow formats a pruneWorktree as a table row matching `wt list` columns.
-func pruneTableRow(wt pruneWorktree) []string {
+// pruneTableRow formats a git.Worktree as a table row matching `wt list` columns.
+func pruneTableRow(wt git.Worktree) []string {
 	commit := wt.CommitHash
 	if len(commit) > 7 {
 		commit = commit[:7]
 	}
 	created := format.RelativeTime(wt.CreatedAt)
-	pr := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.IsDraft, wt.PRURL)
+	pr := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.PRDraft, wt.PRURL)
 	return []string{wt.RepoName, wt.Branch, pr, commit, created, wt.Note}
 }
 
@@ -140,36 +123,10 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 
 			l.Debug("pruning worktrees", "repos", len(repos), "dryRun", dryRun)
 
-			// Collect all worktrees from target repos
-			var allWorktrees []pruneWorktree
-			for _, repo := range repos {
-				wtInfos, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-				if err != nil {
-					l.Printf("Warning: %s: %v\n", repo.Name, err)
-					continue
-				}
-				// Get origin URL and branch notes once per repo
-				originURL, err := git.GetOriginURL(ctx, repo.Path)
-				if err != nil {
-					l.Debug("failed to get origin URL", "repo", repo.Name, "error", err)
-				}
-				notes, _ := git.GetAllBranchConfig(ctx, repo.Path)
-				for _, wti := range wtInfos {
-					var createdAt time.Time
-					if info, err := os.Stat(wti.Path); err == nil {
-						createdAt = info.ModTime()
-					}
-					allWorktrees = append(allWorktrees, pruneWorktree{
-						Path:       wti.Path,
-						Branch:     wti.Branch,
-						RepoName:   repo.Name,
-						RepoPath:   repo.Path,
-						OriginURL:  originURL,
-						CommitHash: wti.CommitHash,
-						CreatedAt:  createdAt,
-						Note:       notes[wti.Branch],
-					})
-				}
+			// Load worktrees from all repos in parallel
+			allWorktrees, warnings := git.LoadWorktreesForRepos(ctx, reposToRefs(repos))
+			for _, w := range warnings {
+				l.Printf("Warning: %s: %v\n", w.RepoName, w.Err)
 			}
 
 			if len(allWorktrees) == 0 {
@@ -197,7 +154,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 			// Refresh PR status if requested
 			if refresh {
 				sp.UpdateMessage(fmt.Sprintf("Fetching PR status (%d branches)...", len(allWorktrees)))
-				refreshPRStatusForPrune(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge, sp)
+				refreshPRStatusForWorktrees(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge, sp)
 			}
 
 			// Update PR fields from cache
@@ -205,7 +162,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				folderName := filepath.Base(allWorktrees[i].Path)
 				if pr := prCache.Get(folderName); pr != nil && pr.Fetched {
 					allWorktrees[i].PRState = pr.State
-					allWorktrees[i].IsDraft = pr.IsDraft
+					allWorktrees[i].PRDraft = pr.IsDraft
 					allWorktrees[i].PRNumber = pr.Number
 					allWorktrees[i].PRURL = pr.URL
 				}
@@ -214,19 +171,13 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 			sp.Stop()
 
 			// Sort by repo name
-			slices.SortFunc(allWorktrees, func(a, b pruneWorktree) int {
-				if a.RepoName < b.RepoName {
-					return -1
-				}
-				if a.RepoName > b.RepoName {
-					return 1
-				}
-				return 0
+			slices.SortFunc(allWorktrees, func(a, b git.Worktree) int {
+				return strings.Compare(a.RepoName, b.RepoName)
 			})
 
 			// Determine which to remove and why
-			var toRemove []pruneWorktree
-			var toSkip []pruneWorktree
+			var toRemove []git.Worktree
+			var toSkip []git.Worktree
 
 			for _, wt := range allWorktrees {
 				// Only auto-prune worktrees with merged PRs
@@ -246,7 +197,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 						ID:         i + 1, // Use index as ID
 						RepoName:   wt.RepoName,
 						Branch:     wt.Branch,
-						Reason:     styles.FormatPRState(wt.PRState, wt.IsDraft),
+						Reason:     styles.FormatPRState(wt.PRState, wt.PRDraft),
 						IsPrunable: isPrunable,
 					})
 				}
@@ -312,8 +263,8 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				out.Print(static.RenderTable(headers, rows))
 			}
 
-			// Save PR cache
-			if err := prCache.Save(); err != nil {
+			// Save PR cache once at the end
+			if err := prCache.SaveIfDirty(); err != nil {
 				l.Printf("Warning: failed to save cache: %v\n", err)
 			}
 
@@ -360,10 +311,10 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 		return err
 	}
 
-	// Convert to pruneWorktree
-	var toRemove []pruneWorktree
+	// Convert to git.Worktree
+	var toRemove []git.Worktree
 	for _, t := range wtTargets {
-		toRemove = append(toRemove, pruneWorktree{
+		toRemove = append(toRemove, git.Worktree{
 			Path:     t.Path,
 			Branch:   t.Branch,
 			RepoName: t.RepoName,
@@ -396,46 +347,10 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 	return nil
 }
 
-// refreshPRStatusForPrune fetches PR status for worktrees in parallel.
-// Stops the spinner before switching to a progress bar for determinate progress.
-func refreshPRStatusForPrune(ctx context.Context, worktrees []pruneWorktree, prCache *prcache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig, sp *progress.Spinner) {
-	l := log.FromContext(ctx)
-
-	// Build fetch items, skipping worktrees without origin or already merged
-	var items []prFetchItem
-	for _, wt := range worktrees {
-		if wt.OriginURL == "" {
-			continue
-		}
-		folderName := filepath.Base(wt.Path)
-		if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.State == forge.PRStateMerged {
-			continue
-		}
-		items = append(items, prFetchItem{
-			originURL: wt.OriginURL,
-			repoPath:  wt.RepoPath,
-			branch:    wt.Branch,
-			cacheKey:  folderName,
-		})
-	}
-
-	if len(items) == 0 {
-		return
-	}
-
-	// Stop spinner before starting progress bar
-	sp.Stop()
-
-	_, failed := refreshPRStatuses(ctx, items, prCache, hosts, forgeConfig)
-	if failed > 0 {
-		l.Printf("Warning: failed to fetch PR status for %d branch(es)\n", failed)
-	}
-}
-
 // pruneWorktrees removes the given worktrees and runs hooks.
 // Returns slices of successfully removed and failed worktrees.
-func pruneWorktrees(ctx context.Context, toRemove []pruneWorktree, force, dryRun, deleteBranches bool,
-	hookNames []string, noHook bool, env []string, prCache *prcache.Cache) (removed, failed []pruneWorktree) {
+func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, force, dryRun, deleteBranches bool,
+	hookNames []string, noHook bool, env []string, prCache *prcache.Cache) (removed, failed []git.Worktree) {
 
 	if len(toRemove) == 0 {
 		return nil, nil
@@ -469,15 +384,7 @@ func pruneWorktrees(ctx context.Context, toRemove []pruneWorktree, force, dryRun
 	}
 
 	for _, wt := range toRemove {
-		// Get full worktree info for removal
-		wtInfo, err := git.GetWorktreeInfo(ctx, wt.Path)
-		if err != nil {
-			l.Printf("Warning: failed to get info for %s: %v\n", wt.Path, err)
-			failed = append(failed, wt)
-			continue
-		}
-
-		if err := git.RemoveWorktree(ctx, *wtInfo, force); err != nil {
+		if err := git.RemoveWorktree(ctx, wt, force); err != nil {
 			l.Printf("Warning: failed to remove %s: %v\n", wt.Path, err)
 			failed = append(failed, wt)
 			continue

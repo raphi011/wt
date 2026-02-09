@@ -1,18 +1,14 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
-	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
@@ -22,20 +18,6 @@ import (
 	"github.com/raphi011/wt/internal/ui/static"
 	"github.com/raphi011/wt/internal/ui/styles"
 )
-
-// WorktreeDisplay holds worktree info for display
-type WorktreeDisplay struct {
-	RepoName   string    `json:"repo"`
-	Branch     string    `json:"branch"`
-	Path       string    `json:"path"`
-	CommitHash string    `json:"commit"`
-	CreatedAt  time.Time `json:"created_at"`
-	Note       string    `json:"note,omitempty"`
-	PRNumber   int       `json:"pr_number,omitempty"`
-	PRState    string    `json:"pr_state,omitempty"`
-	PRURL      string    `json:"pr_url,omitempty"`
-	PRDraft    bool      `json:"pr_draft,omitempty"`
-}
 
 func newListCmd() *cobra.Command {
 	var (
@@ -102,14 +84,9 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 
 			l.Debug("listing worktrees", "repos", len(repos))
 
-			var allWorktrees []WorktreeDisplay
-			for _, repo := range repos {
-				worktrees, err := listWorktreesForRepo(ctx, repo)
-				if err != nil {
-					l.Printf("Warning: %s: %v\n", repo.Name, err)
-					continue
-				}
-				allWorktrees = append(allWorktrees, worktrees...)
+			allWorktrees, warnings := git.LoadWorktreesForRepos(ctx, reposToRefs(repos))
+			for _, w := range warnings {
+				l.Printf("Warning: %s: %v\n", w.RepoName, w.Err)
 			}
 
 			// Load PR cache
@@ -121,10 +98,7 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 
 			// Refresh PR status if requested
 			if refresh {
-				refreshPRStatusForList(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge)
-				if err := prCache.Save(); err != nil {
-					l.Printf("Warning: failed to save PR cache: %v\n", err)
-				}
+				refreshPRStatusForWorktrees(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge, nil)
 			}
 
 			// Populate PR fields from cache
@@ -136,6 +110,11 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 					allWorktrees[i].PRURL = pr.URL
 					allWorktrees[i].PRDraft = pr.IsDraft
 				}
+			}
+
+			// Save PR cache if modified
+			if err := prCache.SaveIfDirty(); err != nil {
+				l.Printf("Warning: failed to save PR cache: %v\n", err)
 			}
 
 			switch sortBy {
@@ -199,85 +178,4 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 	})
 
 	return cmd
-}
-
-func listWorktreesForRepo(ctx context.Context, repo registry.Repo) ([]WorktreeDisplay, error) {
-	worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get branch notes in batch
-	notes, _ := git.GetAllBranchConfig(ctx, repo.Path)
-
-	var display []WorktreeDisplay
-	for _, wt := range worktrees {
-		// Get worktree creation time (use mtime of directory)
-		var createdAt time.Time
-		if info, err := os.Stat(wt.Path); err == nil {
-			createdAt = info.ModTime()
-		}
-
-		display = append(display, WorktreeDisplay{
-			RepoName:   repo.Name,
-			Branch:     wt.Branch,
-			Path:       wt.Path,
-			CommitHash: wt.CommitHash,
-			CreatedAt:  createdAt,
-			Note:       notes[wt.Branch],
-		})
-	}
-
-	return display, nil
-}
-
-// refreshPRStatusForList fetches PR status for worktrees in parallel.
-func refreshPRStatusForList(ctx context.Context, worktrees []WorktreeDisplay, prCache *prcache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig) {
-	l := log.FromContext(ctx)
-
-	// Build a map of repo name -> origin URL (deduplicate per repo)
-	type repoInfo struct {
-		path      string
-		originURL string
-	}
-	repoOrigins := make(map[string]repoInfo)
-
-	for i := range worktrees {
-		wt := &worktrees[i]
-		if _, ok := repoOrigins[wt.RepoName]; ok {
-			continue
-		}
-		originURL, err := git.GetOriginURL(ctx, wt.Path)
-		if err != nil {
-			l.Debug("failed to get origin URL", "path", wt.Path, "err", err)
-			continue
-		}
-		repoOrigins[wt.RepoName] = repoInfo{path: wt.Path, originURL: originURL}
-	}
-
-	// Build fetch items
-	var items []prFetchItem
-	for i := range worktrees {
-		wt := &worktrees[i]
-		ri, ok := repoOrigins[wt.RepoName]
-		if !ok || ri.originURL == "" {
-			continue
-		}
-		folderName := filepath.Base(wt.Path)
-		// Skip already-merged entries (stable state)
-		if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.State == forge.PRStateMerged {
-			continue
-		}
-		items = append(items, prFetchItem{
-			originURL: ri.originURL,
-			repoPath:  ri.path,
-			branch:    wt.Branch,
-			cacheKey:  folderName,
-		})
-	}
-
-	_, failed := refreshPRStatuses(ctx, items, prCache, hosts, forgeConfig)
-	if failed > 0 {
-		l.Printf("Warning: failed to fetch PR status for %d branch(es)\n", failed)
-	}
 }

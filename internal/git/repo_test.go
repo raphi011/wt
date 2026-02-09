@@ -75,13 +75,11 @@ func TestGetDefaultBranch(t *testing.T) {
 
 func TestWorktreeStruct(t *testing.T) {
 	wt := Worktree{
-		Path:        "/test/path",
-		Branch:      "feature-branch",
-		MainRepo:    "/test/main",
-		RepoName:    "test-repo",
-		IsMerged:    true,
-		CommitCount: 5,
-		LastCommit:  "2 days ago",
+		Path:     "/test/path",
+		Branch:   "feature-branch",
+		RepoPath: "/test/main",
+		RepoName: "test-repo",
+		PRState:  "MERGED",
 	}
 
 	if wt.Path != "/test/path" {
@@ -90,8 +88,8 @@ func TestWorktreeStruct(t *testing.T) {
 	if wt.Branch != "feature-branch" {
 		t.Errorf("unexpected branch: %s", wt.Branch)
 	}
-	if !wt.IsMerged {
-		t.Error("expected IsMerged to be true")
+	if wt.PRState != "MERGED" {
+		t.Errorf("expected PRState to be MERGED, got %s", wt.PRState)
 	}
 }
 
