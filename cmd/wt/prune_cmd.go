@@ -451,7 +451,7 @@ func pruneWorktrees(ctx context.Context, toRemove []pruneWorktree, force, dryRun
 	// Load history for cleanup
 	hist, err := history.Load(cfg.GetHistoryPath())
 	if err != nil {
-		l.Debug("failed to load history for prune cleanup", "error", err)
+		l.Printf("Warning: failed to load history for prune cleanup: %v\n", err)
 		hist = &history.History{}
 	}
 	historyChanged := false
@@ -528,7 +528,7 @@ func pruneWorktrees(ctx context.Context, toRemove []pruneWorktree, force, dryRun
 	// Save history if any entries were removed
 	if historyChanged {
 		if err := hist.Save(cfg.GetHistoryPath()); err != nil {
-			l.Debug("failed to save history after prune", "error", err)
+			l.Printf("Warning: failed to save history after prune: %v\n", err)
 		}
 	}
 

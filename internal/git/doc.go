@@ -11,7 +11,6 @@
 //   - [AddWorktree]: Create worktrees for new or existing branches
 //   - [RemoveWorktree]: Remove worktrees with optional force flag
 //   - [MoveWorktree]: Relocate worktrees to new paths
-//   - [ListWorktrees]: Scan directory for worktrees with batched git calls
 //   - [GetWorktreeInfo]: Get detailed info for a single worktree
 //
 // # Repository Operations
@@ -41,11 +40,4 @@
 //   - [CanRepairWorktree]: Check if repair is possible
 //   - [RepairWorktree]: Fix broken links via "git worktree repair"
 //   - [ListPrunableWorktrees]: Find stale git references
-//
-// # Batching for Performance
-//
-// [ListWorktrees] uses batched git calls to minimize subprocess overhead:
-// one "git worktree list --porcelain" per repo instead of individual calls
-// per worktree. For 10 worktrees across 2 repos, this reduces calls from
-// ~40 to ~8.
 package git

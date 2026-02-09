@@ -5,6 +5,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+
 	"github.com/atotto/clipboard"
 	"github.com/spf13/cobra"
 
@@ -60,7 +61,7 @@ With no arguments, returns the most recently accessed worktree.`,
 				// Load history for recency ranking
 				hist, err := history.Load(cfg.GetHistoryPath())
 				if err != nil {
-					l.Debug("failed to load history", "error", err)
+					l.Printf("Warning: failed to load history: %v\n", err)
 					hist = &history.History{}
 				}
 
@@ -74,13 +75,11 @@ With no arguments, returns the most recently accessed worktree.`,
 						l.Debug("skipping repo", "repo", repo.Name, "error", err)
 						continue
 					}
-					notes, _ := git.GetAllBranchConfig(ctx, repo.Path)
 					for _, wt := range worktrees {
 						info := flows.CdWorktreeInfo{
 							RepoName: repo.Name,
 							Branch:   wt.Branch,
 							Path:     wt.Path,
-							Note:     notes[wt.Branch],
 						}
 						if entry := hist.FindByPath(wt.Path); entry != nil {
 							info.LastAccess = entry.LastAccess
@@ -94,10 +93,10 @@ With no arguments, returns the most recently accessed worktree.`,
 					return fmt.Errorf("no worktrees found")
 				}
 
-				// Clean stale history entries while we have the data
+				// Opportunistically clean stale history entries
 				if removed := hist.RemoveStale(); removed > 0 {
 					if err := hist.Save(cfg.GetHistoryPath()); err != nil {
-						l.Debug("failed to save history after cleanup", "error", err)
+						l.Printf("Warning: failed to save history after cleanup: %v\n", err)
 					}
 				}
 
@@ -147,7 +146,7 @@ With no arguments, returns the most recently accessed worktree.`,
 				if removed := hist.RemoveStale(); removed > 0 {
 					if err := hist.Save(cfg.GetHistoryPath()); err != nil {
 						l := log.FromContext(ctx)
-						l.Debug("failed to save history after cleanup", "error", err)
+						l.Printf("Warning: failed to save history after cleanup: %v\n", err)
 					}
 				}
 
@@ -251,7 +250,7 @@ With no arguments, returns the most recently accessed worktree.`,
 			// Record access to history for wt cd
 			if err := history.RecordAccess(targetPath, repoName, branchName, cfg.GetHistoryPath()); err != nil {
 				l := log.FromContext(ctx)
-				l.Debug("failed to record history", "error", err)
+				l.Printf("Warning: failed to record history: %v\n", err)
 			}
 
 			// Copy to clipboard if requested

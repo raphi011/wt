@@ -529,7 +529,7 @@ If destination is not specified, clones into the current directory.`,
 
 					// Record to history for wt cd
 					if err := history.RecordAccess(wtPath, repoName, worktreeBranch, cfg.GetHistoryPath()); err != nil {
-						l.Debug("failed to record history", "error", err)
+						l.Printf("Warning: failed to record history: %v\n", err)
 					}
 				}
 			}

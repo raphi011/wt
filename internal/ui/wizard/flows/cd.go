@@ -26,7 +26,6 @@ type CdWorktreeInfo struct {
 	RepoName    string
 	Branch      string
 	Path        string
-	Note        string
 	LastAccess  time.Time
 	AccessCount int
 }
@@ -43,13 +42,16 @@ type cdListModel struct {
 	worktrees  []CdWorktreeInfo
 	done       bool
 	cancelled  bool
-	selectedAt int // index into worktrees
+	selectedAt int // index into worktrees; -1 means no selection
 }
 
 func (m *cdListModel) Init() tea.Cmd {
 	return m.step.Init()
 }
 
+// Update handles incoming messages. Only tea.KeyPressMsg is processed;
+// other message types (window size, mouse, etc.) are safely ignored
+// because FilterableListStep only operates on key events.
 func (m *cdListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	keyMsg, ok := msg.(tea.KeyPressMsg)
 	if !ok {
@@ -114,8 +116,9 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 	selectStep := steps.NewFilterableList("worktree", "Worktree", "", options)
 
 	model := &cdListModel{
-		step:      selectStep,
-		worktrees: params.Worktrees,
+		step:       selectStep,
+		worktrees:  params.Worktrees,
+		selectedAt: -1,
 	}
 
 	profile := colorprofile.Detect(os.Stderr, os.Environ())
@@ -130,7 +133,7 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 	}
 
 	m := finalModel.(*cdListModel)
-	if m.cancelled || !m.done {
+	if m.cancelled || !m.done || m.selectedAt < 0 {
 		return CdOptions{Cancelled: true}, nil
 	}
 
@@ -142,19 +145,10 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 	}, nil
 }
 
-// buildDescription creates the option description from note and history.
+// buildDescription creates the option description from history data.
 func buildDescription(wt CdWorktreeInfo) string {
-	hasHistory := !wt.LastAccess.IsZero()
-	hasNote := wt.Note != ""
-
-	if hasNote && hasHistory {
-		return wt.Note + " • " + format.RelativeTime(wt.LastAccess)
-	}
-	if hasHistory {
+	if !wt.LastAccess.IsZero() {
 		return format.RelativeTime(wt.LastAccess)
-	}
-	if hasNote {
-		return wt.Note
 	}
 	return ""
 }

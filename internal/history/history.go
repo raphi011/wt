@@ -5,6 +5,7 @@
 package history
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -38,8 +39,9 @@ func DefaultPath() string {
 }
 
 // Load reads the history from disk at the given path.
-// Returns empty history if file doesn't exist or has an unrecognized format
-// (e.g. the old {"most_recent": "..."} schema).
+// Returns empty history if the file doesn't exist. Unrecognized formats
+// (e.g. the old {"most_recent": "..."} schema) decode into an empty
+// History struct because unknown JSON keys are silently dropped.
 func Load(path string) (*History, error) {
 	var h History
 	if err := storage.LoadJSON(path, &h); err != nil {
@@ -79,15 +81,18 @@ func (h *History) RemoveByPath(path string) bool {
 }
 
 // RemoveStale removes entries whose paths no longer exist on disk.
+// Only entries with os.IsNotExist errors are removed; other stat errors
+// (permissions, NFS timeouts) are kept to avoid purging temporarily
+// inaccessible paths.
 // Returns the number of entries removed.
 func (h *History) RemoveStale() int {
 	kept := h.Entries[:0]
 	removed := 0
 	for _, e := range h.Entries {
-		if _, err := os.Stat(e.Path); err == nil {
-			kept = append(kept, e)
-		} else {
+		if _, err := os.Stat(e.Path); err != nil && os.IsNotExist(err) {
 			removed++
+		} else {
+			kept = append(kept, e)
 		}
 	}
 	h.Entries = kept
@@ -105,9 +110,13 @@ func (h *History) SortByRecency() {
 // AccessCount, and updates LastAccess. Caps entries at maxEntries by evicting
 // the oldest.
 func RecordAccess(path, repoName, branch, historyPath string) error {
+	if path == "" {
+		return fmt.Errorf("path must not be empty")
+	}
+
 	h, err := Load(historyPath)
 	if err != nil {
-		h = &History{}
+		return fmt.Errorf("load history: %w", err)
 	}
 
 	now := time.Now()
