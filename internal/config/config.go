@@ -107,7 +107,7 @@ type Config struct {
 	HistoryPath   string            `toml:"-"` // Override ~/.wt/history.json path (for testing)
 	WorktreeDir   string            `toml:"worktree_dir"`
 	RepoDir       string            `toml:"repo_dir"`       // optional: where to find repos for -r/-l
-	DefaultSort   string            `toml:"default_sort"`   // "id", "repo", "branch", "commit" (default: "id")
+	DefaultSort   string            `toml:"default_sort"`   // "created", "repo", "branch" (default: "created")
 	DefaultLabels []string          `toml:"default_labels"` // labels for newly registered repos
 	Hooks         HooksConfig       `toml:"-"`              // custom parsing needed
 	Checkout      CheckoutConfig    `toml:"checkout"`       // checkout settings
@@ -333,9 +333,9 @@ func Load() (Config, error) {
 		return Default(), fmt.Errorf("invalid checkout.base_ref %q: must be \"local\" or \"remote\"", cfg.Checkout.BaseRef)
 	}
 
-	// Validate default_sort (only "id", "repo", "branch", "commit", or empty allowed)
-	if cfg.DefaultSort != "" && cfg.DefaultSort != "id" && cfg.DefaultSort != "repo" && cfg.DefaultSort != "branch" && cfg.DefaultSort != "commit" {
-		return Default(), fmt.Errorf("invalid default_sort %q: must be \"id\", \"repo\", \"branch\", or \"commit\"", cfg.DefaultSort)
+	// Validate default_sort (only "created", "repo", "branch", or empty allowed)
+	if cfg.DefaultSort != "" && cfg.DefaultSort != "created" && cfg.DefaultSort != "repo" && cfg.DefaultSort != "branch" {
+		return Default(), fmt.Errorf("invalid default_sort %q: must be \"created\", \"repo\", or \"branch\"", cfg.DefaultSort)
 	}
 
 	// Note: theme.name is validated at runtime with a warning, not an error
@@ -531,12 +531,11 @@ worktree_format = "{repo}-{branch}"
 # set_upstream = false
 
 # Default sort order for 'wt list'
-# Available values: "id", "repo", "branch", "commit"
-#   "id"     - sort by stable worktree ID (default)
-#   "repo"   - sort by repository name
-#   "branch" - sort by branch name
-#   "commit" - sort by most recent commit (newest first)
-# default_sort = "id"
+# Available values: "created", "repo", "branch"
+#   "created" - sort by creation date, newest first (default)
+#   "repo"    - sort by repository name
+#   "branch"  - sort by branch name
+# default_sort = "created"
 
 # Hooks - run commands after worktree creation/removal
 # Use --hook=name to run a specific hook, --no-hook to skip all hooks

@@ -1,6 +1,6 @@
 // Package config handles loading and validation of wt configuration.
 //
-// Configuration is read from ~/.config/wt/config.toml with environment
+// Configuration is read from ~/.wt/config.toml with environment
 // variable overrides for directory settings.
 //
 // # Configuration Sources (highest priority first)

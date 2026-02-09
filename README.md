@@ -38,13 +38,32 @@ Requires `git` in PATH. For GitHub repos: `gh` CLI. For GitLab repos: `glab` CLI
 ### 1. Create Config
 
 ```bash
-wt config init ~/Git/worktrees           # worktrees dir only
-wt config init ~/Git/worktrees ~/Code    # with separate repo dir
+wt config init            # Create ~/.wt/config.toml
+wt config init -s         # Print default config to stdout (for review)
 ```
 
-This creates `~/.config/wt/config.toml` with your worktree directory (and optionally repo directory).
+Then edit `~/.wt/config.toml` to set your worktree directory:
 
-### 2. List Worktrees
+```toml
+worktree_dir = "~/Git/worktrees"
+
+# Optional: separate directory where repos live
+# repo_dir = "~/Code"
+```
+
+### 2. Register Repos
+
+```bash
+# Register a repo you already have cloned
+wt repo add ~/path/to/myrepo
+
+# Or clone and register a new repo
+wt repo clone git@github.com:org/repo.git
+```
+
+Repos are also auto-registered the first time you run `wt checkout` inside one.
+
+### 3. List Worktrees
 
 ```bash
 wt list -g
@@ -89,7 +108,7 @@ wt checkout -b feature-login --note "Implementing OAuth flow"
 With hooks configured, your editor opens automatically:
 
 ```toml
-# ~/.config/wt/config.toml
+# ~/.wt/config.toml
 [hooks.vscode]
 command = "code {worktree-dir}"
 on = ["checkout"]
@@ -102,10 +121,10 @@ on = ["checkout"]
 wt pr checkout 123
 
 # Checkout PR from a different local repo (by name)
-wt pr checkout 123 backend-api
+wt pr checkout backend-api 123
 
 # Clone repo you don't have locally and checkout PR
-wt pr checkout 456 org/new-repo
+wt pr checkout org/new-repo 456
 
 # Specify forge type when auto-detection fails
 wt pr checkout 123 --forge gitlab
@@ -170,6 +189,12 @@ wt prune -d -v
 # Clear cached PR data and re-fetch
 wt prune --reset-cache
 
+# Also delete local branches after removal
+wt prune --delete-branches
+
+# Keep local branches even if config says delete
+wt prune --no-delete-branches
+
 # Remove specific branch worktree
 wt prune feature-login -f
 
@@ -198,8 +223,8 @@ wt repo make-bare ./myrepo
 wt repo remove myrepo
 
 # List all repos
-wt repo
-wt repo -l backend    # Filter by label
+wt repo list
+wt repo list backend    # Filter by label
 ```
 
 Label your repos for batch operations:
@@ -290,13 +315,13 @@ wt note set "Ready for review" myrepo:feature
 
 ## Configuration
 
-Config file: `~/.config/wt/config.toml`
+Config file: `~/.wt/config.toml`
 
 ```bash
-wt config init ~/Git/worktrees           # worktrees dir only
-wt config init ~/Git/worktrees ~/Code    # with separate repo dir
-wt config show                           # Show effective config
-wt config hooks                          # List configured hooks
+wt config init               # Create default config
+wt config init -s            # Print config to stdout
+wt config show               # Show effective config
+wt config hooks              # List configured hooks
 ```
 
 ### Basic Settings
@@ -308,8 +333,11 @@ worktree_dir = "~/Git/worktrees"
 # Where repos live (for repo: lookups, defaults to worktree_dir)
 repo_dir = "~/Git"
 
-# Default sort order for list: "id", "repo", "branch", "commit"
-default_sort = "id"
+# Default sort order for list: "created", "repo", "branch"
+default_sort = "created"
+
+# Labels applied to newly auto-registered repos
+# default_labels = ["work"]
 
 [checkout]
 # Folder naming: {repo}, {branch}, {origin}
@@ -323,6 +351,13 @@ base_ref = "remote"
 # Auto-fetch from origin before checkout (default: false)
 # Note: with base_ref="local", --fetch is skipped (warns) since fetch doesn't affect local refs
 auto_fetch = true
+
+# Auto-set upstream tracking (default: false)
+# set_upstream = false
+
+[prune]
+# Delete local branches after worktree removal (default: false)
+# delete_local_branches = false
 ```
 
 **Base branch resolution (`--base` flag):**
@@ -381,7 +416,7 @@ Configure forge detection and multi-account auth for PR operations:
 ```toml
 [forge]
 default = "github"      # Default forge
-default_org = "my-company"  # Default org (allows: wt pr checkout 123 repo)
+default_org = "my-company"  # Default org (allows: wt pr checkout repo 123)
 
 [[forge.rules]]
 pattern = "company/*"
@@ -415,7 +450,10 @@ Customize the interactive UI with preset themes or custom colors:
 ```toml
 [theme]
 # Use a preset theme
-name = "dracula"  # default, dracula, nord, gruvbox, catppuccin-frappe, catppuccin-mocha
+name = "dracula"  # none, default, dracula, nord, gruvbox, catppuccin
+
+# Theme mode: "auto" (detect terminal), "light", or "dark"
+mode = "auto"
 
 # Use nerd font symbols (requires a nerd font installed)
 nerdfont = true
@@ -441,7 +479,7 @@ Available color keys: `primary`, `accent`, `success`, `error`, `muted`, `normal`
 keybindings:
   prs:
     - key: O
-      command: wt pr checkout {{.PrNumber}} {{.RepoName}}
+      command: wt pr checkout {{.RepoName}} {{.PrNumber}}
 ```
 
 Press `O` to checkout PR → hooks auto-open your editor.
