@@ -6,13 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
-
-// GetRepoName extracts the repository name from the origin URL
-func GetRepoName(ctx context.Context) (string, error) {
-	return GetRepoNameFrom(ctx, ".")
-}
 
 // ExtractRepoNameFromURL extracts the repository name from a git URL
 func ExtractRepoNameFromURL(url string) string {
@@ -21,55 +15,9 @@ func ExtractRepoNameFromURL(url string) string {
 	return parts[len(parts)-1]
 }
 
-// GetRepoNameFrom extracts the repository name from the origin URL of a repo at the given path
-func GetRepoNameFrom(ctx context.Context, repoPath string) (string, error) {
-	output, err := outputGit(ctx, repoPath, "remote", "get-url", "origin")
-	if err != nil {
-		return "", fmt.Errorf("not in a git repository or no origin remote: %v", err)
-	}
-
-	url := strings.TrimSpace(string(output))
-
-	// Remove .git suffix
-	url = strings.TrimSuffix(url, ".git")
-
-	// Extract last part of path (repo name)
-	parts := strings.Split(url, "/")
-	repoName := parts[len(parts)-1]
-	if repoName == "" {
-		return "", fmt.Errorf("invalid git origin URL: could not extract repo name from %q", url)
-	}
-
-	return repoName, nil
-}
-
 // GetRepoDisplayName returns the folder name of the repository.
 func GetRepoDisplayName(repoPath string) string {
 	return filepath.Base(repoPath)
-}
-
-// resolveToMainRepo returns the main repo path if path is a worktree, otherwise returns path unchanged.
-// This ensures we get the actual repo folder name, not the worktree folder name.
-func resolveToMainRepo(path string) string {
-	if main, err := GetMainRepoPath(path); err == nil {
-		return main
-	}
-	return path
-}
-
-// GetRepoFolderName returns the actual folder name of the git repo on disk
-// Uses git rev-parse --show-toplevel to get the root directory.
-// If inside a worktree, resolves to the main repo folder name.
-func GetRepoFolderName(ctx context.Context) (string, error) {
-	output, err := outputGit(ctx, "", "rev-parse", "--show-toplevel")
-	if err != nil {
-		return "", fmt.Errorf("not in a git repository: %v", err)
-	}
-
-	repoPath := strings.TrimSpace(string(output))
-	// If inside a worktree, resolve to main repo folder name
-	repoPath = resolveToMainRepo(repoPath)
-	return filepath.Base(repoPath), nil
 }
 
 // GetDefaultBranch returns the default branch name for the remote (e.g., "main" or "master")
@@ -120,80 +68,6 @@ func GetCurrentBranch(ctx context.Context, path string) (string, error) {
 		return "(detached)", nil
 	}
 	return branch, nil
-}
-
-// GetCommitCount returns number of commits ahead of the default branch
-func GetCommitCount(ctx context.Context, repoPath, branch string) (int, error) {
-	return GetCommitCountWithBase(ctx, repoPath, branch, GetDefaultBranch(ctx, repoPath))
-}
-
-// GetCommitCountWithBase returns number of commits ahead of the given base branch.
-// Use this when you already have the default branch to avoid redundant git calls.
-func GetCommitCountWithBase(ctx context.Context, repoPath, branch, baseBranch string) (int, error) {
-	output, err := outputGit(ctx, repoPath, "rev-list", "--count", fmt.Sprintf("origin/%s..%s", baseBranch, branch))
-	if err != nil {
-		return 0, fmt.Errorf("failed to count commits: %v", err)
-	}
-
-	var count int
-	_, err = fmt.Sscanf(strings.TrimSpace(string(output)), "%d", &count)
-	return count, err
-}
-
-// LastCommitInfo contains both relative and absolute time of the last commit
-type LastCommitInfo struct {
-	Relative string    // Human-readable relative time (e.g., "2 days ago")
-	Time     time.Time // Absolute timestamp
-}
-
-// GetLastCommitInfo returns both relative time and absolute timestamp in a single git call.
-// Use this instead of calling GetLastCommitRelative and GetLastCommitTime separately.
-func GetLastCommitInfo(ctx context.Context, path string) (LastCommitInfo, error) {
-	output, err := outputGit(ctx, path, "log", "-1", "--format=%cr|%ct")
-	if err != nil {
-		return LastCommitInfo{}, fmt.Errorf("failed to get last commit: %v", err)
-	}
-
-	parts := strings.SplitN(strings.TrimSpace(string(output)), "|", 2)
-	if len(parts) != 2 {
-		return LastCommitInfo{}, fmt.Errorf("unexpected git log output format")
-	}
-
-	var timestamp int64
-	_, err = fmt.Sscanf(parts[1], "%d", &timestamp)
-	if err != nil {
-		return LastCommitInfo{}, fmt.Errorf("failed to parse commit timestamp: %w", err)
-	}
-
-	return LastCommitInfo{
-		Relative: parts[0],
-		Time:     time.Unix(timestamp, 0),
-	}, nil
-}
-
-// GetLastCommitRelative returns relative time of last commit
-func GetLastCommitRelative(ctx context.Context, path string) (string, error) {
-	output, err := outputGit(ctx, path, "log", "-1", "--format=%cr")
-	if err != nil {
-		return "", fmt.Errorf("failed to get last commit: %v", err)
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
-// GetLastCommitTime returns the unix timestamp of the last commit
-func GetLastCommitTime(ctx context.Context, path string) (time.Time, error) {
-	output, err := outputGit(ctx, path, "log", "-1", "--format=%ct")
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to get last commit time: %v", err)
-	}
-
-	var timestamp int64
-	_, err = fmt.Sscanf(strings.TrimSpace(string(output)), "%d", &timestamp)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to parse commit timestamp: %w", err)
-	}
-
-	return time.Unix(timestamp, 0), nil
 }
 
 // FetchBranch fetches a specific branch from origin
@@ -314,25 +188,6 @@ func PushBranch(ctx context.Context, repoPath, branch string) error {
 	return runGit(ctx, repoPath, "push", "-u", "origin", branch)
 }
 
-// BranchExists checks if a local branch exists
-func BranchExists(ctx context.Context, branch string) (bool, error) {
-	err := runGit(ctx, "", "rev-parse", "--verify", "refs/heads/"+branch)
-	if err != nil {
-		// Exit code 128 means branch doesn't exist
-		return false, nil
-	}
-	return true, nil
-}
-
-// GetShortCommitHash returns the short (7 char) commit hash for HEAD in a worktree
-func GetShortCommitHash(ctx context.Context, path string) (string, error) {
-	output, err := outputGit(ctx, path, "rev-parse", "--short", "HEAD")
-	if err != nil {
-		return "", fmt.Errorf("failed to get commit hash: %v", err)
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
 // GetCurrentRepoMainPath returns the main repository path from cwd
 // Works whether you're in the main repo or a worktree
 // Returns empty string if not in a git repo
@@ -376,42 +231,6 @@ func GetOriginURL(ctx context.Context, repoPath string) (string, error) {
 		return "", fmt.Errorf("failed to get origin URL: %v", err)
 	}
 	return strings.TrimSpace(string(output)), nil
-}
-
-// GetBranchWorktree returns the worktree path if branch is checked out, empty string if not
-func GetBranchWorktree(ctx context.Context, branch string) (string, error) {
-	output, err := outputGit(ctx, "", "worktree", "list", "--porcelain", "-z")
-	if err != nil {
-		return "", fmt.Errorf("failed to list worktrees: %v", err)
-	}
-
-	// Split on double-NUL for record boundaries
-	records := strings.Split(string(output), "\x00\x00")
-
-	for _, record := range records {
-		if record == "" {
-			continue
-		}
-
-		var wtPath, wtBranch string
-
-		// Split on single-NUL for fields within record
-		fields := strings.Split(record, "\x00")
-		for _, field := range fields {
-			switch {
-			case strings.HasPrefix(field, "worktree "):
-				wtPath = strings.TrimPrefix(field, "worktree ")
-			case strings.HasPrefix(field, "branch refs/heads/"):
-				wtBranch = strings.TrimPrefix(field, "branch refs/heads/")
-			}
-		}
-
-		if wtBranch == branch && wtPath != "" {
-			return wtPath, nil
-		}
-	}
-
-	return "", nil
 }
 
 // WorktreeInfo contains basic worktree information from git worktree list.
@@ -543,67 +362,6 @@ func DeleteLocalBranch(ctx context.Context, repoPath, branch string, force bool)
 		return fmt.Errorf("failed to delete branch: %v", err)
 	}
 	return nil
-}
-
-// DiffStats contains diff statistics
-type DiffStats struct {
-	Additions int
-	Deletions int
-	Files     int
-}
-
-// GetDiffStats returns additions, deletions, and files changed vs default branch
-func GetDiffStats(ctx context.Context, repoPath, branch string) (DiffStats, error) {
-	return GetDiffStatsWithBase(ctx, repoPath, branch, GetDefaultBranch(ctx, repoPath))
-}
-
-// GetDiffStatsWithBase returns additions, deletions, and files changed vs the given base branch.
-// Use this when you already have the default branch to avoid redundant git calls.
-func GetDiffStatsWithBase(ctx context.Context, repoPath, branch, baseBranch string) (DiffStats, error) {
-	output, err := outputGit(ctx, repoPath, "diff", "--numstat", fmt.Sprintf("origin/%s...%s", baseBranch, branch))
-	if err != nil {
-		return DiffStats{}, fmt.Errorf("failed to get diff stats: %v", err)
-	}
-
-	var stats DiffStats
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
-		if line == "" {
-			continue
-		}
-		parts := strings.Fields(line)
-		if len(parts) >= 2 {
-			var add, del int
-			// Handle binary files which show "-" instead of numbers
-			if parts[0] != "-" {
-				fmt.Sscanf(parts[0], "%d", &add)
-			}
-			if parts[1] != "-" {
-				fmt.Sscanf(parts[1], "%d", &del)
-			}
-			stats.Additions += add
-			stats.Deletions += del
-			stats.Files++
-		}
-	}
-	return stats, nil
-}
-
-// GetCommitsBehind returns number of commits behind the default branch
-func GetCommitsBehind(ctx context.Context, repoPath, branch string) (int, error) {
-	return GetCommitsBehindWithBase(ctx, repoPath, branch, GetDefaultBranch(ctx, repoPath))
-}
-
-// GetCommitsBehindWithBase returns number of commits behind the given base branch.
-// Use this when you already have the default branch to avoid redundant git calls.
-func GetCommitsBehindWithBase(ctx context.Context, repoPath, branch, baseBranch string) (int, error) {
-	output, err := outputGit(ctx, repoPath, "rev-list", "--count", fmt.Sprintf("%s..origin/%s", branch, baseBranch))
-	if err != nil {
-		return 0, fmt.Errorf("failed to count commits behind: %v", err)
-	}
-
-	var count int
-	_, err = fmt.Sscanf(strings.TrimSpace(string(output)), "%d", &count)
-	return count, err
 }
 
 // ListLocalBranches returns all local branch names for a repository.
@@ -755,29 +513,6 @@ func GetGitDir(repoPath string, repoType RepoType) string {
 	return gitDir
 }
 
-// GetGitDirForWorktree returns the shared git directory for a worktree or repo.
-// Uses git rev-parse --git-common-dir instead of reading .git files directly.
-func GetGitDirForWorktree(worktreePath string) (string, error) {
-	return GetGitDirForWorktreeWithContext(context.Background(), worktreePath)
-}
-
-// GetGitDirForWorktreeWithContext returns the shared git directory for a worktree or repo.
-func GetGitDirForWorktreeWithContext(ctx context.Context, worktreePath string) (string, error) {
-	output, err := outputGit(ctx, worktreePath, "rev-parse", "--git-common-dir")
-	if err != nil {
-		return "", fmt.Errorf("not a git repository: %w", err)
-	}
-
-	gitCommonDir := strings.TrimSpace(string(output))
-
-	// Handle relative paths
-	if !filepath.IsAbs(gitCommonDir) {
-		gitCommonDir = filepath.Join(worktreePath, gitCommonDir)
-	}
-
-	return filepath.Clean(gitCommonDir), nil
-}
-
 // CloneBareWithWorktreeSupport clones a repo as a bare repo inside the .git directory.
 // This allows worktrees to be created as siblings while git commands work normally.
 //
@@ -808,37 +543,3 @@ func CloneBareWithWorktreeSupport(ctx context.Context, url, destPath string) err
 	return nil
 }
 
-// GetBranchCreatedTime returns when the branch was created (first commit on branch)
-// Falls back to first commit time if reflog is unavailable
-func GetBranchCreatedTime(ctx context.Context, repoPath, branch string) (time.Time, error) {
-	// Try reflog first - most reliable for local branches
-	output, err := outputGit(ctx, repoPath, "reflog", "show", "--date=iso", "--format=%gd", branch)
-	if err == nil {
-		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-		if len(lines) > 0 {
-			// Last line is oldest entry (branch creation)
-			lastLine := lines[len(lines)-1]
-			// Parse ISO date format
-			t, err := time.Parse("2006-01-02 15:04:05 -0700", lastLine)
-			if err == nil {
-				return t, nil
-			}
-		}
-	}
-
-	// Fallback: get the merge-base commit date (when branch diverged from default)
-	defaultBranch := GetDefaultBranch(ctx, repoPath)
-	output, err = outputGit(ctx, repoPath, "merge-base", fmt.Sprintf("origin/%s", defaultBranch), branch)
-	if err == nil {
-		mergeBase := strings.TrimSpace(string(output))
-		output, err = outputGit(ctx, repoPath, "log", "-1", "--format=%ci", mergeBase)
-		if err == nil {
-			t, err := time.Parse("2006-01-02 15:04:05 -0700", strings.TrimSpace(string(output)))
-			if err == nil {
-				return t, nil
-			}
-		}
-	}
-
-	return time.Time{}, fmt.Errorf("could not determine branch creation time")
-}

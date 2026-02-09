@@ -17,11 +17,6 @@ type Printer struct {
 	w io.Writer
 }
 
-// New creates a new Printer writing to the given writer.
-func New(w io.Writer) *Printer {
-	return &Printer{w: w}
-}
-
 // WithPrinter attaches a Printer to the context.
 func WithPrinter(ctx context.Context, w io.Writer) context.Context {
 	return context.WithValue(ctx, ctxKey{}, &Printer{w: w})

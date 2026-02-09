@@ -691,37 +691,6 @@ const defaultConfig = `# wt configuration
 # worktree_dir = "~/Git/worktrees"
 ` + defaultConfigAfterWorktreeDir
 
-// Init creates a default config file at ~/.config/wt/config.toml
-// If force is true, overwrites existing file
-// Returns the path to the created file
-func Init(worktreeDir, repoDir string, force bool) (string, error) {
-	path, err := configPath()
-	if err != nil {
-		return "", err
-	}
-
-	// Check if file already exists (skip if force)
-	if !force {
-		if _, err := os.Stat(path); err == nil {
-			return "", errors.New("config file already exists: " + path)
-		}
-	}
-
-	// Create directory
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", err
-	}
-
-	// Write config with worktree dir and optional repo dir
-	content := DefaultConfigWithDirs(worktreeDir, repoDir)
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		return "", err
-	}
-
-	return path, nil
-}
-
 // DefaultConfig returns the default configuration content.
 func DefaultConfig() string {
 	return defaultConfig

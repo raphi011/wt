@@ -69,33 +69,6 @@ func completeBranches(cmd *cobra.Command, args []string, toComplete string) ([]s
 	return matches, cobra.ShellCompDirectiveNoFileComp
 }
 
-// completeRemoteBranches provides remote branch name completion.
-// It checks args for a repo reference (scope:branch or bare repo name),
-// otherwise uses current directory.
-func completeRemoteBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg := config.FromContext(cmd.Context())
-	ctx := context.Background()
-
-	repoPath := repoPathFromArgs(ctx, cfg, args)
-	if repoPath == "" {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	branches, err := git.ListRemoteBranches(ctx, repoPath)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	var matches []string
-	for _, b := range branches {
-		if strings.HasPrefix(b, toComplete) {
-			matches = append(matches, b)
-		}
-	}
-
-	return matches, cobra.ShellCompDirectiveNoFileComp
-}
-
 // completeBaseBranches provides completion for the --base flag.
 // Supports both local branches and explicit remote refs (origin/branch, upstream/branch).
 func completeBaseBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -149,103 +122,6 @@ func completeBaseBranches(cmd *cobra.Command, args []string, toComplete string) 
 		for _, remote := range remotes {
 			prefix := remote + "/"
 			if strings.HasPrefix(prefix, toComplete) {
-				matches = append(matches, prefix)
-			}
-		}
-	}
-
-	return matches, cobra.ShellCompDirectiveNoFileComp
-}
-
-// completeWorktrees provides worktree completion for the specified repo.
-// Supports "branch", "repo:branch", and "label:branch" formats.
-func completeWorktrees(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg := config.FromContext(cmd.Context())
-	ctx := context.Background()
-
-	// Check if user is typing scope:branch format
-	if idx := strings.Index(toComplete, ":"); idx >= 0 {
-		scopeName := toComplete[:idx]
-		branchPrefix := toComplete[idx+1:]
-
-		reg, err := registry.Load(cfg.RegistryPath)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		// Try repo name first
-		repo, err := reg.FindByName(scopeName)
-		if err == nil {
-			worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-			if err != nil {
-				return nil, cobra.ShellCompDirectiveNoFileComp
-			}
-
-			var matches []string
-			for _, wt := range worktrees {
-				if strings.HasPrefix(wt.Branch, branchPrefix) {
-					matches = append(matches, scopeName+":"+wt.Branch)
-				}
-			}
-			return matches, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		// Try label
-		labelRepos := reg.FindByLabel(scopeName)
-		if len(labelRepos) > 0 {
-			branchSet := make(map[string]bool)
-			for _, repo := range labelRepos {
-				worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-				if err != nil {
-					continue
-				}
-				for _, wt := range worktrees {
-					if strings.HasPrefix(wt.Branch, branchPrefix) {
-						branchSet[wt.Branch] = true
-					}
-				}
-			}
-
-			var matches []string
-			for branch := range branchSet {
-				matches = append(matches, scopeName+":"+branch)
-			}
-			return matches, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	var matches []string
-
-	// Try current repo first
-	repoPath := git.GetCurrentRepoMainPath(ctx)
-	if repoPath != "" {
-		worktrees, err := git.ListWorktreesFromRepo(ctx, repoPath)
-		if err == nil {
-			for _, wt := range worktrees {
-				if strings.HasPrefix(wt.Branch, toComplete) {
-					matches = append(matches, wt.Branch)
-				}
-			}
-		}
-	}
-
-	// Also offer "repo:" and "label:" completions
-	reg, err := registry.Load(cfg.RegistryPath)
-	if err == nil {
-		// Repo prefixes
-		for _, repo := range reg.Repos {
-			prefix := repo.Name + ":"
-			if strings.HasPrefix(prefix, toComplete) || strings.HasPrefix(toComplete, repo.Name) {
-				matches = append(matches, prefix)
-			}
-		}
-
-		// Label prefixes
-		for _, label := range reg.AllLabels() {
-			prefix := label + ":"
-			if strings.HasPrefix(prefix, toComplete) || strings.HasPrefix(toComplete, label) {
 				matches = append(matches, prefix)
 			}
 		}
