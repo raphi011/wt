@@ -215,14 +215,16 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 			// For auto-prune (merged PRs), force=true is implicit
 			removed, failed := pruneWorktrees(ctx, toRemove, true, dryRun, shouldDeleteBranches, hookNames, noHook, env, prCache)
 
-			// Display results
+			// Print summary
+			if dryRun {
+				out.Printf("Would remove %d worktree(s), skip %d\n", len(removed), len(toSkip)+len(failed))
+			} else {
+				out.Printf("Removed %d worktree(s), skipped %d\n", len(removed), len(toSkip)+len(failed))
+			}
+
+			// Display results table
 			if len(removed) > 0 {
-				fmt.Println()
-				if dryRun {
-					fmt.Println("Would remove:")
-				} else {
-					fmt.Println("Removed:")
-				}
+				out.Println()
 				var rows [][]string
 				for _, wt := range removed {
 					rows = append(rows, static.WorktreeTableRow(wt))
@@ -233,13 +235,6 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 			// Save PR cache once at the end
 			if err := prCache.SaveIfDirty(); err != nil {
 				l.Printf("Warning: failed to save cache: %v\n", err)
-			}
-
-			// Print summary
-			if dryRun {
-				out.Printf("\nWould remove %d worktree(s), skip %d\n", len(removed), len(toSkip)+len(failed))
-			} else {
-				out.Printf("\nRemoved %d worktree(s), skipped %d\n", len(removed), len(toSkip)+len(failed))
 			}
 
 			return nil
