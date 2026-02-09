@@ -491,12 +491,10 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 				out.Printf("Merged PR #%d\n", pr.Number)
 
 				// Update cache with merged state
-				if cache != nil {
-					pr.State = forge.PRStateMerged
-					cache.Set(cacheKey, prcache.FromForge(pr))
-					if err := cache.Save(); err != nil {
-						l.Printf("Warning: failed to save PR cache: %v\n", err)
-					}
+				pr.State = forge.PRStateMerged
+				cache.Set(cacheKey, prcache.FromForge(pr))
+				if err := cache.Save(); err != nil {
+					l.Printf("Warning: failed to save PR cache: %v\n", err)
 				}
 			}
 

@@ -71,8 +71,9 @@ func loadWorktreesForRepo(ctx context.Context, repo RepoRef) ([]Worktree, *LoadW
 	// Batch-fetch branch config (notes + upstreams) in one git call
 	notes, upstreams := GetAllBranchConfig(ctx, repo.Path)
 
-	// Get origin URL once per repo (repos without origin simply skip PR refresh)
-	originURL, _ := GetOriginURL(ctx, repo.Path)
+	// Get origin URL once per repo. Non-fatal: repos without an "origin"
+	// remote get originURL="" and simply skip PR refresh downstream.
+	originURL, _ := GetOriginURL(ctx, repo.Path) //nolint:errcheck
 
 	worktrees := make([]Worktree, 0, len(wtInfos))
 	for _, wti := range wtInfos {

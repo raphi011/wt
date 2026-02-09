@@ -23,7 +23,6 @@ import (
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
 
-
 func newPruneCmd() *cobra.Command {
 	var (
 		dryRun           bool
