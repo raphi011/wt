@@ -197,10 +197,28 @@ func IsDirty(ctx context.Context, path string) bool {
 
 // FetchBranch fetches a specific branch from origin
 func FetchBranch(ctx context.Context, repoPath, branch string) error {
-	if err := runGit(ctx, repoPath, "fetch", "origin", branch, "--quiet"); err != nil {
-		return fmt.Errorf("failed to fetch origin/%s: %v", branch, err)
+	return FetchBranchFromRemote(ctx, repoPath, "origin", branch)
+}
+
+// FetchBranchFromRemote fetches a specific branch from a named remote.
+func FetchBranchFromRemote(ctx context.Context, repoPath, remote, branch string) error {
+	if err := runGit(ctx, repoPath, "fetch", remote, branch, "--quiet"); err != nil {
+		return fmt.Errorf("failed to fetch %s/%s: %v", remote, branch, err)
 	}
 	return nil
+}
+
+// ParseRemoteRef checks if ref has a valid remote prefix (e.g., "origin/main").
+// Returns the remote name, branch name, and whether it's a remote ref.
+func ParseRemoteRef(ctx context.Context, repoPath, ref string) (remote, branch string, isRemote bool) {
+	parts := strings.SplitN(ref, "/", 2)
+	if len(parts) != 2 {
+		return "", ref, false
+	}
+	if HasRemote(ctx, repoPath, parts[0]) {
+		return parts[0], parts[1], true
+	}
+	return "", ref, false
 }
 
 // HasRemote checks if a remote with the given name exists
