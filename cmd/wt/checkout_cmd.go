@@ -115,48 +115,72 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				}
 				repos = []registry.Repo{repo}
 			} else {
-				// Existing branch without scope - search all repos
-				for _, repo := range filterOrphanedRepos(l, reg.Repos) {
-					// Check if this repo has a worktree for this branch
+				// Existing branch without scope — prefer current repo
+				repo, currentRepoErr := findOrRegisterCurrentRepoFromContext(ctx, reg)
+				if currentRepoErr == nil {
+					// In a registered repo — check only this one
 					wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-					if err != nil {
-						l.Debug("skipping repo", "repo", repo.Name, "error", err)
-						continue
-					}
-					for _, wt := range wts {
-						if wt.Branch == parsed.Branch {
-							return fmt.Errorf("branch %q already checked out at %s", parsed.Branch, wt.Path)
+					if err == nil {
+						for _, wt := range wts {
+							if wt.Branch == parsed.Branch {
+								return fmt.Errorf("branch %q already checked out at %s", parsed.Branch, wt.Path)
+							}
 						}
 					}
-					// Check if branch exists locally
 					branches, err := git.ListLocalBranches(ctx, repo.Path)
-					if err != nil {
-						l.Debug("failed to list branches", "repo", repo.Name, "error", err)
-						continue
-					}
-					for _, b := range branches {
-						if b == parsed.Branch {
-							repos = append(repos, repo)
-							break
+					if err == nil {
+						for _, b := range branches {
+							if b == parsed.Branch {
+								repos = append(repos, repo)
+								break
+							}
 						}
 					}
-				}
+					if len(repos) == 0 {
+						if fetch {
+							// Branch not found locally but --fetch may pull it from remote
+							repos = append(repos, repo)
+						} else {
+							return fmt.Errorf("branch %q not found in repo %s", parsed.Branch, repo.Name)
+						}
+					}
+				} else {
+					// Not in a repo — search all repos
+					for _, repo := range filterOrphanedRepos(l, reg.Repos) {
+						wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+						if err != nil {
+							l.Debug("skipping repo", "repo", repo.Name, "error", err)
+							continue
+						}
+						for _, wt := range wts {
+							if wt.Branch == parsed.Branch {
+								return fmt.Errorf("branch %q already checked out at %s", parsed.Branch, wt.Path)
+							}
+						}
+						branches, err := git.ListLocalBranches(ctx, repo.Path)
+						if err != nil {
+							l.Debug("failed to list branches", "repo", repo.Name, "error", err)
+							continue
+						}
+						for _, b := range branches {
+							if b == parsed.Branch {
+								repos = append(repos, repo)
+								break
+							}
+						}
+					}
 
-				if len(repos) == 0 {
-					// Try current repo as fallback
-					repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
-					if err != nil {
+					if len(repos) == 0 {
 						return fmt.Errorf("branch %q not found in any repo", parsed.Branch)
 					}
-					repos = []registry.Repo{repo}
-				}
 
-				if len(repos) > 1 {
-					var names []string
-					for _, r := range repos {
-						names = append(names, r.Name+":"+parsed.Branch)
+					if len(repos) > 1 {
+						var names []string
+						for _, r := range repos {
+							names = append(names, r.Name+":"+parsed.Branch)
+						}
+						return fmt.Errorf("branch %q exists in multiple repos: %v\nUse scope:branch to specify", parsed.Branch, names)
 					}
-					return fmt.Errorf("branch %q exists in multiple repos: %v\nUse scope:branch to specify", parsed.Branch, names)
 				}
 			}
 

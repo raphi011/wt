@@ -442,4 +442,3 @@ func updateWorktreeLinks(_ context.Context, repoPath string, wt WorktreeMigratio
 
 	return nil
 }
-
