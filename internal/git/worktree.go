@@ -20,7 +20,6 @@ type Worktree struct {
 	OriginURL      string    `json:"origin_url"`
 	IsMerged       bool      `json:"is_merged"`
 	CommitCount    int       `json:"commit_count"`
-	IsDirty        bool      `json:"is_dirty"` // only populated when includeDirty=true
 	HasUpstream    bool      `json:"has_upstream"`
 	LastCommit     string    `json:"last_commit"`
 	LastCommitTime time.Time `json:"last_commit_time"` // for sorting by commit date
@@ -28,11 +27,8 @@ type Worktree struct {
 }
 
 // Status returns a human-readable status string for the worktree.
-// Priority: dirty > merged/prunable > commits ahead > clean
+// Priority: merged/prunable > commits ahead > clean
 func (w *Worktree) Status() string {
-	if w.IsDirty {
-		return "dirty"
-	}
 	if w.IsMerged {
 		return "prunable"
 	}
@@ -76,9 +72,6 @@ func GetWorktreeInfo(ctx context.Context, path string) (*Worktree, error) {
 	// Get commit count (errors treated as 0 commits)
 	commitCount, _ := GetCommitCount(ctx, mainRepo, branch)
 
-	// Check dirty status via git status --porcelain
-	isDirty := IsDirty(ctx, path)
-
 	// Get last commit time (errors treated as empty/zero values)
 	var lastCommit string
 	var lastCommitTime time.Time
@@ -101,160 +94,11 @@ func GetWorktreeInfo(ctx context.Context, path string) (*Worktree, error) {
 		OriginURL:      originURL,
 		IsMerged:       false, // Set later based on PR status
 		CommitCount:    commitCount,
-		IsDirty:        isDirty,
 		HasUpstream:    hasUpstream,
 		LastCommit:     lastCommit,
 		LastCommitTime: lastCommitTime,
 		Note:           note,
 	}, nil
-}
-
-// ListWorktrees scans a directory for git worktrees with batched git calls per repo.
-// If includeDirty is true, checks each worktree for dirty status (adds subprocess calls).
-// For 10 worktrees across 2 repos: ~8 calls (list) or ~18 calls with dirty checks (prune).
-func ListWorktrees(ctx context.Context, worktreeDir string, includeDirty bool) ([]Worktree, error) {
-	entries, err := os.ReadDir(worktreeDir)
-	if err != nil {
-		return nil, err
-	}
-
-	// Phase 1: Find all worktrees and group by main repo (file I/O only)
-	type pendingWorktree struct {
-		path     string
-		mainRepo string
-	}
-	var pending []pendingWorktree
-	mainRepos := make(map[string]bool)
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		path := filepath.Join(worktreeDir, entry.Name())
-		gitFile := filepath.Join(path, ".git")
-
-		// Check if it's a worktree (has .git file, not directory)
-		info, err := os.Stat(gitFile)
-		if err != nil || info.IsDir() {
-			continue
-		}
-
-		// Get main repo path (file read, no subprocess)
-		mainRepo, err := GetMainRepoPath(path)
-		if err != nil {
-			continue
-		}
-
-		pending = append(pending, pendingWorktree{path: path, mainRepo: mainRepo})
-		mainRepos[mainRepo] = true
-	}
-
-	if len(pending) == 0 {
-		return nil, nil
-	}
-
-	// Phase 2: Batch fetch info per main repo (4 subprocess calls per repo)
-	// Map: mainRepo -> (worktree path -> WorktreeInfo)
-	repoWorktrees := make(map[string]map[string]WorktreeInfo)
-	// Map: mainRepo -> (branch -> note)
-	repoNotes := make(map[string]map[string]string)
-	// Map: mainRepo -> (branch -> hasUpstream)
-	repoUpstreams := make(map[string]map[string]bool)
-	// Map: mainRepo -> originURL
-	repoOrigins := make(map[string]string)
-
-	// Map: mainRepo -> default branch (for commit count comparisons)
-	repoDefaultBranches := make(map[string]string)
-
-	for mainRepo := range mainRepos {
-		// Get all worktrees from this repo in one call
-		wtInfos, err := ListWorktreesFromRepo(ctx, mainRepo)
-		if err != nil {
-			continue
-		}
-		repoWorktrees[mainRepo] = make(map[string]WorktreeInfo)
-		for _, wti := range wtInfos {
-			repoWorktrees[mainRepo][wti.Path] = wti
-		}
-
-		// Get origin URL once
-		originURL, _ := GetOriginURL(ctx, mainRepo)
-		repoOrigins[mainRepo] = originURL
-
-		// Get all branch notes and upstreams in one call
-		notes, upstreams := GetAllBranchConfig(ctx, mainRepo)
-		repoNotes[mainRepo] = notes
-		repoUpstreams[mainRepo] = upstreams
-
-		// Cache default branch for commit count comparisons
-		repoDefaultBranches[mainRepo] = GetDefaultBranch(ctx, mainRepo)
-	}
-
-	// Phase 3: Build worktrees by merging batched data
-	var worktrees []Worktree
-	for _, p := range pending {
-		wtMap, ok := repoWorktrees[p.mainRepo]
-		if !ok {
-			continue
-		}
-		wtInfo, ok := wtMap[p.path]
-		if !ok {
-			continue
-		}
-
-		branch := wtInfo.Branch
-
-		// Get commit count using cached default branch
-		var commitCount int
-		if branch != "(detached)" {
-			defaultBranch := repoDefaultBranches[p.mainRepo]
-			commitCount, _ = GetCommitCountWithBase(ctx, p.mainRepo, branch, defaultBranch)
-		}
-
-		// Get note for this branch
-		note := ""
-		if notes, ok := repoNotes[p.mainRepo]; ok {
-			note = notes[branch]
-		}
-
-		// Check upstream
-		hasUpstream := false
-		if upstreams, ok := repoUpstreams[p.mainRepo]; ok {
-			hasUpstream = upstreams[branch]
-		}
-
-		// Get last commit time (relative and absolute) in single call
-		var lastCommit string
-		var lastCommitTime time.Time
-		if commitInfo, err := GetLastCommitInfo(ctx, p.path); err == nil {
-			lastCommit = commitInfo.Relative
-			lastCommitTime = commitInfo.Time
-		}
-
-		// Phase 4: Only check dirty status if requested
-		var isDirty bool
-		if includeDirty {
-			isDirty = IsDirty(ctx, p.path)
-		}
-
-		worktrees = append(worktrees, Worktree{
-			Path:           p.path,
-			Branch:         branch,
-			MainRepo:       p.mainRepo,
-			RepoName:       filepath.Base(p.mainRepo),
-			OriginURL:      repoOrigins[p.mainRepo],
-			IsMerged:       false, // Set later based on PR status
-			CommitCount:    commitCount,
-			IsDirty:        isDirty,
-			HasUpstream:    hasUpstream,
-			LastCommit:     lastCommit,
-			LastCommitTime: lastCommitTime,
-			Note:           note,
-		})
-	}
-
-	return worktrees, nil
 }
 
 // CreateWorktreeResult contains the result of creating a worktree

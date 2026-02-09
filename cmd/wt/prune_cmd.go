@@ -14,6 +14,7 @@ import (
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
@@ -447,6 +448,14 @@ func pruneWorktrees(ctx context.Context, toRemove []pruneWorktree, force, dryRun
 	l := log.FromContext(ctx)
 	cfg := config.FromContext(ctx)
 
+	// Load history for cleanup
+	hist, err := history.Load(cfg.GetHistoryPath())
+	if err != nil {
+		l.Printf("Warning: failed to load history for prune cleanup: %v\n", err)
+		hist = &history.History{}
+	}
+	historyChanged := false
+
 	// Select hooks
 	hookMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandPrune)
 	if err != nil {
@@ -479,6 +488,12 @@ func pruneWorktrees(ctx context.Context, toRemove []pruneWorktree, force, dryRun
 			folderName := filepath.Base(wt.Path)
 			prCache.Delete(folderName)
 		}
+
+		// Remove from history
+		if hist.RemoveByPath(wt.Path) {
+			historyChanged = true
+		}
+
 		removed = append(removed, wt)
 
 		// Delete local branch if enabled
@@ -507,6 +522,13 @@ func pruneWorktrees(ctx context.Context, toRemove []pruneWorktree, force, dryRun
 				Env:         hookEnv,
 			}
 			hooks.RunForEach(hookMatches, hookCtx, wt.RepoPath)
+		}
+	}
+
+	// Save history if any entries were removed
+	if historyChanged {
+		if err := hist.Save(cfg.GetHistoryPath()); err != nil {
+			l.Printf("Warning: failed to save history after prune: %v\n", err)
 		}
 	}
 

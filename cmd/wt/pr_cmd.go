@@ -226,8 +226,8 @@ Otherwise, it's looked up in the local registry.`,
 			fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
 
 			// Record to history for wt cd
-			if err := history.RecordAccess(wtPath, cfg.GetHistoryPath()); err != nil {
-				l.Debug("failed to record history", "error", err)
+			if err := history.RecordAccess(wtPath, repo.Name, branch, cfg.GetHistoryPath()); err != nil {
+				l.Printf("Warning: failed to record history: %v\n", err)
 			}
 
 			// Set note if provided

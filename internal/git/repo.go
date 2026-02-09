@@ -196,15 +196,6 @@ func GetLastCommitTime(ctx context.Context, path string) (time.Time, error) {
 	return time.Unix(timestamp, 0), nil
 }
 
-// IsDirty returns true if the worktree has uncommitted changes or untracked files
-func IsDirty(ctx context.Context, path string) bool {
-	output, err := outputGit(ctx, path, "status", "--porcelain")
-	if err != nil {
-		return false // Treat error as clean (safe default)
-	}
-	return strings.TrimSpace(string(output)) != ""
-}
-
 // FetchBranch fetches a specific branch from origin
 func FetchBranch(ctx context.Context, repoPath, branch string) error {
 	return FetchBranchFromRemote(ctx, repoPath, "origin", branch)

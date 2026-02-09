@@ -81,7 +81,6 @@ func TestWorktreeStruct(t *testing.T) {
 		RepoName:    "test-repo",
 		IsMerged:    true,
 		CommitCount: 5,
-		IsDirty:     false,
 		LastCommit:  "2 days ago",
 	}
 

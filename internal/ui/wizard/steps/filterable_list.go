@@ -398,10 +398,12 @@ func (s *FilterableListStep) canAdvanceMulti() bool {
 
 func (s *FilterableListStep) View() string {
 	var b strings.Builder
-	if s.multiSelect {
-		fmt.Fprintf(&b, "%s (%d selected):\n", s.prompt, len(s.multiSelected))
-	} else {
-		b.WriteString(s.prompt + ":\n")
+	if s.prompt != "" {
+		if s.multiSelect {
+			fmt.Fprintf(&b, "%s (%d selected):\n", s.prompt, len(s.multiSelected))
+		} else {
+			b.WriteString(s.prompt + ":\n")
+		}
 	}
 
 	// Render filter line: show textinput view when focused (includes cursor), plain text otherwise

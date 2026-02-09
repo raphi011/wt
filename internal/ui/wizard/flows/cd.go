@@ -2,7 +2,13 @@ package flows
 
 import (
 	"fmt"
+	"os"
+	"time"
 
+	"github.com/charmbracelet/colorprofile"
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
 	"github.com/raphi011/wt/internal/ui/wizard/steps"
 )
@@ -15,87 +21,134 @@ type CdOptions struct {
 	Cancelled    bool
 }
 
-// CdWorktreeInfo contains worktree data for display in the wizard.
+// CdWorktreeInfo contains worktree data for display in the list.
 type CdWorktreeInfo struct {
-	RepoName string
-	Branch   string
-	Path     string
-	IsDirty  bool
-	Note     string
+	RepoName    string
+	Branch      string
+	Path        string
+	LastAccess  time.Time
+	AccessCount int
 }
 
-// CdWizardParams contains parameters for the cd wizard.
+// CdWizardParams contains parameters for the cd interactive list.
 type CdWizardParams struct {
 	Worktrees []CdWorktreeInfo // All worktrees available for selection
 }
 
-// CdInteractive runs the interactive cd wizard with fuzzy search.
+// cdListModel is a lightweight BubbleTea model wrapping FilterableListStep
+// directly, bypassing the wizard framework chrome (borders, title, tabs).
+type cdListModel struct {
+	step       *steps.FilterableListStep
+	worktrees  []CdWorktreeInfo
+	done       bool
+	cancelled  bool
+	selectedAt int // index into worktrees; -1 means no selection
+}
+
+func (m *cdListModel) Init() tea.Cmd {
+	return m.step.Init()
+}
+
+// Update handles incoming messages. Only tea.KeyPressMsg is processed;
+// other message types (window size, mouse, etc.) are safely ignored
+// because FilterableListStep only operates on key events.
+func (m *cdListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return m, nil
+	}
+
+	switch keyMsg.String() {
+	case "esc":
+		if m.step.HasClearableInput() {
+			cmd := m.step.ClearInput()
+			return m, cmd
+		}
+		m.cancelled = true
+		return m, tea.Quit
+	case "ctrl+c":
+		m.cancelled = true
+		return m, tea.Quit
+	}
+
+	_, cmd, result := m.step.Update(keyMsg)
+
+	if result == framework.StepSubmitIfReady || result == framework.StepAdvance {
+		val := m.step.GetSelectedValue()
+		if val != nil {
+			m.selectedAt = val.(int)
+			m.done = true
+			return m, tea.Quit
+		}
+	}
+
+	return m, cmd
+}
+
+func (m *cdListModel) View() tea.View {
+	if m.done || m.cancelled {
+		return tea.NewView("")
+	}
+	return tea.NewView(m.step.View() + "\n" + framework.HelpStyle().Render(m.step.Help()) + "\n")
+}
+
+// CdInteractive runs the interactive cd list with fuzzy search.
+// This bypasses the wizard framework for a lightweight, fast experience.
 func CdInteractive(params CdWizardParams) (CdOptions, error) {
 	if len(params.Worktrees) == 0 {
 		return CdOptions{Cancelled: true}, nil
 	}
 
-	w := framework.NewWizard("Change Directory to Worktree")
-
-	// Build options from worktrees
 	options := make([]framework.Option, len(params.Worktrees))
 
 	for i, wt := range params.Worktrees {
-		// Format: "repo:branch" with optional dirty marker
 		label := fmt.Sprintf("%s:%s", wt.RepoName, wt.Branch)
-		if wt.IsDirty {
-			label += " *"
-		}
 
-		description := ""
-		if wt.Note != "" {
-			description = wt.Note
-		}
+		description := buildDescription(wt)
 
 		options[i] = framework.Option{
 			Label:       label,
-			Value:       i, // Store index to retrieve full info later
+			Value:       i,
 			Description: description,
-			Disabled:    false,
 		}
 	}
 
-	// Create filterable list step (uses fuzzy search)
-	selectStep := steps.NewFilterableList("worktree", "Worktree", "Select worktree", options)
+	selectStep := steps.NewFilterableList("worktree", "Worktree", "", options)
 
-	w.AddStep(selectStep)
+	model := &cdListModel{
+		step:       selectStep,
+		worktrees:  params.Worktrees,
+		selectedAt: -1,
+	}
 
-	// Skip summary for single-step wizard - go directly after selection
-	w.WithSkipSummary(true)
+	profile := colorprofile.Detect(os.Stderr, os.Environ())
+	p := tea.NewProgram(model,
+		tea.WithOutput(os.Stderr),
+		tea.WithColorProfile(profile),
+	)
 
-	// Run the wizard
-	result, err := w.Run()
+	finalModel, err := p.Run()
 	if err != nil {
 		return CdOptions{}, err
 	}
 
-	if result.IsCancelled() {
+	m := finalModel.(*cdListModel)
+	if m.cancelled || !m.done || m.selectedAt < 0 {
 		return CdOptions{Cancelled: true}, nil
 	}
 
-	// Extract selected worktree
-	step := result.GetStep("worktree")
-	if step == nil {
-		return CdOptions{Cancelled: true}, nil
-	}
-
-	fl := step.(*steps.FilterableListStep)
-	val := fl.GetSelectedValue()
-	if val == nil {
-		return CdOptions{Cancelled: true}, nil
-	}
-
-	idx := val.(int)
-	wt := params.Worktrees[idx]
-
+	wt := m.worktrees[m.selectedAt]
 	return CdOptions{
 		SelectedPath: wt.Path,
 		RepoName:     wt.RepoName,
 		Branch:       wt.Branch,
 	}, nil
+}
+
+// buildDescription creates the option description from history data.
+func buildDescription(wt CdWorktreeInfo) string {
+	if !wt.LastAccess.IsZero() {
+		return format.RelativeTime(wt.LastAccess)
+	}
+	return ""
 }

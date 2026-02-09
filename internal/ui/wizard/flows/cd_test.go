@@ -46,11 +46,8 @@ func TestCdWorktreeInfo_Structure(t *testing.T) {
 		RepoName: "my-repo",
 		Branch:   "feature-branch",
 		Path:     "/path/to/worktree",
-		IsDirty:  true,
-		Note:     "WIP: implementing feature",
 	}
 
-	// Verify all fields are accessible
 	if info.RepoName != "my-repo" {
 		t.Errorf("RepoName = %q, want my-repo", info.RepoName)
 	}
@@ -60,20 +57,9 @@ func TestCdWorktreeInfo_Structure(t *testing.T) {
 	if info.Path != "/path/to/worktree" {
 		t.Errorf("Path = %q, want /path/to/worktree", info.Path)
 	}
-	if !info.IsDirty {
-		t.Error("IsDirty should be true")
-	}
-	if info.Note != "WIP: implementing feature" {
-		t.Errorf("Note = %q, want 'WIP: implementing feature'", info.Note)
-	}
 }
 
-// Note: Full interactive testing of CdInteractive would require:
-// 1. Refactoring to separate wizard building from wizard.Run()
-// 2. Or using teatest with golden files for full TUI testing
-//
-// The wizard builds options like "repo:branch *" for dirty worktrees
-// and uses the Note as description. To test this, we would need to:
-// - Build the wizard without calling Run()
-// - Inspect the step options to verify formatting
-// - Simulate key events to test selection
+// Note: Full interactive testing of CdInteractive requires calling
+// cdListModel.Update() directly with synthetic tea.KeyPressMsg values,
+// bypassing the BubbleTea runtime. The model only processes KeyPressMsg;
+// other message types are safely ignored.
