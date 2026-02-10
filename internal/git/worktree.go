@@ -2,8 +2,6 @@ package git
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -45,19 +43,6 @@ func RemoveWorktree(ctx context.Context, worktree Worktree, force bool) error {
 // PruneWorktrees prunes stale worktree references
 func PruneWorktrees(ctx context.Context, repoPath string) error {
 	return runGit(ctx, repoPath, "worktree", "prune")
-}
-
-// IsWorktree returns true if path is a git worktree (not main repo)
-// Worktrees have .git as a file pointing to the main repo,
-// while main repos have .git as a directory.
-func IsWorktree(path string) bool {
-	gitPath := filepath.Join(path, ".git")
-	info, err := os.Stat(gitPath)
-	if err != nil {
-		return false
-	}
-	// Worktrees have .git as file, main repos have .git as directory
-	return !info.IsDir()
 }
 
 // CreateWorktree creates a worktree for an existing branch.

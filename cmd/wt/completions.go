@@ -131,16 +131,20 @@ func completeBaseBranches(cmd *cobra.Command, args []string, toComplete string) 
 }
 
 // completeCdArg provides completion for `wt cd [scope:]branch`
-// scope can be a repo name or label.
-// Inside a repo: shows branches from current repo (no prefix) + scope:branch for others
-// Outside a repo or with scope prefix: shows scope:branch combinations
 func completeCdArg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
+	return completeScopedWorktreeArg(cmd, args, toComplete)
+}
 
-	cfg := config.FromContext(cmd.Context())
-	ctx := context.Background()
+// completeScopedWorktreeArg provides completion for [scope:]branch format
+// including both repo: and label: prefixes.
+// Inside a repo: shows branches from current repo (no prefix) + scope:branch for others
+// Outside a repo or with scope prefix: shows scope:branch combinations
+func completeScopedWorktreeArg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	ctx := cmd.Context()
+	cfg := config.FromContext(ctx)
 
 	// Check if user is typing scope:branch format
 	if idx := strings.Index(toComplete, ":"); idx >= 0 {

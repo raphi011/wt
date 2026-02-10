@@ -103,8 +103,8 @@ type ThemeConfig struct {
 
 // Config holds the wt configuration
 type Config struct {
-	RegistryPath  string            `toml:"-"` // Override ~/.wt/repos.json path (for testing)
-	HistoryPath   string            `toml:"-"` // Override ~/.wt/history.json path (for testing)
+	RegistryPath  string            `toml:"-"`              // Override ~/.wt/repos.json path (for testing)
+	HistoryPath   string            `toml:"-"`              // Override ~/.wt/history.json path (for testing)
 	DefaultSort   string            `toml:"default_sort"`   // "created", "repo", "branch" (default: "created")
 	DefaultLabels []string          `toml:"default_labels"` // labels for newly registered repos
 	Hooks         HooksConfig       `toml:"-"`              // custom parsing needed
@@ -565,4 +565,3 @@ worktree_format = "{repo}-{branch}"
 func DefaultConfig() string {
 	return defaultConfig
 }
-
