@@ -24,7 +24,9 @@ func TestPrCheckout_InvalidPRNumber(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -60,7 +62,9 @@ func TestPrCheckout_RepoNotFound(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{},
@@ -73,7 +77,9 @@ func TestPrCheckout_RepoNotFound(t *testing.T) {
 
 	// Work from a non-repo directory
 	otherDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(otherDir, 0755)
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx := testContextWithConfig(t, cfg, otherDir)
 	cmd := newPrCheckoutCmd()
@@ -101,7 +107,9 @@ func TestPrCheckout_InvalidPRNumberWithRepo(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -125,5 +133,230 @@ func TestPrCheckout_InvalidPRNumberWithRepo(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "invalid PR number") {
 		t.Errorf("expected error about invalid PR number, got %q", err.Error())
+	}
+}
+
+// TestPrCreate_NotInGitRepo tests error when running pr create outside a git repo.
+//
+// Scenario: User runs `wt pr create` from a non-git directory with no repo arg
+// Expected: Returns "not in a git repository" error
+func TestPrCreate_NotInGitRepo(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{Repos: []registry.Repo{}}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	nonGitDir := filepath.Join(tmpDir, "not-a-repo")
+	if err := os.MkdirAll(nonGitDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, nonGitDir)
+
+	cmd := newPrCreateCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--title", "test"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for non-git directory, got nil")
+	}
+	if !strings.Contains(err.Error(), "not in a git repository") {
+		t.Errorf("expected 'not in a git repository' error, got %q", err.Error())
+	}
+}
+
+// TestPrCreate_RepoNotFound tests error when specified repo doesn't exist.
+//
+// Scenario: User runs `wt pr create nonexistent`
+// Expected: Returns "not found" error
+func TestPrCreate_RepoNotFound(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{Repos: []registry.Repo{}}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newPrCreateCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"nonexistent", "--title", "test"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for nonexistent repo, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got %q", err.Error())
+	}
+}
+
+// TestPrMerge_NotInGitRepo tests error when running pr merge outside a git repo.
+//
+// Scenario: User runs `wt pr merge` from a non-git directory with no repo arg
+// Expected: Returns "not in a git repository" error
+func TestPrMerge_NotInGitRepo(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{Repos: []registry.Repo{}}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	nonGitDir := filepath.Join(tmpDir, "not-a-repo")
+	if err := os.MkdirAll(nonGitDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, nonGitDir)
+
+	cmd := newPrMergeCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for non-git directory, got nil")
+	}
+	if !strings.Contains(err.Error(), "not in a git repository") {
+		t.Errorf("expected 'not in a git repository' error, got %q", err.Error())
+	}
+}
+
+// TestPrMerge_RepoNotFound tests error when specified repo doesn't exist.
+//
+// Scenario: User runs `wt pr merge nonexistent`
+// Expected: Returns "not found" error
+func TestPrMerge_RepoNotFound(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{Repos: []registry.Repo{}}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newPrMergeCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"nonexistent"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for nonexistent repo, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got %q", err.Error())
+	}
+}
+
+// TestPrView_NotInGitRepo tests error when running pr view outside a git repo.
+//
+// Scenario: User runs `wt pr view` from a non-git directory with no repo arg
+// Expected: Returns "not in a git repository" error
+func TestPrView_NotInGitRepo(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{Repos: []registry.Repo{}}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	nonGitDir := filepath.Join(tmpDir, "not-a-repo")
+	if err := os.MkdirAll(nonGitDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, nonGitDir)
+
+	cmd := newPrViewCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for non-git directory, got nil")
+	}
+	if !strings.Contains(err.Error(), "not in a git repository") {
+		t.Errorf("expected 'not in a git repository' error, got %q", err.Error())
+	}
+}
+
+// TestPrView_RepoNotFound tests error when specified repo doesn't exist.
+//
+// Scenario: User runs `wt pr view nonexistent`
+// Expected: Returns "not found" error
+func TestPrView_RepoNotFound(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{Repos: []registry.Repo{}}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newPrViewCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"nonexistent"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for nonexistent repo, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got %q", err.Error())
 	}
 }

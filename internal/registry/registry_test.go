@@ -156,7 +156,10 @@ func TestRegistryLabels(t *testing.T) {
 		t.Fatalf("AddLabel() failed: %v", err)
 	}
 
-	repo, _ := reg.FindByName("foo")
+	repo, err := reg.FindByName("foo")
+	if err != nil {
+		t.Fatalf("FindByName after AddLabel failed: %v", err)
+	}
 	if !repo.HasLabel("backend") {
 		t.Error("expected repo to have backend label")
 	}
@@ -284,5 +287,145 @@ func TestAllRepoNames(t *testing.T) {
 		if names[i] != n {
 			t.Errorf("names[%d] = %s, want %s", i, names[i], n)
 		}
+	}
+}
+
+func TestFindByPath(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	repoPath := filepath.Join(tmpDir, "myrepo")
+	if err := os.MkdirAll(repoPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	reg := &Registry{
+		Repos: []Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+
+	// Find existing by absolute path
+	repo, err := reg.FindByPath(repoPath)
+	if err != nil {
+		t.Fatalf("FindByPath() failed: %v", err)
+	}
+	if repo.Name != "myrepo" {
+		t.Errorf("expected myrepo, got %s", repo.Name)
+	}
+
+	// Find non-existent path
+	_, err = reg.FindByPath("/nonexistent/path")
+	if err == nil {
+		t.Error("expected error for non-existent path")
+	}
+}
+
+func TestUpdate(t *testing.T) {
+	t.Parallel()
+
+	reg := &Registry{
+		Repos: []Repo{
+			{Name: "foo", Path: "/tmp/foo"},
+		},
+	}
+
+	// Update worktree format
+	if err := reg.Update("foo", func(r *Repo) {
+		r.WorktreeFormat = "../{repo}-{branch}"
+	}); err != nil {
+		t.Fatalf("Update() failed: %v", err)
+	}
+
+	repo, err := reg.FindByName("foo")
+	if err != nil {
+		t.Fatalf("FindByName after Update failed: %v", err)
+	}
+	if repo.WorktreeFormat != "../{repo}-{branch}" {
+		t.Errorf("expected worktree format updated, got %q", repo.WorktreeFormat)
+	}
+
+	// Update non-existent repo
+	if err := reg.Update("nonexistent", func(r *Repo) {}); err == nil {
+		t.Error("expected error updating non-existent repo")
+	}
+}
+
+func TestGetEffectiveWorktreeFormat(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		repoFormat    string
+		defaultFormat string
+		want          string
+	}{
+		{
+			name:          "uses repo format when set",
+			repoFormat:    "../{repo}-{branch}",
+			defaultFormat: "{branch}",
+			want:          "../{repo}-{branch}",
+		},
+		{
+			name:          "falls back to default when repo format empty",
+			repoFormat:    "",
+			defaultFormat: "{repo}-{branch}",
+			want:          "{repo}-{branch}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			repo := &Repo{
+				Name:           "test",
+				Path:           "/test",
+				WorktreeFormat: tt.repoFormat,
+			}
+			if got := repo.GetEffectiveWorktreeFormat(tt.defaultFormat); got != tt.want {
+				t.Errorf("GetEffectiveWorktreeFormat() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPathExists(t *testing.T) {
+	t.Parallel()
+
+	// Existing path
+	tmpDir := t.TempDir()
+	repo := &Repo{Name: "exists", Path: tmpDir}
+	exists, err := repo.PathExists()
+	if err != nil {
+		t.Fatalf("PathExists() error: %v", err)
+	}
+	if !exists {
+		t.Error("expected PathExists() = true for existing dir")
+	}
+
+	// Non-existent path
+	repo2 := &Repo{Name: "gone", Path: filepath.Join(tmpDir, "nonexistent")}
+	exists, err = repo2.PathExists()
+	if err != nil {
+		t.Fatalf("PathExists() error: %v", err)
+	}
+	if exists {
+		t.Error("expected PathExists() = false for non-existent dir")
+	}
+}
+
+func TestRepoString(t *testing.T) {
+	t.Parallel()
+
+	// Without labels
+	repo := Repo{Name: "myrepo", Path: "/tmp/myrepo"}
+	if got := repo.String(); got != "myrepo" {
+		t.Errorf("String() = %q, want 'myrepo'", got)
+	}
+
+	// With labels
+	repo2 := Repo{Name: "myrepo", Path: "/tmp/myrepo", Labels: []string{"backend", "api"}}
+	if got := repo2.String(); got != "myrepo (backend, api)" {
+		t.Errorf("String() = %q, want 'myrepo (backend, api)'", got)
 	}
 }
