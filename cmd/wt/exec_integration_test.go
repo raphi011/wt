@@ -23,7 +23,9 @@ func TestExec_NoCommand(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -61,7 +63,9 @@ func TestExec_InCurrentWorktree(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -102,7 +106,9 @@ func TestExec_ByBranch(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -149,7 +155,9 @@ func TestExec_ByRepoBranch(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -189,7 +197,9 @@ func TestExec_MultipleTargets(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -235,7 +245,9 @@ func TestExec_BranchNotFound(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -271,10 +283,12 @@ func TestExec_Deduplication(t *testing.T) {
 
 	tmpDir := resolvePath(t, t.TempDir())
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
-	wtPath := createTestWorktree(t, repoPath, "feature")
+	createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -308,7 +322,4 @@ func TestExec_Deduplication(t *testing.T) {
 		t.Errorf("expected command to run once (1 line), got %d lines", lines)
 	}
 
-	// Also verify the command ran in the right directory
-	testFile := filepath.Join(wtPath, "exec-test-file-does-not-exist")
-	_ = testFile // dedup test — we just verify execution count
 }

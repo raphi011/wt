@@ -24,7 +24,9 @@ func TestPrCheckout_InvalidPRNumber(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -60,7 +62,9 @@ func TestPrCheckout_RepoNotFound(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{},
@@ -73,7 +77,9 @@ func TestPrCheckout_RepoNotFound(t *testing.T) {
 
 	// Work from a non-repo directory
 	otherDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(otherDir, 0755)
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx := testContextWithConfig(t, cfg, otherDir)
 	cmd := newPrCheckoutCmd()
@@ -101,7 +107,9 @@ func TestPrCheckout_InvalidPRNumberWithRepo(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -138,7 +146,9 @@ func TestPrCreate_NotInGitRepo(t *testing.T) {
 	tmpDir := resolvePath(t, t.TempDir())
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
 	if err := reg.Save(regFile); err != nil {
@@ -146,7 +156,9 @@ func TestPrCreate_NotInGitRepo(t *testing.T) {
 	}
 
 	nonGitDir := filepath.Join(tmpDir, "not-a-repo")
-	os.MkdirAll(nonGitDir, 0755)
+	if err := os.MkdirAll(nonGitDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, nonGitDir)
@@ -174,7 +186,9 @@ func TestPrCreate_RepoNotFound(t *testing.T) {
 	tmpDir := resolvePath(t, t.TempDir())
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
 	if err := reg.Save(regFile); err != nil {
@@ -207,7 +221,9 @@ func TestPrMerge_NotInGitRepo(t *testing.T) {
 	tmpDir := resolvePath(t, t.TempDir())
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
 	if err := reg.Save(regFile); err != nil {
@@ -215,7 +231,9 @@ func TestPrMerge_NotInGitRepo(t *testing.T) {
 	}
 
 	nonGitDir := filepath.Join(tmpDir, "not-a-repo")
-	os.MkdirAll(nonGitDir, 0755)
+	if err := os.MkdirAll(nonGitDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, nonGitDir)
@@ -243,7 +261,9 @@ func TestPrMerge_RepoNotFound(t *testing.T) {
 	tmpDir := resolvePath(t, t.TempDir())
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
 	if err := reg.Save(regFile); err != nil {
@@ -276,7 +296,9 @@ func TestPrView_NotInGitRepo(t *testing.T) {
 	tmpDir := resolvePath(t, t.TempDir())
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
 	if err := reg.Save(regFile); err != nil {
@@ -284,7 +306,9 @@ func TestPrView_NotInGitRepo(t *testing.T) {
 	}
 
 	nonGitDir := filepath.Join(tmpDir, "not-a-repo")
-	os.MkdirAll(nonGitDir, 0755)
+	if err := os.MkdirAll(nonGitDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, nonGitDir)
@@ -312,7 +336,9 @@ func TestPrView_RepoNotFound(t *testing.T) {
 	tmpDir := resolvePath(t, t.TempDir())
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
 	if err := reg.Save(regFile); err != nil {

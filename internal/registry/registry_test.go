@@ -156,7 +156,10 @@ func TestRegistryLabels(t *testing.T) {
 		t.Fatalf("AddLabel() failed: %v", err)
 	}
 
-	repo, _ := reg.FindByName("foo")
+	repo, err := reg.FindByName("foo")
+	if err != nil {
+		t.Fatalf("FindByName after AddLabel failed: %v", err)
+	}
 	if !repo.HasLabel("backend") {
 		t.Error("expected repo to have backend label")
 	}
@@ -292,7 +295,9 @@ func TestFindByPath(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	repoPath := filepath.Join(tmpDir, "myrepo")
-	os.MkdirAll(repoPath, 0755)
+	if err := os.MkdirAll(repoPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &Registry{
 		Repos: []Repo{
@@ -332,7 +337,10 @@ func TestUpdate(t *testing.T) {
 		t.Fatalf("Update() failed: %v", err)
 	}
 
-	repo, _ := reg.FindByName("foo")
+	repo, err := reg.FindByName("foo")
+	if err != nil {
+		t.Fatalf("FindByName after Update failed: %v", err)
+	}
 	if repo.WorktreeFormat != "../{repo}-{branch}" {
 		t.Errorf("expected worktree format updated, got %q", repo.WorktreeFormat)
 	}
@@ -368,6 +376,7 @@ func TestGetEffectiveWorktreeFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			repo := &Repo{
 				Name:           "test",
 				Path:           "/test",

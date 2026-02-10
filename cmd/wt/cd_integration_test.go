@@ -25,7 +25,9 @@ func TestCd_BranchName(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -65,7 +67,9 @@ func TestCd_RepoBranch(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -104,7 +108,9 @@ func TestCd_BranchNotFound(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "myrepo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -141,7 +147,9 @@ func TestCd_RepoNotFound(t *testing.T) {
 	tmpDir := resolvePath(t, t.TempDir())
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{},
@@ -180,7 +188,9 @@ func TestCd_AmbiguousBranch(t *testing.T) {
 	createTestWorktree(t, repo2Path, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -218,7 +228,9 @@ func TestCd_NoArgs_NoHistory(t *testing.T) {
 	tmpDir := resolvePath(t, t.TempDir())
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
 	if err := reg.Save(regFile); err != nil {
@@ -258,7 +270,9 @@ func TestCd_NoArgs_WithHistory(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -308,7 +322,9 @@ func TestCd_RecordsHistory(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{

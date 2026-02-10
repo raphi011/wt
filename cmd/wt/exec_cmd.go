@@ -69,7 +69,7 @@ With no targets, runs in the current worktree.`,
 
 			if len(targets) == 0 {
 				// No targets - use current directory
-				repoPath := git.GetCurrentRepoMainPath(ctx)
+				repoPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
 				if repoPath == "" {
 					return fmt.Errorf("not in a git repository")
 				}

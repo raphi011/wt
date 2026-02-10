@@ -12,7 +12,11 @@ import (
 func setupNotesTestRepo(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
-	tmpDir, _ = filepath.EvalSymlinks(tmpDir)
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks for %s: %v", tmpDir, err)
+	}
+	tmpDir = resolved
 	repoPath := filepath.Join(tmpDir, "test-repo")
 
 	ctx := context.Background()
