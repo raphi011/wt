@@ -131,8 +131,8 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 
 			// Refresh PR status if requested
 			if refresh {
-				if f := refreshPRs(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge); f > 0 {
-					l.Printf("Warning: failed to fetch PR status for %d branch(es)\n", f)
+				if failed := refreshPRs(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge); len(failed) > 0 {
+					l.Printf("Warning: failed to fetch PR status for: %v\n", failed)
 				}
 			}
 
@@ -354,8 +354,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, force, dryRun,
 
 		// Remove from PR cache
 		if prCache != nil {
-			folderName := filepath.Base(wt.Path)
-			prCache.Delete(folderName)
+			prCache.Delete(prcache.CacheKey(wt.RepoPath, wt.Branch))
 		}
 
 		// Remove from history

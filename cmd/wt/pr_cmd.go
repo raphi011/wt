@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -216,7 +215,7 @@ Otherwise, it's looked up in the local registry.`,
 			if err != nil {
 				l.Debug("failed to fetch PR info", "branch", branch, "error", err)
 			} else {
-				cache.Set(filepath.Base(wtPath), prcache.FromForge(prInfo))
+				cache.Set(prcache.CacheKey(repoPath, branch), prcache.FromForge(prInfo))
 				if err := cache.Save(); err != nil {
 					l.Printf("Warning: failed to save PR cache: %v\n", err)
 				}
@@ -476,7 +475,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 
 			// Load PR cache for updates
 			cache := prcache.Load()
-			cacheKey := filepath.Base(cwd)
+			cacheKey := prcache.CacheKey(repo.Path, branch)
 
 			if pr.State == forge.PRStateMerged {
 				out.Printf("PR #%d is already merged\n", pr.Number)
