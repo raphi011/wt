@@ -91,8 +91,8 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 
 			// Refresh PR status if requested
 			if refresh {
-				if f := refreshPRs(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge); f > 0 {
-					l.Printf("Warning: failed to fetch PR status for %d branch(es)\n", f)
+				if failed := refreshPRs(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge); len(failed) > 0 {
+					l.Printf("Warning: failed to fetch PR status for: %v\n", failed)
 				}
 			}
 

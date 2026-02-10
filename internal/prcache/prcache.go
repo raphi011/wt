@@ -1,5 +1,5 @@
 // Package prcache provides PR status caching stored in ~/.wt/prs.json.
-// PRs are stored independently of worktree entries, keyed by folder name,
+// PRs are stored independently of worktree entries, keyed by repoPath:branch,
 // allowing PR info to be cached before worktrees are created.
 package prcache
 
@@ -37,7 +37,13 @@ func (p *PRInfo) IsStale() bool {
 	return time.Since(p.CachedAt) > CacheMaxAge
 }
 
-// Cache stores PR info keyed by folder name
+// CacheKey returns the cache key for a worktree, namespaced by repo path.
+// Uses repoPath:branch since the PR is tied to the branch, not the folder.
+func CacheKey(repoPath, branch string) string {
+	return repoPath + ":" + branch
+}
+
+// Cache stores PR info keyed by repoPath:branch
 type Cache struct {
 	PRs   map[string]*PRInfo `json:"prs"`
 	dirty bool
@@ -75,20 +81,20 @@ func (c *Cache) Save() error {
 	return storage.SaveJSON(Path(), c)
 }
 
-// Set stores PR info for a folder
-func (c *Cache) Set(folder string, pr *PRInfo) {
-	c.PRs[folder] = pr
+// Set stores PR info for a cache key
+func (c *Cache) Set(key string, pr *PRInfo) {
+	c.PRs[key] = pr
 	c.dirty = true
 }
 
-// Get returns PR info for a folder, or nil if not found
-func (c *Cache) Get(folder string) *PRInfo {
-	return c.PRs[folder]
+// Get returns PR info for a cache key, or nil if not found
+func (c *Cache) Get(key string) *PRInfo {
+	return c.PRs[key]
 }
 
-// Delete removes PR info for a folder
-func (c *Cache) Delete(folder string) {
-	delete(c.PRs, folder)
+// Delete removes PR info for a cache key
+func (c *Cache) Delete(key string) {
+	delete(c.PRs, key)
 	c.dirty = true
 }
 

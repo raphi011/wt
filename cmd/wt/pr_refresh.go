@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"sync"
 
 	"github.com/raphi011/wt/internal/config"
@@ -19,12 +18,12 @@ type prFetchItem struct {
 	originURL string
 	repoPath  string
 	branch    string
-	cacheKey  string // key for prCache (typically filepath.Base(path))
+	cacheKey  string // key for prCache (repoName:folderName)
 }
 
 // refreshPRs fetches PR status for the given worktrees in parallel with a
-// progress bar. It updates prCache in-place and returns the number of failed fetches.
-func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig) (failed int) {
+// progress bar. It updates prCache in-place and returns the branches that failed.
+func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig) (failedBranches []string) {
 	l := log.FromContext(ctx)
 
 	// Build fetch items, skipping worktrees without origin or already merged
@@ -33,20 +32,23 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 		if wt.OriginURL == "" {
 			continue
 		}
-		folderName := filepath.Base(wt.Path)
-		if pr := prCache.Get(folderName); pr != nil && pr.Fetched && pr.State == forge.PRStateMerged {
+		if !wt.HasUpstream {
+			continue
+		}
+		cacheKey := prcache.CacheKey(wt.RepoPath, wt.Branch)
+		if pr := prCache.Get(cacheKey); pr != nil && pr.Fetched && pr.State == forge.PRStateMerged {
 			continue
 		}
 		items = append(items, prFetchItem{
 			originURL: wt.OriginURL,
 			repoPath:  wt.RepoPath,
 			branch:    wt.Branch,
-			cacheKey:  folderName,
+			cacheKey:  cacheKey,
 		})
 	}
 
 	if len(items) == 0 {
-		return 0
+		return nil
 	}
 
 	pb := progress.NewProgressBar(len(items), "Fetching PR status...")
@@ -60,10 +62,11 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 	var countMutex sync.Mutex
 
 	// recordProgress must be called under countMutex.
-	recordProgress := func(isFailed bool) {
+	recordProgress := func(branch string) {
 		completedCount++
-		if isFailed {
+		if branch != "" {
 			failedCount++
+			failedBranches = append(failedBranches, branch)
 		}
 		msg := "Fetching PR status..."
 		if failedCount > 0 {
@@ -84,7 +87,7 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 			if err := f.Check(ctx); err != nil {
 				l.Debug("forge check failed", "origin", item.originURL, "err", err)
 				countMutex.Lock()
-				recordProgress(true)
+				recordProgress(item.branch)
 				countMutex.Unlock()
 				return
 			}
@@ -99,7 +102,7 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 			if err != nil {
 				l.Debug("PR fetch failed", "branch", item.branch, "err", err)
 				countMutex.Lock()
-				recordProgress(true)
+				recordProgress(item.branch)
 				countMutex.Unlock()
 				return
 			}
@@ -109,21 +112,21 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 			prMutex.Unlock()
 
 			countMutex.Lock()
-			recordProgress(false)
+			recordProgress("")
 			countMutex.Unlock()
 		}()
 	}
 
 	wg.Wait()
 
-	return failedCount
+	return failedBranches
 }
 
 // populatePRFields fills PR fields on worktrees from the cache.
 func populatePRFields(worktrees []git.Worktree, prCache *prcache.Cache) {
 	for i := range worktrees {
-		folderName := filepath.Base(worktrees[i].Path)
-		if pr := prCache.Get(folderName); pr != nil && pr.Fetched {
+		cacheKey := prcache.CacheKey(worktrees[i].RepoPath, worktrees[i].Branch)
+		if pr := prCache.Get(cacheKey); pr != nil && pr.Fetched {
 			worktrees[i].PRNumber = pr.Number
 			worktrees[i].PRState = pr.State
 			worktrees[i].PRURL = pr.URL
