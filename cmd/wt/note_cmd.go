@@ -238,7 +238,7 @@ func resolveNoteTargets(ctx context.Context, cfg *config.Config, workDir string,
 
 // getCurrentRepoBranch gets the repo and current branch from current directory
 func getCurrentRepoBranch(ctx context.Context, cfg *config.Config, workDir string, reg *registry.Registry) (registry.Repo, string, error) {
-	repoPath := git.GetCurrentRepoMainPath(ctx)
+	repoPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
 	if repoPath == "" {
 		return registry.Repo{}, "", fmt.Errorf("not in a git repository")
 	}
