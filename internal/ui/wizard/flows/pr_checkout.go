@@ -70,28 +70,7 @@ func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, er
 	// Step 3: Hooks (only when available and not set via CLI)
 	hasHooks := len(params.AvailableHooks) > 0 && !params.HooksFromCLI
 	if hasHooks {
-		hookOptions := make([]framework.Option, len(params.AvailableHooks))
-		var preSelectedHooks []int
-		for i, hook := range params.AvailableHooks {
-			label := hook.Name
-			if hook.Description != "" {
-				label = hook.Name + " - " + hook.Description
-			}
-			hookOptions[i] = framework.Option{
-				Label: label,
-				Value: hook.Name,
-			}
-			if hook.IsDefault {
-				preSelectedHooks = append(preSelectedHooks, i)
-			}
-		}
-		hookStep := steps.NewFilterableList("hooks", "Hooks", "Select hooks to run after checkout", hookOptions).
-			WithMultiSelect().
-			SetMinMax(0, 0)
-		if len(preSelectedHooks) > 0 {
-			hookStep.SetSelected(preSelectedHooks)
-		}
-		w.AddStep(hookStep)
+		addHookStep(w, params.AvailableHooks)
 	}
 
 	// Callbacks

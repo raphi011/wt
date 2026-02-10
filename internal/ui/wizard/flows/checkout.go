@@ -38,6 +38,33 @@ type HookInfo struct {
 	IsDefault   bool // Has on=["checkout"]
 }
 
+// addHookStep adds a hook selection step to the wizard if hooks are available
+// and not already set via CLI flags.
+func addHookStep(w *framework.Wizard, hooks []HookInfo) {
+	hookOptions := make([]framework.Option, len(hooks))
+	var preSelectedHooks []int
+	for i, hook := range hooks {
+		label := hook.Name
+		if hook.Description != "" {
+			label = hook.Name + " - " + hook.Description
+		}
+		hookOptions[i] = framework.Option{
+			Label: label,
+			Value: hook.Name,
+		}
+		if hook.IsDefault {
+			preSelectedHooks = append(preSelectedHooks, i)
+		}
+	}
+	hookStep := steps.NewFilterableList("hooks", "Hooks", "Select hooks to run after checkout", hookOptions).
+		WithMultiSelect().
+		SetMinMax(0, 0) // No minimum required (can select none)
+	if len(preSelectedHooks) > 0 {
+		hookStep.SetSelected(preSelectedHooks)
+	}
+	w.AddStep(hookStep)
+}
+
 // CheckoutWizardParams contains parameters for the checkout wizard.
 type CheckoutWizardParams struct {
 	Branches         []BranchInfo  // Existing branches with worktree status
@@ -112,28 +139,7 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	// Step 3: Hooks (only when available and not set via CLI)
 	hasHooks := len(params.AvailableHooks) > 0 && !params.HooksFromCLI
 	if hasHooks {
-		hookOptions := make([]framework.Option, len(params.AvailableHooks))
-		var preSelectedHooks []int
-		for i, hook := range params.AvailableHooks {
-			label := hook.Name
-			if hook.Description != "" {
-				label = hook.Name + " - " + hook.Description
-			}
-			hookOptions[i] = framework.Option{
-				Label: label,
-				Value: hook.Name,
-			}
-			if hook.IsDefault {
-				preSelectedHooks = append(preSelectedHooks, i)
-			}
-		}
-		hookStep := steps.NewFilterableList("hooks", "Hooks", "Select hooks to run after checkout", hookOptions).
-			WithMultiSelect().
-			SetMinMax(0, 0) // No minimum required (can select none)
-		if len(preSelectedHooks) > 0 {
-			hookStep.SetSelected(preSelectedHooks)
-		}
-		w.AddStep(hookStep)
+		addHookStep(w, params.AvailableHooks)
 	}
 
 	// Callbacks

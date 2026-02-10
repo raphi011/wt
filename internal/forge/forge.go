@@ -2,6 +2,8 @@ package forge
 
 import (
 	"context"
+	"fmt"
+	"os/exec"
 	"time"
 )
 
@@ -95,4 +97,14 @@ type Forge interface {
 
 	// FormatState returns a human-readable PR state
 	FormatState(state string) string
+}
+
+// configureBareRepo configures a bare repo for worktree support by setting
+// the fetch refspec to get all branches (bare clones don't set this up by default).
+func configureBareRepo(ctx context.Context, gitDir string) error {
+	c := exec.CommandContext(ctx, "git", "-C", gitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("failed to configure fetch refspec: %w", err)
+	}
+	return nil
 }

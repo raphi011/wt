@@ -218,23 +218,12 @@ func (g *GitLab) CloneBareRepo(ctx context.Context, repoSpec, destPath string) (
 	}
 
 	// Configure the repo for worktree support
-	if err := g.configureBareRepo(ctx, gitDir); err != nil {
+	if err := configureBareRepo(ctx, gitDir); err != nil {
 		os.RemoveAll(repoDir)
 		return "", err
 	}
 
 	return repoDir, nil
-}
-
-// configureBareRepo configures a bare repo for worktree support
-func (g *GitLab) configureBareRepo(ctx context.Context, gitDir string) error {
-	// Set fetch refspec to get all branches (bare clones don't set this up by default)
-	c := exec.CommandContext(ctx, "git", "-C", gitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
-	if err := c.Run(); err != nil {
-		return fmt.Errorf("failed to configure fetch refspec: %w", err)
-	}
-
-	return nil
 }
 
 // CreatePR creates a new MR using glab CLI

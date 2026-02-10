@@ -8,13 +8,6 @@ import (
 	"strings"
 )
 
-// ExtractRepoNameFromURL extracts the repository name from a git URL
-func ExtractRepoNameFromURL(url string) string {
-	url = strings.TrimSuffix(url, ".git")
-	parts := strings.Split(url, "/")
-	return parts[len(parts)-1]
-}
-
 // GetRepoDisplayName returns the folder name of the repository.
 func GetRepoDisplayName(repoPath string) string {
 	return filepath.Base(repoPath)
@@ -542,4 +535,3 @@ func CloneBareWithWorktreeSupport(ctx context.Context, url, destPath string) err
 
 	return nil
 }
-
