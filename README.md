@@ -94,6 +94,12 @@ wt checkout -b feature-login -s
 
 # Add a note to remember what you're working on
 wt checkout -b feature-login --note "Implementing OAuth flow"
+
+# Target a specific repo from any directory (repo:branch syntax)
+wt checkout -b myrepo:feature-login
+
+# Combine with other flags
+wt checkout -b myrepo:feature-login --base develop -f
 ```
 
 With hooks configured, your editor opens automatically:
