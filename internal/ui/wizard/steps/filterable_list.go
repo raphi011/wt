@@ -549,7 +549,7 @@ func (s *FilterableListStep) Value() framework.StepValue {
 	// Multi-select mode
 	if s.multiSelect {
 		var labels []string
-		var values []interface{}
+		var values []any
 		// Iterate in original option order for consistent display
 		for idx := 0; idx < len(s.options); idx++ {
 			if s.multiSelected[idx] {
@@ -659,7 +659,7 @@ func (s *FilterableListStep) GetCursor() int {
 
 // GetSelectedValue returns the selected option's value, or nil if none.
 // If "Create" was selected, returns the filter string.
-func (s *FilterableListStep) GetSelectedValue() interface{} {
+func (s *FilterableListStep) GetSelectedValue() any {
 	if s.selected < 0 {
 		return nil
 	}

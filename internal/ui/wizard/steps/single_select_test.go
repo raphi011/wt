@@ -423,7 +423,7 @@ func TestSingleSelectStep_FormatValue(t *testing.T) {
 	}
 
 	// With custom labels
-	displayLabels := map[interface{}]string{
+	displayLabels := map[any]string{
 		"opt2": "Custom Label",
 	}
 	formatted = step.FormatValue(displayLabels)

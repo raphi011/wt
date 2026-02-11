@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -196,10 +197,8 @@ With no targets, runs in the current worktree.`,
 // completeExecArg provides completion for exec command targets
 func completeExecArg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	// After --, no more completions for targets
-	for _, arg := range args {
-		if arg == "--" {
-			return nil, cobra.ShellCompDirectiveDefault
-		}
+	if slices.Contains(args, "--") {
+		return nil, cobra.ShellCompDirectiveDefault
 	}
 
 	// Reuse the same completion logic as cd

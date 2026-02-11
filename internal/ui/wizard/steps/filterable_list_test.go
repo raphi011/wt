@@ -373,7 +373,7 @@ func TestFilterableListStep_MultiSelect(t *testing.T) {
 			t.Errorf("Value.Label = %s, want 'Option A, Option B'", value.Label)
 		}
 
-		raw, ok := value.Raw.([]interface{})
+		raw, ok := value.Raw.([]any)
 		if !ok {
 			t.Errorf("Value.Raw type = %T, want []interface{}", value.Raw)
 		} else if len(raw) != 2 {

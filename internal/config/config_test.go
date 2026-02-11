@@ -28,18 +28,18 @@ func TestLoadNonexistent(t *testing.T) {
 func TestParseHooksConfig(t *testing.T) {
 	tests := []struct {
 		name     string
-		raw      map[string]interface{}
+		raw      map[string]any
 		expected HooksConfig
 	}{
 		{
 			name: "full hooks config",
-			raw: map[string]interface{}{
-				"kitty": map[string]interface{}{
+			raw: map[string]any{
+				"kitty": map[string]any{
 					"command":     "kitty @ launch --cwd={worktree-dir}",
 					"description": "Open kitty tab",
-					"on":          []interface{}{"create", "open"},
+					"on":          []any{"create", "open"},
 				},
-				"vscode": map[string]interface{}{
+				"vscode": map[string]any{
 					"command":     "code {worktree-dir}",
 					"description": "Open VS Code",
 				},
@@ -60,8 +60,8 @@ func TestParseHooksConfig(t *testing.T) {
 		},
 		{
 			name: "hook without on",
-			raw: map[string]interface{}{
-				"test": map[string]interface{}{
+			raw: map[string]any{
+				"test": map[string]any{
 					"command": "echo test",
 				},
 			},
@@ -78,7 +78,7 @@ func TestParseHooksConfig(t *testing.T) {
 		},
 		{
 			name:     "empty input",
-			raw:      map[string]interface{}{},
+			raw:      map[string]any{},
 			expected: HooksConfig{Hooks: map[string]Hook{}},
 		},
 	}

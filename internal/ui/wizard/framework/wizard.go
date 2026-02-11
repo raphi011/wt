@@ -122,7 +122,7 @@ func (w *Wizard) GetBool(id string) bool {
 // GetStrings returns a step's value as a string slice.
 func (w *Wizard) GetStrings(id string) []string {
 	v := w.GetValue(id)
-	if arr, ok := v.Raw.([]interface{}); ok {
+	if arr, ok := v.Raw.([]any); ok {
 		strs := make([]string, 0, len(arr))
 		for _, item := range arr {
 			if s, ok := item.(string); ok {

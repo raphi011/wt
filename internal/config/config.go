@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/BurntSushi/toml"
 )
@@ -160,15 +161,15 @@ func configPath() (string, error) {
 
 // rawConfig is used for initial TOML parsing before processing hooks
 type rawConfig struct {
-	DefaultSort   string                 `toml:"default_sort"`
-	DefaultLabels []string               `toml:"default_labels"`
-	Hooks         map[string]interface{} `toml:"hooks"`
-	Checkout      CheckoutConfig         `toml:"checkout"`
-	Forge         ForgeConfig            `toml:"forge"`
-	Merge         MergeConfig            `toml:"merge"`
-	Prune         PruneConfig            `toml:"prune"`
-	Hosts         map[string]string      `toml:"hosts"`
-	Theme         ThemeConfig            `toml:"theme"`
+	DefaultSort   string            `toml:"default_sort"`
+	DefaultLabels []string          `toml:"default_labels"`
+	Hooks         map[string]any    `toml:"hooks"`
+	Checkout      CheckoutConfig    `toml:"checkout"`
+	Forge         ForgeConfig       `toml:"forge"`
+	Merge         MergeConfig       `toml:"merge"`
+	Prune         PruneConfig       `toml:"prune"`
+	Hosts         map[string]string `toml:"hosts"`
+	Theme         ThemeConfig       `toml:"theme"`
 }
 
 // Load reads config from ~/.config/wt/config.toml
@@ -282,7 +283,7 @@ func applyEnvOverrides(cfg *Config) error {
 
 // parseHooksConfig extracts HooksConfig from raw TOML map
 // Handles [hooks.NAME] sections
-func parseHooksConfig(raw map[string]interface{}) HooksConfig {
+func parseHooksConfig(raw map[string]any) HooksConfig {
 	hc := HooksConfig{
 		Hooks: make(map[string]Hook),
 	}
@@ -293,7 +294,7 @@ func parseHooksConfig(raw map[string]interface{}) HooksConfig {
 
 	for key, value := range raw {
 		// Hook definitions are tables
-		if hookMap, ok := value.(map[string]interface{}); ok {
+		if hookMap, ok := value.(map[string]any); ok {
 			hook := Hook{}
 			if cmd, ok := hookMap["command"].(string); ok {
 				hook.Command = cmd
@@ -301,7 +302,7 @@ func parseHooksConfig(raw map[string]interface{}) HooksConfig {
 			if desc, ok := hookMap["description"].(string); ok {
 				hook.Description = desc
 			}
-			if on, ok := hookMap["on"].([]interface{}); ok {
+			if on, ok := hookMap["on"].([]any); ok {
 				for _, v := range on {
 					if s, ok := v.(string); ok {
 						hook.On = append(hook.On, s)
@@ -345,12 +346,7 @@ var ValidThemeModes = []string{"auto", "light", "dark"}
 
 // isValidThemeName checks if the theme name is a known preset
 func isValidThemeName(name string) bool {
-	for _, valid := range ValidThemeNames {
-		if name == valid {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ValidThemeNames, name)
 }
 
 // matchPattern checks if repoSpec matches the pattern

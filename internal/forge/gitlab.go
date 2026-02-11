@@ -258,7 +258,7 @@ func (g *GitLab) CreatePR(ctx context.Context, repoURL string, params CreatePRPa
 	// Try to extract URL - glab outputs the URL on a line
 	var mrURL string
 	var mrNumber int
-	for _, line := range strings.Split(outputStr, "\n") {
+	for line := range strings.SplitSeq(outputStr, "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "https://") {
 			mrURL = line
