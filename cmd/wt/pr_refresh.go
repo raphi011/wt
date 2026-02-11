@@ -76,9 +76,7 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 	}
 
 	for _, item := range items {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
@@ -114,7 +112,7 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 			countMutex.Lock()
 			recordProgress("")
 			countMutex.Unlock()
-		}()
+		})
 	}
 
 	wg.Wait()

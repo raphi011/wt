@@ -102,7 +102,7 @@ func ListRemotes(ctx context.Context, repoPath string) ([]string, error) {
 	}
 
 	var remotes []string
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			remotes = append(remotes, line)
 		}
@@ -245,9 +245,9 @@ func ListWorktreesFromRepo(ctx context.Context, repoPath string) ([]WorktreeInfo
 	var worktrees []WorktreeInfo
 
 	// Split on double-NUL for record boundaries
-	records := strings.Split(string(output), "\x00\x00")
+	records := strings.SplitSeq(string(output), "\x00\x00")
 
-	for _, record := range records {
+	for record := range records {
 		if record == "" {
 			continue
 		}
@@ -256,8 +256,8 @@ func ListWorktreesFromRepo(ctx context.Context, repoPath string) ([]WorktreeInfo
 		var isBare bool
 
 		// Split on single-NUL for fields within record
-		fields := strings.Split(record, "\x00")
-		for _, field := range fields {
+		fields := strings.SplitSeq(record, "\x00")
+		for field := range fields {
 			switch {
 			case strings.HasPrefix(field, "worktree "):
 				wt.Path = strings.TrimPrefix(field, "worktree ")
@@ -312,7 +312,7 @@ func GetAllBranchConfig(ctx context.Context, repoPath string) (notes map[string]
 	// Parse output lines like:
 	// branch.feature-x.description Note text here
 	// branch.feature-x.merge refs/heads/feature-x
-	for _, line := range strings.Split(string(output), "\n") {
+	for line := range strings.SplitSeq(string(output), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -365,7 +365,7 @@ func ListLocalBranches(ctx context.Context, repoPath string) ([]string, error) {
 	}
 
 	var branches []string
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			branches = append(branches, line)
 		}
@@ -382,7 +382,7 @@ func ListRemoteBranches(ctx context.Context, repoPath string) ([]string, error) 
 
 	var branches []string
 	seen := make(map[string]bool)
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -477,8 +477,8 @@ func isBareRepo(path string) bool {
 	}
 
 	// Look for "bare = true" in the config
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(content), "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "bare") {
 			parts := strings.SplitN(line, "=", 2)

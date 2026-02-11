@@ -133,8 +133,8 @@ func extractDescription(doc string, testName string) string {
 		return "_No documentation_"
 	}
 
-	lines := strings.Split(doc, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(doc, "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			// Strip test name prefix if present (e.g., "TestCd_ByID verifies..." -> "verifies...")

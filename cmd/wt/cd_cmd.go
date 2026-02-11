@@ -159,10 +159,10 @@ With no arguments, returns the most recently accessed worktree.`,
 				// Parse positional argument
 				arg := args[0]
 
-				if idx := strings.Index(arg, ":"); idx >= 0 {
+				if before, after, ok := strings.Cut(arg, ":"); ok {
 					// repo:branch format
-					repoName = arg[:idx]
-					branchName = arg[idx+1:]
+					repoName = before
+					branchName = after
 				} else {
 					// Just branch name
 					branchName = arg

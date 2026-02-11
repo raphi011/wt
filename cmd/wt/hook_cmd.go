@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -187,10 +188,8 @@ func completeHookArg(cmd *cobra.Command, args []string, toComplete string) ([]st
 	cfg := config.FromContext(cmd.Context())
 
 	// After --, complete worktree targets
-	for _, arg := range args {
-		if arg == "--" {
-			return completeScopedWorktreeArg(cmd, nil, toComplete)
-		}
+	if slices.Contains(args, "--") {
+		return completeScopedWorktreeArg(cmd, nil, toComplete)
 	}
 
 	// Check if user is typing after --

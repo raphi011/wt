@@ -18,9 +18,9 @@ const (
 
 // StepValue holds the result of a completed step.
 type StepValue struct {
-	Key   string      // Field name (e.g., "Branch")
-	Label string      // Display value (e.g., "feature-branch")
-	Raw   interface{} // Actual value (can be string, bool, []string, etc.)
+	Key   string // Field name (e.g., "Branch")
+	Label string // Display value (e.g., "feature-branch")
+	Raw   any    // Actual value (can be string, bool, []string, etc.)
 }
 
 // Step is the interface for wizard steps.
@@ -64,8 +64,8 @@ type Step interface {
 
 // Option represents a selectable item in list-based steps.
 type Option struct {
-	Label       string      // Display text
-	Value       interface{} // Actual value
-	Description string      // Optional description (for disabled reason)
-	Disabled    bool        // Whether option is disabled/unselectable
+	Label       string // Display text
+	Value       any    // Actual value
+	Description string // Optional description (for disabled reason)
+	Disabled    bool   // Whether option is disabled/unselectable
 }

@@ -25,8 +25,8 @@ func repoPathFromArgs(ctx context.Context, cfg *config.Config, args []string) st
 
 	for _, arg := range args {
 		// Check for scope:branch pattern
-		if idx := strings.Index(arg, ":"); idx >= 0 {
-			repoName := arg[:idx]
+		if before, _, ok := strings.Cut(arg, ":"); ok {
+			repoName := before
 			if repo, err := reg.FindByName(repoName); err == nil {
 				return repo.Path
 			}
@@ -83,9 +83,9 @@ func completeBaseBranches(cmd *cobra.Command, args []string, toComplete string) 
 	var matches []string
 
 	// Check if user is typing a remote prefix (e.g., "origin/", "upstream/")
-	if idx := strings.Index(toComplete, "/"); idx >= 0 {
-		remoteName := toComplete[:idx]
-		branchPrefix := toComplete[idx+1:]
+	if before, after, ok := strings.Cut(toComplete, "/"); ok {
+		remoteName := before
+		branchPrefix := after
 
 		// Verify remote exists
 		if git.HasRemote(ctx, repoPath, remoteName) {
@@ -94,8 +94,8 @@ func completeBaseBranches(cmd *cobra.Command, args []string, toComplete string) 
 			if err == nil {
 				prefix := remoteName + "/"
 				for _, b := range remoteBranches {
-					if strings.HasPrefix(b, prefix) {
-						branchPart := strings.TrimPrefix(b, prefix)
+					if after, ok := strings.CutPrefix(b, prefix); ok {
+						branchPart := after
 						if strings.HasPrefix(branchPart, branchPrefix) {
 							matches = append(matches, b)
 						}
@@ -147,9 +147,9 @@ func completeScopedWorktreeArg(cmd *cobra.Command, args []string, toComplete str
 	cfg := config.FromContext(ctx)
 
 	// Check if user is typing scope:branch format
-	if idx := strings.Index(toComplete, ":"); idx >= 0 {
-		scopeName := toComplete[:idx]
-		branchPrefix := toComplete[idx+1:]
+	if before, after, ok := strings.Cut(toComplete, ":"); ok {
+		scopeName := before
+		branchPrefix := after
 
 		reg, err := registry.Load(cfg.RegistryPath)
 		if err != nil {
@@ -329,9 +329,9 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 		ctx := context.Background()
 
 		// If user is typing scope:branch format, complete the branch part
-		if idx := strings.Index(toComplete, ":"); idx >= 0 {
-			scopeName := toComplete[:idx]
-			branchPrefix := toComplete[idx+1:]
+		if before, after, ok := strings.Cut(toComplete, ":"); ok {
+			scopeName := before
+			branchPrefix := after
 
 			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {

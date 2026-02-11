@@ -159,11 +159,8 @@ func (r *Registry) FindByPath(path string) (Repo, error) {
 func (r *Registry) FindByLabel(label string) []Repo {
 	var matches []Repo
 	for _, repo := range r.Repos {
-		for _, l := range repo.Labels {
-			if l == label {
-				matches = append(matches, repo)
-				break
-			}
+		if slices.Contains(repo.Labels, label) {
+			matches = append(matches, repo)
 		}
 	}
 	return matches
@@ -223,10 +220,8 @@ func (r *Registry) AddLabel(repoName, label string) error {
 	}
 
 	// Check if label already exists
-	for _, l := range repo.Labels {
-		if l == label {
-			return nil // Already has label
-		}
+	if slices.Contains(repo.Labels, label) {
+		return nil // Already has label
 	}
 
 	repo.Labels = append(repo.Labels, label)
@@ -272,22 +267,12 @@ func (r *Registry) Update(name string, fn func(*Repo)) error {
 
 // HasLabel checks if a repo has a specific label
 func (repo *Repo) HasLabel(label string) bool {
-	for _, l := range repo.Labels {
-		if l == label {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(repo.Labels, label)
 }
 
 // MatchesLabels checks if repo has any of the given labels
 func (repo *Repo) MatchesLabels(labels []string) bool {
-	for _, label := range labels {
-		if repo.HasLabel(label) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(labels, repo.HasLabel)
 }
 
 // PathExists returns true if the repo path exists on disk.

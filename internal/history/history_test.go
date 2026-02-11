@@ -102,7 +102,7 @@ func TestRecordAccess_MaxCap(t *testing.T) {
 	// Create history at the cap
 	h := &History{}
 	base := time.Now().Add(-time.Hour)
-	for i := 0; i < maxEntries; i++ {
+	for i := range maxEntries {
 		h.Entries = append(h.Entries, Entry{
 			Path:        filepath.Join("/wt", "entry", string(rune('a'+i%26))+filepath.Join("x", string(rune('0'+i/26)))),
 			RepoName:    "repo",

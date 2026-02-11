@@ -291,7 +291,7 @@ func (s *SingleSelectStep) GetOption(index int) (framework.Option, bool) {
 }
 
 // FormatValue formats the value for display in summary.
-func (s *SingleSelectStep) FormatValue(displayLabels map[interface{}]string) string {
+func (s *SingleSelectStep) FormatValue(displayLabels map[any]string) string {
 	if s.selected < 0 || s.selected >= len(s.options) {
 		return ""
 	}

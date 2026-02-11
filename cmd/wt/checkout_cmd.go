@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -129,11 +130,8 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 					}
 					branches, err := git.ListLocalBranches(ctx, repo.Path)
 					if err == nil {
-						for _, b := range branches {
-							if b == parsed.Branch {
-								repos = append(repos, repo)
-								break
-							}
+						if slices.Contains(branches, parsed.Branch) {
+							repos = append(repos, repo)
 						}
 					}
 					if len(repos) == 0 {
@@ -162,11 +160,8 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 							l.Debug("failed to list branches", "repo", repo.Name, "error", err)
 							continue
 						}
-						for _, b := range branches {
-							if b == parsed.Branch {
-								repos = append(repos, repo)
-								break
-							}
+						if slices.Contains(branches, parsed.Branch) {
+							repos = append(repos, repo)
 						}
 					}
 
@@ -449,13 +444,7 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 	// Build available hooks
 	var availableHooks []flows.HookInfo
 	for name, hook := range cfg.Hooks.Hooks {
-		isDefault := false
-		for _, trigger := range hook.On {
-			if trigger == "checkout" {
-				isDefault = true
-				break
-			}
-		}
+		isDefault := slices.Contains(hook.On, "checkout")
 		availableHooks = append(availableHooks, flows.HookInfo{
 			Name:        name,
 			Description: hook.Description,
