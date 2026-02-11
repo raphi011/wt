@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"runtime"
+)
 
 // Version information - set by goreleaser
 var (
@@ -15,5 +18,5 @@ func main() {
 
 // versionString returns the version string.
 func versionString() string {
-	return fmt.Sprintf("wt %s (%s, %s)", version, commit[:min(7, len(commit))], date)
+	return fmt.Sprintf("wt %s (%s, %s, %s)", version, commit[:min(7, len(commit))], date, runtime.Version())
 }
