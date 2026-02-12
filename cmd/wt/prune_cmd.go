@@ -55,7 +55,8 @@ a repo name or label. Use -f when targeting specific worktrees.`,
   wt prune --global                # Prune all repos
   wt prune -d                      # Dry-run: preview without removing
   wt prune -i                      # Interactive mode
-  wt prune feature -f              # Remove feature worktree (all repos)
+  wt prune feature -f              # Remove feature worktree (current repo)
+  wt prune feature -f -g           # Remove feature worktree (all repos)
   wt prune myrepo:feature -f       # Remove specific worktree
   wt prune backend:main -f         # Remove main in backend-labeled repos`,
 		ValidArgsFunction: completeScopedWorktreeArg,
@@ -83,7 +84,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				} else if cmd.Flags().Changed("no-delete-branches") {
 					shouldDeleteBranches = false
 				}
-				return runPruneTargets(ctx, reg, args, dryRun, shouldDeleteBranches, hookNames, noHook, env)
+				return runPruneTargets(ctx, reg, args, global, dryRun, shouldDeleteBranches, hookNames, noHook, env)
 			}
 
 			// Determine target repos for auto-prune
@@ -263,9 +264,26 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 }
 
 // runPruneTargets handles removal of specific worktrees by [scope:]branch args.
-func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []string, dryRun, deleteBranches bool, hookNames []string, noHook bool, env []string) error {
+// When global is false, unscoped targets are scoped to the current repo.
+func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []string, global, dryRun, deleteBranches bool, hookNames []string, noHook bool, env []string) error {
 	l := log.FromContext(ctx)
 	out := output.FromContext(ctx)
+
+	// When not global, scope unscoped targets to current repo
+	if !global {
+		repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
+		if err == nil {
+			// Prepend repo name to targets that have no scope prefix
+			for i, t := range targets {
+				scope, _ := parseBranchTarget(t)
+				if scope == "" {
+					targets[i] = repo.Name + ":" + t
+				}
+			}
+		} else {
+			l.Debug("could not determine current repo, searching all repos", "error", err)
+		}
+	}
 
 	// Resolve all targets
 	wtTargets, err := resolveWorktreeTargets(ctx, reg, targets)

@@ -33,10 +33,8 @@ func Detect(remoteURL string, hostMap map[string]string, forgeConfig *config.For
 func extractHost(remoteURL string) string {
 	// SSH format: git@github.com:user/repo.git
 	if after, ok := strings.CutPrefix(remoteURL, "git@"); ok {
-		// Extract host between "git@" and ":"
-		withoutPrefix := after
-		if idx := strings.Index(withoutPrefix, ":"); idx > 0 {
-			return withoutPrefix[:idx]
+		if idx := strings.Index(after, ":"); idx > 0 {
+			return after[:idx]
 		}
 	}
 

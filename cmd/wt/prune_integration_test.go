@@ -677,6 +677,172 @@ func TestPrune_DeleteBranchesFlag_OverridesConfigFalse(t *testing.T) {
 	}
 }
 
+// TestPrune_UnscopedTarget_OnlyCurrentRepo tests that `wt prune feature -f` (without -g)
+// only removes the worktree in the current repo, not in other repos.
+//
+// Scenario: Two repos both have a "feature" worktree, user runs from repo1
+// Expected: Only repo1's worktree is removed
+func TestPrune_UnscopedTarget_OnlyCurrentRepo(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repo1Path := setupTestRepoWithBranches(t, tmpDir, "repo1", []string{"feature"})
+	repo2Path := setupTestRepoWithBranches(t, tmpDir, "repo2", []string{"feature"})
+
+	wt1Path := createTestWorktree(t, repo1Path, "feature")
+	wt2Path := createTestWorktree(t, repo2Path, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: repo1Path},
+			{Name: "repo2", Path: repo2Path},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	// Run from repo1 (workDir = repo1Path)
+	ctx := testContextWithConfig(t, cfg, repo1Path)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// repo1's worktree should be removed
+	if _, err := os.Stat(wt1Path); err == nil {
+		t.Error("repo1 worktree should be removed after prune")
+	}
+
+	// repo2's worktree should still exist
+	if _, err := os.Stat(wt2Path); os.IsNotExist(err) {
+		t.Error("repo2 worktree should NOT be removed (not in scope)")
+	}
+}
+
+// TestPrune_UnscopedTarget_GlobalFlag tests that `wt prune feature -f -g`
+// removes worktrees from all repos.
+//
+// Scenario: Two repos both have a "feature" worktree, user runs with -g
+// Expected: Both worktrees are removed
+func TestPrune_UnscopedTarget_GlobalFlag(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repo1Path := setupTestRepoWithBranches(t, tmpDir, "repo1", []string{"feature"})
+	repo2Path := setupTestRepoWithBranches(t, tmpDir, "repo2", []string{"feature"})
+
+	wt1Path := createTestWorktree(t, repo1Path, "feature")
+	wt2Path := createTestWorktree(t, repo2Path, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: repo1Path},
+			{Name: "repo2", Path: repo2Path},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	// Run from repo1 with -g flag
+	ctx := testContextWithConfig(t, cfg, repo1Path)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f", "-g"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Both worktrees should be removed
+	if _, err := os.Stat(wt1Path); err == nil {
+		t.Error("repo1 worktree should be removed after global prune")
+	}
+	if _, err := os.Stat(wt2Path); err == nil {
+		t.Error("repo2 worktree should be removed after global prune")
+	}
+}
+
+// TestPrune_UnscopedTarget_NotInRepo_FallsBackToAll tests that running from a
+// non-repo directory (without -g) falls back to searching all repos.
+//
+// Scenario: Two repos both have a "feature" worktree, user runs from non-repo dir
+// Expected: Both worktrees are removed (fallback to all repos)
+func TestPrune_UnscopedTarget_NotInRepo_FallsBackToAll(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repo1Path := setupTestRepoWithBranches(t, tmpDir, "repo1", []string{"feature"})
+	repo2Path := setupTestRepoWithBranches(t, tmpDir, "repo2", []string{"feature"})
+
+	wt1Path := createTestWorktree(t, repo1Path, "feature")
+	wt2Path := createTestWorktree(t, repo2Path, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: repo1Path},
+			{Name: "repo2", Path: repo2Path},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	// Run from a non-repo directory
+	otherDir := filepath.Join(tmpDir, "not-a-repo")
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create non-repo dir: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, cfg, otherDir)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Both worktrees should be removed (fallback to all repos)
+	if _, err := os.Stat(wt1Path); err == nil {
+		t.Error("repo1 worktree should be removed (fallback to all repos)")
+	}
+	if _, err := os.Stat(wt2Path); err == nil {
+		t.Error("repo2 worktree should be removed (fallback to all repos)")
+	}
+}
+
 // TestPrune_ForceDeleteBranch_MergedPRState tests that branches with unmerged commits
 // are force-deleted when PRState is MERGED (the squash-merge scenario).
 //
