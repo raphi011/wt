@@ -280,8 +280,9 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 					targets[i] = repo.Name + ":" + t
 				}
 			}
+		} else {
+			l.Debug("could not determine current repo, searching all repos", "error", err)
 		}
-		// If not in a repo, fall through — resolveWorktreeTargets will search all repos
 	}
 
 	// Resolve all targets

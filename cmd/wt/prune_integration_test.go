@@ -695,7 +695,9 @@ func TestPrune_UnscopedTarget_OnlyCurrentRepo(t *testing.T) {
 	wt2Path := createTestWorktree(t, repo2Path, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -748,7 +750,9 @@ func TestPrune_UnscopedTarget_GlobalFlag(t *testing.T) {
 	wt2Path := createTestWorktree(t, repo2Path, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -799,7 +803,9 @@ func TestPrune_UnscopedTarget_NotInRepo_FallsBackToAll(t *testing.T) {
 	wt2Path := createTestWorktree(t, repo2Path, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -815,7 +821,9 @@ func TestPrune_UnscopedTarget_NotInRepo_FallsBackToAll(t *testing.T) {
 
 	// Run from a non-repo directory
 	otherDir := filepath.Join(tmpDir, "not-a-repo")
-	os.MkdirAll(otherDir, 0755)
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create non-repo dir: %v", err)
+	}
 
 	ctx := testContextWithConfig(t, cfg, otherDir)
 	cmd := newPruneCmd()
