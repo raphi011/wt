@@ -16,6 +16,10 @@ import (
 	"github.com/raphi011/wt/internal/log"
 )
 
+// ErrNoSourceWorktree is returned when no suitable source worktree is found
+// for file preservation. This is a benign condition (e.g., first worktree).
+var ErrNoSourceWorktree = errors.New("no source worktree found")
+
 // FindSourceWorktree finds an existing worktree to copy preserved files from.
 // It prefers the worktree on the default branch, falling back to the first
 // worktree that isn't the target.
@@ -41,7 +45,7 @@ func FindSourceWorktree(ctx context.Context, gitDir, targetPath string) (string,
 		}
 	}
 
-	return "", errors.New("no source worktree found")
+	return "", ErrNoSourceWorktree
 }
 
 // FindIgnoredFiles returns paths (relative to worktreeDir) of all git-ignored
@@ -75,7 +79,11 @@ func matchesPattern(relPath string, patterns, exclude []string) bool {
 
 	base := filepath.Base(relPath)
 	for _, pat := range patterns {
-		if matched, _ := filepath.Match(pat, base); matched {
+		matched, err := filepath.Match(pat, base)
+		if err != nil {
+			continue // invalid patterns are caught at config load time
+		}
+		if matched {
 			return true
 		}
 	}
@@ -85,12 +93,17 @@ func matchesPattern(relPath string, patterns, exclude []string) bool {
 
 // CopyFile copies src to dst, creating parent directories as needed.
 // Uses O_CREATE|O_EXCL to skip files that already exist (never overwrite).
-// Preserves the source file's permission bits.
-// Returns true if the file was copied, false if it was skipped (already exists).
+// Preserves the source file's permission bits. Symlinks are skipped.
+// Returns true if the file was copied, false if it was skipped (already exists or symlink).
 func CopyFile(src, dst string) (bool, error) {
-	srcInfo, err := os.Stat(src)
+	srcInfo, err := os.Lstat(src)
 	if err != nil {
 		return false, err
+	}
+
+	// Skip symlinks — only copy regular files
+	if srcInfo.Mode()&os.ModeSymlink != 0 {
+		return false, nil
 	}
 
 	// Create parent directories
@@ -106,17 +119,23 @@ func CopyFile(src, dst string) (bool, error) {
 		}
 		return false, err
 	}
-	defer dstFile.Close()
 
 	srcFile, err := os.Open(src)
 	if err != nil {
+		dstFile.Close()
 		os.Remove(dst) // clean up empty dst
 		return false, err
 	}
 	defer srcFile.Close()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		dstFile.Close()
 		os.Remove(dst) // clean up partial dst
+		return false, err
+	}
+
+	if err := dstFile.Close(); err != nil {
+		os.Remove(dst) // clean up on flush failure
 		return false, err
 	}
 
@@ -125,7 +144,8 @@ func CopyFile(src, dst string) (bool, error) {
 
 // PreserveFiles copies git-ignored files matching the configured patterns
 // from sourceDir into targetDir. Returns the list of relative paths that
-// were copied.
+// were copied. Individual file copy failures are logged and skipped; the
+// returned error only indicates failure to enumerate ignored files.
 func PreserveFiles(ctx context.Context, cfg config.PreserveConfig, sourceDir, targetDir string) ([]string, error) {
 	l := log.FromContext(ctx)
 
@@ -146,7 +166,7 @@ func PreserveFiles(ctx context.Context, cfg config.PreserveConfig, sourceDir, ta
 
 		ok, err := CopyFile(src, dst)
 		if err != nil {
-			l.Debug("preserve: failed to copy file", "file", relPath, "error", err)
+			l.Printf("Warning: preserve: failed to copy %s: %v\n", relPath, err)
 			continue
 		}
 

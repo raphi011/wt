@@ -79,6 +79,12 @@ func TestMatchesPattern(t *testing.T) {
 			patterns: nil,
 			want:     false,
 		},
+		{
+			name:     "invalid glob pattern does not match",
+			relPath:  ".env",
+			patterns: []string{"[invalid"},
+			want:     false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -103,8 +109,12 @@ func TestCopyFile(t *testing.T) {
 		src := filepath.Join(tmpDir, "src", ".env")
 		dst := filepath.Join(tmpDir, "dst", ".env")
 
-		os.MkdirAll(filepath.Dir(src), 0755)
-		os.WriteFile(src, []byte("SECRET=abc123\n"), 0644)
+		if err := os.MkdirAll(filepath.Dir(src), 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.WriteFile(src, []byte("SECRET=abc123\n"), 0644); err != nil {
+			t.Fatalf("setup: write file failed: %v", err)
+		}
 
 		copied, err := CopyFile(src, dst)
 		if err != nil {
@@ -130,10 +140,18 @@ func TestCopyFile(t *testing.T) {
 		src := filepath.Join(tmpDir, "src", ".env")
 		dst := filepath.Join(tmpDir, "dst", ".env")
 
-		os.MkdirAll(filepath.Dir(src), 0755)
-		os.MkdirAll(filepath.Dir(dst), 0755)
-		os.WriteFile(src, []byte("NEW_CONTENT\n"), 0644)
-		os.WriteFile(dst, []byte("EXISTING_CONTENT\n"), 0644)
+		if err := os.MkdirAll(filepath.Dir(src), 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.WriteFile(src, []byte("NEW_CONTENT\n"), 0644); err != nil {
+			t.Fatalf("setup: write file failed: %v", err)
+		}
+		if err := os.WriteFile(dst, []byte("EXISTING_CONTENT\n"), 0644); err != nil {
+			t.Fatalf("setup: write file failed: %v", err)
+		}
 
 		copied, err := CopyFile(src, dst)
 		if err != nil {
@@ -160,8 +178,12 @@ func TestCopyFile(t *testing.T) {
 		src := filepath.Join(tmpDir, "src", "deep", "nested", ".env")
 		dst := filepath.Join(tmpDir, "dst", "deep", "nested", ".env")
 
-		os.MkdirAll(filepath.Dir(src), 0755)
-		os.WriteFile(src, []byte("NESTED=true\n"), 0644)
+		if err := os.MkdirAll(filepath.Dir(src), 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.WriteFile(src, []byte("NESTED=true\n"), 0644); err != nil {
+			t.Fatalf("setup: write file failed: %v", err)
+		}
 
 		copied, err := CopyFile(src, dst)
 		if err != nil {
@@ -187,8 +209,12 @@ func TestCopyFile(t *testing.T) {
 		src := filepath.Join(tmpDir, "src", "script.sh")
 		dst := filepath.Join(tmpDir, "dst", "script.sh")
 
-		os.MkdirAll(filepath.Dir(src), 0755)
-		os.WriteFile(src, []byte("#!/bin/sh\n"), 0755)
+		if err := os.MkdirAll(filepath.Dir(src), 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.WriteFile(src, []byte("#!/bin/sh\n"), 0755); err != nil {
+			t.Fatalf("setup: write file failed: %v", err)
+		}
 
 		if _, err := CopyFile(src, dst); err != nil {
 			t.Fatalf("CopyFile() error = %v", err)
@@ -200,6 +226,50 @@ func TestCopyFile(t *testing.T) {
 		}
 		if info.Mode().Perm() != 0755 {
 			t.Errorf("permissions = %o, want %o", info.Mode().Perm(), 0755)
+		}
+	})
+
+	t.Run("returns error for non-existent source", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+
+		src := filepath.Join(tmpDir, "does-not-exist")
+		dst := filepath.Join(tmpDir, "dst", "file")
+
+		_, err := CopyFile(src, dst)
+		if err == nil {
+			t.Fatal("CopyFile() should return error for non-existent source")
+		}
+	})
+
+	t.Run("skips symlinks", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+
+		// Create a real file and a symlink to it
+		realFile := filepath.Join(tmpDir, "real.txt")
+		if err := os.WriteFile(realFile, []byte("content\n"), 0644); err != nil {
+			t.Fatalf("setup: write file failed: %v", err)
+		}
+
+		src := filepath.Join(tmpDir, "link.txt")
+		if err := os.Symlink(realFile, src); err != nil {
+			t.Fatalf("setup: symlink failed: %v", err)
+		}
+
+		dst := filepath.Join(tmpDir, "dst", "link.txt")
+
+		copied, err := CopyFile(src, dst)
+		if err != nil {
+			t.Fatalf("CopyFile() error = %v", err)
+		}
+		if copied {
+			t.Error("CopyFile() should return false for symlink")
+		}
+
+		// dst should not exist
+		if _, err := os.Stat(dst); !os.IsNotExist(err) {
+			t.Error("dst should not exist when source is a symlink")
 		}
 	})
 }

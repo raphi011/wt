@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -350,11 +351,15 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 		}
 	}
 
-	// Preserve files from existing worktree
+	// Preserve git-ignored files from an existing worktree (prefers default branch worktree)
 	if !noPreserve && len(cfg.Preserve.Patterns) > 0 {
 		sourceWT, err := preserve.FindSourceWorktree(ctx, gitDir, wtPath)
 		if err != nil {
-			l.Debug("preserve: no source worktree found", "error", err)
+			if errors.Is(err, preserve.ErrNoSourceWorktree) {
+				l.Debug("preserve: no source worktree found")
+			} else {
+				l.Printf("Warning: preserve: %v\n", err)
+			}
 		} else {
 			copied, err := preserve.PreserveFiles(ctx, cfg.Preserve, sourceWT, wtPath)
 			if err != nil {

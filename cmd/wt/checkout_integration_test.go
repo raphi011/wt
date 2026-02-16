@@ -1903,8 +1903,8 @@ func TestCheckout_ExplicitOriginRemoteRef(t *testing.T) {
 // TestCheckout_PreserveFiles tests that git-ignored files matching preserve patterns
 // are copied from the existing worktree into the new one.
 //
-// Scenario: Repo has .env and .envrc (git-ignored), user runs `wt checkout -b feature`
-// Expected: .env and .envrc are copied to new worktree
+// Scenario: Repo has .env, .envrc, and .env.production (all git-ignored), user runs `wt checkout -b feature`
+// Expected: All three are copied to new worktree (all match configured patterns)
 func TestCheckout_PreserveFiles(t *testing.T) {
 	t.Parallel()
 
@@ -1936,7 +1936,7 @@ func TestCheckout_PreserveFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repoPath, ".envrc"), []byte("dotenv\n"), 0644); err != nil {
 		t.Fatalf("failed to write .envrc: %v", err)
 	}
-	// Also create a non-matching ignored file
+	// Also create .env.production (matches .env.* pattern)
 	if err := os.WriteFile(filepath.Join(repoPath, ".env.production"), []byte("PROD=true\n"), 0644); err != nil {
 		t.Fatalf("failed to write .env.production: %v", err)
 	}

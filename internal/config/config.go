@@ -258,6 +258,13 @@ func Load() (Config, error) {
 		return Default(), fmt.Errorf("invalid default_sort %q: must be \"created\", \"repo\", or \"branch\"", cfg.DefaultSort)
 	}
 
+	// Validate preserve patterns are valid filepath.Match syntax
+	for i, pat := range cfg.Preserve.Patterns {
+		if _, err := filepath.Match(pat, ""); err != nil {
+			return Default(), fmt.Errorf("invalid preserve.patterns[%d] %q: %w", i, pat, err)
+		}
+	}
+
 	// Note: theme.name is validated at runtime with a warning, not an error
 
 	// Use defaults for empty values
@@ -492,7 +499,7 @@ worktree_format = "{repo}-{branch}"
 # on = ["prune"]
 
 # Preserve settings - auto-copy git-ignored files into new worktrees
-# Copies matching files from an existing worktree (default branch) into newly created ones.
+# Copies matching files from an existing worktree (preferring the default branch) into newly created ones.
 # Only git-ignored files are considered. Existing files are never overwritten.
 # Use --no-preserve on checkout to skip for a single invocation.
 #
