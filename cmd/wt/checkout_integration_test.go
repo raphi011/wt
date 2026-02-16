@@ -11,6 +11,7 @@ import (
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/history"
+	"github.com/raphi011/wt/internal/preserve"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -1896,5 +1897,328 @@ func TestCheckout_ExplicitOriginRemoteRef(t *testing.T) {
 	originFile := filepath.Join(wtPath, "origin-develop.txt")
 	if _, err := os.Stat(originFile); os.IsNotExist(err) {
 		t.Error("feature branch should have origin-develop.txt (explicit origin/develop overrides base_ref=local)")
+	}
+}
+
+// TestCheckout_PreserveFiles tests that git-ignored files matching preserve patterns
+// are copied from the existing worktree into the new one.
+//
+// Scenario: Repo has .env, .envrc, and .env.production (all git-ignored), user runs `wt checkout -b feature`
+// Expected: All three are copied to new worktree (all match configured patterns)
+func TestCheckout_PreserveFiles(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	// Add .gitignore
+	if err := os.WriteFile(filepath.Join(repoPath, ".gitignore"), []byte(".env\n.env.*\n.envrc\n"), 0644); err != nil {
+		t.Fatalf("failed to write .gitignore: %v", err)
+	}
+	cmds := [][]string{
+		{"git", "add", ".gitignore"},
+		{"git", "commit", "-m", "Add gitignore"},
+	}
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create git-ignored files in main worktree
+	if err := os.WriteFile(filepath.Join(repoPath, ".env"), []byte("SECRET=abc\n"), 0644); err != nil {
+		t.Fatalf("failed to write .env: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repoPath, ".envrc"), []byte("dotenv\n"), 0644); err != nil {
+		t.Fatalf("failed to write .envrc: %v", err)
+	}
+	// Also create .env.production (matches .env.* pattern)
+	if err := os.WriteFile(filepath.Join(repoPath, ".env.production"), []byte("PROD=true\n"), 0644); err != nil {
+		t.Fatalf("failed to write .env.production: %v", err)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+		Preserve: config.PreserveConfig{
+			Patterns: []string{".env", ".env.*", ".envrc"},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+
+	// Verify all matching files were copied
+	for _, file := range []string{".env", ".envrc", ".env.production"} {
+		data, err := os.ReadFile(filepath.Join(wtPath, file))
+		if err != nil {
+			t.Errorf("preserved file %s should exist in new worktree: %v", file, err)
+			continue
+		}
+		srcData, _ := os.ReadFile(filepath.Join(repoPath, file))
+		if string(data) != string(srcData) {
+			t.Errorf("preserved file %s content mismatch: got %q, want %q", file, data, srcData)
+		}
+	}
+}
+
+// TestCheckout_PreserveNoOverwrite tests that preserved files never overwrite
+// existing files in the target worktree.
+//
+// Scenario: Target worktree already has a .env file, source has a different one
+// Expected: Existing .env in target is not overwritten
+func TestCheckout_PreserveNoOverwrite(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	// Add .gitignore
+	if err := os.WriteFile(filepath.Join(repoPath, ".gitignore"), []byte(".env\n"), 0644); err != nil {
+		t.Fatalf("failed to write .gitignore: %v", err)
+	}
+	cmds := [][]string{
+		{"git", "add", ".gitignore"},
+		{"git", "commit", "-m", "Add gitignore"},
+	}
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create .env in main worktree
+	if err := os.WriteFile(filepath.Join(repoPath, ".env"), []byte("SOURCE_SECRET=old\n"), 0644); err != nil {
+		t.Fatalf("failed to write .env: %v", err)
+	}
+
+	// Create worktree path manually and put a .env there first
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+
+	preserveCfg := config.PreserveConfig{
+		Patterns: []string{".env"},
+	}
+
+	// Directly test the preserve function since we need to create the .env before checkout
+	ctx := testContext(t)
+
+	// First create the worktree directory with an existing .env
+	os.MkdirAll(wtPath, 0755)
+	if err := os.WriteFile(filepath.Join(wtPath, ".env"), []byte("EXISTING=keep\n"), 0644); err != nil {
+		t.Fatalf("failed to write existing .env: %v", err)
+	}
+
+	// Run preserve
+	copied, err := preserve.PreserveFiles(ctx, preserveCfg, repoPath, wtPath)
+	if err != nil {
+		t.Fatalf("PreserveFiles failed: %v", err)
+	}
+
+	// .env should NOT be in copied list (it was skipped)
+	for _, f := range copied {
+		if f == ".env" {
+			t.Error(".env should not have been copied (file already exists)")
+		}
+	}
+
+	// Verify existing content was preserved
+	data, err := os.ReadFile(filepath.Join(wtPath, ".env"))
+	if err != nil {
+		t.Fatalf("failed to read .env: %v", err)
+	}
+	if string(data) != "EXISTING=keep\n" {
+		t.Errorf("existing .env was overwritten: got %q, want %q", data, "EXISTING=keep\n")
+	}
+}
+
+// TestCheckout_NoPreserveFlag tests that --no-preserve skips file preservation.
+//
+// Scenario: User runs `wt checkout -b feature --no-preserve` with preserve config
+// Expected: No files are copied despite matching patterns
+func TestCheckout_NoPreserveFlag(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	// Add .gitignore and create ignored file
+	if err := os.WriteFile(filepath.Join(repoPath, ".gitignore"), []byte(".env\n"), 0644); err != nil {
+		t.Fatalf("failed to write .gitignore: %v", err)
+	}
+	cmds := [][]string{
+		{"git", "add", ".gitignore"},
+		{"git", "commit", "-m", "Add gitignore"},
+	}
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(repoPath, ".env"), []byte("SECRET=abc\n"), 0644); err != nil {
+		t.Fatalf("failed to write .env: %v", err)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+		Preserve: config.PreserveConfig{
+			Patterns: []string{".env"},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--no-preserve"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+
+	// Verify .env was NOT copied
+	if _, err := os.Stat(filepath.Join(wtPath, ".env")); !os.IsNotExist(err) {
+		t.Error(".env should NOT exist in new worktree when --no-preserve is used")
+	}
+}
+
+// TestCheckout_PreserveExclude tests that exclude patterns filter out matching path segments.
+//
+// Scenario: .env inside node_modules is ignored when "node_modules" is in exclude
+// Expected: Only non-excluded .env files are copied
+func TestCheckout_PreserveExclude(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	// Add .gitignore that ignores .env and node_modules
+	if err := os.WriteFile(filepath.Join(repoPath, ".gitignore"), []byte(".env\nnode_modules/\n"), 0644); err != nil {
+		t.Fatalf("failed to write .gitignore: %v", err)
+	}
+	cmds := [][]string{
+		{"git", "add", ".gitignore"},
+		{"git", "commit", "-m", "Add gitignore"},
+	}
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create root .env (should be preserved)
+	if err := os.WriteFile(filepath.Join(repoPath, ".env"), []byte("ROOT=true\n"), 0644); err != nil {
+		t.Fatalf("failed to write .env: %v", err)
+	}
+
+	// Create node_modules/.env (should be excluded)
+	os.MkdirAll(filepath.Join(repoPath, "node_modules"), 0755)
+	if err := os.WriteFile(filepath.Join(repoPath, "node_modules", ".env"), []byte("MODULES=true\n"), 0644); err != nil {
+		t.Fatalf("failed to write node_modules/.env: %v", err)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+		Preserve: config.PreserveConfig{
+			Patterns: []string{".env"},
+			Exclude:  []string{"node_modules"},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+
+	// Root .env should be preserved
+	data, err := os.ReadFile(filepath.Join(wtPath, ".env"))
+	if err != nil {
+		t.Fatalf("root .env should exist: %v", err)
+	}
+	if string(data) != "ROOT=true\n" {
+		t.Errorf("root .env content = %q, want %q", data, "ROOT=true\n")
+	}
+
+	// node_modules/.env should NOT be preserved
+	if _, err := os.Stat(filepath.Join(wtPath, "node_modules", ".env")); !os.IsNotExist(err) {
+		t.Error("node_modules/.env should NOT be preserved (excluded)")
 	}
 }

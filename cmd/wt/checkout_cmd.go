@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
+	"github.com/raphi011/wt/internal/preserve"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
@@ -25,6 +27,7 @@ func newCheckoutCmd() *cobra.Command {
 		note        string
 		hookNames   []string
 		noHook      bool
+		noPreserve  bool
 		env         []string
 		interactive bool
 	)
@@ -182,7 +185,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			l.Debug("checkout", "branch", parsed.Branch, "repos", len(repos), "new", newBranch)
 
 			for _, repo := range repos {
-				if err := checkoutInRepo(ctx, repo, parsed.Branch, newBranch, base, fetch, autoStash, note, hookNames, noHook, env); err != nil {
+				if err := checkoutInRepo(ctx, repo, parsed.Branch, newBranch, base, fetch, autoStash, noPreserve, note, hookNames, noHook, env); err != nil {
 					return fmt.Errorf("%s: %w", repo.Name, err)
 				}
 			}
@@ -198,6 +201,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
 	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
 	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-checkout hook")
+	cmd.Flags().BoolVar(&noPreserve, "no-preserve", false, "Skip file preservation")
 	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable KEY=VALUE")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode")
 
@@ -210,7 +214,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 	return cmd
 }
 
-func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newBranch bool, base string, fetch, autoStash bool, note string, hookNames []string, noHook bool, env []string) error {
+func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newBranch bool, base string, fetch, autoStash, noPreserve bool, note string, hookNames []string, noHook bool, env []string) error {
 	cfg := config.FromContext(ctx)
 	l := log.FromContext(ctx)
 
@@ -344,6 +348,28 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 	if note != "" {
 		if err := git.SetBranchNote(ctx, gitDir, branch, note); err != nil {
 			l.Printf("Warning: failed to set note: %v\n", err)
+		}
+	}
+
+	// Preserve git-ignored files from an existing worktree (prefers default branch worktree)
+	if !noPreserve && len(cfg.Preserve.Patterns) > 0 {
+		sourceWT, err := preserve.FindSourceWorktree(ctx, gitDir, wtPath)
+		if err != nil {
+			if errors.Is(err, preserve.ErrNoSourceWorktree) {
+				l.Debug("preserve: no source worktree found")
+			} else {
+				l.Printf("Warning: preserve: %v\n", err)
+			}
+		} else {
+			copied, err := preserve.PreserveFiles(ctx, cfg.Preserve, sourceWT, wtPath)
+			if err != nil {
+				l.Printf("Warning: preserve files failed: %v\n", err)
+			} else if len(copied) > 0 {
+				l.Debug("preserved files", "count", len(copied), "from", sourceWT)
+				for _, f := range copied {
+					l.Debug("  preserved", "file", f)
+				}
+			}
 		}
 	}
 
