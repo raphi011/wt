@@ -80,6 +80,13 @@ type PruneConfig struct {
 	DeleteLocalBranches bool `toml:"delete_local_branches"`
 }
 
+// PreserveConfig holds file preservation settings for worktree creation.
+// Matching git-ignored files are copied from an existing worktree into new ones.
+type PreserveConfig struct {
+	Patterns []string `toml:"patterns"` // Glob patterns matched against file basenames
+	Exclude  []string `toml:"exclude"`  // Path segments to exclude (e.g., "node_modules")
+}
+
 // CheckoutConfig holds checkout-related configuration
 type CheckoutConfig struct {
 	WorktreeFormat string `toml:"worktree_format"` // Template for worktree folder names
@@ -113,8 +120,9 @@ type Config struct {
 	Forge         ForgeConfig       `toml:"forge"`
 	Merge         MergeConfig       `toml:"merge"`
 	Prune         PruneConfig       `toml:"prune"`
-	Hosts         map[string]string `toml:"hosts"` // domain -> forge type mapping
-	Theme         ThemeConfig       `toml:"theme"` // UI theme/colors for interactive mode
+	Preserve      PreserveConfig    `toml:"preserve"` // file preservation for new worktrees
+	Hosts         map[string]string `toml:"hosts"`    // domain -> forge type mapping
+	Theme         ThemeConfig       `toml:"theme"`    // UI theme/colors for interactive mode
 }
 
 // DefaultWorktreeFormat is the default format for worktree folder names
@@ -168,6 +176,7 @@ type rawConfig struct {
 	Forge         ForgeConfig       `toml:"forge"`
 	Merge         MergeConfig       `toml:"merge"`
 	Prune         PruneConfig       `toml:"prune"`
+	Preserve      PreserveConfig    `toml:"preserve"`
 	Hosts         map[string]string `toml:"hosts"`
 	Theme         ThemeConfig       `toml:"theme"`
 }
@@ -210,6 +219,7 @@ func Load() (Config, error) {
 		Forge:         raw.Forge,
 		Merge:         raw.Merge,
 		Prune:         raw.Prune,
+		Preserve:      raw.Preserve,
 		Hosts:         raw.Hosts,
 		Theme:         raw.Theme,
 	}
@@ -480,6 +490,15 @@ worktree_format = "{repo}-{branch}"
 # command = "echo 'Removed {branch} from {repo}'"
 # description = "Log removed branches"
 # on = ["prune"]
+
+# Preserve settings - auto-copy git-ignored files into new worktrees
+# Copies matching files from an existing worktree (default branch) into newly created ones.
+# Only git-ignored files are considered. Existing files are never overwritten.
+# Use --no-preserve on checkout to skip for a single invocation.
+#
+# [preserve]
+# patterns = [".env", ".env.*", ".envrc", "docker-compose.override.yml"]
+# exclude = ["node_modules", ".cache", "vendor"]
 
 # Forge settings - configure forge type, default org, and multi-account auth
 # Used for PR operations and "wt pr checkout <number> org/repo" when cloning
