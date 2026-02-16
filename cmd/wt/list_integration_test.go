@@ -331,3 +331,54 @@ func TestList_JSON(t *testing.T) {
 		t.Errorf("expected JSON array output, got %q", output)
 	}
 }
+
+// TestList_OrphanedRepoFiltered tests that orphaned repos are silently skipped.
+//
+// Scenario: Registry has two repos, one with a non-existent path
+// Expected: Command succeeds, only valid repo's worktrees are shown
+func TestList_OrphanedRepoFiltered(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "valid-repo", []string{"feature"})
+	createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "valid-repo", Path: repoPath},
+			{Name: "orphaned-repo", Path: filepath.Join(tmpDir, "no-such-path")},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	otherDir := filepath.Join(tmpDir, "other")
+	os.MkdirAll(otherDir, 0755)
+
+	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, otherDir)
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "feature") {
+		t.Errorf("expected valid repo's worktree in output, got %q", output)
+	}
+	if strings.Contains(output, "orphaned-repo") {
+		t.Errorf("expected orphaned repo to be filtered from output, got %q", output)
+	}
+}
+
