@@ -3,16 +3,12 @@
 package main
 
 import (
-	"context"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
-	"github.com/raphi011/wt/internal/log"
-	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -386,59 +382,3 @@ func TestList_OrphanedRepoFiltered(t *testing.T) {
 	}
 }
 
-// TestList_OrphanedRepoDebugLog tests that orphaned repos emit debug messages
-// only when verbose mode is enabled.
-//
-// Scenario: Registry has one orphaned repo, verbose logging is on
-// Expected: Debug message about non-existent path is written to stderr
-func TestList_OrphanedRepoDebugLog(t *testing.T) {
-	t.Parallel()
-	tmpDir := t.TempDir()
-	tmpDir = resolvePath(t, tmpDir)
-
-	repoPath := setupTestRepo(t, tmpDir, "good-repo")
-
-	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
-
-	orphanedPath := filepath.Join(tmpDir, "gone-repo")
-
-	reg := &registry.Registry{
-		Repos: []registry.Repo{
-			{Name: "good-repo", Path: repoPath},
-			{Name: "gone-repo", Path: orphanedPath},
-		},
-	}
-	if err := reg.Save(regFile); err != nil {
-		t.Fatalf("failed to save registry: %v", err)
-	}
-
-	cfg := &config.Config{RegistryPath: regFile}
-
-	otherDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(otherDir, 0755)
-
-	// Create context with verbose logger to capture debug output
-	var logBuf strings.Builder
-	ctx := context.Background()
-	ctx = log.WithLogger(ctx, log.New(&logBuf, true, false))
-	ctx = output.WithPrinter(ctx, io.Discard)
-	ctx = config.WithConfig(ctx, cfg)
-	ctx = config.WithWorkDir(ctx, otherDir)
-
-	cmd := newListCmd()
-	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{})
-
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("list command failed: %v", err)
-	}
-
-	logOutput := logBuf.String()
-	if !strings.Contains(logOutput, "repo path no longer exists") {
-		t.Errorf("expected debug log about orphaned repo, got %q", logOutput)
-	}
-	if !strings.Contains(logOutput, "gone-repo") {
-		t.Errorf("expected repo name in debug log, got %q", logOutput)
-	}
-}

@@ -57,7 +57,7 @@ Repos are also auto-registered the first time you run `wt checkout` inside one.
 ### 3. Create a Worktree
 
 ```bash
-wt checkout -b new-branch    # Create worktree with new branch (from origin/main)
+wt checkout -b new-branch    # Create worktree with new branch (from default branch)
 ```
 
 ### 4. List Worktrees
@@ -497,6 +497,8 @@ wt init fish | source
 ```
 
 ## Shell Completions
+
+Completions are installed automatically when using Homebrew. For manual installs:
 
 ```bash
 # Fish
