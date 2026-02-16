@@ -3,12 +3,16 @@
 package main
 
 import (
+	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/log"
+	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -329,5 +333,112 @@ func TestList_JSON(t *testing.T) {
 	output := out.String()
 	if !strings.HasPrefix(strings.TrimSpace(output), "[") {
 		t.Errorf("expected JSON array output, got %q", output)
+	}
+}
+
+// TestList_OrphanedRepoFiltered tests that orphaned repos are silently skipped.
+//
+// Scenario: Registry has two repos, one with a non-existent path
+// Expected: Command succeeds, only valid repo's worktrees are shown
+func TestList_OrphanedRepoFiltered(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "valid-repo", []string{"feature"})
+	createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "valid-repo", Path: repoPath},
+			{Name: "orphaned-repo", Path: filepath.Join(tmpDir, "no-such-path")},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	otherDir := filepath.Join(tmpDir, "other")
+	os.MkdirAll(otherDir, 0755)
+
+	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, otherDir)
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "feature") {
+		t.Errorf("expected valid repo's worktree in output, got %q", output)
+	}
+	if strings.Contains(output, "orphaned-repo") {
+		t.Errorf("expected orphaned repo to be filtered from output, got %q", output)
+	}
+}
+
+// TestList_OrphanedRepoDebugLog tests that orphaned repos emit debug messages
+// only when verbose mode is enabled.
+//
+// Scenario: Registry has one orphaned repo, verbose logging is on
+// Expected: Debug message about non-existent path is written to stderr
+func TestList_OrphanedRepoDebugLog(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "good-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	orphanedPath := filepath.Join(tmpDir, "gone-repo")
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "good-repo", Path: repoPath},
+			{Name: "gone-repo", Path: orphanedPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	otherDir := filepath.Join(tmpDir, "other")
+	os.MkdirAll(otherDir, 0755)
+
+	// Create context with verbose logger to capture debug output
+	var logBuf strings.Builder
+	ctx := context.Background()
+	ctx = log.WithLogger(ctx, log.New(&logBuf, true, false))
+	ctx = output.WithPrinter(ctx, io.Discard)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, otherDir)
+
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
+	}
+
+	logOutput := logBuf.String()
+	if !strings.Contains(logOutput, "repo path no longer exists") {
+		t.Errorf("expected debug log about orphaned repo, got %q", logOutput)
+	}
+	if !strings.Contains(logOutput, "gone-repo") {
+		t.Errorf("expected repo name in debug log, got %q", logOutput)
 	}
 }

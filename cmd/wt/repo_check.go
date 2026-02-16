@@ -12,12 +12,11 @@ func filterOrphanedRepos(l *log.Logger, repos []registry.Repo) []registry.Repo {
 	for _, repo := range repos {
 		exists, err := repo.PathExists()
 		if err != nil {
-			l.Printf("Warning: %s: cannot access path (%s): %v\n", repo.Name, repo.Path, err)
+			l.Debug("cannot access repo path", "repo", repo.Name, "path", repo.Path, "error", err)
 			continue
 		}
 		if !exists {
-			l.Printf("Warning: %s: path no longer exists (%s)\n", repo.Name, repo.Path)
-			l.Printf("  Repo is orphaned. Update with: wt repo add <new-path> --name %s\n", repo.Name)
+			l.Debug("repo path no longer exists", "repo", repo.Name, "path", repo.Path)
 			continue
 		}
 		valid = append(valid, repo)

@@ -54,7 +54,13 @@ wt repo clone git@github.com:org/repo.git
 
 Repos are also auto-registered the first time you run `wt checkout` inside one.
 
-### 3. List Worktrees
+### 3. Create a Worktree
+
+```bash
+wt checkout -b new-branch    # Create worktree with new branch (from origin/main)
+```
+
+### 4. List Worktrees
 
 ```bash
 wt list -g
@@ -252,7 +258,7 @@ wt exec backend-api:main -- make test   # In specific repo's worktree
 
 ### Quick Navigation
 
-> **Note:** To use `wt cd` directly (without `cd $(...)` wrapper), add `eval "$(wt init)"` to your shell config. See `wt init --help` for details.
+> **Note:** `wt cd` prints the path but can't change your shell directory. Add the shell wrapper from [Shell Integration](#shell-integration) to use `wt cd` directly.
 
 ```bash
 # Jump to most recently accessed worktree
@@ -474,6 +480,21 @@ keybindings:
 ```
 
 Press `O` to checkout PR → hooks auto-open your editor.
+
+## Shell Integration
+
+`wt cd` prints the worktree path to stdout but can't change your shell's directory on its own. `wt init` outputs a shell wrapper that intercepts `wt cd` and performs the actual `cd`.
+
+```bash
+# Bash - add to ~/.bashrc
+eval "$(wt init bash)"
+
+# Zsh - add to ~/.zshrc
+eval "$(wt init zsh)"
+
+# Fish - add to ~/.config/fish/config.fish
+wt init fish | source
+```
 
 ## Shell Completions
 
