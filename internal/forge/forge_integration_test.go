@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -254,6 +255,103 @@ func TestForge_CloneRepo_InvalidSpec(t *testing.T) {
 	}
 }
 
+// TestForge_ListOpenPRs verifies listing open PRs for a repository.
+//
+// Scenario: User lists open PRs for a repo
+// Expected: ListOpenPRs() returns a non-nil slice without error
+func TestForge_ListOpenPRs(t *testing.T) {
+	for _, fc := range testForges {
+		t.Run(fc.name, func(t *testing.T) {
+			t.Parallel()
+			prs, err := fc.forge.ListOpenPRs(context.Background(), fc.repoURL)
+			if err != nil {
+				t.Fatalf("ListOpenPRs() error = %v", err)
+			}
+			if prs == nil {
+				t.Error("ListOpenPRs() returned nil, want non-nil slice")
+			}
+			// If there are open PRs, verify fields are populated
+			for i, pr := range prs {
+				if pr.Number <= 0 {
+					t.Errorf("ListOpenPRs()[%d].Number = %d, want > 0", i, pr.Number)
+				}
+				if pr.Title == "" {
+					t.Errorf("ListOpenPRs()[%d].Title is empty", i)
+				}
+				if pr.Branch == "" {
+					t.Errorf("ListOpenPRs()[%d].Branch is empty", i)
+				}
+			}
+		})
+	}
+}
+
+// TestForge_CloneBareRepo verifies cloning a repository as a bare repo.
+//
+// Scenario: User clones a repo as bare for worktree usage
+// Expected: Bare repo created with .git/HEAD and fetch refspec configured
+func TestForge_CloneBareRepo(t *testing.T) {
+	for _, fc := range testForges {
+		t.Run(fc.name, func(t *testing.T) {
+			t.Parallel()
+			tmpDir := t.TempDir()
+
+			repoDir, err := fc.forge.CloneBareRepo(context.Background(), fc.repoSpec, tmpDir)
+			if err != nil {
+				t.Fatalf("CloneBareRepo() error = %v", err)
+			}
+
+			// Verify bare repo structure: .git/HEAD should exist
+			headPath := filepath.Join(repoDir, ".git", "HEAD")
+			if _, err := os.Stat(headPath); os.IsNotExist(err) {
+				t.Errorf("CloneBareRepo() .git/HEAD not found at %s", headPath)
+			}
+
+			// Verify fetch refspec is configured for worktree support
+			gitDir := filepath.Join(repoDir, ".git")
+			c := exec.Command("git", "-C", gitDir, "config", "remote.origin.fetch")
+			out, err := c.Output()
+			if err != nil {
+				t.Fatalf("git config remote.origin.fetch failed: %v", err)
+			}
+			want := "+refs/heads/*:refs/remotes/origin/*"
+			if got := strings.TrimSpace(string(out)); got != want {
+				t.Errorf("fetch refspec = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// TestForge_CloneBareRepo_InvalidSpec verifies error handling for invalid repo specs
+// when cloning bare repos.
+//
+// Scenario: User tries to bare-clone with invalid spec
+// Expected: CloneBareRepo() returns error for all invalid specs
+func TestForge_CloneBareRepo_InvalidSpec(t *testing.T) {
+	for _, fc := range testForges {
+		t.Run(fc.name, func(t *testing.T) {
+			t.Parallel()
+			tmpDir := t.TempDir()
+			ctx := context.Background()
+
+			_, err := fc.forge.CloneBareRepo(ctx, "invalid-spec-no-slash", tmpDir)
+			if err == nil {
+				t.Error("CloneBareRepo() with invalid spec should return error")
+			}
+
+			_, err = fc.forge.CloneBareRepo(ctx, "/repo", tmpDir)
+			if err == nil {
+				t.Error("CloneBareRepo() with empty org should return error")
+			}
+
+			_, err = fc.forge.CloneBareRepo(ctx, "org/", tmpDir)
+			if err == nil {
+				t.Error("CloneBareRepo() with empty repo should return error")
+			}
+		})
+	}
+}
+
 // Write tests - combined into single test to ensure sequential execution
 // and proper cleanup (t.Cleanup runs after ALL subtests complete)
 
@@ -335,6 +433,48 @@ func TestForge_PRWorkflow(t *testing.T) {
 
 				prNumber = result.Number
 				t.Logf("Created PR #%d: %s", result.Number, result.URL)
+			})
+
+			t.Run("ListOpenPRs", func(t *testing.T) {
+				if prNumber == 0 {
+					t.Skip("No PR created")
+				}
+
+				prs, err := fc.forge.ListOpenPRs(ctx, fc.repoURL)
+				if err != nil {
+					t.Fatalf("ListOpenPRs() error = %v", err)
+				}
+
+				found := false
+				for _, pr := range prs {
+					if pr.Number == prNumber {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("ListOpenPRs() did not include PR #%d", prNumber)
+				}
+			})
+
+			t.Run("GetPRForBranch", func(t *testing.T) {
+				if prNumber == 0 {
+					t.Skip("No PR created")
+				}
+
+				pr, err := fc.forge.GetPRForBranch(ctx, fc.repoURL, testBranch)
+				if err != nil {
+					t.Fatalf("GetPRForBranch() error = %v", err)
+				}
+				if !pr.Fetched {
+					t.Error("GetPRForBranch() pr.Fetched = false, want true")
+				}
+				if pr.Number != prNumber {
+					t.Errorf("GetPRForBranch() pr.Number = %d, want %d", pr.Number, prNumber)
+				}
+				if pr.State != PRStateOpen {
+					t.Errorf("GetPRForBranch() pr.State = %q, want %q", pr.State, PRStateOpen)
+				}
 			})
 
 			t.Run("ViewPR", func(t *testing.T) {
