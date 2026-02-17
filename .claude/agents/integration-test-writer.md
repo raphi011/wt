@@ -19,7 +19,7 @@ All integration test functions MUST have doc comments in this format:
 func TestCommandName_Scenario(t *testing.T) {
 ```
 
-These comments are extracted by `make testdoc` to generate `docs/TESTS.md`.
+These comments are extracted by `just testdoc` to generate `docs/TESTS.md`.
 
 ## Parallel Test Safety
 
