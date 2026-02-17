@@ -491,6 +491,72 @@ accent = "#b48ead"
 
 Available color keys: `primary`, `accent`, `success`, `error`, `muted`, `normal`, `info`.
 
+## Writing Hooks
+
+Hooks are shell commands executed via `sh -c`. Placeholders like `{worktree-dir}` are replaced with raw text before the command runs — no automatic escaping or quoting is applied.
+
+### Quoting Placeholders
+
+Since values are substituted as-is, paths with spaces or special characters will break unquoted placeholders:
+
+```toml
+# Breaks if path contains spaces
+[hooks.unsafe]
+command = "code {worktree-dir}"
+
+# Safe — single quotes protect the value
+[hooks.safe]
+command = "code '{worktree-dir}'"
+```
+
+The same applies to custom `--arg` variables:
+
+```toml
+[hooks.claude]
+command = "claude '{prompt:-help me}'"
+```
+
+### Multiline Hooks
+
+Use TOML triple-quoted strings for multi-step hooks:
+
+```toml
+[hooks.setup]
+command = '''
+cd '{worktree-dir}'
+npm install
+npm run build
+'''
+on = ["checkout"]
+```
+
+**Important:** Without `set -e`, intermediate failures are silent — only the exit code of the **last** command determines whether the hook succeeds or fails. Use `set -e` to fail fast:
+
+```toml
+[hooks.setup]
+command = '''
+set -e
+cd '{worktree-dir}'
+npm install
+npm run build
+'''
+on = ["checkout"]
+```
+
+### Piping Content via Stdin
+
+Use `--arg key=-` to pipe stdin into a variable:
+
+```bash
+echo "implement auth" | wt hook claude --arg prompt=-
+```
+
+Multiple keys can read from the same stdin:
+
+```bash
+cat spec.md | wt hook claude --arg prompt=- --arg context=-
+```
+
 ## Integration with gh-dash
 
 `wt` works great with [gh-dash](https://github.com/dlvhdr/gh-dash). Add a keybinding to checkout PRs as worktrees:
