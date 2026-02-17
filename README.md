@@ -1,5 +1,14 @@
 # wt
 
+<div align="center">
+
+[![MIT License](https://img.shields.io/badge/License-MIT-555555.svg?labelColor=333333&color=666666)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/raphi011/wt/total?labelColor=333333&color=666666)](https://github.com/raphi011/wt/releases)
+[![Last Commit](https://img.shields.io/github/last-commit/raphi011/wt?labelColor=333333&color=666666)](https://github.com/raphi011/wt/commits/main)
+[![Commit Activity](https://img.shields.io/github/commit-activity/m/raphi011/wt?labelColor=333333&color=666666)](https://github.com/raphi011/wt/graphs/commit-activity)
+
+</div>
+
 Git worktree manager with GitHub/GitLab integration.
 
 ## Why wt
