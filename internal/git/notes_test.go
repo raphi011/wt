@@ -2,55 +2,16 @@ package git
 
 import (
 	"context"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"testing"
 )
 
-// setupNotesTestRepo creates a git repo with a branch for testing notes.
+// setupNotesTestRepo creates a git repo with a feature branch for testing notes.
 func setupNotesTestRepo(t *testing.T) string {
 	t.Helper()
-	tmpDir := t.TempDir()
-	resolved, err := filepath.EvalSymlinks(tmpDir)
-	if err != nil {
-		t.Fatalf("failed to resolve symlinks for %s: %v", tmpDir, err)
-	}
-	tmpDir = resolved
-	repoPath := filepath.Join(tmpDir, "test-repo")
-
+	repoPath := setupTestRepo(t)
 	ctx := context.Background()
-	if err := runGit(ctx, "", "init", "-b", "main", repoPath); err != nil {
-		t.Fatalf("failed to init repo: %v", err)
-	}
 
-	cmds := [][]string{
-		{"config", "user.email", "test@test.com"},
-		{"config", "user.name", "Test User"},
-		{"config", "commit.gpgsign", "false"},
-	}
-
-	for _, args := range cmds {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = repoPath
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("failed to run git %v: %v\n%s", args, err, out)
-		}
-	}
-
-	// Create initial commit
-	readme := filepath.Join(repoPath, "README.md")
-	if err := os.WriteFile(readme, []byte("# test\n"), 0644); err != nil {
-		t.Fatalf("failed to write file: %v", err)
-	}
-	if err := runGit(ctx, repoPath, "add", "README.md"); err != nil {
-		t.Fatalf("failed to add file: %v", err)
-	}
-	if err := runGit(ctx, repoPath, "commit", "-m", "Initial commit"); err != nil {
-		t.Fatalf("failed to commit: %v", err)
-	}
-
-	// Create a feature branch
 	if err := runGit(ctx, repoPath, "branch", "feature"); err != nil {
 		t.Fatalf("failed to create branch: %v", err)
 	}
