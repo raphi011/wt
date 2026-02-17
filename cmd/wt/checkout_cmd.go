@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 
 	"github.com/spf13/cobra"
@@ -365,7 +366,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 			if err != nil {
 				l.Printf("Warning: preserve files failed: %v\n", err)
 			} else if len(copied) > 0 {
-				l.Debug("preserved files", "count", len(copied), "from", sourceWT)
+				l.Printf("Preserved %d file(s) from %s\n", len(copied), filepath.Base(sourceWT))
 				for _, f := range copied {
 					l.Debug("  preserved", "file", f)
 				}
