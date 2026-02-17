@@ -538,7 +538,7 @@ wt completion zsh > ~/.zfunc/_wt
 ## Development
 
 ```bash
-make build    # Build ./wt binary
-make test     # Run tests
-make install  # Install to ~/go/bin
+just build    # Build ./wt binary
+just test     # Run tests
+just install  # Install to ~/go/bin (+ shell completions)
 ```

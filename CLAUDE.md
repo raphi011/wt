@@ -10,19 +10,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Build
-make build          # Creates ./wt binary
+just build          # Creates ./wt binary
 go build ./cmd/wt   # Same as above
 
-# Install to ~/go/bin
-make install
+# Install to ~/go/bin (+ shell completions)
+just install
 go install ./cmd/wt
 
 # Run tests
-make test
+just test
 go test ./...
 
 # Clean
-make clean
+just clean
 ```
 
 ## Architecture
