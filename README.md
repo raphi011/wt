@@ -122,7 +122,7 @@ With hooks configured, your editor opens automatically:
 ```toml
 # ~/.wt/config.toml
 [hooks.vscode]
-command = "code {worktree-dir}"
+command = "code '{worktree-dir}'"
 on = ["checkout"]
 ```
 
@@ -392,12 +392,12 @@ Explicit remote refs (`origin/branch`, `upstream/branch`) always override `base_
 
 ```toml
 [hooks.vscode]
-command = "code {worktree-dir}"
+command = "code '{worktree-dir}'"
 description = "Open VS Code"
 on = ["checkout", "pr"]  # Auto-run for these commands
 
 [hooks.kitty]
-command = "kitty @ launch --type=tab --cwd={worktree-dir}"
+command = "kitty @ launch --type=tab --cwd='{worktree-dir}'"
 description = "Open new kitty tab"
 on = ["checkout"]
 
@@ -406,7 +406,7 @@ command = "echo 'Removed {branch}'"
 on = ["prune"]
 
 [hooks.claude]
-command = "kitty @ launch --cwd={worktree-dir} -- claude {prompt:-help me}"
+command = "kitty @ launch --cwd='{worktree-dir}' -- claude '{prompt:-help me}'"
 description = "Open Claude with prompt"
 # No "on" = only runs via: wt hook claude --arg prompt="..."
 ```
@@ -509,7 +509,9 @@ command = "code {worktree-dir}"
 command = "code '{worktree-dir}'"
 ```
 
-The same applies to custom `--arg` variables:
+> **Note:** Single quotes protect against spaces and most special characters, but not against values containing literal single quotes. This is a limitation of raw text substitution.
+
+The same applies to all placeholders (`{repo-dir}`, `{branch}`, `{repo}`, `{origin}`, `{trigger}`) and custom `--arg` variables:
 
 ```toml
 [hooks.claude]
@@ -551,7 +553,7 @@ Use `--arg key=-` to pipe stdin into a variable:
 echo "implement auth" | wt hook claude --arg prompt=-
 ```
 
-Multiple keys can read from the same stdin:
+Multiple keys can read from the same stdin (all keys receive identical content):
 
 ```bash
 cat spec.md | wt hook claude --arg prompt=- --arg context=-
