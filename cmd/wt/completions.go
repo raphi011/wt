@@ -20,7 +20,7 @@ import (
 func repoPathFromArgs(ctx context.Context, cfg *config.Config, args []string) string {
 	reg, err := registry.Load(cfg.RegistryPath)
 	if err != nil {
-		return git.GetCurrentRepoMainPath(ctx)
+		return git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx))
 	}
 
 	for _, arg := range args {
@@ -39,7 +39,7 @@ func repoPathFromArgs(ctx context.Context, cfg *config.Config, args []string) st
 	}
 
 	// Fall back to current directory
-	return git.GetCurrentRepoMainPath(ctx)
+	return git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx))
 }
 
 // completeBranches provides branch name completion.
@@ -47,7 +47,7 @@ func repoPathFromArgs(ctx context.Context, cfg *config.Config, args []string) st
 // otherwise uses current directory.
 func completeBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	cfg := config.FromContext(cmd.Context())
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	repoPath := repoPathFromArgs(ctx, cfg, args)
 	if repoPath == "" {
@@ -73,7 +73,7 @@ func completeBranches(cmd *cobra.Command, args []string, toComplete string) ([]s
 // Supports both local branches and explicit remote refs (origin/branch, upstream/branch).
 func completeBaseBranches(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	cfg := config.FromContext(cmd.Context())
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	repoPath := repoPathFromArgs(ctx, cfg, args)
 	if repoPath == "" {
@@ -203,7 +203,7 @@ func completeScopedWorktreeArg(cmd *cobra.Command, args []string, toComplete str
 	var matches []string
 
 	// Check if we're inside a git repo
-	currentRepoPath := git.GetCurrentRepoMainPath(ctx)
+	currentRepoPath := git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx))
 
 	if currentRepoPath != "" {
 		// Inside a repo - show branches from current repo first (no prefix)
@@ -326,7 +326,7 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 		}
 
 		cfg := config.FromContext(cmd.Context())
-		ctx := context.Background()
+		ctx := cmd.Context()
 
 		// If user is typing scope:branch format, complete the branch part
 		if before, after, ok := strings.Cut(toComplete, ":"); ok {
@@ -412,7 +412,7 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 
 		// Also suggest existing branches (excluding checked-out ones)
 		// Even with -b, users may want to base new branch names on existing ones
-		currentRepoPath := git.GetCurrentRepoMainPath(ctx)
+		currentRepoPath := git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx))
 		if currentRepoPath != "" {
 			wtBranches := git.GetWorktreeBranches(ctx, currentRepoPath)
 

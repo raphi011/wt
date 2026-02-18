@@ -426,7 +426,7 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 	var preSelectedRepos []int
 
 	// Get current repo path if inside one
-	currentRepoPath := git.GetCurrentRepoMainPath(ctx)
+	currentRepoPath := git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx))
 
 	for i, repo := range reg.Repos {
 		repoPaths = append(repoPaths, repo.Path)

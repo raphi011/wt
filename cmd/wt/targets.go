@@ -236,7 +236,8 @@ func resolveScopeArgsOrCurrent(ctx context.Context, reg *registry.Registry, scop
 	}
 
 	// Fall back to current repo
-	repoPath := git.GetCurrentRepoMainPath(ctx)
+	workDir := config.WorkDirFromContext(ctx)
+	repoPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
 	if repoPath == "" {
 		return nil, fmt.Errorf("not in a git repository (specify repo or label)")
 	}

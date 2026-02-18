@@ -118,6 +118,8 @@ internal/ui/             - Terminal UI components
 
 **Never ignore errors** - All errors must be handled explicitly. Never use `_ = someFunc()` or call functions without checking their return error. In tests, use `t.Fatalf` for setup errors. In production code, either return the error or log it with context if it's truly non-fatal.
 
+**Always use `config.WorkDirFromContext(ctx)` for the working directory** - Never call `os.Getwd()` in command implementations. The working directory is captured once in `root.go` and stored in context. Use `config.WorkDirFromContext(ctx)` to retrieve it. For git operations that need a path, use `git.GetCurrentRepoMainPathFrom(ctx, workDir)` instead of `git.GetCurrentRepoMainPath(ctx)`. Direct `os.Getwd()` calls break parallel test isolation.
+
 **Avoid magic strings** - Use named constants for repeated string values (e.g., PR states, merge strategies). Define constants in the package that owns the concept (e.g., `forge.PRStateMerged` for PR states). Never compare against string literals scattered across files.
 
 **Interactive Mode (`-i` flag)** - When implementing interactive wizard mode for commands:
