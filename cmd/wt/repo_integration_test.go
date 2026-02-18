@@ -24,7 +24,9 @@ func TestRepoList_ListEmpty(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -48,7 +50,9 @@ func TestRepoList_ListRepos(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 
@@ -63,13 +67,21 @@ func TestRepoList_ListRepos(t *testing.T) {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	ctx := testContextWithConfig(t, cfg, tmpDir)
+	ctx, out := testContextWithConfigAndOutput(t, cfg, tmpDir)
 	cmd := newRepoListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("repo list command failed: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "repo1") {
+		t.Errorf("expected output to contain 'repo1', got %q", output)
+	}
+	if !strings.Contains(output, "repo2") {
+		t.Errorf("expected output to contain 'repo2', got %q", output)
 	}
 }
 
@@ -84,7 +96,9 @@ func TestRepoList_FilterByLabel(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 
@@ -99,13 +113,21 @@ func TestRepoList_FilterByLabel(t *testing.T) {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	ctx := testContextWithConfig(t, cfg, tmpDir)
+	ctx, out := testContextWithConfigAndOutput(t, cfg, tmpDir)
 	cmd := newRepoListCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"backend"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("repo list command failed: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "backend-api") {
+		t.Errorf("expected output to contain 'backend-api', got %q", output)
+	}
+	if strings.Contains(output, "frontend-app") {
+		t.Errorf("expected output NOT to contain 'frontend-app', got %q", output)
 	}
 }
 
@@ -120,7 +142,9 @@ func TestRepoList_LabelNotFound(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 
@@ -159,7 +183,9 @@ func TestRepoList_JSON(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 
@@ -196,7 +222,7 @@ func TestRepoList_JSON(t *testing.T) {
 // Scenario: User runs `wt repo add /path/to/repo`
 // Expected: Repo is registered in the registry
 func TestRepoAdd_RegisterRepo(t *testing.T) {
-	// Not parallel - modifies HOME
+	t.Parallel()
 
 	// Setup temp dir
 	tmpDir := t.TempDir()
@@ -207,7 +233,9 @@ func TestRepoAdd_RegisterRepo(t *testing.T) {
 
 	// Create test registry
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 
@@ -253,7 +281,9 @@ func TestRepoAdd_WithLabels(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "labeled-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -303,7 +333,9 @@ func TestRepoAdd_DuplicatePath(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "dup-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -336,10 +368,14 @@ func TestRepoAdd_NotAGitRepo(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	notGitPath := filepath.Join(tmpDir, "not-a-repo")
-	os.MkdirAll(notGitPath, 0755)
+	if err := os.MkdirAll(notGitPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -367,7 +403,9 @@ func TestRepoAdd_MultiplePaths(t *testing.T) {
 	repo2 := setupTestRepo(t, tmpDir, "repo2")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -412,11 +450,15 @@ func TestRepoAdd_SkipsNonGitDirs(t *testing.T) {
 	// Create one repo and one non-git directory
 	repo1 := setupTestRepo(t, tmpDir, "repo1")
 	notGit := filepath.Join(tmpDir, "notgit")
-	os.MkdirAll(notGit, 0755)
+	if err := os.MkdirAll(notGit, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 	repo2 := setupTestRepo(t, tmpDir, "repo2")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -461,7 +503,9 @@ func TestRepoRemove_UnregisterRepo(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "remove-test")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 
@@ -512,7 +556,9 @@ func TestRepoRemove_NonExistent(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -599,7 +645,9 @@ func TestRepoMakeBare_BasicMigration(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "migrate-test")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -655,7 +703,9 @@ func TestRepoMakeBare_WithCustomName(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "original-name")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -690,7 +740,9 @@ func TestRepoMakeBare_WithLabels(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "labeled-migrate")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -734,7 +786,9 @@ func TestRepoMakeBare_WithWorktreeFormat(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "format-migrate")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -769,7 +823,9 @@ func TestRepoMakeBare_WithSiblingFormat(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "sibling-format")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -816,7 +872,9 @@ func TestRepoMakeBare_SiblingFormatWithExistingWorktrees(t *testing.T) {
 	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -862,7 +920,9 @@ func TestRepoMakeBare_DryRun(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "dryrun-migrate")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx, out := testContextWithOutput(t)
@@ -920,7 +980,9 @@ func TestRepoMakeBare_WithExistingWorktrees(t *testing.T) {
 	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -975,7 +1037,9 @@ func TestRepoMakeBare_IsWorktree(t *testing.T) {
 	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -1006,7 +1070,9 @@ func TestRepoMakeBare_AlreadyBare(t *testing.T) {
 	repoPath := setupBareInGitRepo(t, tmpDir, "already-bare")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -1031,10 +1097,14 @@ func TestRepoMakeBare_NotGitRepo(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	notGitPath := filepath.Join(tmpDir, "not-a-repo")
-	os.MkdirAll(notGitPath, 0755)
+	if err := os.MkdirAll(notGitPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -1060,7 +1130,9 @@ func TestRepoMakeBare_HasSubmodules(t *testing.T) {
 	repoPath := setupTestRepoWithSubmodule(t, tmpDir, "with-submodule")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -1091,7 +1163,9 @@ func TestRepoMakeBare_AlreadyRegistered(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "already-registered")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 
@@ -1151,7 +1225,9 @@ func TestRepoMakeBare_NameConflict(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "name-conflict")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 
@@ -1192,11 +1268,15 @@ func TestRepoMakeBare_ByPath(t *testing.T) {
 
 	// Create repo in a subdirectory
 	reposDir := filepath.Join(tmpDir, "repos")
-	os.MkdirAll(reposDir, 0755)
+	if err := os.MkdirAll(reposDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 	repoPath := setupTestRepo(t, reposDir, "path-migrate")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
@@ -1226,6 +1306,107 @@ func TestRepoMakeBare_ByPath(t *testing.T) {
 
 	if reg.Repos[0].Name != "path-migrate" {
 		t.Errorf("expected name 'path-migrate', got %q", reg.Repos[0].Name)
+	}
+}
+
+// TestRepoRemove_DeleteForce tests removing a repo with --delete --force flags.
+//
+// Scenario: User runs `wt repo remove myrepo --delete --force`
+// Expected: Repo is unregistered AND files are deleted from disk
+func TestRepoRemove_DeleteForce(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "delete-test")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "delete-test", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newRepoRemoveCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"delete-test", "--delete", "--force"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("repo remove --delete --force failed: %v", err)
+	}
+
+	// Verify repo was removed from registry
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	if len(reg.Repos) != 0 {
+		t.Errorf("expected 0 repos, got %d", len(reg.Repos))
+	}
+
+	// Verify files were deleted from disk
+	if _, err := os.Stat(repoPath); !os.IsNotExist(err) {
+		t.Errorf("expected repo files to be deleted, but path still exists: %s", repoPath)
+	}
+}
+
+// TestRepoRemove_ByPath tests removing a repo by its full path instead of name.
+//
+// Scenario: User runs `wt repo remove /full/path/to/repo`
+// Expected: Repo is found by path and unregistered
+func TestRepoRemove_ByPath(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "path-remove-test")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "path-remove-test", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	// Remove by full path instead of name
+	cmd := newRepoRemoveCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("repo remove by path failed: %v", err)
+	}
+
+	// Verify repo was removed from registry
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	if len(reg.Repos) != 0 {
+		t.Errorf("expected 0 repos after removal by path, got %d", len(reg.Repos))
+	}
+
+	// Files should still exist (no --delete flag)
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		t.Error("repo files should not be deleted without --delete flag")
 	}
 }
 

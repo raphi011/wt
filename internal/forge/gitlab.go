@@ -325,9 +325,9 @@ func (g *GitLab) ViewPR(ctx context.Context, repoURL string, number int, web boo
 // ListOpenPRs lists all open MRs for a repository
 func (g *GitLab) ListOpenPRs(ctx context.Context, repoURL string) ([]OpenPR, error) {
 	projectPath := extractRepoPath(repoURL)
+	// glab mr list shows open MRs by default (no --state flag)
 	output, err := g.outputGlab(ctx, "mr", "list",
 		"-R", projectPath,
-		"--state", "opened",
 		"-F", "json",
 		"-P", "100")
 	if err != nil {
