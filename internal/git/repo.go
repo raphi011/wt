@@ -181,13 +181,6 @@ func PushBranch(ctx context.Context, repoPath, branch string) error {
 	return runGit(ctx, repoPath, "push", "-u", "origin", branch)
 }
 
-// GetCurrentRepoMainPath returns the main repository path from cwd
-// Works whether you're in the main repo or a worktree
-// Returns empty string if not in a git repo
-func GetCurrentRepoMainPath(ctx context.Context) string {
-	return GetCurrentRepoMainPathFrom(ctx, "")
-}
-
 // GetCurrentRepoMainPathFrom returns the main repository path from the given path
 // Works whether you're in the main repo or a worktree
 // Returns empty string if not in a git repo

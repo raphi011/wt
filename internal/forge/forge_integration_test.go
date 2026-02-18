@@ -406,7 +406,8 @@ func TestForge_PRWorkflow(t *testing.T) {
 			})
 
 			t.Run("CreatePR", func(t *testing.T) {
-				// Change to clone directory (CLI tools may need to run from within repo)
+				// glab requires cwd to be inside the repo to detect GitLab host.
+				// Safe: parent test is not parallel, subtests run sequentially.
 				origDir, err := os.Getwd()
 				if err != nil {
 					t.Fatalf("failed to get current directory: %v", err)
@@ -416,10 +417,10 @@ func TestForge_PRWorkflow(t *testing.T) {
 				}
 				defer os.Chdir(origDir)
 
-				// Create PR (not draft so it can be merged)
 				result, err := fc.forge.CreatePR(ctx, fc.repoURL, CreatePRParams{
 					Title: "Test PR - " + testBranch,
 					Body:  "Automated integration test PR. Will be merged automatically.",
+					Head:  testBranch,
 				})
 				if err != nil {
 					t.Fatalf("CreatePR() error = %v", err)

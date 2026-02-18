@@ -323,3 +323,162 @@ func TestExec_Deduplication(t *testing.T) {
 	}
 
 }
+
+// TestExec_NotInGitRepo tests error when running exec with no targets from outside a git repo.
+//
+// Scenario: User runs `wt exec -- ls` from a non-git directory
+// Expected: Returns "not in a git repository" error
+func TestExec_NotInGitRepo(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{Repos: []registry.Repo{}}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	// Use a non-git directory as workDir
+	nonGitDir := filepath.Join(tmpDir, "not-a-repo")
+	if err := os.MkdirAll(nonGitDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, nonGitDir)
+
+	cmd := newExecCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--", "ls"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for non-git directory, got nil")
+	}
+	if !strings.Contains(err.Error(), "not in a git repository") {
+		t.Errorf("expected 'not in a git repository' error, got %q", err.Error())
+	}
+}
+
+// TestExec_FailingCommand tests that a non-zero exit command is handled gracefully.
+//
+// Scenario: User runs `wt exec -- false` (exit code 1)
+// Expected: exec itself succeeds (logs error but does not return an error)
+func TestExec_FailingCommand(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cmd := newExecCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--", "false"})
+
+	// exec itself should succeed; it logs the error but continues
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("exec command should not fail when sub-command fails, got: %v", err)
+	}
+}
+
+// TestExec_RepoNotFound tests error when targeting a non-existent repo.
+//
+// Scenario: User runs `wt exec nonexistent:main -- ls`
+// Expected: Returns error from reg.FindByName
+func TestExec_RepoNotFound(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{Repos: []registry.Repo{}}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newExecCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"nonexistent:main", "--", "ls"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for nonexistent repo, got nil")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got %q", err.Error())
+	}
+}
+
+// TestExec_ByLabelScope tests running a command in worktrees matched by label scope.
+//
+// Scenario: User runs `wt exec backend:main -- touch test-file` where "backend" is a label
+// Expected: Since exec uses parseBranchTarget not label resolution, "backend" is treated as repo name
+//           and fails with not found. The label:branch pattern is for worktree commands, not exec.
+//           Actually, exec uses parseBranchTarget which splits on ":" and treats left side as repo name.
+func TestExec_ByRepoScope(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath, Labels: []string{"backend"}},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	// exec's parser treats "backend" as plain branch name when no colon
+	// When branch "main" is specified without colon, it searches all repos
+	cmd := newExecCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"main", "--", "touch", "exec-label-file"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("exec command failed: %v", err)
+	}
+
+	// Verify file was created in the main worktree (repoPath is on branch main)
+	testFile := filepath.Join(repoPath, "exec-label-file")
+	if _, err := os.Stat(testFile); os.IsNotExist(err) {
+		t.Errorf("expected file %q to be created in main worktree", testFile)
+	}
+}

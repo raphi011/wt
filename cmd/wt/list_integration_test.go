@@ -24,7 +24,9 @@ func TestList_EmptyRepo(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -70,7 +72,9 @@ func TestList_WithWorktrees(t *testing.T) {
 	createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -114,7 +118,9 @@ func TestList_ByRepoName(t *testing.T) {
 	createTestWorktree(t, repoPath, "develop")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -129,7 +135,9 @@ func TestList_ByRepoName(t *testing.T) {
 
 	// Work from a different directory
 	otherDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(otherDir, 0755)
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
@@ -161,7 +169,9 @@ func TestList_ByLabel(t *testing.T) {
 	createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -176,7 +186,9 @@ func TestList_ByLabel(t *testing.T) {
 
 	// Work from a different directory
 	otherDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(otherDir, 0755)
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
@@ -212,7 +224,9 @@ func TestList_MultipleScopes(t *testing.T) {
 	createTestWorktree(t, repo2Path, "feat2")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -228,7 +242,9 @@ func TestList_MultipleScopes(t *testing.T) {
 
 	// Work from a different directory
 	otherDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(otherDir, 0755)
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
@@ -260,7 +276,9 @@ func TestList_ScopeNotFound(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{},
@@ -273,7 +291,9 @@ func TestList_ScopeNotFound(t *testing.T) {
 
 	// Work from a different directory
 	otherDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(otherDir, 0755)
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx, _ := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
@@ -303,7 +323,9 @@ func TestList_JSON(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -345,7 +367,9 @@ func TestList_OrphanedRepoFiltered(t *testing.T) {
 	createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -360,7 +384,9 @@ func TestList_OrphanedRepoFiltered(t *testing.T) {
 	cfg := &config.Config{RegistryPath: regFile}
 
 	otherDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(otherDir, 0755)
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
@@ -379,6 +405,221 @@ func TestList_OrphanedRepoFiltered(t *testing.T) {
 	}
 	if strings.Contains(output, "orphaned-repo") {
 		t.Errorf("expected orphaned repo to be filtered from output, got %q", output)
+	}
+}
+
+// TestList_SortByBranch tests sorting worktrees by branch name.
+//
+// Scenario: User runs `wt list --sort branch`
+// Expected: Worktrees are sorted alphabetically by branch name
+func TestList_SortByBranch(t *testing.T) {
+	t.Parallel()
+	tmpDir := resolvePath(t, t.TempDir())
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"beta", "alpha", "gamma"})
+	createTestWorktree(t, repoPath, "beta")
+	createTestWorktree(t, repoPath, "alpha")
+	createTestWorktree(t, repoPath, "gamma")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, repoPath)
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--sort", "branch"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
+	}
+
+	output := out.String()
+	// Verify all branches are present
+	for _, branch := range []string{"alpha", "beta", "gamma"} {
+		if !strings.Contains(output, branch) {
+			t.Errorf("expected output to contain %q, got %q", branch, output)
+		}
+	}
+
+	// Verify alphabetical order: alpha should appear before beta, beta before gamma
+	alphaIdx := strings.Index(output, "alpha")
+	betaIdx := strings.Index(output, "beta")
+	gammaIdx := strings.Index(output, "gamma")
+	if alphaIdx > betaIdx || betaIdx > gammaIdx {
+		t.Errorf("expected alphabetical order (alpha < beta < gamma), got alpha=%d beta=%d gamma=%d", alphaIdx, betaIdx, gammaIdx)
+	}
+}
+
+// TestList_SortByRepo tests sorting worktrees by repo name.
+//
+// Scenario: User runs `wt list --sort repo` with multiple repos
+// Expected: Worktrees are sorted by repo name, then branch name within each repo
+func TestList_SortByRepo(t *testing.T) {
+	t.Parallel()
+	tmpDir := resolvePath(t, t.TempDir())
+
+	repo1Path := setupTestRepoWithBranches(t, tmpDir, "zeta-repo", []string{"feature"})
+	createTestWorktree(t, repo1Path, "feature")
+
+	repo2Path := setupTestRepoWithBranches(t, tmpDir, "alpha-repo", []string{"develop"})
+	createTestWorktree(t, repo2Path, "develop")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "zeta-repo", Path: repo1Path},
+			{Name: "alpha-repo", Path: repo2Path},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	otherDir := filepath.Join(tmpDir, "other")
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, otherDir)
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"zeta-repo", "alpha-repo", "--sort", "repo"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
+	}
+
+	output := out.String()
+	// alpha-repo should appear before zeta-repo
+	alphaIdx := strings.Index(output, "alpha-repo")
+	zetaIdx := strings.Index(output, "zeta-repo")
+	if alphaIdx == -1 || zetaIdx == -1 {
+		t.Fatalf("expected both repo names in output, got %q", output)
+	}
+	if alphaIdx > zetaIdx {
+		t.Errorf("expected alpha-repo before zeta-repo in sorted output")
+	}
+}
+
+// TestList_Global tests the --global flag shows all repos.
+//
+// Scenario: User runs `wt list --global` from inside a repo
+// Expected: Shows worktrees from all repos, not just current
+func TestList_Global(t *testing.T) {
+	t.Parallel()
+	tmpDir := resolvePath(t, t.TempDir())
+
+	repo1Path := setupTestRepoWithBranches(t, tmpDir, "repo1", []string{"feat1"})
+	createTestWorktree(t, repo1Path, "feat1")
+
+	repo2Path := setupTestRepoWithBranches(t, tmpDir, "repo2", []string{"feat2"})
+	createTestWorktree(t, repo2Path, "feat2")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: repo1Path},
+			{Name: "repo2", Path: repo2Path},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, repo1Path) // Inside repo1
+
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--global"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
+	}
+
+	output := out.String()
+	// Should show worktrees from both repos
+	if !strings.Contains(output, "feat1") {
+		t.Errorf("expected output to contain 'feat1', got %q", output)
+	}
+	if !strings.Contains(output, "feat2") {
+		t.Errorf("expected output to contain 'feat2', got %q", output)
+	}
+}
+
+// TestList_GlobalFromNonRepo tests --global from outside any git repo.
+//
+// Scenario: User runs `wt list --global` from a non-git directory
+// Expected: Shows worktrees from all registered repos
+func TestList_GlobalFromNonRepo(t *testing.T) {
+	t.Parallel()
+	tmpDir := resolvePath(t, t.TempDir())
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
+	createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	nonRepoDir := filepath.Join(tmpDir, "not-a-repo")
+	if err := os.MkdirAll(nonRepoDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, nonRepoDir)
+
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--global"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "feature") {
+		t.Errorf("expected output to contain 'feature', got %q", output)
 	}
 }
 

@@ -360,3 +360,168 @@ func TestPrView_RepoNotFound(t *testing.T) {
 		t.Errorf("expected 'not found' error, got %q", err.Error())
 	}
 }
+
+// TestPrCreate_BodyAndBodyFileMutuallyExclusive tests that --body and --body-file cannot both be used.
+//
+// Scenario: User runs `wt pr create --title test --body "text" --body-file file.txt`
+// Expected: Returns cobra mutual exclusivity error
+func TestPrCreate_BodyAndBodyFileMutuallyExclusive(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cmd := newPrCreateCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--title", "test", "--body", "inline body", "--body-file", "file.txt"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for mutually exclusive flags, got nil")
+	}
+	if !strings.Contains(err.Error(), "body") || !strings.Contains(err.Error(), "body-file") {
+		t.Errorf("expected error about body/body-file mutual exclusivity, got %q", err.Error())
+	}
+}
+
+// TestPrCheckout_HookNoHookMutuallyExclusive tests that --hook and --no-hook cannot both be used.
+//
+// Scenario: User runs `wt pr checkout --hook myhook --no-hook 123`
+// Expected: Returns cobra mutual exclusivity error
+func TestPrCheckout_HookNoHookMutuallyExclusive(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--hook", "myhook", "--no-hook", "123"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for mutually exclusive flags, got nil")
+	}
+	if !strings.Contains(err.Error(), "hook") || !strings.Contains(err.Error(), "no-hook") {
+		t.Errorf("expected error about hook/no-hook mutual exclusivity, got %q", err.Error())
+	}
+}
+
+// TestPrMerge_HookNoHookMutuallyExclusive tests that --hook and --no-hook cannot both be used.
+//
+// Scenario: User runs `wt pr merge --hook myhook --no-hook`
+// Expected: Returns cobra mutual exclusivity error
+func TestPrMerge_HookNoHookMutuallyExclusive(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cmd := newPrMergeCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--hook", "myhook", "--no-hook"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for mutually exclusive flags, got nil")
+	}
+	if !strings.Contains(err.Error(), "hook") || !strings.Contains(err.Error(), "no-hook") {
+		t.Errorf("expected error about hook/no-hook mutual exclusivity, got %q", err.Error())
+	}
+}
+
+// TestPrCheckout_OrgRepoAlreadyInRegistry tests error when org/repo format is used
+// but the repo name is already registered.
+//
+// Scenario: User runs `wt pr checkout org/myrepo 123` but "myrepo" already in registry
+// Expected: Returns specific error suggesting to use the local name instead
+func TestPrCheckout_OrgRepoAlreadyInRegistry(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"org/myrepo", "123"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for already registered repo, got nil")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("expected 'already exists' error, got %q", err.Error())
+	}
+	// Should suggest using the local name
+	if !strings.Contains(err.Error(), "wt pr checkout myrepo") {
+		t.Errorf("expected suggestion to use local name, got %q", err.Error())
+	}
+}
