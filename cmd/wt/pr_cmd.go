@@ -122,7 +122,7 @@ Otherwise, it's looked up in the local registry.`,
 				}
 
 				// Clone the repo as bare into .git directory
-				cwd, _ := os.Getwd()
+				cwd := config.WorkDirFromContext(ctx)
 				l.Printf("Cloning %s (bare)...\n", orgRepo)
 				repoPath, err = f.CloneBareRepo(ctx, orgRepo, cwd)
 				if err != nil {
@@ -325,7 +325,7 @@ func newPrCreateCmd() *cobra.Command {
 			}
 
 			// Get current branch
-			cwd, _ := os.Getwd()
+			cwd := config.WorkDirFromContext(ctx)
 			branch, err := git.GetCurrentBranch(ctx, cwd)
 			if err != nil {
 				return fmt.Errorf("failed to get current branch: %w", err)
@@ -448,7 +448,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 			}
 
 			// Get current branch and worktree path
-			cwd, _ := os.Getwd()
+			cwd := config.WorkDirFromContext(ctx)
 			branch, err := git.GetCurrentBranch(ctx, cwd)
 			if err != nil {
 				return fmt.Errorf("failed to get current branch: %w", err)
@@ -594,7 +594,7 @@ func newPrViewCmd() *cobra.Command {
 			}
 
 			// Get current branch
-			cwd, _ := os.Getwd()
+			cwd := config.WorkDirFromContext(ctx)
 			branch, err := git.GetCurrentBranch(ctx, cwd)
 			if err != nil {
 				return fmt.Errorf("failed to get current branch: %w", err)
