@@ -54,7 +54,7 @@ func TestStash_NoChanges(t *testing.T) {
 	repoPath := setupTestRepo(t)
 	ctx := context.Background()
 
-	// Stash on clean worktree — git exits 0 but nothing is stashed
+	// Stash on clean worktree — git stash push succeeds (exit 0) but creates no entry
 	n, err := Stash(ctx, repoPath)
 	if err != nil {
 		t.Fatalf("Stash on clean worktree should not error, got: %v", err)

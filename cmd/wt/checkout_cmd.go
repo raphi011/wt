@@ -241,11 +241,13 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 	repoHasCommits := git.RefExists(ctx, gitDir, "HEAD")
 
 	// Stash changes if autostash is enabled (skip for empty repos — no commits to stash)
+	var stashed bool
 	if autoStash && repoHasCommits {
 		n, err := git.Stash(ctx, repo.Path)
 		if err != nil {
 			l.Printf("Warning: stash failed: %v\n", err)
 		} else if n > 0 {
+			stashed = true
 			l.Printf("Stashed %d file(s)\n", n)
 		}
 	}
@@ -344,7 +346,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 	}
 
 	// Apply stashed changes to new worktree
-	if autoStash {
+	if stashed {
 		if err := git.StashPop(ctx, wtPath); err != nil {
 			l.Printf("Warning: failed to apply stashed changes: %v\n", err)
 		}
