@@ -98,6 +98,7 @@ Target worktrees using [scope:]branch format where scope can be a repo name or l
 
 	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable KEY=VALUE")
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Print command without executing")
+	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
 
 	return cmd
 }

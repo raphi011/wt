@@ -262,6 +262,8 @@ be managed with other wt commands. Non-git directories are silently skipped.`,
 
 	// Completions
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.RegisterFlagCompletionFunc("name", cobra.NoFileCompletions)
+	cmd.RegisterFlagCompletionFunc("worktree-format", cobra.NoFileCompletions)
 
 	return cmd
 }
@@ -544,6 +546,9 @@ If destination is not specified, clones into the current directory.`,
 	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Create initial worktree for branch")
 
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.RegisterFlagCompletionFunc("name", cobra.NoFileCompletions)
+	cmd.RegisterFlagCompletionFunc("worktree-format", cobra.NoFileCompletions)
+	cmd.RegisterFlagCompletionFunc("branch", cobra.NoFileCompletions)
 	cmd.MarkFlagDirname("destination")
 
 	return cmd
@@ -759,6 +764,8 @@ The migration:
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Preview migration without making changes")
 
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
+	cmd.RegisterFlagCompletionFunc("name", cobra.NoFileCompletions)
+	cmd.RegisterFlagCompletionFunc("worktree-format", cobra.NoFileCompletions)
 
 	// Path argument should complete directories only
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

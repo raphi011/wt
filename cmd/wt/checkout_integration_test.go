@@ -2222,3 +2222,206 @@ func TestCheckout_PreserveExclude(t *testing.T) {
 		t.Error("node_modules/.env should NOT be preserved (excluded)")
 	}
 }
+
+// TestCheckout_AutoStash_NoChanges tests that --autostash with clean working tree succeeds.
+//
+// Scenario: User runs `wt checkout feature --autostash` with no uncommitted changes
+// Expected: Stash fails silently (nothing to stash), checkout succeeds, pop skipped gracefully
+func TestCheckout_AutoStash_NoChanges(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "--autostash"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout with --autostash and no changes should succeed, got: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Errorf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify it's on the correct branch
+	branch := getGitBranch(t, wtPath)
+	if branch != "feature" {
+		t.Errorf("expected branch 'feature', got %q", branch)
+	}
+}
+
+// TestCheckout_AutoStash_UntrackedFiles tests that untracked files are stashed and popped.
+//
+// Scenario: User has untracked files, runs `wt checkout feature --autostash`
+// Expected: Untracked files are stashed, worktree created, files applied to new worktree
+func TestCheckout_AutoStash_UntrackedFiles(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+
+	// Create untracked files (not staged)
+	for _, name := range []string{"untracked1.txt", "untracked2.txt"} {
+		f := filepath.Join(repoPath, name)
+		if err := os.WriteFile(f, []byte("content of "+name+"\n"), 0644); err != nil {
+			t.Fatalf("failed to write %s: %v", name, err)
+		}
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "--autostash"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify untracked files were stashed and applied to new worktree
+	for _, name := range []string{"untracked1.txt", "untracked2.txt"} {
+		f := filepath.Join(wtPath, name)
+		content, err := os.ReadFile(f)
+		if err != nil {
+			t.Errorf("untracked file %s should exist in new worktree: %v", name, err)
+			continue
+		}
+		expected := "content of " + name + "\n"
+		if string(content) != expected {
+			t.Errorf("%s content = %q, want %q", name, content, expected)
+		}
+	}
+
+	// Verify original repo no longer has the untracked files
+	for _, name := range []string{"untracked1.txt", "untracked2.txt"} {
+		f := filepath.Join(repoPath, name)
+		if _, err := os.Stat(f); !os.IsNotExist(err) {
+			t.Errorf("untracked file %s should not exist in original repo after stash", name)
+		}
+	}
+}
+
+// TestCheckout_AutoStash_StagedAndModified tests autostash with a mix of staged and modified files.
+//
+// Scenario: User has both staged and modified files, runs `wt checkout feature --autostash`
+// Expected: All changes are stashed and applied to new worktree
+func TestCheckout_AutoStash_StagedAndModified(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+
+	// Create a staged file
+	stagedFile := filepath.Join(repoPath, "staged.txt")
+	if err := os.WriteFile(stagedFile, []byte("staged content\n"), 0644); err != nil {
+		t.Fatalf("failed to write staged file: %v", err)
+	}
+	runGitCommand(repoPath, "add", "staged.txt")
+
+	// Modify an existing tracked file (README.md from setupTestRepo)
+	readmePath := filepath.Join(repoPath, "README.md")
+	if err := os.WriteFile(readmePath, []byte("modified readme\n"), 0644); err != nil {
+		t.Fatalf("failed to modify README.md: %v", err)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "--autostash"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify staged file was applied to new worktree
+	content, err := os.ReadFile(filepath.Join(wtPath, "staged.txt"))
+	if err != nil {
+		t.Errorf("staged.txt should exist in new worktree: %v", err)
+	} else if string(content) != "staged content\n" {
+		t.Errorf("staged.txt content = %q, want %q", content, "staged content\n")
+	}
+
+	// Verify modified README was applied to new worktree
+	content, err = os.ReadFile(filepath.Join(wtPath, "README.md"))
+	if err != nil {
+		t.Errorf("README.md should exist in new worktree: %v", err)
+	} else if string(content) != "modified readme\n" {
+		t.Errorf("README.md content = %q, want %q", content, "modified readme\n")
+	}
+}
