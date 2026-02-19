@@ -2226,7 +2226,7 @@ func TestCheckout_PreserveExclude(t *testing.T) {
 // TestCheckout_AutoStash_NoChanges tests that --autostash with clean working tree succeeds.
 //
 // Scenario: User runs `wt checkout feature --autostash` with no uncommitted changes
-// Expected: Stash fails silently (nothing to stash), checkout succeeds, pop skipped gracefully
+// Expected: Stash succeeds but creates no entry, checkout succeeds, pop is skipped
 func TestCheckout_AutoStash_NoChanges(t *testing.T) {
 	t.Parallel()
 
@@ -2236,7 +2236,9 @@ func TestCheckout_AutoStash_NoChanges(t *testing.T) {
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -2296,7 +2298,9 @@ func TestCheckout_AutoStash_UntrackedFiles(t *testing.T) {
 	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -2377,7 +2381,9 @@ func TestCheckout_AutoStash_StagedAndModified(t *testing.T) {
 	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
