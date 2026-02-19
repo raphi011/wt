@@ -272,6 +272,8 @@ Otherwise, it's looked up in the local registry.`,
 	cmd.RegisterFlagCompletionFunc("forge", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"github", "gitlab"}, cobra.ShellCompDirectiveNoFileComp
 	})
+	cmd.RegisterFlagCompletionFunc("note", cobra.NoFileCompletions)
+	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
 
 	return cmd
 }
@@ -395,6 +397,8 @@ func newPrCreateCmd() *cobra.Command {
 	cmd.MarkFlagFilename("body-file") // Enable file completion for body-file flag
 	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	cmd.RegisterFlagCompletionFunc("base", completeBranches)
+	cmd.RegisterFlagCompletionFunc("title", cobra.NoFileCompletions)
+	cmd.RegisterFlagCompletionFunc("body", cobra.NoFileCompletions)
 
 	return cmd
 }
@@ -550,6 +554,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 	cmd.RegisterFlagCompletionFunc("strategy", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"squash", "rebase", "merge"}, cobra.ShellCompDirectiveNoFileComp
 	})
+	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
 
 	return cmd
 }

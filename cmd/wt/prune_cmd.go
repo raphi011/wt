@@ -259,6 +259,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 
 	// Completions
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
+	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
 
 	return cmd
 }

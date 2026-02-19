@@ -210,6 +210,8 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 
 	// Completions
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
+	cmd.RegisterFlagCompletionFunc("note", cobra.NoFileCompletions)
+	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
 	registerCheckoutCompletions(cmd)
 
 	return cmd
@@ -240,8 +242,11 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 
 	// Stash changes if autostash is enabled (skip for empty repos — no commits to stash)
 	if autoStash && repoHasCommits {
-		if err := git.Stash(ctx, repo.Path); err != nil {
-			l.Debug("stash failed (may have no changes)", "error", err)
+		n, err := git.Stash(ctx, repo.Path)
+		if err != nil {
+			l.Printf("Warning: stash failed: %v\n", err)
+		} else if n > 0 {
+			l.Printf("Stashed %d file(s)\n", n)
 		}
 	}
 
@@ -341,7 +346,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 	// Apply stashed changes to new worktree
 	if autoStash {
 		if err := git.StashPop(ctx, wtPath); err != nil {
-			l.Debug("stash pop failed (may have no stash)", "error", err)
+			l.Printf("Warning: failed to apply stashed changes: %v\n", err)
 		}
 	}
 
