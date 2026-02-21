@@ -88,10 +88,10 @@ func TestCacheKey(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		repo     string
-		branch   string
-		want     string
+		name   string
+		repo   string
+		branch string
+		want   string
 	}{
 		{"normal", "/path/to/repo", "feature", "/path/to/repo:feature"},
 		{"empty repo", "", "feature", ":feature"},

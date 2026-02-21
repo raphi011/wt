@@ -441,8 +441,9 @@ func TestExec_RepoNotFound(t *testing.T) {
 //
 // Scenario: User runs `wt exec backend:main -- touch test-file` where "backend" is a label
 // Expected: Since exec uses parseBranchTarget not label resolution, "backend" is treated as repo name
-//           and fails with not found. The label:branch pattern is for worktree commands, not exec.
-//           Actually, exec uses parseBranchTarget which splits on ":" and treats left side as repo name.
+//
+//	and fails with not found. The label:branch pattern is for worktree commands, not exec.
+//	Actually, exec uses parseBranchTarget which splits on ":" and treats left side as repo name.
 func TestExec_ByRepoScope(t *testing.T) {
 	t.Parallel()
 

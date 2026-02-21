@@ -255,7 +255,7 @@ Otherwise, it's looked up in the local registry.`,
 				Trigger:     string(hooks.CommandCheckout),
 				Env:         hookEnv,
 			}
-			hooks.RunForEach(hookMatches, hookCtx, repoPath)
+			hooks.RunForEach(ctx, hookMatches, hookCtx, repoPath)
 
 			return nil
 		},
@@ -521,7 +521,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 				Trigger:     "merge",
 				Env:         hookEnv,
 			}
-			hooks.RunForEach(hookMatches, hookCtx, repo.Path)
+			hooks.RunForEach(ctx, hookMatches, hookCtx, repo.Path)
 
 			// Remove worktree unless --keep
 			if !keep {

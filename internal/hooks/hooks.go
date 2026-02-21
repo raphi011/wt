@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/mattn/go-isatty"
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/log"
 )
 
 // CommandType identifies which command is triggering the hook
@@ -95,59 +97,66 @@ func hookMatchesCommand(hook config.Hook, cmdType CommandType) bool {
 
 // RunAllNonFatal runs all matched hooks, logging failures as warnings instead of returning errors.
 // Prints "No hooks matched" if matches is empty.
-func RunAllNonFatal(matches []HookMatch, ctx Context, workDir string) {
+func RunAllNonFatal(goCtx context.Context, matches []HookMatch, ctx Context, workDir string) {
+	l := log.FromContext(goCtx)
+
 	if len(matches) == 0 {
-		fmt.Println("No hooks matched")
+		l.Printf("No hooks matched\n")
 		return
 	}
 
 	for _, match := range matches {
-		if err := runHook(match.Name, match.Hook, ctx, workDir); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: hook %q failed: %v\n", match.Name, err)
+		if err := runHook(goCtx, match.Name, match.Hook, ctx, workDir); err != nil {
+			l.Printf("Warning: hook %q failed: %v\n", match.Name, err)
 		}
 	}
 }
 
 // RunForEach runs all matched hooks for a single item (e.g., one worktree in a batch).
 // Logs failures as warnings with branch context. Does NOT print "no hooks matched".
-func RunForEach(matches []HookMatch, ctx Context, workDir string) {
+func RunForEach(goCtx context.Context, matches []HookMatch, ctx Context, workDir string) {
+	l := log.FromContext(goCtx)
+
 	for _, match := range matches {
-		if err := runHook(match.Name, match.Hook, ctx, workDir); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: hook %q failed for %s: %v\n", match.Name, ctx.Branch, err)
+		if err := runHook(goCtx, match.Name, match.Hook, ctx, workDir); err != nil {
+			l.Printf("Warning: hook %q failed for %s: %v\n", match.Name, ctx.Branch, err)
 		}
 	}
 }
 
 // RunSingle runs a single hook by name with the given context.
 // Used by `wt hook` to execute a specific hook manually.
-func RunSingle(name string, hook *config.Hook, ctx Context) error {
-	return runHook(name, hook, ctx, ctx.WorktreeDir)
+func RunSingle(goCtx context.Context, name string, hook *config.Hook, ctx Context) error {
+	return runHook(goCtx, name, hook, ctx, ctx.WorktreeDir)
 }
 
 // runHook executes a single hook with variable substitution.
-func runHook(name string, hook *config.Hook, ctx Context, workDir string) error {
+func runHook(goCtx context.Context, name string, hook *config.Hook, ctx Context, workDir string) error {
+	l := log.FromContext(goCtx)
 	cmd := SubstitutePlaceholders(hook.Command, ctx)
 
 	if ctx.DryRun {
-		fmt.Printf("[dry-run] %s: %s\n", name, cmd)
+		l.Printf("[dry-run] %s: %s\n", name, cmd)
 		return nil
 	}
 
-	fmt.Printf("Running hook '%s'...\n", name)
+	l.Printf("Running hook '%s'...\n", name)
 
 	shellCmd := exec.Command("sh", "-c", cmd)
 	shellCmd.Dir = workDir
-	shellCmd.Stdout = os.Stdout
-	shellCmd.Stderr = os.Stderr
 	shellCmd.Stdin = os.Stdin
 
+	if l.IsVerbose() {
+		shellCmd.Stdout = os.Stdout
+		shellCmd.Stderr = os.Stderr
+	}
+
 	if err := shellCmd.Run(); err != nil {
-		// Error details already printed to stderr by shell
 		return fmt.Errorf("command failed: %s", cmd)
 	}
 
 	if hook.Description != "" {
-		fmt.Printf("  ✓ %s\n", hook.Description)
+		l.Printf("  ✓ %s\n", hook.Description)
 	}
 	return nil
 }
