@@ -408,7 +408,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, force, dryRun,
 				Trigger:     string(hooks.CommandPrune),
 				Env:         hookEnv,
 			}
-			hooks.RunForEach(hookMatches, hookCtx, wt.RepoPath)
+			hooks.RunForEach(ctx, hookMatches, hookCtx, wt.RepoPath)
 		}
 	}
 

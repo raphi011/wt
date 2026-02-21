@@ -402,7 +402,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 			Trigger:     "checkout",
 			Env:         hookEnv,
 		}
-		hooks.RunAllNonFatal(hookMatches, hookCtx, wtPath)
+		hooks.RunAllNonFatal(ctx, hookMatches, hookCtx, wtPath)
 	}
 
 	return nil

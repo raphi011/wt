@@ -73,12 +73,12 @@ func TestParseScopedTarget(t *testing.T) {
 	reg := newTestRegistry()
 
 	tests := []struct {
-		name      string
-		target    string
-		wantRepos int
-		wantLabel bool
+		name       string
+		target     string
+		wantRepos  int
+		wantLabel  bool
 		wantBranch string
-		wantErr   string
+		wantErr    string
 	}{
 		{
 			name:       "no scope",

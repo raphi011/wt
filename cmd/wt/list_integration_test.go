@@ -622,4 +622,3 @@ func TestList_GlobalFromNonRepo(t *testing.T) {
 		t.Errorf("expected output to contain 'feature', got %q", output)
 	}
 }
-

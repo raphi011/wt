@@ -85,6 +85,11 @@ func (l *Logger) Debug(msg string, keyvals ...any) {
 	}
 }
 
+// IsVerbose returns true if the logger is in verbose mode (and not quiet).
+func (l *Logger) IsVerbose() bool {
+	return l.verbose && !l.quiet
+}
+
 // Writer returns the underlying writer.
 func (l *Logger) Writer() io.Writer {
 	return l.out

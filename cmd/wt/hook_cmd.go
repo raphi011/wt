@@ -129,7 +129,7 @@ func runHooksInRepo(ctx context.Context, repo registry.Repo, hookNames []string,
 		DryRun:      dryRun,
 	}
 
-	return runHooksForContext(hookNames, cfg.Hooks.Hooks, hookCtx, repo.Path)
+	return runHooksForContext(ctx, hookNames, cfg.Hooks.Hooks, hookCtx, repo.Path)
 }
 
 // runHooksInTargets runs hooks in specified [scope:]branch targets
@@ -153,7 +153,7 @@ func runHooksInTargets(ctx context.Context, reg *registry.Registry, hookNames []
 			Env:         env,
 			DryRun:      dryRun,
 		}
-		if err := runHooksForContext(hookNames, cfg.Hooks.Hooks, hookCtx, wt.RepoPath); err != nil {
+		if err := runHooksForContext(ctx, hookNames, cfg.Hooks.Hooks, hookCtx, wt.RepoPath); err != nil {
 			errs = append(errs, fmt.Errorf("%s:%s: %w", wt.RepoName, wt.Branch, err))
 		}
 	}
@@ -165,7 +165,7 @@ func runHooksInTargets(ctx context.Context, reg *registry.Registry, hookNames []
 }
 
 // runHooksForContext runs the specified hooks in the given context
-func runHooksForContext(hookNames []string, hooksMap map[string]config.Hook, hookCtx hooks.Context, _ string) error {
+func runHooksForContext(ctx context.Context, hookNames []string, hooksMap map[string]config.Hook, hookCtx hooks.Context, _ string) error {
 	// Collect matching hooks
 	var toRun []config.Hook
 	for _, name := range hookNames {
@@ -176,7 +176,7 @@ func runHooksForContext(hookNames []string, hooksMap map[string]config.Hook, hoo
 
 	// Run each hook
 	for i, name := range hookNames {
-		if err := hooks.RunSingle(name, &toRun[i], hookCtx); err != nil {
+		if err := hooks.RunSingle(ctx, name, &toRun[i], hookCtx); err != nil {
 			return fmt.Errorf("hook %s: %w", name, err)
 		}
 	}
