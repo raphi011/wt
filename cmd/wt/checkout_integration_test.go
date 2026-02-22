@@ -2431,3 +2431,437 @@ func TestCheckout_AutoStash_StagedAndModified(t *testing.T) {
 		t.Errorf("README.md content = %q, want %q", content, "modified readme\n")
 	}
 }
+
+// TestCheckout_AutoStash_BareInGitRepo tests that --autostash works with bare-in-.git repos.
+//
+// Scenario: User is in a worktree of a bare-in-.git repo with staged changes,
+// runs `wt checkout feature --autostash`
+// Expected: Changes are stashed from worktree (not repo root), worktree created,
+// changes applied to new worktree
+func TestCheckout_AutoStash_BareInGitRepo(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Create bare-in-.git repo with main + feature branches
+	repoPath := setupBareInGitRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	gitDir := filepath.Join(repoPath, ".git")
+
+	// Add a worktree for main (simulates user's current working location)
+	mainWT := filepath.Join(tmpDir, "test-repo-main")
+	cmd := exec.Command("git", "worktree", "add", mainWT, "main")
+	cmd.Dir = gitDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to add main worktree: %v\n%s", err, out)
+	}
+
+	// Configure git user in worktree (needed for stash)
+	for _, args := range [][]string{
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test User"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = mainWT
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create dirty file in the main worktree (staged)
+	dirtyFile := filepath.Join(mainWT, "dirty.txt")
+	if err := os.WriteFile(dirtyFile, []byte("dirty changes\n"), 0644); err != nil {
+		t.Fatalf("failed to write dirty file: %v", err)
+	}
+	cmd = exec.Command("git", "add", "dirty.txt")
+	cmd.Dir = mainWT
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to stage dirty.txt: %v\n%s", err, out)
+	}
+
+	// Register repo and set workDir to the main worktree
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	// workDir is the main worktree, NOT repoPath (which has no working tree)
+	ctx := testContextWithConfig(t, cfg, mainWT)
+	checkoutCmd := newCheckoutCmd()
+	checkoutCmd.SetContext(ctx)
+	checkoutCmd.SetArgs([]string{"feature", "--autostash"})
+
+	if err := checkoutCmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the stashed changes were applied to the new worktree
+	stashedFile := filepath.Join(wtPath, "dirty.txt")
+	content, err := os.ReadFile(stashedFile)
+	if err != nil {
+		t.Errorf("dirty.txt should exist in new worktree: %v", err)
+	} else if string(content) != "dirty changes\n" {
+		t.Errorf("dirty.txt content = %q, want %q", content, "dirty changes\n")
+	}
+
+	// Verify the original worktree is clean
+	out, _ := runGitCommand(mainWT, "status", "--porcelain")
+	if strings.Contains(out, "dirty.txt") {
+		t.Error("main worktree should be clean after autostash")
+	}
+}
+
+// TestCheckout_AutoStash_BareInGitRepo_NoChanges tests that --autostash with a clean
+// worktree in a bare-in-.git repo succeeds silently.
+//
+// Scenario: User is in a clean worktree of a bare-in-.git repo, runs checkout --autostash
+// Expected: Worktree is created successfully, no stash needed
+func TestCheckout_AutoStash_BareInGitRepo_NoChanges(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupBareInGitRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	gitDir := filepath.Join(repoPath, ".git")
+
+	// Add a worktree for main
+	mainWT := filepath.Join(tmpDir, "test-repo-main")
+	cmd := exec.Command("git", "worktree", "add", mainWT, "main")
+	cmd.Dir = gitDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to add main worktree: %v\n%s", err, out)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, mainWT)
+	checkoutCmd := newCheckoutCmd()
+	checkoutCmd.SetContext(ctx)
+	checkoutCmd.SetArgs([]string{"feature", "--autostash"})
+
+	if err := checkoutCmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+}
+
+// TestCheckout_AutoStash_NotInTargetRepo tests that --autostash errors when the user
+// is not in a worktree of the target repo.
+//
+// Scenario: User is in repo A, runs `wt checkout repoB:feature --autostash`
+// Expected: Error saying autostash requires running from a worktree of the target repo
+func TestCheckout_AutoStash_NotInTargetRepo(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Create two repos
+	repoA := setupTestRepoWithBranches(t, tmpDir, "repo-a", []string{"feature"})
+	repoB := setupTestRepoWithBranches(t, tmpDir, "repo-b", []string{"feature"})
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo-a", Path: repoA, WorktreeFormat: "../{repo}-{branch}"},
+			{Name: "repo-b", Path: repoB, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	// workDir is repo A, but targeting repo B
+	ctx := testContextWithConfig(t, cfg, repoA)
+	checkoutCmd := newCheckoutCmd()
+	checkoutCmd.SetContext(ctx)
+	checkoutCmd.SetArgs([]string{"repo-b:feature", "--autostash"})
+
+	err := checkoutCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when autostash targets a different repo")
+	}
+	if !strings.Contains(err.Error(), "--autostash requires running from a worktree of repo-b") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestCheckout_AutoStash_SecondaryWorktree tests that --autostash works when the user
+// is in a secondary worktree (not the main worktree) of a bare-in-.git repo.
+//
+// Scenario: User has a bare-in-.git repo with main and develop worktrees,
+// is working in the develop worktree with dirty changes, runs `wt checkout feature --autostash`
+// Expected: Changes are stashed from the develop worktree and applied to the new feature worktree
+func TestCheckout_AutoStash_SecondaryWorktree(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupBareInGitRepoWithBranches(t, tmpDir, "test-repo", []string{"develop", "feature"})
+	gitDir := filepath.Join(repoPath, ".git")
+
+	// Add worktrees for both main and develop
+	mainWT := filepath.Join(tmpDir, "test-repo-main")
+	cmd := exec.Command("git", "worktree", "add", mainWT, "main")
+	cmd.Dir = gitDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to add main worktree: %v\n%s", err, out)
+	}
+
+	developWT := filepath.Join(tmpDir, "test-repo-develop")
+	cmd = exec.Command("git", "worktree", "add", developWT, "develop")
+	cmd.Dir = gitDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to add develop worktree: %v\n%s", err, out)
+	}
+
+	// Configure git user in develop worktree (needed for stash)
+	for _, args := range [][]string{
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test User"},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = developWT
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create dirty file in the develop worktree (staged)
+	dirtyFile := filepath.Join(developWT, "dirty.txt")
+	if err := os.WriteFile(dirtyFile, []byte("develop changes\n"), 0644); err != nil {
+		t.Fatalf("failed to write dirty file: %v", err)
+	}
+	cmd = exec.Command("git", "add", "dirty.txt")
+	cmd.Dir = developWT
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to stage dirty.txt: %v\n%s", err, out)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	// workDir is the develop worktree (secondary, not main)
+	ctx := testContextWithConfig(t, cfg, developWT)
+	checkoutCmd := newCheckoutCmd()
+	checkoutCmd.SetContext(ctx)
+	checkoutCmd.SetArgs([]string{"feature", "--autostash"})
+
+	if err := checkoutCmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the stashed changes were applied to the new worktree
+	content, err := os.ReadFile(filepath.Join(wtPath, "dirty.txt"))
+	if err != nil {
+		t.Errorf("dirty.txt should exist in new worktree: %v", err)
+	} else if string(content) != "develop changes\n" {
+		t.Errorf("dirty.txt content = %q, want %q", content, "develop changes\n")
+	}
+
+	// Verify the develop worktree is clean
+	out, _ := runGitCommand(developWT, "status", "--porcelain")
+	if strings.Contains(out, "dirty.txt") {
+		t.Error("develop worktree should be clean after autostash")
+	}
+}
+
+// TestCheckout_AutoStash_Subdirectory tests that --autostash works when the user
+// is in a subdirectory within a worktree.
+//
+// Scenario: User is in ~/repo/src/ (a subdirectory) with staged changes,
+// runs `wt checkout feature --autostash`
+// Expected: Changes are stashed from the subdirectory (git traverses up), worktree created,
+// changes applied to the new worktree
+func TestCheckout_AutoStash_Subdirectory(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+
+	// Create a subdirectory
+	subDir := filepath.Join(repoPath, "src", "pkg")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("failed to create subdirectory: %v", err)
+	}
+
+	// Create a dirty file (staged)
+	dirtyFile := filepath.Join(repoPath, "dirty.txt")
+	if err := os.WriteFile(dirtyFile, []byte("subdir changes\n"), 0644); err != nil {
+		t.Fatalf("failed to write dirty file: %v", err)
+	}
+	cmd := exec.Command("git", "add", "dirty.txt")
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to stage dirty.txt: %v\n%s", err, out)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	// workDir is a subdirectory within the repo
+	ctx := testContextWithConfig(t, cfg, subDir)
+	checkoutCmd := newCheckoutCmd()
+	checkoutCmd.SetContext(ctx)
+	checkoutCmd.SetArgs([]string{"feature", "--autostash"})
+
+	if err := checkoutCmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the stashed changes were applied to the new worktree
+	content, err := os.ReadFile(filepath.Join(wtPath, "dirty.txt"))
+	if err != nil {
+		t.Errorf("dirty.txt should exist in new worktree: %v", err)
+	} else if string(content) != "subdir changes\n" {
+		t.Errorf("dirty.txt content = %q, want %q", content, "subdir changes\n")
+	}
+}
+
+// TestCheckout_AutoStash_LabelTarget tests that --autostash errors when used
+// with label-scoped targets that resolve to multiple repos.
+//
+// Scenario: User runs `wt checkout backend:feature --autostash` where "backend" is a label
+// matching multiple repos
+// Expected: Error saying autostash cannot be used with label targets
+func TestCheckout_AutoStash_LabelTarget(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoA := setupTestRepoWithBranches(t, tmpDir, "repo-a", []string{"feature"})
+	repoB := setupTestRepoWithBranches(t, tmpDir, "repo-b", []string{"feature"})
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo-a", Path: repoA, Labels: []string{"backend"}, WorktreeFormat: "../{repo}-{branch}"},
+			{Name: "repo-b", Path: repoB, Labels: []string{"backend"}, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoA)
+	checkoutCmd := newCheckoutCmd()
+	checkoutCmd.SetContext(ctx)
+	checkoutCmd.SetArgs([]string{"backend:feature", "-b", "--autostash"})
+
+	err := checkoutCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when autostash used with label target")
+	}
+	if !strings.Contains(err.Error(), "--autostash cannot be used with label targets") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}

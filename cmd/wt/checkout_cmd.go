@@ -185,6 +185,10 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 
 			l.Debug("checkout", "branch", parsed.Branch, "repos", len(repos), "new", newBranch)
 
+			if autoStash && len(repos) > 1 {
+				return fmt.Errorf("--autostash cannot be used with label targets (affects multiple repos)")
+			}
+
 			for _, repo := range repos {
 				if err := checkoutInRepo(ctx, repo, parsed.Branch, newBranch, base, fetch, autoStash, noPreserve, note, hookNames, noHook, env); err != nil {
 					return fmt.Errorf("%s: %w", repo.Name, err)
@@ -242,13 +246,31 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 
 	// Stash changes if autostash is enabled (skip for empty repos — no commits to stash)
 	var stashed bool
-	if autoStash && repoHasCommits {
-		n, err := git.Stash(ctx, repo.Path)
+	if autoStash {
+		workDir := config.WorkDirFromContext(ctx)
+		mainPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
+		if mainPath == "" {
+			return fmt.Errorf("--autostash: cannot determine repo from working directory %s (are you in a git repository?)", workDir)
+		}
+		mainPathResolved, err := filepath.EvalSymlinks(mainPath)
 		if err != nil {
-			l.Printf("Warning: stash failed: %v\n", err)
-		} else if n > 0 {
-			stashed = true
-			l.Printf("Stashed %d file(s)\n", n)
+			return fmt.Errorf("--autostash: cannot resolve path %s: %w", mainPath, err)
+		}
+		repoPathResolved, err := filepath.EvalSymlinks(repo.Path)
+		if err != nil {
+			return fmt.Errorf("--autostash: cannot resolve repo path %s: %w", repo.Path, err)
+		}
+		if mainPathResolved != repoPathResolved {
+			return fmt.Errorf("--autostash requires running from a worktree of %s", repo.Name)
+		}
+		if repoHasCommits {
+			n, err := git.Stash(ctx, workDir)
+			if err != nil {
+				l.Printf("Warning: stash failed: %v\n", err)
+			} else if n > 0 {
+				stashed = true
+				l.Printf("Stashed %d file(s)\n", n)
+			}
 		}
 	}
 
