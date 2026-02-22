@@ -57,9 +57,10 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
+			fetchExplicit := cmd.Flags().Changed("fetch")
 
 			// Apply config default if --fetch flag not explicitly set
-			if !cmd.Flags().Changed("fetch") {
+			if !fetchExplicit {
 				fetch = cfg.Checkout.AutoFetch
 			}
 
@@ -190,7 +191,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			}
 
 			for _, repo := range repos {
-				if err := checkoutInRepo(ctx, repo, parsed.Branch, newBranch, base, fetch, autoStash, noPreserve, note, hookNames, noHook, env); err != nil {
+				if err := checkoutInRepo(ctx, repo, parsed.Branch, newBranch, base, fetch, fetchExplicit, autoStash, noPreserve, note, hookNames, noHook, env); err != nil {
 					return fmt.Errorf("%s: %w", repo.Name, err)
 				}
 			}
@@ -221,9 +222,21 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 	return cmd
 }
 
-func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newBranch bool, base string, fetch, autoStash, noPreserve bool, note string, hookNames []string, noHook bool, env []string) error {
-	cfg := config.FromContext(ctx)
+func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newBranch bool, base string, fetch, fetchExplicit, autoStash, noPreserve bool, note string, hookNames []string, noHook bool, env []string) error {
 	l := log.FromContext(ctx)
+
+	// Resolve effective config for this repo (global + local .wt.toml)
+	resolver := config.ResolverFromContext(ctx)
+	cfg, err := resolver.ConfigForRepo(repo.Path)
+	if err != nil {
+		l.Printf("Warning: failed to load local config for %s: %v\n", repo.Name, err)
+		cfg = resolver.Global()
+	}
+
+	// Override fetch with per-repo config if not explicitly set by CLI flag
+	if !fetchExplicit {
+		fetch = cfg.Checkout.AutoFetch
+	}
 
 	// Get effective worktree format
 	format := repo.GetEffectiveWorktreeFormat(cfg.Checkout.WorktreeFormat)
@@ -437,18 +450,42 @@ func resolveWorktreePath(repo registry.Repo, branch, format string) string {
 
 // completeHooks provides completion for hook flags
 func completeHooks(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg := config.FromContext(cmd.Context())
+	hooksMap := getEffectiveHooksForCompletion(cmd.Context())
 	var hooks []string
-	for name := range cfg.Hooks.Hooks {
+	for name := range hooksMap {
 		hooks = append(hooks, name)
 	}
 	return hooks, cobra.ShellCompDirectiveNoFileComp
 }
 
+// getEffectiveHooksForCompletion returns the effective hooks map for completions,
+// using the resolver to include local hooks if available in a repo context.
+func getEffectiveHooksForCompletion(ctx context.Context) map[string]config.Hook {
+	resolver := config.ResolverFromContext(ctx)
+	if resolver == nil {
+		cfg := config.FromContext(ctx)
+		return cfg.Hooks.Hooks
+	}
+
+	// Try to resolve for the current repo
+	workDir := config.WorkDirFromContext(ctx)
+	repoPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
+	if repoPath != "" {
+		effCfg, err := resolver.ConfigForRepo(repoPath)
+		if err == nil {
+			return effCfg.Hooks.Hooks
+		}
+	}
+
+	return resolver.Global().Hooks.Hooks
+}
+
 // runCheckoutWizard runs the interactive checkout wizard
 func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []string, cliNoHook bool) (flows.CheckoutOptions, error) {
-	cfg := config.FromContext(ctx)
 	l := log.FromContext(ctx)
+
+	// Use global config for wizard — hooks from all repos are shown
+	cfg := config.FromContext(ctx)
 
 	// Build available repos list
 	var repoPaths, repoNames []string

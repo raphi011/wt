@@ -35,7 +35,7 @@ cmd/wt/                  - CLI commands and entry point (cobra)
   ├── root.go            - Root command setup and context injection
   └── *_cmd.go           - Individual command implementations
 internal/prcache/        - PR cache (simple JSON at ~/.wt/prs.json)
-internal/config/         - Configuration loading (TOML)
+internal/config/         - Configuration loading (TOML), local config, resolver
 internal/forge/          - Git hosting service abstraction (GitHub/GitLab)
   ├── forge.go           - Forge interface
   ├── detect.go          - Auto-detect forge from remote URL
@@ -163,10 +163,22 @@ var (
 ```
 
 **context.Context** - Request-scoped values passed to functions:
-- `config.FromContext(ctx)` → Config (loaded configuration)
+- `config.FromContext(ctx)` → Config (global configuration)
+- `config.ResolverFromContext(ctx)` → ConfigResolver (per-repo config resolution with caching)
 - `config.WorkDirFromContext(ctx)` → Working directory
 - `log.FromContext(ctx)` → Logger (writes to stderr)
 - `output.FromContext(ctx)` → Printer (writes to stdout)
+
+**Per-repo config resolution** - Commands that operate on a specific repo should use the `ConfigResolver` to get effective config (global merged with local `.wt.toml`):
+```go
+resolver := config.ResolverFromContext(ctx)
+effCfg, err := resolver.ConfigForRepo(repo.Path)
+if err != nil {
+    l.Printf("Warning: failed to load local config: %v\n", err)
+    effCfg = resolver.Global()
+}
+```
+Use `effCfg` for repo-specific settings (hooks, checkout, merge, prune, preserve, forge.default). Use `config.FromContext(ctx)` for global-only settings (RegistryPath, DefaultSort, DefaultLabels, forge.rules, hosts, theme).
 
 **Convention**: Always name the logger variable `l`:
 ```go

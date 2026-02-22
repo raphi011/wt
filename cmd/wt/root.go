@@ -95,8 +95,9 @@ func Execute() {
 	// Add output printer (stdout for primary data)
 	ctx = output.WithPrinter(ctx, os.Stdout)
 
-	// Add config and workDir to context
+	// Add config, resolver, and workDir to context
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, workDir)
 
 	// Store context for commands to use
