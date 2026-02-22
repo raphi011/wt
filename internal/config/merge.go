@@ -10,7 +10,10 @@ func MergeLocal(global *Config, local *LocalConfig) *Config {
 		return global
 	}
 
-	// Shallow copy global
+	// Shallow copy global — fields not listed in LocalConfig (Hosts, Forge.Rules,
+	// Theme, DefaultSort, DefaultLabels, RegistryPath, HistoryPath) are inherited
+	// from global as-is. If adding new global-only fields to Config, they are
+	// automatically preserved by the shallow copy and must NOT be added to LocalConfig.
 	merged := *global
 
 	// Merge hooks by name: local overrides/adds, enabled=false removes

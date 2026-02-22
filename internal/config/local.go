@@ -81,26 +81,17 @@ func LoadLocal(repoPath string) (*LocalConfig, error) {
 		Forge:    raw.Forge,
 	}
 
-	// Validate forge.default
-	if local.Forge.Default != "" && local.Forge.Default != "github" && local.Forge.Default != "gitlab" {
-		return nil, fmt.Errorf("invalid forge.default %q in %s: must be \"github\" or \"gitlab\"", local.Forge.Default, configFile)
+	if err := validateEnum(local.Forge.Default, "forge.default", ValidForgeTypes); err != nil {
+		return nil, fmt.Errorf("%w in %s", err, configFile)
 	}
-
-	// Validate merge.strategy
-	if local.Merge.Strategy != "" && local.Merge.Strategy != "squash" && local.Merge.Strategy != "rebase" && local.Merge.Strategy != "merge" {
-		return nil, fmt.Errorf("invalid merge.strategy %q in %s: must be \"squash\", \"rebase\", or \"merge\"", local.Merge.Strategy, configFile)
+	if err := validateEnum(local.Merge.Strategy, "merge.strategy", ValidMergeStrategies); err != nil {
+		return nil, fmt.Errorf("%w in %s", err, configFile)
 	}
-
-	// Validate checkout.base_ref
-	if local.Checkout.BaseRef != "" && local.Checkout.BaseRef != "local" && local.Checkout.BaseRef != "remote" {
-		return nil, fmt.Errorf("invalid checkout.base_ref %q in %s: must be \"local\" or \"remote\"", local.Checkout.BaseRef, configFile)
+	if err := validateEnum(local.Checkout.BaseRef, "checkout.base_ref", ValidBaseRefs); err != nil {
+		return nil, fmt.Errorf("%w in %s", err, configFile)
 	}
-
-	// Validate preserve patterns
-	for i, pat := range local.Preserve.Patterns {
-		if _, err := filepath.Match(pat, ""); err != nil {
-			return nil, fmt.Errorf("invalid preserve.patterns[%d] %q in %s: %w", i, pat, configFile, err)
-		}
+	if err := validatePreservePatterns(local.Preserve.Patterns, configFile); err != nil {
+		return nil, err
 	}
 
 	return local, nil

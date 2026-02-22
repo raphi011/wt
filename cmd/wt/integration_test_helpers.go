@@ -41,6 +41,7 @@ func testContextWithConfig(t *testing.T, cfg *config.Config, workDir string) con
 	}
 	ctx := testContext(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, workDir)
 	return ctx
 }
@@ -58,6 +59,7 @@ func testContextWithConfigAndOutput(t *testing.T, cfg *config.Config, workDir st
 	ctx = log.WithLogger(ctx, log.New(io.Discard, false, false))
 	ctx = output.WithPrinter(ctx, &out)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, workDir)
 	return ctx, &out
 }

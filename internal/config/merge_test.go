@@ -4,10 +4,6 @@ import (
 	"testing"
 )
 
-func boolPtr(b bool) *bool {
-	return &b
-}
-
 func TestMergeLocal_Nil(t *testing.T) {
 	t.Parallel()
 
@@ -66,11 +62,11 @@ func TestMergeLocal_SimpleFieldReplace(t *testing.T) {
 		Checkout: LocalCheckout{
 			WorktreeFormat: "{branch}",
 			BaseRef:        "local",
-			AutoFetch:      boolPtr(true),
-			SetUpstream:    boolPtr(true),
+			AutoFetch:      new(true),
+			SetUpstream:    new(true),
 		},
 		Merge: LocalMerge{Strategy: "rebase"},
-		Prune: LocalPrune{DeleteLocalBranches: boolPtr(true)},
+		Prune: LocalPrune{DeleteLocalBranches: new(true)},
 		Forge: LocalForge{Default: "gitlab"},
 	}
 
@@ -156,7 +152,7 @@ func TestMergeLocal_HooksMergeByName(t *testing.T) {
 				// Override setup with different command
 				"setup": {Command: "go mod download", Description: "Go deps"},
 				// Disable lint
-				"lint": {Enabled: boolPtr(false)},
+				"lint": {Enabled: new(false)},
 				// Add new hook
 				"test": {Command: "go test ./...", On: []string{"checkout"}},
 			},
@@ -288,14 +284,14 @@ func TestHookIsEnabled(t *testing.T) {
 	})
 
 	t.Run("explicit true", func(t *testing.T) {
-		h := Hook{Command: "test", Enabled: boolPtr(true)}
+		h := Hook{Command: "test", Enabled: new(true)}
 		if !h.IsEnabled() {
 			t.Error("explicit true should return true")
 		}
 	})
 
 	t.Run("explicit false", func(t *testing.T) {
-		h := Hook{Command: "test", Enabled: boolPtr(false)}
+		h := Hook{Command: "test", Enabled: new(false)}
 		if h.IsEnabled() {
 			t.Error("explicit false should return false")
 		}

@@ -236,45 +236,31 @@ func Load() (Config, error) {
 		Theme:         raw.Theme,
 	}
 
-	// Validate forge.default (only "github", "gitlab", or empty allowed)
-	if cfg.Forge.Default != "" && cfg.Forge.Default != "github" && cfg.Forge.Default != "gitlab" {
-		return Default(), fmt.Errorf("invalid forge.default %q: must be \"github\" or \"gitlab\"", cfg.Forge.Default)
+	// Validate enum fields
+	if err := validateEnum(cfg.Forge.Default, "forge.default", ValidForgeTypes); err != nil {
+		return Default(), err
 	}
-
-	// Validate forge.rules
 	for i, rule := range cfg.Forge.Rules {
-		if rule.Type != "" && rule.Type != "github" && rule.Type != "gitlab" {
-			return Default(), fmt.Errorf("invalid forge.rules[%d].type %q: must be \"github\" or \"gitlab\"", i, rule.Type)
+		if err := validateEnum(rule.Type, fmt.Sprintf("forge.rules[%d].type", i), ValidForgeTypes); err != nil {
+			return Default(), err
 		}
 	}
-
-	// Validate hosts (only "github" or "gitlab" allowed)
 	for host, forgeType := range cfg.Hosts {
-		if forgeType != "github" && forgeType != "gitlab" {
-			return Default(), fmt.Errorf("invalid forge type %q for host %q: must be \"github\" or \"gitlab\"", forgeType, host)
+		if err := validateEnum(forgeType, fmt.Sprintf("hosts[%q]", host), ValidForgeTypes); err != nil {
+			return Default(), err
 		}
 	}
-
-	// Validate merge.strategy (only "squash", "rebase", "merge", or empty allowed)
-	if cfg.Merge.Strategy != "" && cfg.Merge.Strategy != "squash" && cfg.Merge.Strategy != "rebase" && cfg.Merge.Strategy != "merge" {
-		return Default(), fmt.Errorf("invalid merge.strategy %q: must be \"squash\", \"rebase\", or \"merge\"", cfg.Merge.Strategy)
+	if err := validateEnum(cfg.Merge.Strategy, "merge.strategy", ValidMergeStrategies); err != nil {
+		return Default(), err
 	}
-
-	// Validate base_ref (only "local", "remote", or empty allowed)
-	if cfg.Checkout.BaseRef != "" && cfg.Checkout.BaseRef != "local" && cfg.Checkout.BaseRef != "remote" {
-		return Default(), fmt.Errorf("invalid checkout.base_ref %q: must be \"local\" or \"remote\"", cfg.Checkout.BaseRef)
+	if err := validateEnum(cfg.Checkout.BaseRef, "checkout.base_ref", ValidBaseRefs); err != nil {
+		return Default(), err
 	}
-
-	// Validate default_sort (only "created", "repo", "branch", or empty allowed)
-	if cfg.DefaultSort != "" && cfg.DefaultSort != "created" && cfg.DefaultSort != "repo" && cfg.DefaultSort != "branch" {
-		return Default(), fmt.Errorf("invalid default_sort %q: must be \"created\", \"repo\", or \"branch\"", cfg.DefaultSort)
+	if err := validateEnum(cfg.DefaultSort, "default_sort", ValidDefaultSortModes); err != nil {
+		return Default(), err
 	}
-
-	// Validate preserve patterns are valid filepath.Match syntax
-	for i, pat := range cfg.Preserve.Patterns {
-		if _, err := filepath.Match(pat, ""); err != nil {
-			return Default(), fmt.Errorf("invalid preserve.patterns[%d] %q: %w", i, pat, err)
-		}
+	if err := validatePreservePatterns(cfg.Preserve.Patterns, ""); err != nil {
+		return Default(), err
 	}
 
 	// Note: theme.name is validated at runtime with a warning, not an error
