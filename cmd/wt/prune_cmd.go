@@ -77,6 +77,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				if !force {
 					return fmt.Errorf("targeting specific worktrees requires -f/--force")
 				}
+				deleteBranchesExplicit := cmd.Flags().Changed("delete-branches") || cmd.Flags().Changed("no-delete-branches")
 				// Determine if we should delete local branches
 				shouldDeleteBranches := cfg.Prune.DeleteLocalBranches
 				if cmd.Flags().Changed("delete-branches") {
@@ -84,7 +85,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				} else if cmd.Flags().Changed("no-delete-branches") {
 					shouldDeleteBranches = false
 				}
-				return runPruneTargets(ctx, reg, args, global, dryRun, shouldDeleteBranches, hookNames, noHook, env)
+				return runPruneTargets(ctx, reg, args, global, dryRun, shouldDeleteBranches, deleteBranchesExplicit, hookNames, noHook, env)
 			}
 
 			// Determine target repos for auto-prune
@@ -204,7 +205,8 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				}
 			}
 
-			// Determine if we should delete local branches
+			deleteBranchesExplicit := cmd.Flags().Changed("delete-branches") || cmd.Flags().Changed("no-delete-branches")
+			// Determine if we should delete local branches (default from global config)
 			shouldDeleteBranches := cfg.Prune.DeleteLocalBranches
 			if cmd.Flags().Changed("delete-branches") {
 				shouldDeleteBranches = deleteBranches
@@ -214,7 +216,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 
 			// Remove worktrees using shared helper
 			// For auto-prune (merged PRs), force=true is implicit
-			removed, failed := pruneWorktrees(ctx, toRemove, true, dryRun, shouldDeleteBranches, hookNames, noHook, env, prCache)
+			removed, failed := pruneWorktrees(ctx, toRemove, true, dryRun, shouldDeleteBranches, deleteBranchesExplicit, hookNames, noHook, env, prCache)
 
 			// Print summary
 			if dryRun {
@@ -266,7 +268,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 
 // runPruneTargets handles removal of specific worktrees by [scope:]branch args.
 // When global is false, unscoped targets are scoped to the current repo.
-func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []string, global, dryRun, deleteBranches bool, hookNames []string, noHook bool, env []string) error {
+func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []string, global, dryRun, deleteBranches, deleteBranchesExplicit bool, hookNames []string, noHook bool, env []string) error {
 	l := log.FromContext(ctx)
 	out := output.FromContext(ctx)
 
@@ -312,7 +314,7 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 	}
 
 	// Use pruneWorktrees for consistent removal logic
-	removed, failed := pruneWorktrees(ctx, toRemove, true, false, deleteBranches, hookNames, noHook, env, nil)
+	removed, failed := pruneWorktrees(ctx, toRemove, true, false, deleteBranches, deleteBranchesExplicit, hookNames, noHook, env, nil)
 
 	for _, wt := range removed {
 		l.Printf("Removed worktree: %s:%s (%s)\n", wt.RepoName, wt.Branch, wt.Path)
@@ -330,7 +332,7 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 
 // pruneWorktrees removes the given worktrees and runs hooks.
 // Returns slices of successfully removed and failed worktrees.
-func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, force, dryRun, deleteBranches bool,
+func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, force, dryRun, deleteBranches, deleteBranchesExplicit bool,
 	hookNames []string, noHook bool, env []string, prCache *prcache.Cache) (removed, failed []git.Worktree) {
 
 	if len(toRemove) == 0 {
@@ -343,6 +345,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, force, dryRun,
 
 	l := log.FromContext(ctx)
 	cfg := config.FromContext(ctx)
+	resolver := config.ResolverFromContext(ctx)
 
 	// Load history for cleanup
 	hist, err := history.Load(cfg.GetHistoryPath())
@@ -352,19 +355,19 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, force, dryRun,
 	}
 	historyChanged := false
 
-	// Select hooks
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandPrune)
-	if err != nil {
-		// Log error but continue - don't fail the whole prune
-		l.Printf("Warning: failed to select hooks: %v\n", err)
-	}
-
 	hookEnv, err := hooks.ParseEnvWithStdin(env)
 	if err != nil {
 		l.Printf("Warning: failed to parse hook env: %v\n", err)
 	}
 
 	for _, wt := range toRemove {
+		// Resolve per-repo config for hooks and delete_local_branches
+		effCfg, resolveErr := resolver.ConfigForRepo(wt.RepoPath)
+		if resolveErr != nil {
+			l.Printf("Warning: failed to load local config for %s: %v\n", wt.RepoName, resolveErr)
+			effCfg = cfg
+		}
+
 		if err := git.RemoveWorktree(ctx, wt, force); err != nil {
 			l.Printf("Warning: failed to remove %s: %v\n", wt.Path, err)
 			failed = append(failed, wt)
@@ -383,8 +386,12 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, force, dryRun,
 
 		removed = append(removed, wt)
 
-		// Delete local branch if enabled
-		if deleteBranches {
+		// Delete local branch if enabled (per-repo config unless CLI flag was explicit)
+		shouldDelete := deleteBranches
+		if !deleteBranchesExplicit {
+			shouldDelete = effCfg.Prune.DeleteLocalBranches
+		}
+		if shouldDelete {
 			// Force delete if forge confirmed merge (handles squash merges),
 			// safe delete (-d) otherwise.
 			// Note: PRState is empty for targeted prune (no forge lookup),
@@ -397,7 +404,11 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, force, dryRun,
 			}
 		}
 
-		// Run hooks
+		// Select and run hooks per-repo
+		hookMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandPrune)
+		if err != nil {
+			l.Printf("Warning: failed to select hooks for %s: %v\n", wt.RepoName, err)
+		}
 		if hookMatches != nil {
 			hookCtx := hooks.Context{
 				WorktreeDir: wt.Path,

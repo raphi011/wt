@@ -44,11 +44,23 @@ func WorkDirFromContext(ctx context.Context) string {
 	return wd
 }
 
+// LocalConfigFileName is the name of the per-repo local config file
+const LocalConfigFileName = ".wt.toml"
+
 // Hook defines a post-create hook
 type Hook struct {
 	Command     string   `toml:"command"`
 	Description string   `toml:"description"`
-	On          []string `toml:"on"` // commands this hook runs on (empty = only via --hook)
+	On          []string `toml:"on"`      // commands this hook runs on (empty = only via --hook)
+	Enabled     *bool    `toml:"enabled"` // nil = true (default); false disables a global hook locally
+}
+
+// IsEnabled returns whether the hook is enabled (defaults to true when Enabled is nil)
+func (h *Hook) IsEnabled() bool {
+	if h.Enabled == nil {
+		return true
+	}
+	return *h.Enabled
 }
 
 // HooksConfig holds hook-related configuration
@@ -325,6 +337,9 @@ func parseHooksConfig(raw map[string]any) HooksConfig {
 						hook.On = append(hook.On, s)
 					}
 				}
+			}
+			if enabled, ok := hookMap["enabled"].(bool); ok {
+				hook.Enabled = &enabled
 			}
 			hc.Hooks[key] = hook
 		}

@@ -327,13 +327,16 @@ wt note set "Ready for review" myrepo:feature
 
 ## Configuration
 
-Config file: `~/.wt/config.toml`
+Global config: `~/.wt/config.toml`
+Local config: `.wt.toml` (in bare repo root)
 
 ```bash
-wt config init               # Create default config
+wt config init               # Create default global config
+wt config init --local       # Create per-repo .wt.toml
 wt config init -s            # Print config to stdout
-wt config show               # Show effective config
-wt config hooks              # List configured hooks
+wt config show               # Show effective config (merged if in a repo)
+wt config show --repo myrepo # Show effective config for specific repo
+wt config hooks              # List hooks with source annotations
 ```
 
 ### Basic Settings
@@ -490,6 +493,50 @@ accent = "#b48ead"
 ```
 
 Available color keys: `primary`, `accent`, `success`, `error`, `muted`, `normal`, `info`.
+
+### Per-Repo Config
+
+Place a `.wt.toml` file in your bare repo root to override global settings for that repo:
+
+```bash
+wt config init --local       # Creates .wt.toml in current repo root
+```
+
+Local settings merge with global config — unset fields inherit from global. Available overrides:
+
+```toml
+# .wt.toml — per-repo overrides
+
+[checkout]
+worktree_format = "{branch}"  # replaces global
+base_ref = "local"            # replaces global
+auto_fetch = true             # replaces global
+set_upstream = true           # replaces global
+
+[merge]
+strategy = "rebase"           # replaces global
+
+[prune]
+delete_local_branches = true  # replaces global
+
+[forge]
+default = "gitlab"            # replaces global
+
+[preserve]
+patterns = [".env.local"]     # appended to global (deduplicated)
+exclude = ["dist"]            # appended to global (deduplicated)
+
+# Hooks merge by name — add new hooks or override global ones
+[hooks.setup]
+command = "go mod download"
+on = ["checkout"]
+
+# Disable a global hook for this repo
+[hooks.npm-install]
+enabled = false
+```
+
+**Not overridable** (global-only): `default_sort`, `default_labels`, `forge.default_org`, `forge.rules`, `hosts`, `theme`.
 
 ## Writing Hooks
 

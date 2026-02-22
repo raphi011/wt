@@ -159,6 +159,14 @@ Otherwise, it's looked up in the local registry.`,
 				repoPath = repo.Path
 			}
 
+			// Resolve effective config for this repo
+			resolver := config.ResolverFromContext(ctx)
+			effCfg, resolveErr := resolver.ConfigForRepo(repoPath)
+			if resolveErr != nil {
+				l.Printf("Warning: failed to load local config: %v\n", resolveErr)
+				effCfg = cfg
+			}
+
 			// Get origin URL and detect forge
 			originURL, err := git.GetOriginURL(ctx, repoPath)
 			if err != nil {
@@ -166,7 +174,7 @@ Otherwise, it's looked up in the local registry.`,
 			}
 
 			if f == nil {
-				f = forge.Detect(originURL, cfg.Hosts, &cfg.Forge)
+				f = forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
 				if err := f.Check(ctx); err != nil {
 					return err
 				}
@@ -182,7 +190,7 @@ Otherwise, it's looked up in the local registry.`,
 			l.Debug("pr checkout", "branch", branch, "repo", repoPath)
 
 			// Get worktree format
-			format := repo.GetEffectiveWorktreeFormat(cfg.Checkout.WorktreeFormat)
+			format := repo.GetEffectiveWorktreeFormat(effCfg.Checkout.WorktreeFormat)
 			wtPath := resolveWorktreePathWithConfig(repoPath, repo.Name, branch, format)
 
 			// Detect repo type
@@ -203,7 +211,7 @@ Otherwise, it's looked up in the local registry.`,
 			}
 
 			// Set upstream - branch was fetched so remote exists
-			if cfg.Checkout.ShouldSetUpstream() {
+			if effCfg.Checkout.ShouldSetUpstream() {
 				if err := git.SetUpstreamBranch(ctx, gitDir, branch, branch); err != nil {
 					l.Debug("failed to set upstream", "error", err)
 				}
@@ -224,7 +232,7 @@ Otherwise, it's looked up in the local registry.`,
 			fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
 
 			// Record to history for wt cd
-			if err := history.RecordAccess(wtPath, repo.Name, branch, cfg.GetHistoryPath()); err != nil {
+			if err := history.RecordAccess(wtPath, repo.Name, branch, effCfg.GetHistoryPath()); err != nil {
 				l.Printf("Warning: failed to record history: %v\n", err)
 			}
 
@@ -236,7 +244,7 @@ Otherwise, it's looked up in the local registry.`,
 			}
 
 			// Run hooks
-			hookMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout)
+			hookMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandCheckout)
 			if err != nil {
 				return err
 			}
@@ -326,6 +334,14 @@ func newPrCreateCmd() *cobra.Command {
 				}
 			}
 
+			// Resolve effective config for this repo
+			resolver := config.ResolverFromContext(ctx)
+			effCfg, resolveErr := resolver.ConfigForRepo(repo.Path)
+			if resolveErr != nil {
+				l.Printf("Warning: failed to load local config: %v\n", resolveErr)
+				effCfg = cfg
+			}
+
 			// Get current branch
 			cwd := config.WorkDirFromContext(ctx)
 			branch, err := git.GetCurrentBranch(ctx, cwd)
@@ -339,7 +355,7 @@ func newPrCreateCmd() *cobra.Command {
 				return fmt.Errorf("failed to get origin URL: %w", err)
 			}
 
-			f := forge.Detect(originURL, cfg.Hosts, &cfg.Forge)
+			f := forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
 			if err := f.Check(ctx); err != nil {
 				return err
 			}
@@ -451,6 +467,19 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 				}
 			}
 
+			// Resolve effective config for this repo
+			resolver := config.ResolverFromContext(ctx)
+			effCfg, resolveErr := resolver.ConfigForRepo(repo.Path)
+			if resolveErr != nil {
+				l.Printf("Warning: failed to load local config: %v\n", resolveErr)
+				effCfg = cfg
+			}
+
+			// Apply merge strategy from config if not explicitly set
+			if !cmd.Flags().Changed("strategy") && effCfg.Merge.Strategy != "" {
+				strategy = effCfg.Merge.Strategy
+			}
+
 			// Get current branch and worktree path
 			cwd := config.WorkDirFromContext(ctx)
 			branch, err := git.GetCurrentBranch(ctx, cwd)
@@ -464,7 +493,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 				return fmt.Errorf("failed to get origin URL: %w", err)
 			}
 
-			f := forge.Detect(originURL, cfg.Hosts, &cfg.Forge)
+			f := forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
 			if err := f.Check(ctx); err != nil {
 				return err
 			}
@@ -502,7 +531,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 			}
 
 			// Run hooks
-			hookMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandPrune)
+			hookMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandPrune)
 			if err != nil {
 				return err
 			}
@@ -598,6 +627,14 @@ func newPrViewCmd() *cobra.Command {
 				}
 			}
 
+			// Resolve effective config for this repo
+			resolver := config.ResolverFromContext(ctx)
+			effCfg, resolveErr := resolver.ConfigForRepo(repo.Path)
+			if resolveErr != nil {
+				l.Printf("Warning: failed to load local config: %v\n", resolveErr)
+				effCfg = cfg
+			}
+
 			// Get current branch
 			cwd := config.WorkDirFromContext(ctx)
 			branch, err := git.GetCurrentBranch(ctx, cwd)
@@ -611,7 +648,7 @@ func newPrViewCmd() *cobra.Command {
 				return fmt.Errorf("failed to get origin URL: %w", err)
 			}
 
-			f := forge.Detect(originURL, cfg.Hosts, &cfg.Forge)
+			f := forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
 			if err := f.Check(ctx); err != nil {
 				return err
 			}
