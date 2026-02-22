@@ -4,9 +4,9 @@ before:
   hooks:
     - go mod tidy
     - mkdir -p completions
-    - go run ./cmd/wt completion bash > completions/wt.bash
-    - go run ./cmd/wt completion zsh > completions/_wt
-    - go run ./cmd/wt completion fish > completions/wt.fish
+    - sh -c "go run ./cmd/wt completion bash > completions/wt.bash"
+    - sh -c "go run ./cmd/wt completion zsh > completions/_wt"
+    - sh -c "go run ./cmd/wt completion fish > completions/wt.fish"
 
 builds:
   - main: ./cmd/wt
