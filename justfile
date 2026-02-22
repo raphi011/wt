@@ -6,7 +6,7 @@ ldflags := "-s -w -X main.version=" + version + " -X main.commit=" + commit + " 
 build:
     go build -buildvcs=false -ldflags "{{ldflags}}" -o wt ./cmd/wt
 
-install: && install-completions
+install: && install-completions install-hooks
     go install -buildvcs=false -ldflags "{{ldflags}}" ./cmd/wt
 
 install-completions:
@@ -54,6 +54,10 @@ install-completions:
     fi
     mv "$tmpfile" "$dest"
     echo "Installed completions to $dest"
+
+install-hooks:
+    git config core.hooksPath .githooks
+    @echo "Installed git hooks from .githooks/"
 
 test:
     go test ./...
