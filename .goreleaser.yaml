@@ -53,15 +53,18 @@ changelog:
       - "^test:"
       - "^chore:"
 
-homebrew_casks:
+brews:
   - repository:
       owner: raphi011
       name: homebrew-tap
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    directory: Casks
+    directory: Formula
     homepage: "https://github.com/raphi011/wt"
     description: "Git worktree manager with GitHub PR integration"
-    completions:
-      bash: completions/wt.bash
-      zsh: completions/_wt
-      fish: completions/wt.fish
+    license: "MIT"
+    dependencies:
+      - name: git
+    extra_install: |
+      bash_completion.install "completions/wt.bash" => "wt"
+      zsh_completion.install "completions/_wt"
+      fish_completion.install "completions/wt.fish"

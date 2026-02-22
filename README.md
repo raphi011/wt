@@ -34,7 +34,7 @@ If something breaks:
 
 ```bash
 # Homebrew (macOS/Linux)
-brew install --cask raphi011/tap/wt
+brew install raphi011/tap/wt
 
 # Go
 go install github.com/raphi011/wt/cmd/wt@latest
