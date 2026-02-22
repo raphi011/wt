@@ -32,7 +32,6 @@ go.work.sum
 # .vscode/
 /wt
 .claude/settings.local.json
-completions/
 dist/
 logo-*.png
 prs.json
