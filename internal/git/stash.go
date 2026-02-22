@@ -30,7 +30,7 @@ func Stash(ctx context.Context, path string) (int, error) {
 		return 1, nil // stash was created but can't count — return safe fallback
 	}
 	count := 0
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
 		if line != "" {
 			count++
 		}

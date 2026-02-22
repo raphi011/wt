@@ -879,7 +879,11 @@ func TestPrune_ForceDeleteBranch_MergedPRState(t *testing.T) {
 		},
 	}
 
-	removed, failed := pruneWorktrees(ctx, toRemove, true, false, true, nil, true, nil, nil)
+	removed, failed := pruneWorktrees(ctx, toRemove, pruneOpts{
+		Force:                  true,
+		DeleteBranches:         true,
+		DeleteBranchesExplicit: true,
+	})
 
 	if len(failed) > 0 {
 		t.Fatalf("expected no failures, got %d", len(failed))
@@ -900,5 +904,74 @@ func TestPrune_ForceDeleteBranch_MergedPRState(t *testing.T) {
 	}
 	if strings.TrimSpace(output) != "" {
 		t.Error("branch should be force-deleted when PRState is MERGED (squash-merge scenario)")
+	}
+}
+
+// TestPrune_LocalConfigOverridesDeleteBranches tests that a per-repo .wt.toml
+// overrides the global config's delete_local_branches setting.
+//
+// Scenario: Global config has delete_local_branches=false, local .wt.toml sets it to true.
+//
+//	User runs `wt prune feature -f` (no explicit --delete-branches flag).
+//
+// Expected: Branch is deleted because the local config override takes effect.
+func TestPrune_LocalConfigOverridesDeleteBranches(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	// Global config: delete_local_branches = false
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Prune: config.PruneConfig{
+			DeleteLocalBranches: false,
+		},
+	}
+
+	// Write local .wt.toml that overrides delete_local_branches to true
+	localConfig := []byte("[prune]\ndelete_local_branches = true\n")
+	if err := os.WriteFile(filepath.Join(repoPath, ".wt.toml"), localConfig, 0644); err != nil {
+		t.Fatalf("failed to write .wt.toml: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Verify worktree was removed
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("worktree should be removed after prune")
+	}
+
+	// Verify branch was deleted (local config override takes effect)
+	output, err := runGitCommand(repoPath, "branch", "--list", "feature")
+	if err != nil {
+		t.Fatalf("failed to list branches: %v", err)
+	}
+	if strings.TrimSpace(output) != "" {
+		t.Error("branch should be deleted when local .wt.toml sets delete_local_branches=true")
 	}
 }

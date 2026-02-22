@@ -170,7 +170,6 @@ annotations (global vs local). Otherwise shows global config only.`,
 			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			out := output.FromContext(ctx)
-			resolver := config.ResolverFromContext(ctx)
 
 			// Determine if we should show merged config
 			var repoPath string
@@ -193,7 +192,7 @@ annotations (global vs local). Otherwise shows global config only.`,
 				repoPath = git.GetCurrentRepoMainPathFrom(ctx, workDir)
 			}
 
-			// Load local config if in a repo context
+			// Load local config once and derive effective config from it
 			var local *config.LocalConfig
 			var effCfg *config.Config
 			if repoPath != "" {
@@ -201,13 +200,9 @@ annotations (global vs local). Otherwise shows global config only.`,
 				var err error
 				local, err = config.LoadLocal(repoPath)
 				if err != nil {
-					l.Printf("Warning: failed to load local config: %v\n", err)
+					l.Printf("Warning: failed to load local config: %v (using global config)\n", err)
 				}
-				effCfg, err = resolver.ConfigForRepo(repoPath)
-				if err != nil {
-					l.Printf("Warning: failed to resolve config: %v\n", err)
-					effCfg = cfg
-				}
+				effCfg = config.MergeLocal(cfg, local)
 			} else {
 				effCfg = cfg
 			}
@@ -281,7 +276,6 @@ When inside a repo (or with --repo), shows merged hooks with source annotations.
 			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			out := output.FromContext(ctx)
-			resolver := config.ResolverFromContext(ctx)
 
 			// Determine repo context
 			var repoPath string
@@ -300,20 +294,16 @@ When inside a repo (or with --repo), shows merged hooks with source annotations.
 				repoPath = git.GetCurrentRepoMainPathFrom(ctx, workDir)
 			}
 
-			// Resolve effective config
+			// Load local config once and derive effective config from it
 			var effCfg *config.Config
 			var local *config.LocalConfig
 			if repoPath != "" {
 				var err error
 				local, err = config.LoadLocal(repoPath)
 				if err != nil {
-					l.Printf("Warning: failed to load local config: %v\n", err)
+					l.Printf("Warning: failed to load local config: %v (using global config)\n", err)
 				}
-				effCfg, err = resolver.ConfigForRepo(repoPath)
-				if err != nil {
-					l.Printf("Warning: failed to resolve config: %v\n", err)
-					effCfg = cfg
-				}
+				effCfg = config.MergeLocal(cfg, local)
 			} else {
 				effCfg = cfg
 			}
