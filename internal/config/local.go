@@ -12,7 +12,7 @@ import (
 // LocalConfig holds per-repo configuration overrides from .wt.toml.
 // Pointer fields and zero-value strings indicate "not set" (inherit from global).
 type LocalConfig struct {
-	Hooks    HooksConfig    `toml:"-"`        // merge by name into global
+	Hooks    HooksConfig    `toml:"-"` // merge by name into global
 	Checkout LocalCheckout  `toml:"checkout"`
 	Merge    LocalMerge     `toml:"merge"`
 	Prune    LocalPrune     `toml:"prune"`
