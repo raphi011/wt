@@ -22,10 +22,11 @@ type LocalConfig struct {
 
 // LocalCheckout holds local checkout overrides
 type LocalCheckout struct {
-	WorktreeFormat string `toml:"worktree_format"`
-	BaseRef        string `toml:"base_ref"`
-	AutoFetch      *bool  `toml:"auto_fetch"`
-	SetUpstream    *bool  `toml:"set_upstream"`
+	WorktreeFormat       string `toml:"worktree_format"`
+	BaseRef              string `toml:"base_ref"`
+	AutoFetch            *bool  `toml:"auto_fetch"`
+	SetUpstream          *bool  `toml:"set_upstream"`
+	ClaudeSessionSymlink *bool  `toml:"claude_session_symlink"`
 }
 
 // LocalMerge holds local merge overrides
@@ -108,6 +109,7 @@ const defaultLocalConfig = `# wt local config (per-repo overrides)
 # base_ref = "remote"
 # auto_fetch = false
 # set_upstream = false
+# claude_session_symlink = false
 
 # Merge settings
 # [merge]

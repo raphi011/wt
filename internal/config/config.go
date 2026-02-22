@@ -101,10 +101,11 @@ type PreserveConfig struct {
 
 // CheckoutConfig holds checkout-related configuration
 type CheckoutConfig struct {
-	WorktreeFormat string `toml:"worktree_format"` // Template for worktree folder names
-	BaseRef        string `toml:"base_ref"`        // "local" or "remote" (default: "remote")
-	AutoFetch      bool   `toml:"auto_fetch"`      // Fetch from origin before checkout
-	SetUpstream    *bool  `toml:"set_upstream"`    // Auto-set upstream tracking (default: true)
+	WorktreeFormat       string `toml:"worktree_format"`        // Template for worktree folder names
+	BaseRef              string `toml:"base_ref"`               // "local" or "remote" (default: "remote")
+	AutoFetch            bool   `toml:"auto_fetch"`             // Fetch from origin before checkout
+	SetUpstream          *bool  `toml:"set_upstream"`           // Auto-set upstream tracking (default: true)
+	ClaudeSessionSymlink bool   `toml:"claude_session_symlink"` // Symlink Claude Code session dirs for worktrees
 }
 
 // ThemeConfig holds theme/color configuration for interactive UI
@@ -423,6 +424,12 @@ worktree_format = "{repo}-{branch}"
 #   - For existing branches: sets upstream if origin/<branch> exists
 # This enables git push/pull without specifying remote.
 # set_upstream = false
+
+# Symlink Claude Code session directories for worktrees (default: false)
+# When true, new worktrees share Claude Code sessions and auto-memory with
+# the main repo by creating a symlink in ~/.claude/projects/.
+# This means all worktrees see the same conversation history and memory.
+# claude_session_symlink = false
 
 # Default sort order for 'wt list'
 # Available values: "created", "repo", "branch"

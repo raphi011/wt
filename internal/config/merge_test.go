@@ -131,6 +131,56 @@ func TestMergeLocal_ZeroValuesPreserveGlobal(t *testing.T) {
 	}
 }
 
+func TestMergeLocal_ClaudeSessionSymlink(t *testing.T) {
+	t.Parallel()
+
+	global := &Config{
+		Checkout: CheckoutConfig{
+			WorktreeFormat:       "{repo}-{branch}",
+			ClaudeSessionSymlink: false,
+		},
+		Forge: ForgeConfig{Default: "github"},
+		Hooks: HooksConfig{Hooks: map[string]Hook{}},
+	}
+
+	// Local enables claude_session_symlink
+	local := &LocalConfig{
+		Checkout: LocalCheckout{
+			ClaudeSessionSymlink: new(true),
+		},
+	}
+
+	result := MergeLocal(global, local)
+	if !result.Checkout.ClaudeSessionSymlink {
+		t.Error("claude_session_symlink should be true after merge")
+	}
+
+	// Nil local should preserve global
+	global2 := &Config{
+		Checkout: CheckoutConfig{
+			WorktreeFormat:       "{repo}-{branch}",
+			ClaudeSessionSymlink: true,
+		},
+		Forge: ForgeConfig{Default: "github"},
+		Hooks: HooksConfig{Hooks: map[string]Hook{}},
+	}
+	result2 := MergeLocal(global2, &LocalConfig{})
+	if !result2.Checkout.ClaudeSessionSymlink {
+		t.Error("claude_session_symlink should remain true when local doesn't set it")
+	}
+
+	// Local explicitly disables
+	local3 := &LocalConfig{
+		Checkout: LocalCheckout{
+			ClaudeSessionSymlink: new(false),
+		},
+	}
+	result3 := MergeLocal(global2, local3)
+	if result3.Checkout.ClaudeSessionSymlink {
+		t.Error("claude_session_symlink should be false after merge with local=false")
+	}
+}
+
 func TestMergeLocal_HooksMergeByName(t *testing.T) {
 	t.Parallel()
 

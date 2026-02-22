@@ -32,6 +32,9 @@ func MergeLocal(global *Config, local *LocalConfig) *Config {
 	if local.Checkout.SetUpstream != nil {
 		merged.Checkout.SetUpstream = local.Checkout.SetUpstream
 	}
+	if local.Checkout.ClaudeSessionSymlink != nil {
+		merged.Checkout.ClaudeSessionSymlink = *local.Checkout.ClaudeSessionSymlink
+	}
 
 	// Merge strategy (replace)
 	if local.Merge.Strategy != "" {

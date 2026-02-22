@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/claude"
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
@@ -240,6 +241,15 @@ Otherwise, it's looked up in the local registry.`,
 			if note != "" {
 				if err := git.SetBranchNote(ctx, gitDir, branch, note); err != nil {
 					l.Printf("Warning: failed to set note: %v\n", err)
+				}
+			}
+
+			// Symlink Claude Code session directory for shared sessions and auto-memory
+			if effCfg.Checkout.ClaudeSessionSymlink {
+				if err := claude.SymlinkProjectDir(repoPath, wtPath); err != nil {
+					l.Printf("Warning: failed to symlink Claude session dir: %v\n", err)
+				} else {
+					l.Debug("symlinked Claude session directory")
 				}
 			}
 

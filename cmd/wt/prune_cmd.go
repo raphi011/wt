@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/claude"
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
@@ -409,6 +410,13 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		// Remove from history
 		if hist.RemoveByPath(wt.Path) {
 			historyChanged = true
+		}
+
+		// Remove Claude session symlink if present
+		if effCfg.Checkout.ClaudeSessionSymlink {
+			if err := claude.RemoveProjectDirSymlink(wt.Path); err != nil {
+				l.Printf("Warning: failed to remove Claude session symlink: %v\n", err)
+			}
 		}
 
 		removed = append(removed, wt)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/raphi011/wt/internal/claude"
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/history"
@@ -413,6 +414,15 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 					l.Debug("  preserved", "file", f)
 				}
 			}
+		}
+	}
+
+	// Symlink Claude Code session directory for shared sessions and auto-memory
+	if cfg.Checkout.ClaudeSessionSymlink {
+		if err := claude.SymlinkProjectDir(repo.Path, wtPath); err != nil {
+			l.Printf("Warning: failed to symlink Claude session dir: %v\n", err)
+		} else {
+			l.Debug("symlinked Claude session directory")
 		}
 	}
 
