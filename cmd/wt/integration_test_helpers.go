@@ -397,6 +397,93 @@ func setupTestRepoWithSubmodule(t *testing.T, dir, name string) string {
 	return repoPath
 }
 
+// setupBareInGitRepoWithBranches creates a bare-in-.git repo with commits and branches.
+// It creates a temporary regular repo with an initial commit and branches, then
+// clones it as bare into dir/name/.git/ with proper fetch refspec and local branch refs.
+// Returns the repo path (parent of .git/).
+func setupBareInGitRepoWithBranches(t *testing.T, dir, name string, branches []string) string {
+	t.Helper()
+
+	dir = resolvePath(t, dir)
+
+	// 1. Create a temporary regular repo with initial commit + branches
+	tmpSource := filepath.Join(dir, name+"-source")
+	if err := os.MkdirAll(tmpSource, 0755); err != nil {
+		t.Fatalf("failed to create source repo dir: %v", err)
+	}
+
+	cmds := [][]string{
+		{"git", "init", "-b", "main"},
+		{"git", "config", "user.email", "test@test.com"},
+		{"git", "config", "user.name", "Test User"},
+		{"git", "config", "commit.gpgsign", "false"},
+	}
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = tmpSource
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Initial commit
+	readmePath := filepath.Join(tmpSource, "README.md")
+	if err := os.WriteFile(readmePath, []byte("# "+name+"\n"), 0644); err != nil {
+		t.Fatalf("failed to write README: %v", err)
+	}
+	cmds = [][]string{
+		{"git", "add", "README.md"},
+		{"git", "commit", "-m", "Initial commit"},
+	}
+	for _, args := range cmds {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = tmpSource
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create branches
+	for _, branch := range branches {
+		cmd := exec.Command("git", "branch", branch)
+		cmd.Dir = tmpSource
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to create branch %s: %v\n%s", branch, err, out)
+		}
+	}
+
+	// 2. Clone as bare into dir/name/.git/
+	repoPath := filepath.Join(dir, name)
+	if err := os.MkdirAll(repoPath, 0755); err != nil {
+		t.Fatalf("failed to create repo dir: %v", err)
+	}
+
+	gitDir := filepath.Join(repoPath, ".git")
+	cmd := exec.Command("git", "clone", "--bare", tmpSource, gitDir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to clone bare: %v\n%s", err, out)
+	}
+
+	// 3. Set fetch refspec so branches are visible
+	cmd = exec.Command("git", "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+	cmd.Dir = gitDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to set fetch refspec: %v\n%s", err, out)
+	}
+
+	// 4. Update origin URL to fake GitHub remote (for repo name extraction)
+	cmd = exec.Command("git", "remote", "set-url", "origin", "https://github.com/test/"+name+".git")
+	cmd.Dir = gitDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to set origin URL: %v\n%s", err, out)
+	}
+
+	// Clean up source repo
+	os.RemoveAll(tmpSource)
+
+	return repoPath
+}
+
 // setupBareInGitRepo creates a bare-in-.git repo (already migrated structure)
 func setupBareInGitRepo(t *testing.T, dir, name string) string {
 	t.Helper()
