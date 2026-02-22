@@ -210,7 +210,7 @@ func TestMergeLocal_PreserveAppendDedup(t *testing.T) {
 	local := &LocalConfig{
 		Preserve: PreserveConfig{
 			Patterns: []string{".env.*", ".envrc"}, // .env.* is a dup
-			Exclude:  []string{"vendor", ".cache"},  // .cache is a dup
+			Exclude:  []string{"vendor", ".cache"}, // .cache is a dup
 		},
 	}
 
