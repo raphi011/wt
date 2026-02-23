@@ -2,6 +2,8 @@
 
 <div align="center">
 
+[![Tests](https://github.com/raphi011/wt/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/raphi011/wt/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/raphi011/wt/branch/main/graph/badge.svg)](https://codecov.io/gh/raphi011/wt)
 [![MIT License](https://img.shields.io/badge/License-MIT-555555.svg?labelColor=333333&color=666666)](LICENSE)
 [![Downloads](https://img.shields.io/github/downloads/raphi011/wt/total?labelColor=333333&color=666666)](https://github.com/raphi011/wt/releases)
 [![Last Commit](https://img.shields.io/github/last-commit/raphi011/wt?labelColor=333333&color=666666)](https://github.com/raphi011/wt/commits/main)
