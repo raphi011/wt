@@ -4,6 +4,9 @@ import (
 	"testing"
 )
 
+//go:fix inline
+func boolPtr(b bool) *bool { return new(b) }
+
 func TestMergeLocal_Nil(t *testing.T) {
 	t.Parallel()
 
