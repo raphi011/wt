@@ -47,7 +47,7 @@ jobs:
         run: go test -tags=integration -coverprofile=coverage-integration.out ./...
 
       - name: Upload coverage to Codecov
-        if: always() && (github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request')
+        if: "!cancelled() && (github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request')"
         uses: codecov/codecov-action@v5
         with:
           files: coverage.out,coverage-integration.out
