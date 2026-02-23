@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -115,6 +116,108 @@ func setupTestRepoWithOrigin(t *testing.T) (string, string) {
 	}
 
 	return repoPath, originPath
+}
+
+func TestGetCommitMeta(t *testing.T) {
+	t.Parallel()
+
+	t.Run("happy path", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		// Get HEAD SHA
+		output, err := outputGit(ctx, repoPath, "rev-parse", "HEAD")
+		if err != nil {
+			t.Fatalf("failed to get HEAD: %v", err)
+		}
+		sha := strings.TrimSpace(string(output))
+
+		metas := GetCommitMeta(ctx, repoPath, []string{sha})
+		if metas == nil {
+			t.Fatal("expected non-nil map")
+		}
+		meta, ok := metas[sha]
+		if !ok {
+			t.Fatalf("expected entry for SHA %s", sha)
+		}
+		if meta.Age == "" {
+			t.Error("expected non-empty Age")
+		}
+		if meta.Date.IsZero() {
+			t.Error("expected non-zero Date")
+		}
+	})
+
+	t.Run("empty input", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		metas := GetCommitMeta(ctx, repoPath, nil)
+		if metas != nil {
+			t.Errorf("expected nil for empty input, got %v", metas)
+		}
+
+		metas = GetCommitMeta(ctx, repoPath, []string{})
+		if metas != nil {
+			t.Errorf("expected nil for empty slice, got %v", metas)
+		}
+	})
+
+	t.Run("invalid SHA", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		metas := GetCommitMeta(ctx, repoPath, []string{"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"})
+		if len(metas) != 0 {
+			t.Errorf("expected empty map for invalid SHA, got %v", metas)
+		}
+	})
+
+	t.Run("multiple SHAs", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		// Create a second commit
+		readme := filepath.Join(repoPath, "README.md")
+		if err := os.WriteFile(readme, []byte("# updated\n"), 0644); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "add", "README.md"); err != nil {
+			t.Fatalf("failed to add: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "commit", "-m", "Second commit"); err != nil {
+			t.Fatalf("failed to commit: %v", err)
+		}
+
+		// Get both SHAs
+		output, err := outputGit(ctx, repoPath, "log", "--format=%H")
+		if err != nil {
+			t.Fatalf("failed to get log: %v", err)
+		}
+		shas := strings.Fields(strings.TrimSpace(string(output)))
+		if len(shas) < 2 {
+			t.Fatalf("expected at least 2 SHAs, got %d", len(shas))
+		}
+
+		metas := GetCommitMeta(ctx, repoPath, shas)
+		for _, sha := range shas {
+			meta, ok := metas[sha]
+			if !ok {
+				t.Errorf("missing entry for SHA %s", sha)
+				continue
+			}
+			if meta.Age == "" {
+				t.Errorf("SHA %s: expected non-empty Age", sha)
+			}
+			if meta.Date.IsZero() {
+				t.Errorf("SHA %s: expected non-zero Date", sha)
+			}
+		}
+	})
 }
 
 func TestGetMainRepoPath(t *testing.T) {

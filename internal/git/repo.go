@@ -5,8 +5,51 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
+
+// CommitMeta holds commit metadata fetched in a single batched git call.
+type CommitMeta struct {
+	Age  string    // Human-readable relative time (e.g. "3 hours ago")
+	Date time.Time // Commit timestamp for sorting
+}
+
+// GetCommitMeta returns commit metadata for the given SHAs in one batched git call.
+// Uses `git show -s --format=%H|%ct|%cr` to get both unix timestamps and relative times.
+// Returns a map of full SHA → CommitMeta. Returns nil for empty input, empty map on error (non-fatal).
+func GetCommitMeta(ctx context.Context, repoPath string, shas []string) map[string]CommitMeta {
+	if len(shas) == 0 {
+		return nil
+	}
+
+	args := []string{"show", "-s", "--format=%H|%ct|%cr"}
+	args = append(args, shas...)
+
+	output, err := outputGit(ctx, repoPath, args...)
+	if err != nil {
+		return make(map[string]CommitMeta)
+	}
+
+	metas := make(map[string]CommitMeta, len(shas))
+	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
+		sha, rest, ok := strings.Cut(line, "|")
+		if !ok {
+			continue
+		}
+		tsStr, age, ok := strings.Cut(rest, "|")
+		if !ok {
+			continue
+		}
+		var commitDate time.Time
+		if ts, err := strconv.ParseInt(tsStr, 10, 64); err == nil {
+			commitDate = time.Unix(ts, 0)
+		}
+		metas[sha] = CommitMeta{Age: age, Date: commitDate}
+	}
+	return metas
+}
 
 // GetRepoDisplayName returns the folder name of the repository.
 func GetRepoDisplayName(repoPath string) string {

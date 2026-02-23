@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// zeroHash is the git null object hash used for orphan/unborn branches.
+const zeroHash = "0000000000000000000000000000000000000000"
+
 // Worktree represents a git worktree with its metadata.
 // Used as the unified struct across all commands (list, prune, cd, exec).
 // Fields tagged json:"-" are internal and excluded from user-facing JSON output.
@@ -12,12 +15,13 @@ type Worktree struct {
 	Path        string    `json:"path"`
 	Branch      string    `json:"branch"`
 	CommitHash  string    `json:"commit"`
+	CommitAge   string    `json:"commit_age,omitempty"`
 	RepoName    string    `json:"repo"`
 	RepoPath    string    `json:"-"`
 	OriginURL   string    `json:"-"`
 	Note        string    `json:"note,omitempty"`
 	HasUpstream bool      `json:"-"`
-	CreatedAt   time.Time `json:"created_at"`
+	CommitDate  time.Time `json:"commit_date"`
 	PRNumber    int       `json:"pr_number,omitempty"`
 	PRState     string    `json:"pr_state,omitempty"`
 	PRURL       string    `json:"pr_url,omitempty"`

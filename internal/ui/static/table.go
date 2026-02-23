@@ -7,27 +7,35 @@ package static
 
 import (
 	"strings"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 
-	"github.com/raphi011/wt/internal/format"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/ui/styles"
 )
 
 // WorktreeTableHeaders are the column headers for worktree tables used by list and prune.
-var WorktreeTableHeaders = []string{"REPO", "BRANCH", "COMMIT", "CREATED", "PR", "NOTE"}
+var WorktreeTableHeaders = []string{"REPO", "BRANCH", "COMMIT", "AGE", "PR", "NOTE"}
 
 // WorktreeTableRow formats a git.Worktree as a table row matching WorktreeTableHeaders.
-func WorktreeTableRow(wt git.Worktree) []string {
+// staleDays controls stale highlighting: if > 0 and the commit is older than staleDays,
+// the AGE cell is rendered with WarningStyle. Set to 0 to disable.
+func WorktreeTableRow(wt git.Worktree, staleDays int) []string {
 	commit := wt.CommitHash
 	if len(commit) > 7 {
 		commit = commit[:7]
 	}
-	created := format.RelativeTime(wt.CreatedAt)
 	pr := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.PRDraft, wt.PRURL)
-	return []string{wt.RepoName, wt.Branch, commit, created, pr, wt.Note}
+
+	age := wt.CommitAge
+	if staleDays > 0 && !wt.CommitDate.IsZero() &&
+		time.Since(wt.CommitDate) > time.Duration(staleDays)*24*time.Hour {
+		age = styles.WarningStyle.Render(age)
+	}
+
+	return []string{wt.RepoName, wt.Branch, commit, age, pr, wt.Note}
 }
 
 // RenderTable creates a formatted table with proper column alignment.

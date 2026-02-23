@@ -92,6 +92,11 @@ type PruneConfig struct {
 	DeleteLocalBranches bool `toml:"delete_local_branches"`
 }
 
+// ListConfig holds list-related configuration
+type ListConfig struct {
+	StaleDays int `toml:"stale_days"` // days after which worktrees are highlighted as stale (0 = disabled)
+}
+
 // PreserveConfig holds file preservation settings for worktree creation.
 // Matching git-ignored files are copied from an existing worktree into new ones.
 type PreserveConfig struct {
@@ -118,6 +123,7 @@ type ThemeConfig struct {
 	Muted    string `toml:"muted"`    // disabled/inactive text
 	Normal   string `toml:"normal"`   // standard text
 	Info     string `toml:"info"`     // informational text
+	Warning  string `toml:"warning"`  // warning indicators (stale items)
 	Nerdfont bool   `toml:"nerdfont"` // use nerd font symbols (default: false)
 }
 
@@ -125,13 +131,14 @@ type ThemeConfig struct {
 type Config struct {
 	RegistryPath  string            `toml:"-"`              // Override ~/.wt/repos.json path (for testing)
 	HistoryPath   string            `toml:"-"`              // Override ~/.wt/history.json path (for testing)
-	DefaultSort   string            `toml:"default_sort"`   // "created", "repo", "branch" (default: "created")
+	DefaultSort   string            `toml:"default_sort"`   // "date", "repo", "branch" (default: "date")
 	DefaultLabels []string          `toml:"default_labels"` // labels for newly registered repos
 	Hooks         HooksConfig       `toml:"-"`              // custom parsing needed
 	Checkout      CheckoutConfig    `toml:"checkout"`       // checkout settings
 	Forge         ForgeConfig       `toml:"forge"`
 	Merge         MergeConfig       `toml:"merge"`
 	Prune         PruneConfig       `toml:"prune"`
+	List          ListConfig        `toml:"list"`     // list display settings
 	Preserve      PreserveConfig    `toml:"preserve"` // file preservation for new worktrees
 	Hosts         map[string]string `toml:"hosts"`    // domain -> forge type mapping
 	Theme         ThemeConfig       `toml:"theme"`    // UI theme/colors for interactive mode
@@ -167,6 +174,9 @@ func Default() Config {
 		Forge: ForgeConfig{
 			Default: "github",
 		},
+		List: ListConfig{
+			StaleDays: 14,
+		},
 	}
 }
 
@@ -181,16 +191,19 @@ func configPath() (string, error) {
 
 // rawConfig is used for initial TOML parsing before processing hooks
 type rawConfig struct {
-	DefaultSort   string            `toml:"default_sort"`
-	DefaultLabels []string          `toml:"default_labels"`
-	Hooks         map[string]any    `toml:"hooks"`
-	Checkout      CheckoutConfig    `toml:"checkout"`
-	Forge         ForgeConfig       `toml:"forge"`
-	Merge         MergeConfig       `toml:"merge"`
-	Prune         PruneConfig       `toml:"prune"`
-	Preserve      PreserveConfig    `toml:"preserve"`
-	Hosts         map[string]string `toml:"hosts"`
-	Theme         ThemeConfig       `toml:"theme"`
+	DefaultSort   string         `toml:"default_sort"`
+	DefaultLabels []string       `toml:"default_labels"`
+	Hooks         map[string]any `toml:"hooks"`
+	Checkout      CheckoutConfig `toml:"checkout"`
+	Forge         ForgeConfig    `toml:"forge"`
+	Merge         MergeConfig    `toml:"merge"`
+	Prune         PruneConfig    `toml:"prune"`
+	List          struct {
+		StaleDays *int `toml:"stale_days"`
+	} `toml:"list"`
+	Preserve PreserveConfig    `toml:"preserve"`
+	Hosts    map[string]string `toml:"hosts"`
+	Theme    ThemeConfig       `toml:"theme"`
 }
 
 // Load reads config from ~/.config/wt/config.toml
@@ -271,6 +284,11 @@ func Load() (Config, error) {
 	}
 	if cfg.Forge.Default == "" {
 		cfg.Forge.Default = "github"
+	}
+	if raw.List.StaleDays != nil {
+		cfg.List.StaleDays = *raw.List.StaleDays
+	} else {
+		cfg.List.StaleDays = 14
 	}
 
 	// Apply env var overrides (after loading config file)
@@ -425,11 +443,15 @@ worktree_format = "{repo}-{branch}"
 # set_upstream = false
 
 # Default sort order for 'wt list'
-# Available values: "created", "repo", "branch"
-#   "created" - sort by creation date, newest first (default)
+# Available values: "date", "repo", "branch"
+#   "date"    - sort by commit date, newest first (default)
 #   "repo"    - sort by repository name
 #   "branch"  - sort by branch name
-# default_sort = "created"
+# default_sort = "date"
+
+# List display settings
+# [list]
+# stale_days = 14  # Days before a worktree is highlighted as stale (0 = disabled, default: 14)
 
 # Hooks - run commands after worktree creation/removal
 # Use --hook=name to run a specific hook, --no-hook to skip all hooks
@@ -573,6 +595,7 @@ worktree_format = "{repo}-{branch}"
 # muted = "#6c7086"    # disabled text (Catppuccin overlay0)
 # normal = "#cdd6f4"   # standard text (Catppuccin text)
 # info = "#94e2d5"     # info text (Catppuccin teal)
+# warning = "#fab387"  # warning text (Catppuccin peach)
 #
 # You can also use a preset and override specific colors:
 # [theme]

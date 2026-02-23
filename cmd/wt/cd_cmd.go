@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -259,6 +260,17 @@ With no arguments, returns the most recently accessed worktree.`,
 
 			// Print path
 			out.Println(targetPath)
+
+			// Emit OSC 7 directory hint so supporting terminal emulators
+			// know the new CWD. Written directly to stderr (not via logger) because
+			// this is a terminal protocol escape, not a log message — it should be
+			// emitted even in --quiet mode.
+			hostname, err := os.Hostname()
+			if err != nil {
+				hostname = ""
+			}
+			u := url.URL{Scheme: "file", Host: hostname, Path: targetPath}
+			fmt.Fprintf(os.Stderr, "\033]7;%s\033\\", u.String())
 
 			return nil
 		},

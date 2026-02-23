@@ -324,19 +324,18 @@ func TestDefaultSortValidation(t *testing.T) {
 		wantErr bool
 	}{
 		{"empty", "", false},
-		{"created", "created", false},
+		{"date", "date", false},
 		{"repo", "repo", false},
 		{"branch", "branch", false},
 		{"invalid name", "name", true},
 		{"old value id", "id", true},
-		{"old value commit", "commit", true},
-		{"date", "date", true},
+		{"old value created", "created", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Replicate Load()'s validation for default_sort
-			isInvalid := tt.sort != "" && tt.sort != "created" && tt.sort != "repo" && tt.sort != "branch"
+			isInvalid := tt.sort != "" && tt.sort != "date" && tt.sort != "repo" && tt.sort != "branch"
 			if isInvalid != tt.wantErr {
 				t.Errorf("default_sort %q: isInvalid=%v, wantErr=%v", tt.sort, isInvalid, tt.wantErr)
 			}
@@ -452,6 +451,8 @@ func TestGetHistoryPath(t *testing.T) {
 	})
 }
 
+func boolPtr(v bool) *bool { return &v }
+
 func TestShouldSetUpstream(t *testing.T) {
 	t.Parallel()
 
@@ -461,8 +462,8 @@ func TestShouldSetUpstream(t *testing.T) {
 		want bool
 	}{
 		{"nil defaults to false", nil, false},
-		{"true", new(true), true},
-		{"false", new(false), false},
+		{"true", boolPtr(true), true},
+		{"false", boolPtr(false), false},
 	}
 
 	for _, tt := range tests {
@@ -683,5 +684,52 @@ func TestParseHooksConfig_WithEnabled(t *testing.T) {
 	}
 	if !defh.IsEnabled() {
 		t.Error("default-hook.IsEnabled() = false, want true")
+	}
+}
+
+func TestListConfigParsing(t *testing.T) {
+	t.Parallel()
+
+	input := `
+[list]
+stale_days = 30
+`
+	var raw rawConfig
+	if err := toml.Unmarshal([]byte(input), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if raw.List.StaleDays == nil {
+		t.Fatal("stale_days should not be nil")
+	}
+	if *raw.List.StaleDays != 30 {
+		t.Errorf("stale_days = %d, want 30", *raw.List.StaleDays)
+	}
+}
+
+func TestListConfigDefault(t *testing.T) {
+	t.Parallel()
+
+	cfg := Default()
+	if cfg.List.StaleDays != 14 {
+		t.Errorf("default stale_days = %d, want 14", cfg.List.StaleDays)
+	}
+}
+
+func TestListConfigDisabled(t *testing.T) {
+	t.Parallel()
+
+	input := `
+[list]
+stale_days = 0
+`
+	var raw rawConfig
+	if err := toml.Unmarshal([]byte(input), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if raw.List.StaleDays == nil {
+		t.Fatal("stale_days should not be nil when explicitly set to 0")
+	}
+	if *raw.List.StaleDays != 0 {
+		t.Errorf("stale_days = %d, want 0", *raw.List.StaleDays)
 	}
 }

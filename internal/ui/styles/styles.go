@@ -34,6 +34,9 @@ var (
 	// Info is used for informational text (gray)
 	Info color.Color = lipgloss.Color("244")
 
+	// Warning is used for warning indicators (yellow/orange)
+	Warning color.Color = lipgloss.Color("214")
+
 	// Merged is used for merged PR indicators (purple)
 	Merged color.Color = lipgloss.Color("135")
 )
@@ -70,6 +73,9 @@ var (
 	InfoStyle = lipgloss.NewStyle().
 			Foreground(Info).
 			Italic(true)
+
+	// WarningStyle applies the warning color
+	WarningStyle = lipgloss.NewStyle().Foreground(Warning)
 
 	// MergedStyle applies the merged color
 	MergedStyle = lipgloss.NewStyle().Foreground(Merged)

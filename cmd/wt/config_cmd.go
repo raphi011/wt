@@ -365,7 +365,7 @@ func defaultConfig() string {
 # default_labels = []
 
 # Default sort order for 'wt list'
-# default_sort = "created"
+# default_sort = "date"
 
 # Checkout settings
 [checkout]

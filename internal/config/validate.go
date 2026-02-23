@@ -12,7 +12,7 @@ var (
 	ValidForgeTypes       = []string{"github", "gitlab"}
 	ValidMergeStrategies  = []string{"squash", "rebase", "merge"}
 	ValidBaseRefs         = []string{"local", "remote"}
-	ValidDefaultSortModes = []string{"created", "repo", "branch"}
+	ValidDefaultSortModes = []string{"date", "repo", "branch"}
 )
 
 // validateEnum checks that value (if non-empty) is one of the allowed values.
