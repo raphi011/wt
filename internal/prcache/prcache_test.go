@@ -274,6 +274,52 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 	}
 }
 
+func TestPath(t *testing.T) {
+	t.Parallel()
+
+	p := Path()
+	if p == "" {
+		t.Fatal("Path() returned empty string")
+	}
+	if filepath.Base(p) != "prs.json" {
+		t.Errorf("Path() = %q, want base name prs.json", p)
+	}
+	if filepath.Base(filepath.Dir(p)) != ".wt" {
+		t.Errorf("Path() parent = %q, want .wt", filepath.Dir(p))
+	}
+}
+
+func TestLoadSave(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "prs.json")
+
+	// Create cache, set data, save to explicit path
+	c := New()
+	c.Set("/repo:main", &PRInfo{Number: 1, State: "OPEN", Fetched: true})
+	c.Set("/repo:feature", &PRInfo{Number: 2, State: "MERGED", Fetched: true})
+
+	if err := storage.SaveJSON(path, c); err != nil {
+		t.Fatalf("SaveJSON failed: %v", err)
+	}
+
+	// Load back
+	var loaded Cache
+	if err := storage.LoadJSON(path, &loaded); err != nil {
+		t.Fatalf("LoadJSON failed: %v", err)
+	}
+	if loaded.PRs == nil {
+		t.Fatal("loaded PRs map is nil")
+	}
+	if len(loaded.PRs) != 2 {
+		t.Fatalf("loaded %d PRs, want 2", len(loaded.PRs))
+	}
+	if loaded.PRs["/repo:main"].Number != 1 {
+		t.Errorf("PR number = %d, want 1", loaded.PRs["/repo:main"].Number)
+	}
+}
+
 func TestDirtyFlag(t *testing.T) {
 	t.Parallel()
 

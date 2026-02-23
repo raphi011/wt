@@ -107,7 +107,7 @@ func TestRegistryAddRemove(t *testing.T) {
 	}
 }
 
-func TestRegistryFind(t *testing.T) {
+func TestRegistryFindByName(t *testing.T) {
 	t.Parallel()
 
 	reg := &Registry{
@@ -139,6 +139,85 @@ func TestRegistryFind(t *testing.T) {
 	}
 	if repos[0].Name != "bar" {
 		t.Errorf("expected bar, got %s", repos[0].Name)
+	}
+}
+
+func TestRegistryFind(t *testing.T) {
+	t.Parallel()
+
+	reg := &Registry{
+		Repos: []Repo{
+			{Name: "foo", Path: "/tmp/foo"},
+			{Name: "bar", Path: "/tmp/bar", Labels: []string{"backend"}},
+		},
+	}
+
+	// Find by name
+	repo, err := reg.Find("foo")
+	if err != nil {
+		t.Fatalf("Find(name) failed: %v", err)
+	}
+	if repo.Name != "foo" {
+		t.Errorf("expected foo, got %s", repo.Name)
+	}
+
+	// Find by path
+	repo, err = reg.Find("/tmp/bar")
+	if err != nil {
+		t.Fatalf("Find(path) failed: %v", err)
+	}
+	if repo.Name != "bar" {
+		t.Errorf("expected bar, got %s", repo.Name)
+	}
+
+	// Find non-existent
+	_, err = reg.Find("nonexistent")
+	if err == nil {
+		t.Error("expected error for non-existent repo")
+	}
+}
+
+func TestFindByLabels(t *testing.T) {
+	t.Parallel()
+
+	reg := &Registry{
+		Repos: []Repo{
+			{Name: "a", Path: "/tmp/a", Labels: []string{"backend", "api"}},
+			{Name: "b", Path: "/tmp/b", Labels: []string{"frontend"}},
+			{Name: "c", Path: "/tmp/c", Labels: []string{"backend"}},
+			{Name: "d", Path: "/tmp/d"},
+		},
+	}
+
+	// Single label
+	repos := reg.FindByLabels([]string{"frontend"})
+	if len(repos) != 1 || repos[0].Name != "b" {
+		t.Errorf("FindByLabels([frontend]) = %v, want [b]", repos)
+	}
+
+	// Multiple labels (OR logic)
+	repos = reg.FindByLabels([]string{"frontend", "api"})
+	if len(repos) != 2 {
+		t.Fatalf("FindByLabels([frontend, api]) got %d repos, want 2", len(repos))
+	}
+	names := map[string]bool{}
+	for _, r := range repos {
+		names[r.Name] = true
+	}
+	if !names["a"] || !names["b"] {
+		t.Errorf("expected repos a and b, got %v", names)
+	}
+
+	// No matching labels
+	repos = reg.FindByLabels([]string{"nonexistent"})
+	if len(repos) != 0 {
+		t.Errorf("FindByLabels([nonexistent]) = %v, want empty", repos)
+	}
+
+	// Empty labels
+	repos = reg.FindByLabels([]string{})
+	if len(repos) != 0 {
+		t.Errorf("FindByLabels([]) = %v, want empty", repos)
 	}
 }
 

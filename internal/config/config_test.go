@@ -508,6 +508,135 @@ func TestMatchPattern(t *testing.T) {
 	}
 }
 
+func TestApplyEnvOverrides(t *testing.T) {
+	// Cannot use t.Parallel() — t.Setenv mutates process env
+	t.Run("WT_THEME overrides theme name", func(t *testing.T) {
+		t.Setenv("WT_THEME", "nord")
+		cfg := Default()
+		if err := applyEnvOverrides(&cfg); err != nil {
+			t.Fatalf("applyEnvOverrides error: %v", err)
+		}
+		if cfg.Theme.Name != "nord" {
+			t.Errorf("Theme.Name = %q, want %q", cfg.Theme.Name, "nord")
+		}
+	})
+
+	t.Run("WT_THEME_MODE overrides theme mode", func(t *testing.T) {
+		t.Setenv("WT_THEME_MODE", "dark")
+		cfg := Default()
+		if err := applyEnvOverrides(&cfg); err != nil {
+			t.Fatalf("applyEnvOverrides error: %v", err)
+		}
+		if cfg.Theme.Mode != "dark" {
+			t.Errorf("Theme.Mode = %q, want %q", cfg.Theme.Mode, "dark")
+		}
+	})
+
+	t.Run("empty env vars leave config unchanged", func(t *testing.T) {
+		t.Setenv("WT_THEME", "")
+		t.Setenv("WT_THEME_MODE", "")
+		cfg := Config{Theme: ThemeConfig{Name: "dracula", Mode: "light"}}
+		if err := applyEnvOverrides(&cfg); err != nil {
+			t.Fatalf("applyEnvOverrides error: %v", err)
+		}
+		if cfg.Theme.Name != "dracula" {
+			t.Errorf("Theme.Name = %q, want %q", cfg.Theme.Name, "dracula")
+		}
+		if cfg.Theme.Mode != "light" {
+			t.Errorf("Theme.Mode = %q, want %q", cfg.Theme.Mode, "light")
+		}
+	})
+}
+
+func TestValidateEnum(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		value   string
+		field   string
+		allowed []string
+		wantErr bool
+	}{
+		{"empty value is ok", "", "test", []string{"a", "b"}, false},
+		{"valid value", "a", "test", []string{"a", "b"}, false},
+		{"invalid value", "c", "test", []string{"a", "b"}, true},
+		{"case sensitive", "A", "test", []string{"a", "b"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := validateEnum(tt.value, tt.field, tt.allowed)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateEnum(%q, %q, %v) error = %v, wantErr %v", tt.value, tt.field, tt.allowed, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidatePreservePatterns(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		patterns []string
+		context  string
+		wantErr  bool
+	}{
+		{"valid patterns", []string{".env", ".env.*", "*.local"}, "", false},
+		{"empty patterns", []string{}, "", false},
+		{"nil patterns", nil, "", false},
+		{"invalid pattern", []string{"[invalid"}, "", true},
+		{"with context info", []string{"[bad"}, ".wt.toml", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := validatePreservePatterns(tt.patterns, tt.context)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validatePreservePatterns(%v, %q) error = %v, wantErr %v", tt.patterns, tt.context, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestFormatOptions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		opts []string
+		want string
+	}{
+		{"single option", []string{"a"}, `"a"`},
+		{"two options", []string{"a", "b"}, `"a" or "b"`},
+		{"three options", []string{"a", "b", "c"}, `"a", "b", or "c"`},
+		{"four options", []string{"a", "b", "c", "d"}, `"a", "b", "c", or "d"`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := formatOptions(tt.opts)
+			if got != tt.want {
+				t.Errorf("formatOptions(%v) = %q, want %q", tt.opts, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDefaultLocalConfigIsValidTOML(t *testing.T) {
+	t.Parallel()
+
+	content := DefaultLocalConfig()
+	var raw rawLocalConfig
+	if _, err := toml.Decode(content, &raw); err != nil {
+		t.Errorf("DefaultLocalConfig() produces invalid TOML: %v", err)
+	}
+}
+
 func TestParseHooksConfig_WithEnabled(t *testing.T) {
 	t.Parallel()
 

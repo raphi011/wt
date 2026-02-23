@@ -77,6 +77,59 @@ func TestSaveJSON_CreatesDirectory(t *testing.T) {
 	}
 }
 
+func TestWtDir(t *testing.T) {
+	t.Parallel()
+
+	dir, err := WtDir()
+	if err != nil {
+		t.Fatalf("WtDir() error: %v", err)
+	}
+
+	// Should end with .wt
+	if filepath.Base(dir) != ".wt" {
+		t.Errorf("WtDir() = %q, want base dir .wt", dir)
+	}
+
+	// Directory should exist
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("WtDir directory does not exist: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error("WtDir path is not a directory")
+	}
+}
+
+func TestLoadJSON_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "invalid.json")
+
+	if err := os.WriteFile(path, []byte(`{not valid json}`), 0o600); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	var data map[string]any
+	err := LoadJSON(path, &data)
+	if err == nil {
+		t.Fatal("expected error for invalid JSON, got nil")
+	}
+}
+
+func TestSaveJSON_UnmarshalableData(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "bad.json")
+
+	// Channels can't be marshaled to JSON
+	err := SaveJSON(path, make(chan int))
+	if err == nil {
+		t.Fatal("expected error for unmarshalable data, got nil")
+	}
+}
+
 func TestSaveJSON_Atomic(t *testing.T) {
 	t.Parallel()
 
