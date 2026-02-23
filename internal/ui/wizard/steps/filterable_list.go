@@ -494,7 +494,7 @@ func (s *FilterableListStep) View() string {
 		}
 
 		// Highlight matched characters if filtering
-		label := opt.Label
+		var label string
 		if s.filter != "" && len(match.MatchedIndexes) > 0 {
 			label = s.highlightMatches(opt.Label, match.MatchedIndexes, i == s.cursor)
 		} else {

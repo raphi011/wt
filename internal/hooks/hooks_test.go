@@ -1,10 +1,13 @@
 package hooks
 
 import (
+	"bytes"
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/log"
 )
 
 func TestSubstitutePlaceholders(t *testing.T) {
@@ -854,5 +857,160 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 				t.Errorf("SubstitutePlaceholders(%q) = %q, want %q", tt.command, result, tt.expected)
 			}
 		})
+	}
+}
+
+func logCtx(buf *bytes.Buffer) context.Context {
+	l := log.New(buf, false, false)
+	return log.WithLogger(context.Background(), l)
+}
+
+func TestRunSingle_Success(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	ctx := logCtx(&buf)
+	hook := &config.Hook{
+		Command:     "echo hello",
+		Description: "Say hello",
+	}
+	hookCtx := Context{
+		WorktreeDir: t.TempDir(),
+	}
+
+	err := RunSingle(ctx, "test-hook", hook, hookCtx)
+	if err != nil {
+		t.Fatalf("RunSingle() = %v, want nil", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Running hook 'test-hook'") {
+		t.Errorf("output = %q, want to contain running message", out)
+	}
+	if !strings.Contains(out, "Say hello") {
+		t.Errorf("output = %q, want to contain description", out)
+	}
+}
+
+func TestRunSingle_DryRun(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	ctx := logCtx(&buf)
+	hook := &config.Hook{
+		Command: "echo should-not-run",
+	}
+	hookCtx := Context{
+		WorktreeDir: t.TempDir(),
+		DryRun:      true,
+	}
+
+	err := RunSingle(ctx, "dry-hook", hook, hookCtx)
+	if err != nil {
+		t.Fatalf("RunSingle(dry-run) = %v, want nil", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "[dry-run]") {
+		t.Errorf("output = %q, want to contain [dry-run]", out)
+	}
+	if strings.Contains(out, "Running hook") {
+		t.Errorf("output = %q, should not contain running message in dry-run", out)
+	}
+}
+
+func TestRunSingle_Failure(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	ctx := logCtx(&buf)
+	hook := &config.Hook{
+		Command: "sh -c 'exit 1'",
+	}
+	hookCtx := Context{
+		WorktreeDir: t.TempDir(),
+	}
+
+	err := RunSingle(ctx, "fail-hook", hook, hookCtx)
+	if err == nil {
+		t.Error("RunSingle(failing command) = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "command failed") {
+		t.Errorf("error = %q, want to contain 'command failed'", err.Error())
+	}
+}
+
+func TestRunAllNonFatal_EmptyMatches(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	ctx := logCtx(&buf)
+	hookCtx := Context{WorktreeDir: t.TempDir()}
+
+	RunAllNonFatal(ctx, nil, hookCtx, hookCtx.WorktreeDir)
+
+	if !strings.Contains(buf.String(), "No hooks matched") {
+		t.Errorf("output = %q, want to contain 'No hooks matched'", buf.String())
+	}
+}
+
+func TestRunAllNonFatal_WithFailures(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	ctx := logCtx(&buf)
+	failHook := config.Hook{Command: "sh -c 'exit 1'"}
+	successHook := config.Hook{Command: "echo ok", Description: "OK"}
+	matches := []HookMatch{
+		{Hook: &failHook, Name: "failing"},
+		{Hook: &successHook, Name: "passing"},
+	}
+	hookCtx := Context{WorktreeDir: t.TempDir()}
+
+	RunAllNonFatal(ctx, matches, hookCtx, hookCtx.WorktreeDir)
+
+	out := buf.String()
+	if !strings.Contains(out, "Warning: hook \"failing\" failed") {
+		t.Errorf("output = %q, want warning for failing hook", out)
+	}
+	if !strings.Contains(out, "Running hook 'passing'") {
+		t.Errorf("output = %q, want running message for passing hook", out)
+	}
+}
+
+func TestRunForEach_LogsFailuresPerBranch(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	ctx := logCtx(&buf)
+	failHook := config.Hook{Command: "sh -c 'exit 1'"}
+	matches := []HookMatch{
+		{Hook: &failHook, Name: "cleanup"},
+	}
+	hookCtx := Context{
+		WorktreeDir: t.TempDir(),
+		Branch:      "feature/test",
+	}
+
+	RunForEach(ctx, matches, hookCtx, hookCtx.WorktreeDir)
+
+	out := buf.String()
+	if !strings.Contains(out, "Warning: hook \"cleanup\" failed for feature/test") {
+		t.Errorf("output = %q, want warning with branch name", out)
+	}
+}
+
+func TestRunForEach_EmptyMatches(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	ctx := logCtx(&buf)
+	hookCtx := Context{WorktreeDir: t.TempDir()}
+
+	RunForEach(ctx, nil, hookCtx, hookCtx.WorktreeDir)
+
+	// RunForEach does NOT print "No hooks matched" (unlike RunAllNonFatal)
+	if strings.Contains(buf.String(), "No hooks matched") {
+		t.Errorf("RunForEach should not print 'No hooks matched', got %q", buf.String())
 	}
 }
