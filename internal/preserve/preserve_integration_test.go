@@ -42,8 +42,8 @@ func runGit(t *testing.T, dir string, args ...string) {
 	}
 }
 
-// setupTestRepo creates a bare-in-.git repo with an initial commit and .gitignore.
-// Returns the repo path (parent of .git).
+// setupTestRepo creates a git repository with an initial commit and .gitignore.
+// Returns the repo path.
 func setupTestRepo(t *testing.T, dir string) string {
 	t.Helper()
 
@@ -69,7 +69,7 @@ func setupTestRepo(t *testing.T, dir string) string {
 	return resolvePath(t, repoDir)
 }
 
-// testContext returns a context with a logger and output writer (both discarded).
+// testContext returns a context with a discarded logger and stderr output writer.
 func testContext() context.Context {
 	ctx := context.Background()
 	ctx = log.WithLogger(ctx, log.New(io.Discard, false, true))

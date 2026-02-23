@@ -117,7 +117,7 @@ func TestLoadJSON_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestSaveJSON_UnmarshalableData(t *testing.T) {
+func TestSaveJSON_MarshalError(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()

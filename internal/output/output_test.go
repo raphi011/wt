@@ -86,7 +86,9 @@ func TestPrinter_Writer(t *testing.T) {
 	}
 
 	// Write directly through the writer
-	_, _ = w.Write([]byte("direct"))
+	if _, err := w.Write([]byte("direct")); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
 	if got := buf.String(); got != "direct" {
 		t.Errorf("direct Write produced %q, want %q", got, "direct")
 	}
