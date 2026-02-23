@@ -19,6 +19,7 @@ type Theme struct {
 	Muted   color.Color // disabled/inactive text
 	Normal  color.Color // standard text
 	Info    color.Color // informational text
+	Warning color.Color // warning indicators (stale items)
 }
 
 // themeFamily groups light and dark variants of a theme
@@ -38,6 +39,7 @@ var (
 		Muted:   lipgloss.Color("240"), // dark gray
 		Normal:  lipgloss.Color("252"), // light gray
 		Info:    lipgloss.Color("244"), // gray
+		Warning: lipgloss.Color("214"), // orange
 	}
 
 	// DraculaTheme is based on the Dracula color scheme (dark only)
@@ -49,6 +51,7 @@ var (
 		Muted:   lipgloss.Color("#6272a4"), // comment
 		Normal:  lipgloss.Color("#f8f8f2"), // foreground
 		Info:    lipgloss.Color("#8be9fd"), // cyan
+		Warning: lipgloss.Color("#ffb86c"), // dracula orange
 	}
 
 	// NordTheme is based on the Nord color scheme (dark)
@@ -60,6 +63,7 @@ var (
 		Muted:   lipgloss.Color("#4c566a"), // nord3 (polar night)
 		Normal:  lipgloss.Color("#eceff4"), // nord6 (snow storm)
 		Info:    lipgloss.Color("#81a1c1"), // nord9 (frost blue)
+		Warning: lipgloss.Color("#ebcb8b"), // nord13 (aurora yellow)
 	}
 
 	// GruvboxTheme is based on the Gruvbox color scheme (dark)
@@ -71,6 +75,7 @@ var (
 		Muted:   lipgloss.Color("#665c54"), // gray
 		Normal:  lipgloss.Color("#ebdbb2"), // foreground
 		Info:    lipgloss.Color("#8ec07c"), // aqua
+		Warning: lipgloss.Color("#fabd2f"), // gruvbox yellow
 	}
 
 	// CatppuccinMochaTheme is based on Catppuccin Mocha (dark)
@@ -82,6 +87,7 @@ var (
 		Muted:   lipgloss.Color("#6c7086"), // overlay0
 		Normal:  lipgloss.Color("#cdd6f4"), // text
 		Info:    lipgloss.Color("#94e2d5"), // teal
+		Warning: lipgloss.Color("#fab387"), // catppuccin peach
 	}
 
 	// NoneTheme renders without any colors (uses terminal defaults)
@@ -94,6 +100,7 @@ var (
 		Muted:   lipgloss.NoColor{},
 		Normal:  lipgloss.NoColor{},
 		Info:    lipgloss.NoColor{},
+		Warning: lipgloss.NoColor{},
 	}
 )
 
@@ -108,6 +115,7 @@ var (
 		Muted:   lipgloss.Color("#9a9a9a"), // gray
 		Normal:  lipgloss.Color("#2e3440"), // nord0 (polar night)
 		Info:    lipgloss.Color("#81a1c1"), // nord9 (frost blue)
+		Warning: lipgloss.Color("#d08770"), // nord12 (aurora orange)
 	}
 
 	// GruvboxLightTheme is based on the Gruvbox color scheme (light)
@@ -119,6 +127,7 @@ var (
 		Muted:   lipgloss.Color("#928374"), // gray
 		Normal:  lipgloss.Color("#3c3836"), // foreground (dark)
 		Info:    lipgloss.Color("#427b58"), // aqua (dark)
+		Warning: lipgloss.Color("#b57614"), // gruvbox yellow dark
 	}
 
 	// CatppuccinLatteTheme is based on Catppuccin Latte (light)
@@ -130,6 +139,7 @@ var (
 		Muted:   lipgloss.Color("#9ca0b0"), // overlay0
 		Normal:  lipgloss.Color("#4c4f69"), // text
 		Info:    lipgloss.Color("#179299"), // teal
+		Warning: lipgloss.Color("#fe640b"), // catppuccin peach
 	}
 )
 
@@ -177,6 +187,9 @@ func Init(cfg config.ThemeConfig) {
 	}
 	if cfg.Info != "" {
 		theme.Info = lipgloss.Color(cfg.Info)
+	}
+	if cfg.Warning != "" {
+		theme.Warning = lipgloss.Color(cfg.Warning)
 	}
 
 	currentTheme = theme
@@ -259,6 +272,7 @@ func applyTheme(t Theme) {
 	Muted = t.Muted
 	Normal = t.Normal
 	Info = t.Info
+	Warning = t.Warning
 
 	// Update style variables
 	PrimaryStyle = lipgloss.NewStyle().Foreground(t.Primary)
@@ -268,6 +282,7 @@ func applyTheme(t Theme) {
 	MutedStyle = lipgloss.NewStyle().Foreground(t.Muted)
 	NormalStyle = lipgloss.NewStyle().Foreground(t.Normal)
 	InfoStyle = lipgloss.NewStyle().Foreground(t.Info).Italic(true)
+	WarningStyle = lipgloss.NewStyle().Foreground(t.Warning)
 
 	// Update border styles
 	RoundedBorder = lipgloss.NewStyle().

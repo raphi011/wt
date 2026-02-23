@@ -36,7 +36,7 @@ Inside a repo: shows only that repo's worktrees. Use --global for all.
 Use positional args to filter by repo name(s) or label(s).
 Resolution order: repo name → label.
 
-Worktrees are sorted by creation date (most recent first) by default.
+Worktrees are sorted by commit date (most recent first) by default.
 Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 		Example: `  wt list                      # List worktrees for current repo
   wt list --global             # List all worktrees (all repos)
@@ -103,7 +103,19 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 				l.Printf("Warning: failed to save PR cache: %v\n", err)
 			}
 
+			// Apply config default when --sort not explicitly set
+			if !cmd.Flags().Changed("sort") && cfg.DefaultSort != "" {
+				sortBy = cfg.DefaultSort
+			}
+			if sortBy == "" {
+				sortBy = "date"
+			}
+
 			switch sortBy {
+			case "date":
+				sort.Slice(allWorktrees, func(i, j int) bool {
+					return allWorktrees[i].CommitDate.After(allWorktrees[j].CommitDate)
+				})
 			case "repo":
 				sort.Slice(allWorktrees, func(i, j int) bool {
 					if allWorktrees[i].RepoName != allWorktrees[j].RepoName {
@@ -115,10 +127,8 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 				sort.Slice(allWorktrees, func(i, j int) bool {
 					return allWorktrees[i].Branch < allWorktrees[j].Branch
 				})
-			default: // "created" or empty
-				sort.Slice(allWorktrees, func(i, j int) bool {
-					return allWorktrees[i].CreatedAt.After(allWorktrees[j].CreatedAt)
-				})
+			default:
+				return fmt.Errorf("invalid sort value %q (valid: date, repo, branch)", sortBy)
 			}
 
 			if jsonOutput {
@@ -129,14 +139,14 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 
 			// Table output
 			if len(allWorktrees) == 0 {
-				fmt.Println("No worktrees found")
+				out.Println("No worktrees found")
 				return nil
 			}
 
 			// Build table rows
 			var rows [][]string
 			for _, wt := range allWorktrees {
-				rows = append(rows, static.WorktreeTableRow(wt))
+				rows = append(rows, static.WorktreeTableRow(wt, cfg.List.StaleDays))
 			}
 
 			out.Print(static.RenderTable(static.WorktreeTableHeaders, rows))
@@ -147,13 +157,13 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "Show all worktrees (not just current repo)")
-	cmd.Flags().StringVarP(&sortBy, "sort", "s", "", "Sort by: created, repo, branch")
+	cmd.Flags().StringVarP(&sortBy, "sort", "s", "", "Sort by: date, repo, branch")
 	cmd.Flags().BoolVarP(&refresh, "refresh-pr", "R", false, "Refresh PR status before listing")
 
 	// Completions
 	cmd.ValidArgsFunction = completeScopeArgs
 	cmd.RegisterFlagCompletionFunc("sort", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"created", "repo", "branch"}, cobra.ShellCompDirectiveNoFileComp
+		return []string{"date", "repo", "branch"}, cobra.ShellCompDirectiveNoFileComp
 	})
 
 	return cmd

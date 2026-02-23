@@ -2,8 +2,6 @@ package git
 
 import (
 	"context"
-	"os"
-	"time"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -22,7 +20,7 @@ type LoadWarning struct {
 }
 
 // LoadWorktreesForRepos fetches worktrees from all repos in parallel.
-// Per repo: ListWorktreesFromRepo + GetAllBranchConfig + GetOriginURL + os.Stat per worktree.
+// Per repo: ListWorktreesFromRepo + GetAllBranchConfig + GetOriginURL + GetCommitMeta.
 // PR fields are NOT populated — callers do that from prcache after loading.
 // Results maintain stable ordering (by repo index, then worktree order within repo).
 // Errors per repo are collected as warnings (non-fatal).
@@ -75,23 +73,31 @@ func loadWorktreesForRepo(ctx context.Context, repo RepoRef) ([]Worktree, *LoadW
 	// remote get originURL="" and simply skip PR refresh downstream.
 	originURL, _ := GetOriginURL(ctx, repo.Path) //nolint:errcheck
 
+	// Batch-fetch commit metadata (age + date) in one git call.
+	// Filter out zero-hash (orphan/unborn worktrees) to avoid failing the entire batch.
+	shas := make([]string, 0, len(wtInfos))
+	for _, wti := range wtInfos {
+		if wti.CommitHash != "" && wti.CommitHash != zeroHash {
+			shas = append(shas, wti.CommitHash)
+		}
+	}
+	commitMetas := GetCommitMeta(ctx, repo.Path, shas)
+
 	worktrees := make([]Worktree, 0, len(wtInfos))
 	for _, wti := range wtInfos {
-		var createdAt time.Time
-		if info, err := os.Stat(wti.Path); err == nil {
-			createdAt = info.ModTime()
-		}
+		meta := commitMetas[wti.CommitHash]
 
 		worktrees = append(worktrees, Worktree{
 			Path:        wti.Path,
 			Branch:      wti.Branch,
 			CommitHash:  wti.CommitHash,
+			CommitAge:   meta.Age,
+			CommitDate:  meta.Date,
 			RepoName:    repo.Name,
 			RepoPath:    repo.Path,
 			OriginURL:   originURL,
 			Note:        notes[wti.Branch],
 			HasUpstream: upstreams[wti.Branch],
-			CreatedAt:   createdAt,
 		})
 	}
 

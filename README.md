@@ -344,8 +344,8 @@ wt config hooks              # List hooks with source annotations
 ### Basic Settings
 
 ```toml
-# Default sort order for list: "created", "repo", "branch"
-default_sort = "created"
+# Default sort order for list: "date", "repo", "branch"
+default_sort = "date"
 
 # Labels applied to newly auto-registered repos
 # default_labels = ["work"]
@@ -369,6 +369,10 @@ auto_fetch = true
 [prune]
 # Delete local branches after worktree removal (default: false)
 # delete_local_branches = false
+
+[list]
+# Days before a worktree's commit age is highlighted as stale (default: 14, 0 = disabled)
+# stale_days = 14
 ```
 
 **Base branch resolution (`--base` flag):**
@@ -494,7 +498,7 @@ primary = "#88c0d0" # Override specific colors
 accent = "#b48ead"
 ```
 
-Available color keys: `primary`, `accent`, `success`, `error`, `muted`, `normal`, `info`.
+Available color keys: `primary`, `accent`, `success`, `error`, `muted`, `normal`, `info`, `warning`.
 
 ### Per-Repo Config
 

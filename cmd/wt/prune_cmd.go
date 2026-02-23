@@ -245,7 +245,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				out.Println()
 				var rows [][]string
 				for _, wt := range removed {
-					rows = append(rows, static.WorktreeTableRow(wt))
+					rows = append(rows, static.WorktreeTableRow(wt, cfg.List.StaleDays))
 				}
 				out.Print(static.RenderTable(static.WorktreeTableHeaders, rows))
 			}
