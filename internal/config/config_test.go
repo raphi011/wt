@@ -455,16 +455,14 @@ func TestGetHistoryPath(t *testing.T) {
 func TestShouldSetUpstream(t *testing.T) {
 	t.Parallel()
 
-	boolPtr := func(b bool) *bool { return &b }
-
 	tests := []struct {
 		name string
 		ptr  *bool
 		want bool
 	}{
 		{"nil defaults to false", nil, false},
-		{"true", boolPtr(true), true},
-		{"false", boolPtr(false), false},
+		{"true", new(true), true},
+		{"false", new(false), false},
 	}
 
 	for _, tt := range tests {

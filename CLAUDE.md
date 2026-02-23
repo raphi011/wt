@@ -82,6 +82,8 @@ internal/ui/             - Terminal UI components
 
 **Go source files use tabs for indentation** - All `.go` files in this repo use tabs (not spaces). When using the `Edit` tool to match existing code, be aware that the `Read` tool displays tabs as spaces in its output. If an `Edit` replacement fails with "string not found", the likely cause is a tabs-vs-spaces mismatch. Use `cat -v -e -t` via Bash to see the raw whitespace characters before retrying.
 
+**Use `new(expr)` for pointer literals** - Go 1.26+ supports `new(true)`, `new(false)`, `new("value")` etc. to create pointers to values. Use this instead of helper functions like `boolPtr(b bool) *bool`. The pre-commit hook runs `go fix` which inlines these helpers automatically, so never introduce `boolPtr`/`stringPtr`/`intPtr` helpers.
+
 **Target Resolution Pattern** - Commands use a unified `[scope:]branch` positional argument pattern where `scope` can be a repo name OR label:
 
 - **Worktree targeting** (most commands): `wt cd`, `wt exec`, `wt checkout`, `wt prune`, `wt hook`, `wt note`
