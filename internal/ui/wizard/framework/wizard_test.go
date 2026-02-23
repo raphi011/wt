@@ -261,7 +261,7 @@ func TestWizard_Callbacks(t *testing.T) {
 			})
 
 		w.Init()
-		w = updateWizard(t, w, "enter")
+		_ = updateWizard(t, w, "enter")
 
 		if !callbackFired {
 			t.Error("OnComplete callback should have fired")
@@ -285,7 +285,7 @@ func TestWizard_Callbacks(t *testing.T) {
 			})
 
 		w.Init()
-		w = updateWizard(t, w, "enter")
+		_ = updateWizard(t, w, "enter")
 
 		// GetString returns Raw (the actual value) when it's a string
 		if capturedValue != "selected" {

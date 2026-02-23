@@ -48,7 +48,7 @@ func TestBuildBranchOptions_AllCheckedOut(t *testing.T) {
 func TestBuildBranchOptions_Empty(t *testing.T) {
 	opts := buildBranchOptions(nil)
 
-	if opts != nil && len(opts) != 0 {
+	if len(opts) != 0 {
 		t.Errorf("expected nil or empty slice, got %v", opts)
 	}
 }

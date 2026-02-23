@@ -1,6 +1,9 @@
 package config
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/BurntSushi/toml"
@@ -366,5 +369,192 @@ func TestValidThemeModes(t *testing.T) {
 		if ValidThemeModes[i] != name {
 			t.Errorf("ValidThemeModes[%d] = %q, want %q", i, ValidThemeModes[i], name)
 		}
+	}
+}
+
+func TestWithConfig_FromContext(t *testing.T) {
+	t.Parallel()
+
+	t.Run("round trip", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{DefaultSort: "branch"}
+		ctx := WithConfig(context.Background(), cfg)
+		got := FromContext(ctx)
+		if got != cfg {
+			t.Error("FromContext did not return the stored config")
+		}
+		if got.DefaultSort != "branch" {
+			t.Errorf("DefaultSort = %q, want %q", got.DefaultSort, "branch")
+		}
+	})
+
+	t.Run("nil when not set", func(t *testing.T) {
+		t.Parallel()
+		got := FromContext(context.Background())
+		if got != nil {
+			t.Errorf("FromContext on empty context = %v, want nil", got)
+		}
+	})
+}
+
+func TestWithWorkDir_FromContext(t *testing.T) {
+	t.Parallel()
+
+	t.Run("round trip", func(t *testing.T) {
+		t.Parallel()
+		ctx := WithWorkDir(context.Background(), "/custom/path")
+		got := WorkDirFromContext(ctx)
+		if got != "/custom/path" {
+			t.Errorf("WorkDirFromContext = %q, want %q", got, "/custom/path")
+		}
+	})
+
+	t.Run("fallback to getwd when not set", func(t *testing.T) {
+		t.Parallel()
+		got := WorkDirFromContext(context.Background())
+		wd, _ := os.Getwd()
+		if got != wd {
+			t.Errorf("WorkDirFromContext = %q, want %q (os.Getwd)", got, wd)
+		}
+	})
+
+	t.Run("fallback to getwd when empty", func(t *testing.T) {
+		t.Parallel()
+		ctx := WithWorkDir(context.Background(), "")
+		got := WorkDirFromContext(ctx)
+		wd, _ := os.Getwd()
+		if got != wd {
+			t.Errorf("WorkDirFromContext = %q, want %q (os.Getwd)", got, wd)
+		}
+	})
+}
+
+func TestGetHistoryPath(t *testing.T) {
+	t.Parallel()
+
+	t.Run("override", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{HistoryPath: "/custom/history.json"}
+		if got := cfg.GetHistoryPath(); got != "/custom/history.json" {
+			t.Errorf("GetHistoryPath = %q, want %q", got, "/custom/history.json")
+		}
+	})
+
+	t.Run("default", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{}
+		got := cfg.GetHistoryPath()
+		home, _ := os.UserHomeDir()
+		want := filepath.Join(home, ".wt", "history.json")
+		if got != want {
+			t.Errorf("GetHistoryPath = %q, want %q", got, want)
+		}
+	})
+}
+
+func TestShouldSetUpstream(t *testing.T) {
+	t.Parallel()
+
+	boolPtr := func(b bool) *bool { return &b }
+
+	tests := []struct {
+		name string
+		ptr  *bool
+		want bool
+	}{
+		{"nil defaults to false", nil, false},
+		{"true", boolPtr(true), true},
+		{"false", boolPtr(false), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cc := &CheckoutConfig{SetUpstream: tt.ptr}
+			if got := cc.ShouldSetUpstream(); got != tt.want {
+				t.Errorf("ShouldSetUpstream() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMatchPattern(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		pattern  string
+		spec     string
+		expected bool
+	}{
+		{"wildcard matches all", "*", "anything/here", true},
+		{"prefix match", "n26/*", "n26/repo", true},
+		{"prefix no match", "n26/*", "other/repo", false},
+		{"suffix match", "*/repo", "org/repo", true},
+		{"suffix no match", "*/repo", "org/other", false},
+		{"exact match", "org/repo", "org/repo", true},
+		{"exact no match", "org/repo", "org/other", false},
+		{"prefix with trailing chars", "n26/*", "n26/", true},
+		{"empty spec against prefix", "n26/*", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := matchPattern(tt.pattern, tt.spec); got != tt.expected {
+				t.Errorf("matchPattern(%q, %q) = %v, want %v", tt.pattern, tt.spec, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseHooksConfig_WithEnabled(t *testing.T) {
+	t.Parallel()
+
+	raw := map[string]any{
+		"enabled-hook": map[string]any{
+			"command": "echo enabled",
+			"enabled": true,
+		},
+		"disabled-hook": map[string]any{
+			"command": "echo disabled",
+			"enabled": false,
+		},
+		"default-hook": map[string]any{
+			"command": "echo default",
+		},
+	}
+
+	result := parseHooksConfig(raw)
+
+	if len(result.Hooks) != 3 {
+		t.Fatalf("len(Hooks) = %d, want 3", len(result.Hooks))
+	}
+
+	// enabled-hook: Enabled = true
+	eh := result.Hooks["enabled-hook"]
+	if eh.Enabled == nil || !*eh.Enabled {
+		t.Errorf("enabled-hook.Enabled = %v, want true", eh.Enabled)
+	}
+	if !eh.IsEnabled() {
+		t.Error("enabled-hook.IsEnabled() = false, want true")
+	}
+
+	// disabled-hook: Enabled = false
+	dh := result.Hooks["disabled-hook"]
+	if dh.Enabled == nil || *dh.Enabled {
+		t.Errorf("disabled-hook.Enabled = %v, want false", dh.Enabled)
+	}
+	if dh.IsEnabled() {
+		t.Error("disabled-hook.IsEnabled() = true, want false")
+	}
+
+	// default-hook: Enabled = nil (defaults to true)
+	defh := result.Hooks["default-hook"]
+	if defh.Enabled != nil {
+		t.Errorf("default-hook.Enabled = %v, want nil", defh.Enabled)
+	}
+	if !defh.IsEnabled() {
+		t.Error("default-hook.IsEnabled() = false, want true")
 	}
 }
