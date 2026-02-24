@@ -451,8 +451,6 @@ func TestGetHistoryPath(t *testing.T) {
 	})
 }
 
-func boolPtr(v bool) *bool { return &v }
-
 func TestShouldSetUpstream(t *testing.T) {
 	t.Parallel()
 
@@ -462,8 +460,8 @@ func TestShouldSetUpstream(t *testing.T) {
 		want bool
 	}{
 		{"nil defaults to false", nil, false},
-		{"true", boolPtr(true), true},
-		{"false", boolPtr(false), false},
+		{"true", new(true), true},
+		{"false", new(false), false},
 	}
 
 	for _, tt := range tests {
@@ -731,5 +729,166 @@ stale_days = 0
 	}
 	if *raw.List.StaleDays != 0 {
 		t.Errorf("stale_days = %d, want 0", *raw.List.StaleDays)
+	}
+}
+
+func TestFullConfigRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	// Test parsing a full config TOML with all fields — exercises the paths in Load()
+	// that parse forge rules, hosts, merge, stale_days, etc.
+	input := `
+default_sort = "branch"
+default_labels = ["team-a", "team-b"]
+
+[checkout]
+worktree_format = "{origin}-{branch}"
+base_ref = "local"
+auto_fetch = true
+set_upstream = true
+
+[forge]
+default = "gitlab"
+default_org = "my-org"
+
+[[forge.rules]]
+pattern = "n26/*"
+type = "github"
+user = "work-user"
+
+[[forge.rules]]
+pattern = "personal/*"
+type = "github"
+
+[merge]
+strategy = "rebase"
+
+[prune]
+delete_local_branches = true
+
+[list]
+stale_days = 30
+
+[preserve]
+patterns = [".env", ".env.*"]
+exclude = ["node_modules"]
+
+[hosts]
+"gitlab.corp.com" = "gitlab"
+"gh.company.com" = "github"
+
+[theme]
+name = "dracula"
+mode = "dark"
+
+[hooks.test]
+command = "echo test"
+description = "Test"
+on = ["checkout"]
+`
+	var raw rawConfig
+	if err := toml.Unmarshal([]byte(input), &raw); err != nil {
+		t.Fatalf("failed to parse TOML: %v", err)
+	}
+
+	// Build config the same way Load() does
+	cfg := Config{
+		DefaultSort:   raw.DefaultSort,
+		DefaultLabels: raw.DefaultLabels,
+		Hooks:         parseHooksConfig(raw.Hooks),
+		Checkout:      raw.Checkout,
+		Forge:         raw.Forge,
+		Merge:         raw.Merge,
+		Prune:         raw.Prune,
+		Preserve:      raw.Preserve,
+		Hosts:         raw.Hosts,
+		Theme:         raw.Theme,
+	}
+
+	// Validate enums
+	if err := validateEnum(cfg.Forge.Default, "forge.default", ValidForgeTypes); err != nil {
+		t.Fatalf("forge.default validation failed: %v", err)
+	}
+	for i, rule := range cfg.Forge.Rules {
+		if err := validateEnum(rule.Type, "forge.rules.type", ValidForgeTypes); err != nil {
+			t.Fatalf("forge.rules[%d].type validation failed: %v", i, err)
+		}
+	}
+	for host, forgeType := range cfg.Hosts {
+		if err := validateEnum(forgeType, "hosts", ValidForgeTypes); err != nil {
+			t.Fatalf("hosts[%q] validation failed: %v", host, err)
+		}
+	}
+	if err := validateEnum(cfg.Merge.Strategy, "merge.strategy", ValidMergeStrategies); err != nil {
+		t.Fatalf("merge.strategy validation failed: %v", err)
+	}
+	if err := validateEnum(cfg.Checkout.BaseRef, "checkout.base_ref", ValidBaseRefs); err != nil {
+		t.Fatalf("checkout.base_ref validation failed: %v", err)
+	}
+	if err := validateEnum(cfg.DefaultSort, "default_sort", ValidDefaultSortModes); err != nil {
+		t.Fatalf("default_sort validation failed: %v", err)
+	}
+	if err := validatePreservePatterns(cfg.Preserve.Patterns, ""); err != nil {
+		t.Fatalf("preserve.patterns validation failed: %v", err)
+	}
+
+	// Apply defaults
+	if cfg.Checkout.WorktreeFormat == "" {
+		cfg.Checkout.WorktreeFormat = DefaultWorktreeFormat
+	}
+	if cfg.Forge.Default == "" {
+		cfg.Forge.Default = "github"
+	}
+	if raw.List.StaleDays != nil {
+		cfg.List.StaleDays = *raw.List.StaleDays
+	} else {
+		cfg.List.StaleDays = 14
+	}
+
+	// Verify parsed values
+	if cfg.DefaultSort != "branch" {
+		t.Errorf("DefaultSort = %q, want %q", cfg.DefaultSort, "branch")
+	}
+	if len(cfg.DefaultLabels) != 2 {
+		t.Errorf("len(DefaultLabels) = %d, want 2", len(cfg.DefaultLabels))
+	}
+	if cfg.Checkout.WorktreeFormat != "{origin}-{branch}" {
+		t.Errorf("WorktreeFormat = %q, want %q", cfg.Checkout.WorktreeFormat, "{origin}-{branch}")
+	}
+	if cfg.Checkout.BaseRef != "local" {
+		t.Errorf("BaseRef = %q, want %q", cfg.Checkout.BaseRef, "local")
+	}
+	if !cfg.Checkout.AutoFetch {
+		t.Error("AutoFetch should be true")
+	}
+	if cfg.Forge.Default != "gitlab" {
+		t.Errorf("Forge.Default = %q, want %q", cfg.Forge.Default, "gitlab")
+	}
+	if cfg.Forge.DefaultOrg != "my-org" {
+		t.Errorf("Forge.DefaultOrg = %q, want %q", cfg.Forge.DefaultOrg, "my-org")
+	}
+	if len(cfg.Forge.Rules) != 2 {
+		t.Errorf("len(Forge.Rules) = %d, want 2", len(cfg.Forge.Rules))
+	}
+	if cfg.Merge.Strategy != "rebase" {
+		t.Errorf("Merge.Strategy = %q, want %q", cfg.Merge.Strategy, "rebase")
+	}
+	if !cfg.Prune.DeleteLocalBranches {
+		t.Error("Prune.DeleteLocalBranches should be true")
+	}
+	if cfg.List.StaleDays != 30 {
+		t.Errorf("List.StaleDays = %d, want 30", cfg.List.StaleDays)
+	}
+	if len(cfg.Preserve.Patterns) != 2 {
+		t.Errorf("len(Preserve.Patterns) = %d, want 2", len(cfg.Preserve.Patterns))
+	}
+	if len(cfg.Hosts) != 2 {
+		t.Errorf("len(Hosts) = %d, want 2", len(cfg.Hosts))
+	}
+	if cfg.Theme.Name != "dracula" {
+		t.Errorf("Theme.Name = %q, want %q", cfg.Theme.Name, "dracula")
+	}
+	if len(cfg.Hooks.Hooks) != 1 {
+		t.Errorf("len(Hooks) = %d, want 1", len(cfg.Hooks.Hooks))
 	}
 }
