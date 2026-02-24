@@ -72,8 +72,8 @@ func TestConfirmModel_ViewNotDone(t *testing.T) {
 
 	m := confirmModel{prompt: "Delete files?"}
 	view := m.View()
-	if view.Content == nil {
-		t.Error("View().Content should not be nil when not done")
+	if view.Content == "" {
+		t.Error("View().Content should not be empty when not done")
 	}
 }
 
