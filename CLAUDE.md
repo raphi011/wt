@@ -13,16 +13,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 just build          # Creates ./wt binary
 go build ./cmd/wt   # Same as above
 
-# Install to ~/go/bin (+ shell completions)
+# Install to ~/go/bin (+ shell completions + git hooks)
 just install
 go install ./cmd/wt
 
 # Run tests
-just test
+just test                # Unit tests only
+just test-integration    # Integration tests (needs WT_TEST_GITHUB_REPO)
 go test ./...
 
-# Clean
-just clean
+# Other
+just clean               # Remove built binary
+just snapshot            # GoReleaser snapshot build
+just testdoc             # Generate docs/TESTS.md from test names
 ```
 
 ## Architecture
@@ -33,8 +36,9 @@ just clean
 cmd/wt/                  - CLI commands and entry point (cobra)
   ├── main.go            - Entry point
   ├── root.go            - Root command setup and context injection
+  ├── targets.go         - Target resolution (scope:branch parsing, repo/label matching)
   └── *_cmd.go           - Individual command implementations
-internal/prcache/        - PR cache (simple JSON at ~/.wt/prs.json)
+internal/cmd/            - Command execution helpers (exec.Command wrappers)
 internal/config/         - Configuration loading (TOML), local config, resolver
 internal/forge/          - Git hosting service abstraction (GitHub/GitLab)
   ├── forge.go           - Forge interface
@@ -43,15 +47,27 @@ internal/forge/          - Git hosting service abstraction (GitHub/GitLab)
   └── gitlab.go          - GitLab implementation (glab CLI)
 internal/git/            - Git operations via exec.Command
   ├── worktree.go        - Create/list/remove worktrees
-  └── repo.go            - Branch info, merge status, diff stats
+  ├── repo.go            - Branch info, merge status, diff stats
+  ├── load.go            - Parallel worktree data loading
+  ├── check.go           - Git state checks
+  ├── migrate.go         - Worktree migration helpers
+  ├── notes.go           - Git notes operations
+  ├── stash.go           - Stash operations
+  └── exec.go            - Low-level exec.Command runner
+internal/history/        - Directory navigation history tracking
 internal/hooks/          - Hook execution system
 internal/log/            - Context-aware logging (stderr)
 internal/output/         - Context-aware output (stdout)
+internal/prcache/        - PR cache (simple JSON at ~/.wt/prs.json)
+internal/preserve/       - Worktree preservation logic (protect branches from pruning)
 internal/registry/       - Repository registry (tracks managed repos)
-internal/resolve/        - Target resolution for commands
+internal/storage/        - Generic JSON file storage (used by registry, prcache, history)
+internal/worktree/       - Worktree path formatting (template expansion)
 internal/ui/             - Terminal UI components
-  ├── table.go           - Lipgloss table formatting
-  ├── spinner.go         - Bubbletea spinner
+  ├── static/            - Non-interactive output (table formatting)
+  ├── progress/          - Progress indicators (spinner, progress bar)
+  ├── prompt/            - Simple interactive prompts (confirm)
+  ├── styles/            - Shared lipgloss styles, themes, symbols
   └── wizard/            - Interactive wizard framework
       ├── framework/     - Core wizard orchestration (Wizard, Step interface)
       ├── flows/         - Command-specific wizard implementations
@@ -73,9 +89,9 @@ internal/ui/             - Terminal UI components
 ### Dependencies
 
 - **CLI parsing**: `github.com/spf13/cobra` - CLI framework with subcommands and flag parsing
-- **UI**: `github.com/charmbracelet/lipgloss` - Terminal styling
-- **UI**: `github.com/charmbracelet/lipgloss/table` - Table component
-- **UI**: `github.com/charmbracelet/bubbles/spinner` - Spinner component
+- **UI**: `charm.land/lipgloss/v2` - Terminal styling
+- **UI**: `charm.land/bubbles/v2` - UI components (spinner, progress)
+- **UI**: `charm.land/bubbletea/v2` - TUI framework (wizard flows)
 - **External**: Requires `git` in PATH; `gh` CLI for GitHub repos, `glab` CLI for GitLab repos
 
 ### Development Guidelines
