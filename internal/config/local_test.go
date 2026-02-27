@@ -41,6 +41,9 @@ func TestLoadLocal_AllFields(t *testing.T) {
 
 	dir := t.TempDir()
 	content := `
+[clone]
+mode = "regular"
+
 [checkout]
 worktree_format = "{branch}"
 base_ref = "local"
@@ -78,6 +81,9 @@ enabled = false
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	if local.Clone.Mode != "regular" {
+		t.Errorf("clone.mode = %q, want regular", local.Clone.Mode)
+	}
 	if local.Checkout.WorktreeFormat != "{branch}" {
 		t.Errorf("worktree_format = %q, want {branch}", local.Checkout.WorktreeFormat)
 	}
@@ -185,6 +191,43 @@ patterns = ["[invalid"]
 	_, err := LoadLocal(dir)
 	if err == nil {
 		t.Fatal("expected error for invalid preserve pattern")
+	}
+}
+
+func TestLoadLocal_CloneMode(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	content := `[clone]
+mode = "regular"
+`
+	if err := os.WriteFile(filepath.Join(dir, LocalConfigFileName), []byte(content), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	local, err := LoadLocal(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if local.Clone.Mode != "regular" {
+		t.Errorf("clone.mode = %q, want regular", local.Clone.Mode)
+	}
+}
+
+func TestLoadLocal_InvalidCloneMode(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	content := `[clone]
+mode = "shallow"
+`
+	if err := os.WriteFile(filepath.Join(dir, LocalConfigFileName), []byte(content), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	_, err := LoadLocal(dir)
+	if err == nil {
+		t.Fatal("expected error for invalid clone.mode")
 	}
 }
 

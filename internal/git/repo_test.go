@@ -730,6 +730,99 @@ func TestUpstreamBranch(t *testing.T) {
 	}
 }
 
+func TestCloneRegular(t *testing.T) {
+	t.Parallel()
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+		_, originPath := setupTestRepoWithOrigin(t)
+		tmpDir := resolveTempDir(t)
+		destPath := filepath.Join(tmpDir, "cloned-repo")
+		ctx := context.Background()
+
+		if err := CloneRegular(ctx, originPath, destPath); err != nil {
+			t.Fatalf("CloneRegular failed: %v", err)
+		}
+
+		// Verify it's a regular (non-bare) repo
+		repoType, err := DetectRepoType(destPath)
+		if err != nil {
+			t.Fatalf("DetectRepoType failed: %v", err)
+		}
+		if repoType != RepoTypeRegular {
+			t.Errorf("expected RepoTypeRegular, got %v", repoType)
+		}
+
+		// Verify working tree has files
+		readme := filepath.Join(destPath, "README.md")
+		if _, err := os.Stat(readme); err != nil {
+			t.Errorf("expected README.md in working tree: %v", err)
+		}
+	})
+
+	t.Run("cleanup on failure", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := resolveTempDir(t)
+		destPath := filepath.Join(tmpDir, "should-not-exist")
+		ctx := context.Background()
+
+		err := CloneRegular(ctx, "/nonexistent/repo.git", destPath)
+		if err == nil {
+			t.Fatal("expected error for invalid URL")
+		}
+
+		// Verify cleanup: destination should not exist
+		if _, statErr := os.Stat(destPath); statErr == nil {
+			t.Error("expected destination to be cleaned up after failure")
+		}
+	})
+}
+
+func TestCloneBareWithWorktreeSupport(t *testing.T) {
+	t.Parallel()
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+		_, originPath := setupTestRepoWithOrigin(t)
+		tmpDir := resolveTempDir(t)
+		destPath := filepath.Join(tmpDir, "bare-clone")
+		ctx := context.Background()
+
+		if err := CloneBareWithWorktreeSupport(ctx, originPath, destPath); err != nil {
+			t.Fatalf("CloneBareWithWorktreeSupport failed: %v", err)
+		}
+
+		// Verify .git directory exists and is a bare repo
+		gitDir := filepath.Join(destPath, ".git")
+		if !isBareRepo(gitDir) {
+			t.Error("expected .git to be a bare repo")
+		}
+
+		// Verify repo root has no working tree files
+		readme := filepath.Join(destPath, "README.md")
+		if _, err := os.Stat(readme); err == nil {
+			t.Error("bare clone should not have working tree files at root")
+		}
+	})
+
+	t.Run("cleanup on failure", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := resolveTempDir(t)
+		destPath := filepath.Join(tmpDir, "should-not-exist")
+		ctx := context.Background()
+
+		err := CloneBareWithWorktreeSupport(ctx, "/nonexistent/repo.git", destPath)
+		if err == nil {
+			t.Fatal("expected error for invalid URL")
+		}
+
+		// Verify cleanup
+		if _, statErr := os.Stat(destPath); statErr == nil {
+			t.Error("expected destination to be cleaned up after failure")
+		}
+	})
+}
+
 func TestGetCurrentRepoMainPathFrom(t *testing.T) {
 	t.Parallel()
 

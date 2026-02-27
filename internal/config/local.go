@@ -13,6 +13,7 @@ import (
 // Pointer fields and zero-value strings indicate "not set" (inherit from global).
 type LocalConfig struct {
 	Hooks    HooksConfig    `toml:"-"` // merge by name into global
+	Clone    LocalClone     `toml:"clone"`
 	Checkout LocalCheckout  `toml:"checkout"`
 	Merge    LocalMerge     `toml:"merge"`
 	Prune    LocalPrune     `toml:"prune"`
@@ -43,9 +44,15 @@ type LocalForge struct {
 	Default string `toml:"default"`
 }
 
+// LocalClone holds local clone overrides
+type LocalClone struct {
+	Mode string `toml:"mode"`
+}
+
 // rawLocalConfig is used for initial TOML parsing before processing hooks
 type rawLocalConfig struct {
 	Hooks    map[string]any `toml:"hooks"`
+	Clone    LocalClone     `toml:"clone"`
 	Checkout LocalCheckout  `toml:"checkout"`
 	Merge    LocalMerge     `toml:"merge"`
 	Prune    LocalPrune     `toml:"prune"`
@@ -74,6 +81,7 @@ func LoadLocal(repoPath string) (*LocalConfig, error) {
 
 	local := &LocalConfig{
 		Hooks:    parseHooksConfig(raw.Hooks),
+		Clone:    raw.Clone,
 		Checkout: raw.Checkout,
 		Merge:    raw.Merge,
 		Prune:    raw.Prune,
@@ -81,6 +89,9 @@ func LoadLocal(repoPath string) (*LocalConfig, error) {
 		Forge:    raw.Forge,
 	}
 
+	if err := validateEnum(local.Clone.Mode, "clone.mode", ValidCloneModes); err != nil {
+		return nil, fmt.Errorf("%w in %s", err, configFile)
+	}
 	if err := validateEnum(local.Forge.Default, "forge.default", ValidForgeTypes); err != nil {
 		return nil, fmt.Errorf("%w in %s", err, configFile)
 	}
@@ -99,8 +110,13 @@ func LoadLocal(repoPath string) (*LocalConfig, error) {
 
 // defaultLocalConfig is the template for wt config init --local
 const defaultLocalConfig = `# wt local config (per-repo overrides)
-# Place this file at the root of your bare repo.
+# Place this file at the root of your git repo.
 # Settings here override the global ~/.wt/config.toml for this repo only.
+
+# Clone settings
+# [clone]
+# mode: "bare" (default, recommended) or "regular"
+# mode = "bare"
 
 # Checkout settings
 # [checkout]

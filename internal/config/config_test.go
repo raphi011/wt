@@ -685,6 +685,143 @@ func TestParseHooksConfig_WithEnabled(t *testing.T) {
 	}
 }
 
+func TestCloneConfigIsBare(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		mode string
+		want bool
+	}{
+		{"bare mode", "bare", true},
+		{"regular mode", "regular", false},
+		{"empty defaults to bare", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cc := &CloneConfig{Mode: tt.mode}
+			if got := cc.IsBare(); got != tt.want {
+				t.Errorf("IsBare() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCloneConfigParsing(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		toml     string
+		expected string
+	}{
+		{"not set", `worktree_format = "x"`, ""},
+		{"bare", `[clone]
+mode = "bare"`, "bare"},
+		{"regular", `[clone]
+mode = "regular"`, "regular"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var raw rawConfig
+			if _, err := toml.Decode(tt.toml, &raw); err != nil {
+				t.Fatalf("failed to parse TOML: %v", err)
+			}
+			if raw.Clone.Mode != tt.expected {
+				t.Errorf("Clone.Mode = %q, want %q", raw.Clone.Mode, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCloneConfigDefault(t *testing.T) {
+	t.Parallel()
+
+	cfg := Default()
+	if cfg.Clone.Mode != "bare" {
+		t.Errorf("default Clone.Mode = %q, want %q", cfg.Clone.Mode, "bare")
+	}
+	if !cfg.Clone.IsBare() {
+		t.Error("default Clone.IsBare() = false, want true")
+	}
+}
+
+func TestCloneConfigValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		mode    string
+		wantErr bool
+	}{
+		{"empty is valid", "", false},
+		{"bare is valid", "bare", false},
+		{"regular is valid", "regular", false},
+		{"invalid mode", "shallow", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := validateEnum(tt.mode, "clone.mode", ValidCloneModes)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateEnum(%q) error = %v, wantErr %v", tt.mode, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateCloneMode(t *testing.T) {
+	t.Parallel()
+
+	if err := ValidateCloneMode("bare"); err != nil {
+		t.Errorf("ValidateCloneMode(bare) = %v, want nil", err)
+	}
+	if err := ValidateCloneMode("regular"); err != nil {
+		t.Errorf("ValidateCloneMode(regular) = %v, want nil", err)
+	}
+	if err := ValidateCloneMode("invalid"); err == nil {
+		t.Error("ValidateCloneMode(invalid) = nil, want error")
+	}
+}
+
+func TestCloneConfigResolveIsBare(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		configMode  string
+		cliOverride string
+		wantBare    bool
+		wantErr     bool
+	}{
+		{"config bare, no override", "bare", "", true, false},
+		{"config regular, no override", "regular", "", false, false},
+		{"config empty, no override", "", "", true, false},
+		{"cli overrides config to regular", "bare", "regular", false, false},
+		{"cli overrides config to bare", "regular", "bare", true, false},
+		{"invalid cli override", "bare", "shallow", false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cc := &CloneConfig{Mode: tt.configMode}
+			got, err := cc.ResolveIsBare(tt.cliOverride)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ResolveIsBare(%q) error = %v, wantErr %v", tt.cliOverride, err, tt.wantErr)
+			}
+			if err == nil && got != tt.wantBare {
+				t.Errorf("ResolveIsBare(%q) = %v, want %v", tt.cliOverride, got, tt.wantBare)
+			}
+		})
+	}
+}
+
 func TestListConfigParsing(t *testing.T) {
 	t.Parallel()
 
@@ -741,6 +878,9 @@ func TestFullConfigRoundTrip(t *testing.T) {
 default_sort = "branch"
 default_labels = ["team-a", "team-b"]
 
+[clone]
+mode = "regular"
+
 [checkout]
 worktree_format = "{origin}-{branch}"
 base_ref = "local"
@@ -796,6 +936,7 @@ on = ["checkout"]
 		DefaultSort:   raw.DefaultSort,
 		DefaultLabels: raw.DefaultLabels,
 		Hooks:         parseHooksConfig(raw.Hooks),
+		Clone:         raw.Clone,
 		Checkout:      raw.Checkout,
 		Forge:         raw.Forge,
 		Merge:         raw.Merge,
@@ -828,6 +969,9 @@ on = ["checkout"]
 	if err := validateEnum(cfg.DefaultSort, "default_sort", ValidDefaultSortModes); err != nil {
 		t.Fatalf("default_sort validation failed: %v", err)
 	}
+	if err := validateEnum(cfg.Clone.Mode, "clone.mode", ValidCloneModes); err != nil {
+		t.Fatalf("clone.mode validation failed: %v", err)
+	}
 	if err := validatePreservePatterns(cfg.Preserve.Patterns, ""); err != nil {
 		t.Fatalf("preserve.patterns validation failed: %v", err)
 	}
@@ -845,7 +989,15 @@ on = ["checkout"]
 		cfg.List.StaleDays = 14
 	}
 
+	// Apply clone default
+	if cfg.Clone.Mode == "" {
+		cfg.Clone.Mode = "bare"
+	}
+
 	// Verify parsed values
+	if cfg.Clone.Mode != "regular" {
+		t.Errorf("Clone.Mode = %q, want %q", cfg.Clone.Mode, "regular")
+	}
 	if cfg.DefaultSort != "branch" {
 		t.Errorf("DefaultSort = %q, want %q", cfg.DefaultSort, "branch")
 	}

@@ -46,6 +46,7 @@ func newPrCmd() *cobra.Command {
 func newPrCheckoutCmd() *cobra.Command {
 	var (
 		forgeName string
+		cloneMode string
 		note      string
 		hookNames []string
 		noHook    bool
@@ -57,13 +58,15 @@ func newPrCheckoutCmd() *cobra.Command {
 		Short:   "Checkout PR (clones if needed)",
 		Aliases: []string{"co"},
 		Args:    cobra.RangeArgs(1, 2),
-		Long: `Checkout a PR, cloning the repo as a bare repo if it doesn't exist locally.
+		Long: `Checkout a PR, cloning the repo if it doesn't exist locally.
 
 If repo contains '/', it's treated as org/repo and cloned from GitHub/GitLab.
-Otherwise, it's looked up in the local registry.`,
-		Example: `  wt pr checkout 123               # PR from current repo
-  wt pr checkout myrepo 123        # PR from local repo in registry
-  wt pr checkout org/repo 123      # Clone repo and checkout PR`,
+Otherwise, it's looked up in the local registry.
+Use --clone-mode to control whether the repo is cloned as bare or regular.`,
+		Example: `  wt pr checkout 123                            # PR from current repo
+  wt pr checkout myrepo 123                     # PR from local repo in registry
+  wt pr checkout org/repo 123                   # Clone repo and checkout PR
+  wt pr checkout --clone-mode regular org/repo 123  # Regular clone + checkout`,
 		ValidArgsFunction: completePrCheckoutArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -101,8 +104,10 @@ Otherwise, it's looked up in the local registry.`,
 			var repoPath string
 			var f forge.Forge
 
+			var justClonedRegular bool
+
 			if repoArg != "" && strings.Contains(repoArg, "/") {
-				// Clone mode: org/repo format
+				// Remote clone path: org/repo format
 				orgRepo := repoArg
 
 				// Check if already exists in registry
@@ -121,10 +126,24 @@ Otherwise, it's looked up in the local registry.`,
 					return err
 				}
 
-				// Clone the repo as bare into .git directory
+				// Resolve effective clone mode
+				// Uses global config since the repo doesn't exist yet
+				// (local .wt.toml can't be read before cloning)
+				bareMode, err := cfg.Clone.ResolveIsBare(cloneMode)
+				if err != nil {
+					return err
+				}
+
+				// Clone the repo
 				cwd := config.WorkDirFromContext(ctx)
-				l.Printf("Cloning %s (bare)...\n", orgRepo)
-				repoPath, err = f.CloneBareRepo(ctx, orgRepo, cwd)
+				if bareMode {
+					l.Printf("Cloning %s (bare)...\n", orgRepo)
+					repoPath, err = f.CloneBareRepo(ctx, orgRepo, cwd)
+				} else {
+					justClonedRegular = true
+					l.Printf("Cloning %s...\n", orgRepo)
+					repoPath, err = f.CloneRepo(ctx, orgRepo, cwd)
+				}
 				if err != nil {
 					return fmt.Errorf("failed to clone repo: %w", err)
 				}
@@ -205,9 +224,17 @@ Otherwise, it's looked up in the local registry.`,
 				l.Printf("Warning: fetch failed: %v\n", err)
 			}
 
-			// Create worktree
-			if err := git.CreateWorktree(ctx, gitDir, wtPath, branch); err != nil {
-				return fmt.Errorf("create worktree: %w", err)
+			if justClonedRegular {
+				// Regular clone: checkout PR branch in the working tree directly
+				if err := git.RunGitCommand(ctx, repoPath, "checkout", branch); err != nil {
+					return fmt.Errorf("checkout branch: %w", err)
+				}
+				wtPath = repoPath
+			} else {
+				// Bare clone or existing repo: create worktree
+				if err := git.CreateWorktree(ctx, gitDir, wtPath, branch); err != nil {
+					return fmt.Errorf("create worktree: %w", err)
+				}
 			}
 
 			// Set upstream - branch was fetched so remote exists
@@ -229,7 +256,11 @@ Otherwise, it's looked up in the local registry.`,
 				}
 			}
 
-			fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
+			if justClonedRegular {
+				fmt.Printf("Checked out PR branch: %s (%s)\n", repoPath, branch)
+			} else {
+				fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
+			}
 
 			// Record to history for wt cd
 			if err := history.RecordAccess(wtPath, repo.Name, branch, effCfg.GetHistoryPath()); err != nil {
@@ -270,6 +301,7 @@ Otherwise, it's looked up in the local registry.`,
 	}
 
 	cmd.Flags().StringVar(&forgeName, "forge", "", "Forge type: github or gitlab")
+	cmd.Flags().StringVar(&cloneMode, "clone-mode", "", "Clone mode: bare or regular (default: config)")
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
 	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
 	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-checkout hook")
@@ -277,6 +309,9 @@ Otherwise, it's looked up in the local registry.`,
 
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
+	cmd.RegisterFlagCompletionFunc("clone-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"bare", "regular"}, cobra.ShellCompDirectiveNoFileComp
+	})
 	cmd.RegisterFlagCompletionFunc("forge", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"github", "gitlab"}, cobra.ShellCompDirectiveNoFileComp
 	})

@@ -162,6 +162,9 @@ func setupTestRepoWithBranches(t *testing.T, dir, name string, branches []string
 // testConfig returns a test config
 func testConfig() *config.Config {
 	return &config.Config{
+		Clone: config.CloneConfig{
+			Mode: "bare",
+		},
 		Checkout: config.CheckoutConfig{
 			WorktreeFormat: "{repo}-{branch}",
 		},

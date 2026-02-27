@@ -104,6 +104,32 @@ type PreserveConfig struct {
 	Exclude  []string `toml:"exclude"`  // Path segments to exclude (e.g., "node_modules")
 }
 
+// CloneConfig holds clone-related configuration
+type CloneConfig struct {
+	Mode string `toml:"mode"` // "bare" or "regular" (default: "bare")
+}
+
+// IsBare returns true if the clone mode is bare (the default).
+func (c *CloneConfig) IsBare() bool {
+	return c.Mode == "" || c.Mode == "bare"
+}
+
+// ResolveIsBare resolves the effective clone mode from a CLI flag override
+// and returns whether bare mode should be used. The CLI flag takes precedence
+// over the config value. Returns an error if the resolved mode is invalid.
+func (c *CloneConfig) ResolveIsBare(cliOverride string) (bool, error) {
+	mode := cliOverride
+	if mode == "" {
+		mode = c.Mode
+	}
+	if mode != "" {
+		if err := ValidateCloneMode(mode); err != nil {
+			return false, err
+		}
+	}
+	return mode == "" || mode == "bare", nil
+}
+
 // CheckoutConfig holds checkout-related configuration
 type CheckoutConfig struct {
 	WorktreeFormat string `toml:"worktree_format"` // Template for worktree folder names
@@ -134,6 +160,7 @@ type Config struct {
 	DefaultSort   string            `toml:"default_sort"`   // "date", "repo", "branch" (default: "date")
 	DefaultLabels []string          `toml:"default_labels"` // labels for newly registered repos
 	Hooks         HooksConfig       `toml:"-"`              // custom parsing needed
+	Clone         CloneConfig       `toml:"clone"`          // clone settings
 	Checkout      CheckoutConfig    `toml:"checkout"`       // checkout settings
 	Forge         ForgeConfig       `toml:"forge"`
 	Merge         MergeConfig       `toml:"merge"`
@@ -168,6 +195,9 @@ func (c *CheckoutConfig) ShouldSetUpstream() bool {
 // Default returns the default configuration
 func Default() Config {
 	return Config{
+		Clone: CloneConfig{
+			Mode: "bare",
+		},
 		Checkout: CheckoutConfig{
 			WorktreeFormat: DefaultWorktreeFormat,
 		},
@@ -194,6 +224,7 @@ type rawConfig struct {
 	DefaultSort   string         `toml:"default_sort"`
 	DefaultLabels []string       `toml:"default_labels"`
 	Hooks         map[string]any `toml:"hooks"`
+	Clone         CloneConfig    `toml:"clone"`
 	Checkout      CheckoutConfig `toml:"checkout"`
 	Forge         ForgeConfig    `toml:"forge"`
 	Merge         MergeConfig    `toml:"merge"`
@@ -240,6 +271,7 @@ func Load() (Config, error) {
 		DefaultSort:   raw.DefaultSort,
 		DefaultLabels: raw.DefaultLabels,
 		Hooks:         parseHooksConfig(raw.Hooks),
+		Clone:         raw.Clone,
 		Checkout:      raw.Checkout,
 		Forge:         raw.Forge,
 		Merge:         raw.Merge,
@@ -269,6 +301,9 @@ func Load() (Config, error) {
 	if err := validateEnum(cfg.Checkout.BaseRef, "checkout.base_ref", ValidBaseRefs); err != nil {
 		return Default(), err
 	}
+	if err := validateEnum(cfg.Clone.Mode, "clone.mode", ValidCloneModes); err != nil {
+		return Default(), err
+	}
 	if err := validateEnum(cfg.DefaultSort, "default_sort", ValidDefaultSortModes); err != nil {
 		return Default(), err
 	}
@@ -284,6 +319,9 @@ func Load() (Config, error) {
 	}
 	if cfg.Forge.Default == "" {
 		cfg.Forge.Default = "github"
+	}
+	if cfg.Clone.Mode == "" {
+		cfg.Clone.Mode = "bare"
 	}
 	if raw.List.StaleDays != nil {
 		cfg.List.StaleDays = *raw.List.StaleDays
@@ -412,6 +450,13 @@ func matchPattern(pattern, repoSpec string) bool {
 
 // defaultConfig is the full default config template
 const defaultConfig = `# wt configuration
+
+# Clone settings - controls how repos are cloned by "wt repo clone" and "wt pr checkout"
+# [clone]
+# Clone mode: "bare" (default) or "regular"
+#   bare    - clone into .git/ directory, worktrees as siblings (recommended for wt)
+#   regular - standard git clone with working tree at root
+# mode = "bare"
 
 # Checkout settings - controls worktree creation behavior
 [checkout]

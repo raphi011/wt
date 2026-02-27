@@ -360,22 +360,25 @@ func newRepoCloneCmd() *cobra.Command {
 		worktreeFormat string
 		destination    string
 		branch         string
+		cloneMode      string
 	)
 
 	cmd := &cobra.Command{
 		Use:     "clone <url|org/repo> [destination]",
-		Short:   "Clone a repository as bare",
+		Short:   "Clone a repository and register it",
 		Aliases: []string{"cl"},
 		Args:    cobra.RangeArgs(1, 2),
-		Long: `Clone a git repository as bare and register it.
+		Long: `Clone a git repository and register it.
 
-Clones directly into .git (no working tree):
+By default, clones as bare into .git (no working tree):
   repo/
   └── .git/    # bare git repo contents (HEAD, objects/, refs/, etc.)
 
 This allows worktrees to be created as siblings to .git.
 
-By default, creates a worktree for the default branch (main/master).
+Use --clone-mode regular for a standard clone with a working tree at root.
+
+By default (bare mode), creates a worktree for the default branch (main/master).
 Use -b to specify a different branch instead.
 
 Supports both full URLs and short-form org/repo format:
@@ -389,7 +392,8 @@ If destination is not specified, clones into the current directory.`,
   wt repo clone org/repo                              # Clone via gh/glab (uses forge config)
   wt repo clone myrepo                                # Clone with default_org
   wt repo clone org/repo -b main                      # Clone and create worktree for main
-  wt repo clone org/repo -l work                      # Clone with label`,
+  wt repo clone org/repo -l work                      # Clone with label
+  wt repo clone org/repo --clone-mode regular         # Standard (non-bare) clone`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
@@ -426,12 +430,28 @@ If destination is not specified, clones into the current directory.`,
 				return fmt.Errorf("destination already exists: %s", absPath)
 			}
 
+			// Resolve effective clone mode
+			bareMode, err := cfg.Clone.ResolveIsBare(cloneMode)
+			if err != nil {
+				return err
+			}
+
+			if !bareMode && branch != "" {
+				return fmt.Errorf("--branch is only supported in bare clone mode; remove --branch or use --clone-mode bare")
+			}
+
 			// Clone based on input type
 			if isGitURL(input) {
 				// Full URL: use git clone directly
-				l.Debug("cloning repo via git", "url", input, "dest", absPath)
-				if err := git.CloneBareWithWorktreeSupport(ctx, input, absPath); err != nil {
-					return fmt.Errorf("clone failed: %w", err)
+				l.Debug("cloning repo via git", "url", input, "dest", absPath, "bare", bareMode)
+				if bareMode {
+					if err := git.CloneBareWithWorktreeSupport(ctx, input, absPath); err != nil {
+						return fmt.Errorf("clone failed: %w", err)
+					}
+				} else {
+					if err := git.CloneRegular(ctx, input, absPath); err != nil {
+						return fmt.Errorf("clone failed: %w", err)
+					}
 				}
 			} else {
 				// Short-form: org/repo or just repo - use forge CLI
@@ -452,12 +472,17 @@ If destination is not specified, clones into the current directory.`,
 					return err
 				}
 
-				l.Debug("cloning repo via forge", "spec", orgRepo, "forge", forgeName, "dest", absPath)
+				l.Debug("cloning repo via forge", "spec", orgRepo, "forge", forgeName, "dest", absPath, "bare", bareMode)
 
-				// CloneBareRepo creates destPath/repoName, so pass parent dir
-				clonedPath, err := f.CloneBareRepo(ctx, orgRepo, filepath.Dir(absPath))
-				if err != nil {
-					return fmt.Errorf("clone failed: %w", err)
+				var clonedPath string
+				var cloneErr error
+				if bareMode {
+					clonedPath, cloneErr = f.CloneBareRepo(ctx, orgRepo, filepath.Dir(absPath))
+				} else {
+					clonedPath, cloneErr = f.CloneRepo(ctx, orgRepo, filepath.Dir(absPath))
+				}
+				if cloneErr != nil {
+					return fmt.Errorf("clone failed: %w", cloneErr)
 				}
 				absPath = clonedPath // Update to actual path created
 			}
@@ -494,44 +519,48 @@ If destination is not specified, clones into the current directory.`,
 
 			fmt.Printf("Cloned repo: %s (%s)\n", repoName, absPath)
 
-			// Determine which branch to create worktree for
-			worktreeBranch := branch
-			gitDir := filepath.Join(absPath, ".git")
-			if branch == "" {
-				// Auto-detect default branch if no explicit branch specified
-				if git.RefExists(ctx, gitDir, "HEAD") {
-					worktreeBranch = git.GetDefaultBranch(ctx, gitDir)
-					// Verify the detected branch actually exists before attempting worktree creation
-					// Use LocalBranchExists since bare clones have refs/heads/* but not refs/remotes/origin/*
-					if !git.LocalBranchExists(ctx, gitDir, worktreeBranch) {
-						l.Printf("Warning: default branch %q not found, skipping worktree creation\n", worktreeBranch)
-						worktreeBranch = ""
+			// Create initial worktree only in bare mode
+			// Regular clones already have a working tree at root
+			if bareMode {
+				// Determine which branch to create worktree for
+				worktreeBranch := branch
+				gitDir := filepath.Join(absPath, ".git")
+				if branch == "" {
+					// Auto-detect default branch if no explicit branch specified
+					if git.RefExists(ctx, gitDir, "HEAD") {
+						worktreeBranch = git.GetDefaultBranch(ctx, gitDir)
+						// Verify the detected branch actually exists before attempting worktree creation
+						// Use LocalBranchExists since bare clones have refs/heads/* but not refs/remotes/origin/*
+						if !git.LocalBranchExists(ctx, gitDir, worktreeBranch) {
+							l.Printf("Warning: default branch %q not found, skipping worktree creation\n", worktreeBranch)
+							worktreeBranch = ""
+						} else {
+							l.Debug("auto-detected default branch", "branch", worktreeBranch)
+						}
 					} else {
-						l.Debug("auto-detected default branch", "branch", worktreeBranch)
+						l.Debug("skipping worktree creation: repo has no commits")
 					}
-				} else {
-					l.Debug("skipping worktree creation: repo has no commits")
 				}
-			}
 
-			// Create worktree if we have a branch
-			if worktreeBranch != "" {
-				format := worktreeFormat
-				if format == "" {
-					format = cfg.Checkout.WorktreeFormat
-				}
-				wtPath := resolveWorktreePathWithConfig(absPath, repoName, worktreeBranch, format)
+				// Create worktree if we have a branch
+				if worktreeBranch != "" {
+					format := worktreeFormat
+					if format == "" {
+						format = cfg.Checkout.WorktreeFormat
+					}
+					wtPath := resolveWorktreePathWithConfig(absPath, repoName, worktreeBranch, format)
 
-				l.Debug("creating initial worktree", "path", wtPath, "branch", worktreeBranch)
+					l.Debug("creating initial worktree", "path", wtPath, "branch", worktreeBranch)
 
-				if err := git.CreateWorktree(ctx, gitDir, wtPath, worktreeBranch); err != nil {
-					l.Printf("Warning: failed to create initial worktree: %v\n", err)
-				} else {
-					fmt.Printf("Created worktree: %s (%s)\n", wtPath, worktreeBranch)
+					if err := git.CreateWorktree(ctx, gitDir, wtPath, worktreeBranch); err != nil {
+						l.Printf("Warning: failed to create initial worktree: %v\n", err)
+					} else {
+						fmt.Printf("Created worktree: %s (%s)\n", wtPath, worktreeBranch)
 
-					// Record to history for wt cd
-					if err := history.RecordAccess(wtPath, repoName, worktreeBranch, cfg.GetHistoryPath()); err != nil {
-						l.Printf("Warning: failed to record history: %v\n", err)
+						// Record to history for wt cd
+						if err := history.RecordAccess(wtPath, repoName, worktreeBranch, cfg.GetHistoryPath()); err != nil {
+							l.Printf("Warning: failed to record history: %v\n", err)
+						}
 					}
 				}
 			}
@@ -543,8 +572,12 @@ If destination is not specified, clones into the current directory.`,
 	cmd.Flags().StringSliceVarP(&labels, "label", "l", nil, "Labels for grouping (repeatable)")
 	cmd.Flags().StringVarP(&worktreeFormat, "worktree-format", "w", "", "Worktree format override")
 	cmd.Flags().StringVarP(&destination, "destination", "d", "", "Destination directory")
-	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Create initial worktree for branch")
+	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Create initial worktree for branch (bare mode only)")
+	cmd.Flags().StringVar(&cloneMode, "clone-mode", "", "Clone mode: bare or regular (default: config)")
 
+	cmd.RegisterFlagCompletionFunc("clone-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"bare", "regular"}, cobra.ShellCompDirectiveNoFileComp
+	})
 	cmd.RegisterFlagCompletionFunc("label", completeLabels)
 	cmd.RegisterFlagCompletionFunc("name", cobra.NoFileCompletions)
 	cmd.RegisterFlagCompletionFunc("worktree-format", cobra.NoFileCompletions)
