@@ -13,7 +13,14 @@ var (
 	ValidMergeStrategies  = []string{"squash", "rebase", "merge"}
 	ValidBaseRefs         = []string{"local", "remote"}
 	ValidDefaultSortModes = []string{"date", "repo", "branch"}
+	ValidCloneModes       = []string{"bare", "regular"}
 )
+
+// ValidateCloneMode validates a clone mode value against ValidCloneModes.
+// Exported for use in CLI flag validation.
+func ValidateCloneMode(mode string) error {
+	return validateEnum(mode, "clone-mode", ValidCloneModes)
+}
 
 // validateEnum checks that value (if non-empty) is one of the allowed values.
 // Returns a formatted error mentioning the field name and allowed options.

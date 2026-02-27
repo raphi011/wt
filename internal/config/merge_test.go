@@ -131,6 +131,52 @@ func TestMergeLocal_ZeroValuesPreserveGlobal(t *testing.T) {
 	}
 }
 
+func TestMergeLocal_CloneModeReplace(t *testing.T) {
+	t.Parallel()
+
+	global := &Config{
+		Clone:    CloneConfig{Mode: "bare"},
+		Checkout: CheckoutConfig{WorktreeFormat: DefaultWorktreeFormat},
+		Forge:    ForgeConfig{Default: "github"},
+		Hooks:    HooksConfig{Hooks: map[string]Hook{}},
+	}
+
+	local := &LocalConfig{
+		Clone: LocalClone{Mode: "regular"},
+	}
+
+	result := MergeLocal(global, local)
+
+	if result.Clone.Mode != "regular" {
+		t.Errorf("clone.mode = %q, want regular", result.Clone.Mode)
+	}
+
+	// Verify global wasn't mutated
+	if global.Clone.Mode != "bare" {
+		t.Error("global clone.mode was mutated")
+	}
+}
+
+func TestMergeLocal_CloneModePreserveGlobal(t *testing.T) {
+	t.Parallel()
+
+	global := &Config{
+		Clone:    CloneConfig{Mode: "regular"},
+		Checkout: CheckoutConfig{WorktreeFormat: DefaultWorktreeFormat},
+		Forge:    ForgeConfig{Default: "github"},
+		Hooks:    HooksConfig{Hooks: map[string]Hook{}},
+	}
+
+	// Empty local — should preserve global
+	local := &LocalConfig{}
+
+	result := MergeLocal(global, local)
+
+	if result.Clone.Mode != "regular" {
+		t.Errorf("clone.mode = %q, want regular", result.Clone.Mode)
+	}
+}
+
 func TestMergeLocal_HooksMergeByName(t *testing.T) {
 	t.Parallel()
 

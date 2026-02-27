@@ -129,6 +129,7 @@ internal/ui/             - Terminal UI components
 - `-a, --arg` - set hook variable KEY=VALUE (repeatable)
 - `--json` - output as JSON
 - `--hook` / `--no-hook` - control hook execution (for checkout, pr checkout, prune)
+- `--clone-mode` - clone mode: bare or regular (for repo clone, pr checkout)
 
 **Note**: Commands use positional args for repo/label targeting (see "Repo targeting" above).
 

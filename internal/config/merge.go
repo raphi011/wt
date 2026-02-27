@@ -19,6 +19,11 @@ func MergeLocal(global *Config, local *LocalConfig) *Config {
 	// Merge hooks by name: local overrides/adds, enabled=false removes
 	merged.Hooks = mergeHooks(global.Hooks, local.Hooks)
 
+	// Merge clone (replace)
+	if local.Clone.Mode != "" {
+		merged.Clone.Mode = local.Clone.Mode
+	}
+
 	// Merge checkout (simple field replace for non-zero values)
 	if local.Checkout.WorktreeFormat != "" {
 		merged.Checkout.WorktreeFormat = local.Checkout.WorktreeFormat

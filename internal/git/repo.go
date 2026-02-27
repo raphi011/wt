@@ -542,6 +542,16 @@ func GetGitDir(repoPath string, repoType RepoType) string {
 	return gitDir
 }
 
+// CloneRegular performs a standard (non-bare) git clone.
+// Cleans up the destination directory on failure.
+func CloneRegular(ctx context.Context, url, destPath string) error {
+	if err := runGit(ctx, "", "clone", url, destPath); err != nil {
+		os.RemoveAll(destPath)
+		return fmt.Errorf("git clone failed: %w", err)
+	}
+	return nil
+}
+
 // CloneBareWithWorktreeSupport clones a repo as a bare repo inside the .git directory.
 // This allows worktrees to be created as siblings while git commands work normally.
 //
