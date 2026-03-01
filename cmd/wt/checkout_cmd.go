@@ -208,7 +208,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
 	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-checkout hook")
 	cmd.Flags().BoolVar(&noPreserve, "no-preserve", false, "Skip file preservation")
-	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable KEY=VALUE")
+	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode")
 
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")

@@ -422,7 +422,9 @@ description = "Open Claude with prompt"
 
 **Hook triggers:** `checkout`, `pr`, `prune`, `merge`, `all` (see `on` field in config)
 
-**Placeholders:** `{worktree-dir}`, `{repo-dir}`, `{branch}`, `{repo}`, `{origin}`, `{trigger}`, `{key}`, `{key:-default}`
+**Placeholders:** `{worktree-dir}`, `{repo-dir}`, `{branch}`, `{repo}`, `{origin}`, `{trigger}`, `{key}`, `{key:-default}`, `{key:+text}`
+
+**Args:** Pass `--arg key=value` or `--arg key` (bare boolean, sets to `"true"`)
 
 ### Forge Settings
 
@@ -569,6 +571,25 @@ The same applies to all placeholders (`{repo-dir}`, `{branch}`, `{repo}`, `{orig
 ```toml
 [hooks.claude]
 command = "claude '{prompt:-help me}'"
+```
+
+### Conditional Placeholders
+
+Use `{key:+text}` to include text only when an arg is set (and non-empty). This is useful for optional flags:
+
+```toml
+[hooks.claude]
+command = "cd '{worktree-dir}' && claude {skip:+--dangerously-skip-permissions} -p '{prompt:-help}'"
+```
+
+```bash
+# Without skip — flag omitted
+wt hook claude -a prompt="implement auth"
+# → cd '/path' && claude  -p 'implement auth'
+
+# With skip — flag included (bare -a key sets value to "true")
+wt hook claude -a skip -a prompt="implement auth"
+# → cd '/path' && claude --dangerously-skip-permissions -p 'implement auth'
 ```
 
 ### Multiline Hooks

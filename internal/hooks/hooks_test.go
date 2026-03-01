@@ -464,12 +464,27 @@ func TestParseEnv(t *testing.T) {
 			},
 		},
 		{
-			name:        "missing equals sign",
-			input:       []string{"invalid"},
+			name:  "bare key without equals",
+			input: []string{"skip"},
+			expected: map[string]string{
+				"skip": "true",
+			},
+		},
+		{
+			name:  "bare key mixed with key=value",
+			input: []string{"skip", "prompt=hello"},
+			expected: map[string]string{
+				"skip":   "true",
+				"prompt": "hello",
+			},
+		},
+		{
+			name:        "empty string",
+			input:       []string{""},
 			expectError: true,
 		},
 		{
-			name:        "empty key",
+			name:        "empty key with equals",
 			input:       []string{"=value"},
 			expectError: true,
 		},
@@ -541,10 +556,11 @@ func TestParseEnvWithStdin(t *testing.T) {
 			},
 		},
 		{
-			name:        "missing equals sign",
-			input:       []string{"invalid"},
-			expectError: true,
-			errorMsg:    "invalid env format",
+			name:  "bare key without equals",
+			input: []string{"skip"},
+			expected: map[string]string{
+				"skip": "true",
+			},
 		},
 		{
 			name:        "empty key",
@@ -711,11 +727,12 @@ func TestParseEnvWithCachedStdin(t *testing.T) {
 			errorMsg:     "stdin not piped",
 		},
 		{
-			name:         "invalid format",
-			input:        []string{"invalid"},
+			name:         "bare key without equals",
+			input:        []string{"skip"},
 			stdinContent: "",
-			expectError:  true,
-			errorMsg:     "invalid env format",
+			expected: map[string]string{
+				"skip": "true",
+			},
 		},
 		{
 			name:         "empty key",
@@ -847,6 +864,96 @@ func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
 				Env: map[string]string{"my_var": "value"},
 			},
 			expected: "echo value",
+		},
+		// Conditional expansion: {key:+text}
+		{
+			name:    "conditional - key set and non-empty",
+			command: "cmd {flag:+--verbose}",
+			ctx: Context{
+				Env: map[string]string{"flag": "1"},
+			},
+			expected: "cmd --verbose",
+		},
+		{
+			name:    "conditional - key not set",
+			command: "cmd {flag:+--verbose}",
+			ctx: Context{
+				Env: map[string]string{},
+			},
+			expected: "cmd ",
+		},
+		{
+			name:    "conditional - nil env",
+			command: "cmd {flag:+--verbose}",
+			ctx: Context{
+				Env: nil,
+			},
+			expected: "cmd ",
+		},
+		{
+			name:    "conditional - key set to empty string",
+			command: "cmd {flag:+--verbose}",
+			ctx: Context{
+				Env: map[string]string{"flag": ""},
+			},
+			expected: "cmd ",
+		},
+		{
+			name:    "conditional - long flag text",
+			command: "cmd {skip:+--dangerously-skip-permissions}",
+			ctx: Context{
+				Env: map[string]string{"skip": "yes"},
+			},
+			expected: "cmd --dangerously-skip-permissions",
+		},
+		{
+			name:    "conditional - empty text",
+			command: "cmd {flag:+}",
+			ctx: Context{
+				Env: map[string]string{"flag": "1"},
+			},
+			expected: "cmd ",
+		},
+		{
+			name:    "conditional and default combined",
+			command: "claude {skip:+--dangerously-skip-permissions} -p {prompt:-help}",
+			ctx: Context{
+				Env: map[string]string{"skip": "1", "prompt": "do thing"},
+			},
+			expected: "claude --dangerously-skip-permissions -p do thing",
+		},
+		{
+			name:    "conditional not set and default used",
+			command: "claude {skip:+--dangerously-skip-permissions} -p {prompt:-help}",
+			ctx: Context{
+				Env: map[string]string{},
+			},
+			expected: "claude  -p help",
+		},
+		{
+			name:    "conditional with static placeholders",
+			command: "cd {worktree-dir} && claude {skip:+--dangerously-skip-permissions}",
+			ctx: Context{
+				WorktreeDir: "/home/user/wt",
+				Env:         map[string]string{"skip": "1"},
+			},
+			expected: "cd /home/user/wt && claude --dangerously-skip-permissions",
+		},
+		{
+			name:    "multiple conditionals - partial match",
+			command: "cmd {a:+--flag-a} {b:+--flag-b}",
+			ctx: Context{
+				Env: map[string]string{"a": "1"},
+			},
+			expected: "cmd --flag-a ",
+		},
+		{
+			name:    "conditional with bare key boolean",
+			command: "claude {skip:+--dangerously-skip-permissions}",
+			ctx: Context{
+				Env: map[string]string{"skip": "true"},
+			},
+			expected: "claude --dangerously-skip-permissions",
 		},
 	}
 
