@@ -632,11 +632,11 @@ func TestRepoRemove_OutputShowsCorrectName(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_BasicMigration tests basic migration from regular repo to bare-in-.git.
+// TestRepoConvertBare_BasicMigration tests basic migration from regular repo to bare-in-.git.
 //
-// Scenario: User runs `wt repo make-bare` in a regular git repo
+// Scenario: User runs `wt repo convert --clone-mode bare` in a regular git repo
 // Expected: Repo is converted to bare-in-.git structure and registered
-func TestRepoMakeBare_BasicMigration(t *testing.T) {
+func TestRepoConvertBare_BasicMigration(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -651,12 +651,12 @@ func TestRepoMakeBare_BasicMigration(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd := newRepoMakeBareCmd()
+	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{repoPath})
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare"})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("make-bare command failed: %v", err)
+		t.Fatalf("convert command failed: %v", err)
 	}
 
 	// Verify structure - .git should be a directory with bare repo
@@ -690,11 +690,11 @@ func TestRepoMakeBare_BasicMigration(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_WithCustomName tests migration with custom display name.
+// TestRepoConvertBare_WithCustomName tests migration with custom display name.
 //
-// Scenario: User runs `wt repo make-bare -n myapp ./repo`
+// Scenario: User runs `wt repo convert --clone-mode bare -n myapp ./repo`
 // Expected: Repo is migrated and registered with custom name
-func TestRepoMakeBare_WithCustomName(t *testing.T) {
+func TestRepoConvertBare_WithCustomName(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -709,12 +709,12 @@ func TestRepoMakeBare_WithCustomName(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd := newRepoMakeBareCmd()
+	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{repoPath, "-n", "custom-name"})
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare", "-n", "custom-name"})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("make-bare command failed: %v", err)
+		t.Fatalf("convert command failed: %v", err)
 	}
 
 	reg, err := registry.Load(regFile)
@@ -727,11 +727,11 @@ func TestRepoMakeBare_WithCustomName(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_WithLabels tests migration with labels.
+// TestRepoConvertBare_WithLabels tests migration with labels.
 //
-// Scenario: User runs `wt repo make-bare -l backend -l api ./repo`
+// Scenario: User runs `wt repo convert --clone-mode bare -l backend -l api ./repo`
 // Expected: Repo is migrated and registered with labels
-func TestRepoMakeBare_WithLabels(t *testing.T) {
+func TestRepoConvertBare_WithLabels(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -746,12 +746,12 @@ func TestRepoMakeBare_WithLabels(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd := newRepoMakeBareCmd()
+	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{repoPath, "-l", "backend", "-l", "api"})
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare", "-l", "backend", "-l", "api"})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("make-bare command failed: %v", err)
+		t.Fatalf("convert command failed: %v", err)
 	}
 
 	reg, err := registry.Load(regFile)
@@ -773,11 +773,11 @@ func TestRepoMakeBare_WithLabels(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_WithWorktreeFormat tests migration with worktree format.
+// TestRepoConvertBare_WithWorktreeFormat tests migration with worktree format.
 //
-// Scenario: User runs `wt repo make-bare -w "./{branch}" ./repo`
+// Scenario: User runs `wt repo convert --clone-mode bare -w "./{branch}" ./repo`
 // Expected: Repo is migrated and registered with worktree format
-func TestRepoMakeBare_WithWorktreeFormat(t *testing.T) {
+func TestRepoConvertBare_WithWorktreeFormat(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -792,12 +792,12 @@ func TestRepoMakeBare_WithWorktreeFormat(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd := newRepoMakeBareCmd()
+	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{repoPath, "-w", "./{branch}"})
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare", "-w", "./{branch}"})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("make-bare command failed: %v", err)
+		t.Fatalf("convert command failed: %v", err)
 	}
 
 	reg, err := registry.Load(regFile)
@@ -810,11 +810,11 @@ func TestRepoMakeBare_WithWorktreeFormat(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_WithSiblingFormat tests migration with sibling worktree format.
+// TestRepoConvertBare_WithSiblingFormat tests migration with sibling worktree format.
 //
-// Scenario: User runs `wt repo make-bare -w "../{repo}-{branch}" ./repo`
+// Scenario: User runs `wt repo convert --clone-mode bare -w "../{repo}-{branch}" ./repo`
 // Expected: Main worktree is created as sibling to repo directory
-func TestRepoMakeBare_WithSiblingFormat(t *testing.T) {
+func TestRepoConvertBare_WithSiblingFormat(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -829,12 +829,12 @@ func TestRepoMakeBare_WithSiblingFormat(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd := newRepoMakeBareCmd()
+	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{repoPath, "-w", "../{repo}-{branch}"})
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare", "-w", "../{repo}-{branch}"})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("make-bare command failed: %v", err)
+		t.Fatalf("convert command failed: %v", err)
 	}
 
 	// Verify main worktree is at sibling location
@@ -851,11 +851,11 @@ func TestRepoMakeBare_WithSiblingFormat(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_SiblingFormatWithExistingWorktrees tests migration with sibling format and existing worktrees.
+// TestRepoConvertBare_SiblingFormatWithExistingWorktrees tests migration with sibling format and existing worktrees.
 //
-// Scenario: User runs `wt repo make-bare -w "../{repo}-{branch}"` on repo with existing worktrees
+// Scenario: User runs `wt repo convert --clone-mode bare -w "../{repo}-{branch}"` on repo with existing worktrees
 // Expected: Existing worktrees are moved to format-based sibling locations
-func TestRepoMakeBare_SiblingFormatWithExistingWorktrees(t *testing.T) {
+func TestRepoConvertBare_SiblingFormatWithExistingWorktrees(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -878,12 +878,12 @@ func TestRepoMakeBare_SiblingFormatWithExistingWorktrees(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd2 := newRepoMakeBareCmd()
+	cmd2 := newRepoConvertCmd()
 	cmd2.SetContext(ctx)
-	cmd2.SetArgs([]string{repoPath, "-w", "../{repo}-{branch}"})
+	cmd2.SetArgs([]string{repoPath, "--clone-mode", "bare", "-w", "../{repo}-{branch}"})
 
 	if err := cmd2.Execute(); err != nil {
-		t.Fatalf("make-bare command failed: %v", err)
+		t.Fatalf("convert command failed: %v", err)
 	}
 
 	// Verify main worktree at sibling location
@@ -907,11 +907,11 @@ func TestRepoMakeBare_SiblingFormatWithExistingWorktrees(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_DryRun tests dry run mode.
+// TestRepoConvertBare_DryRun tests dry run mode.
 //
-// Scenario: User runs `wt repo make-bare --dry-run ./repo`
+// Scenario: User runs `wt repo convert --clone-mode bare --dry-run ./repo`
 // Expected: Shows migration plan without making changes
-func TestRepoMakeBare_DryRun(t *testing.T) {
+func TestRepoConvertBare_DryRun(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -928,12 +928,12 @@ func TestRepoMakeBare_DryRun(t *testing.T) {
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
 	ctx = config.WithWorkDir(ctx, tmpDir)
-	cmd := newRepoMakeBareCmd()
+	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{repoPath, "--dry-run"})
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare", "--dry-run"})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("make-bare command failed: %v", err)
+		t.Fatalf("convert command failed: %v", err)
 	}
 
 	// Verify dry run message in output
@@ -958,11 +958,11 @@ func TestRepoMakeBare_DryRun(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_WithExistingWorktrees tests migration with existing worktrees.
+// TestRepoConvertBare_WithExistingWorktrees tests migration with existing worktrees.
 //
-// Scenario: User runs `wt repo make-bare` on repo with existing worktrees
+// Scenario: User runs `wt repo convert --clone-mode bare` on repo with existing worktrees
 // Expected: Repo is migrated and existing worktrees are moved to format-based paths
-func TestRepoMakeBare_WithExistingWorktrees(t *testing.T) {
+func TestRepoConvertBare_WithExistingWorktrees(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -986,12 +986,12 @@ func TestRepoMakeBare_WithExistingWorktrees(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd2 := newRepoMakeBareCmd()
+	cmd2 := newRepoConvertCmd()
 	cmd2.SetContext(ctx)
-	cmd2.SetArgs([]string{repoPath})
+	cmd2.SetArgs([]string{repoPath, "--clone-mode", "bare"})
 
 	if err := cmd2.Execute(); err != nil {
-		t.Fatalf("make-bare command failed: %v", err)
+		t.Fatalf("convert command failed: %v", err)
 	}
 
 	// Verify main worktree was created
@@ -1016,11 +1016,11 @@ func TestRepoMakeBare_WithExistingWorktrees(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_IsWorktree tests error when path is a worktree.
+// TestRepoConvertBare_IsWorktree tests error when path is a worktree.
 //
-// Scenario: User runs `wt repo make-bare` on a worktree path
+// Scenario: User runs `wt repo convert --clone-mode bare` on a worktree path
 // Expected: Command fails with error about being a worktree
-func TestRepoMakeBare_IsWorktree(t *testing.T) {
+func TestRepoConvertBare_IsWorktree(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -1043,9 +1043,9 @@ func TestRepoMakeBare_IsWorktree(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd2 := newRepoMakeBareCmd()
+	cmd2 := newRepoConvertCmd()
 	cmd2.SetContext(ctx)
-	cmd2.SetArgs([]string{wtPath}) // Try to migrate the worktree, not the main repo
+	cmd2.SetArgs([]string{wtPath, "--clone-mode", "bare"}) // Try to migrate the worktree, not the main repo
 
 	err := cmd2.Execute()
 	if err == nil {
@@ -1057,11 +1057,11 @@ func TestRepoMakeBare_IsWorktree(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_AlreadyBare tests error when repo is already bare-in-.git.
+// TestRepoConvertBare_AlreadyBare tests error when repo is already bare-in-.git.
 //
-// Scenario: User runs `wt repo make-bare` on already migrated repo
+// Scenario: User runs `wt repo convert --clone-mode bare` on already migrated repo
 // Expected: Command fails with error
-func TestRepoMakeBare_AlreadyBare(t *testing.T) {
+func TestRepoConvertBare_AlreadyBare(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -1076,9 +1076,9 @@ func TestRepoMakeBare_AlreadyBare(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd := newRepoMakeBareCmd()
+	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{repoPath})
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare"})
 
 	err := cmd.Execute()
 	if err == nil {
@@ -1086,11 +1086,11 @@ func TestRepoMakeBare_AlreadyBare(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_NotGitRepo tests error when path is not a git repo.
+// TestRepoConvertBare_NotGitRepo tests error when path is not a git repo.
 //
-// Scenario: User runs `wt repo make-bare` on non-git directory
+// Scenario: User runs `wt repo convert --clone-mode bare` on non-git directory
 // Expected: Command fails with error
-func TestRepoMakeBare_NotGitRepo(t *testing.T) {
+func TestRepoConvertBare_NotGitRepo(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -1108,20 +1108,20 @@ func TestRepoMakeBare_NotGitRepo(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd := newRepoMakeBareCmd()
+	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{notGitPath})
+	cmd.SetArgs([]string{notGitPath, "--clone-mode", "bare"})
 
 	if err := cmd.Execute(); err == nil {
 		t.Error("expected error for non-git directory")
 	}
 }
 
-// TestRepoMakeBare_HasSubmodules tests error when repo has submodules.
+// TestRepoConvertBare_HasSubmodules tests error when repo has submodules.
 //
-// Scenario: User runs `wt repo make-bare` on repo with submodules
+// Scenario: User runs `wt repo convert --clone-mode bare` on repo with submodules
 // Expected: Command fails with error about submodules
-func TestRepoMakeBare_HasSubmodules(t *testing.T) {
+func TestRepoConvertBare_HasSubmodules(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -1136,9 +1136,9 @@ func TestRepoMakeBare_HasSubmodules(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd := newRepoMakeBareCmd()
+	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{repoPath})
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare"})
 
 	err := cmd.Execute()
 	if err == nil {
@@ -1150,11 +1150,11 @@ func TestRepoMakeBare_HasSubmodules(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_AlreadyRegistered tests migration of already registered repo.
+// TestRepoConvertBare_AlreadyRegistered tests migration of already registered repo.
 //
-// Scenario: User runs `wt repo make-bare` on repo already in registry
+// Scenario: User runs `wt repo convert --clone-mode bare` on repo already in registry
 // Expected: Repo is migrated, registration is skipped
-func TestRepoMakeBare_AlreadyRegistered(t *testing.T) {
+func TestRepoConvertBare_AlreadyRegistered(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -1182,12 +1182,12 @@ func TestRepoMakeBare_AlreadyRegistered(t *testing.T) {
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
 	ctx = config.WithWorkDir(ctx, tmpDir)
-	cmd := newRepoMakeBareCmd()
+	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{repoPath})
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare"})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("make-bare command failed: %v", err)
+		t.Fatalf("convert command failed: %v", err)
 	}
 
 	// Verify migration completed
@@ -1212,11 +1212,11 @@ func TestRepoMakeBare_AlreadyRegistered(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_NameConflict tests error when name conflicts with existing repo.
+// TestRepoConvertBare_NameConflict tests error when name conflicts with existing repo.
 //
-// Scenario: User runs `wt repo make-bare` with name that already exists
+// Scenario: User runs `wt repo convert --clone-mode bare` with name that already exists
 // Expected: Command fails with name conflict error
-func TestRepoMakeBare_NameConflict(t *testing.T) {
+func TestRepoConvertBare_NameConflict(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -1242,9 +1242,9 @@ func TestRepoMakeBare_NameConflict(t *testing.T) {
 	}
 
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd := newRepoMakeBareCmd()
+	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{repoPath})
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare"})
 
 	err := cmd.Execute()
 	if err == nil {
@@ -1256,11 +1256,11 @@ func TestRepoMakeBare_NameConflict(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_ByPath tests migration when providing explicit path argument.
+// TestRepoConvertBare_ByPath tests migration when providing explicit path argument.
 //
-// Scenario: User runs `wt repo make-bare ./myrepo` from outside the repo
+// Scenario: User runs `wt repo convert --clone-mode bare ./myrepo` from outside the repo
 // Expected: Repo at path is migrated and registered
-func TestRepoMakeBare_ByPath(t *testing.T) {
+func TestRepoConvertBare_ByPath(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -1280,12 +1280,12 @@ func TestRepoMakeBare_ByPath(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd := newRepoMakeBareCmd()
+	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{repoPath})
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare"})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("make-bare command failed: %v", err)
+		t.Fatalf("convert command failed: %v", err)
 	}
 
 	// Verify migration completed
@@ -1410,12 +1410,12 @@ func TestRepoRemove_ByPath(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_WorktreeMetadataNameMismatch tests migration when worktree folder name
+// TestRepoConvertBare_WorktreeMetadataNameMismatch tests migration when worktree folder name
 // differs from its metadata directory name in .git/worktrees/.
 //
 // Scenario: User has a worktree created with a different folder name than its metadata dir
 // Expected: Migration moves worktree to format-based path regardless of folder name
-func TestRepoMakeBare_WorktreeMetadataNameMismatch(t *testing.T) {
+func TestRepoConvertBare_WorktreeMetadataNameMismatch(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -1462,12 +1462,12 @@ func TestRepoMakeBare_WorktreeMetadataNameMismatch(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	cmd2 := newRepoMakeBareCmd()
+	cmd2 := newRepoConvertCmd()
 	cmd2.SetContext(ctx)
-	cmd2.SetArgs([]string{repoPath})
+	cmd2.SetArgs([]string{repoPath, "--clone-mode", "bare"})
 
 	if err := cmd2.Execute(); err != nil {
-		t.Fatalf("make-bare command failed: %v", err)
+		t.Fatalf("convert command failed: %v", err)
 	}
 
 	// Verify main worktree was created
@@ -1486,11 +1486,11 @@ func TestRepoMakeBare_WorktreeMetadataNameMismatch(t *testing.T) {
 	}
 }
 
-// TestRepoMakeBare_PreservesUpstream tests that upstream tracking is preserved during migration.
+// TestRepoConvertBare_PreservesUpstream tests that upstream tracking is preserved during migration.
 //
-// Scenario: User runs `wt repo make-bare` on repo with upstream tracking configured
+// Scenario: User runs `wt repo convert --clone-mode bare` on repo with upstream tracking configured
 // Expected: Main branch and worktrees retain their upstream tracking after migration
-func TestRepoMakeBare_PreservesUpstream(t *testing.T) {
+func TestRepoConvertBare_PreservesUpstream(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -1632,14 +1632,14 @@ func TestRepoMakeBare_PreservesUpstream(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 
-	// Run make-bare
+	// Run convert to bare
 	ctx := testContextWithConfig(t, cfg, tmpDir)
-	makeBareCmd := newRepoMakeBareCmd()
-	makeBareCmd.SetContext(ctx)
-	makeBareCmd.SetArgs([]string{repoPath})
+	convertCmd := newRepoConvertCmd()
+	convertCmd.SetContext(ctx)
+	convertCmd.SetArgs([]string{repoPath, "--clone-mode", "bare"})
 
-	if err := makeBareCmd.Execute(); err != nil {
-		t.Fatalf("make-bare command failed: %v", err)
+	if err := convertCmd.Execute(); err != nil {
+		t.Fatalf("convert command failed: %v", err)
 	}
 
 	// Verify main worktree was created
@@ -1675,5 +1675,221 @@ func TestRepoMakeBare_PreservesUpstream(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "refs/heads/feature") {
 		t.Errorf("expected feature upstream to be refs/heads/feature, got %s", out)
+	}
+}
+
+// TestRepoConvertRegular_BasicConversion tests basic conversion from bare to regular.
+//
+// Scenario: User runs `wt repo convert --clone-mode regular` on a bare-in-.git repo
+// Expected: Repo is converted to regular structure with files at root
+func TestRepoConvertRegular_BasicConversion(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Create a bare-in-.git repo via convert --clone-mode bare
+	repoPath := setupTestRepo(t, tmpDir, "convert-regular")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	// First convert to bare
+	bareCmd := newRepoConvertCmd()
+	bareCmd.SetContext(ctx)
+	bareCmd.SetArgs([]string{repoPath, "--clone-mode", "bare"})
+	if err := bareCmd.Execute(); err != nil {
+		t.Fatalf("convert to bare failed: %v", err)
+	}
+
+	// Verify it's bare
+	mainWT := filepath.Join(repoPath, "main")
+	if _, err := os.Stat(mainWT); os.IsNotExist(err) {
+		t.Fatal("main worktree should exist after bare conversion")
+	}
+
+	// Now convert back to regular
+	ctx = testContextWithConfig(t, cfg, tmpDir)
+	regCmd := newRepoConvertCmd()
+	regCmd.SetContext(ctx)
+	regCmd.SetArgs([]string{repoPath, "--clone-mode", "regular"})
+	if err := regCmd.Execute(); err != nil {
+		t.Fatalf("convert to regular failed: %v", err)
+	}
+
+	// Verify files are at repo root
+	if _, err := os.Stat(filepath.Join(repoPath, "README.md")); os.IsNotExist(err) {
+		t.Error("README.md should exist at repo root")
+	}
+
+	// Verify old main/ worktree dir is gone
+	if _, err := os.Stat(mainWT); !os.IsNotExist(err) {
+		t.Error("old main/ worktree dir should not exist after regular conversion")
+	}
+
+	// Verify git status works
+	gitCmd := exec.Command("git", "status")
+	gitCmd.Dir = repoPath
+	if out, err := gitCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git status failed: %v\n%s", err, out)
+	}
+
+	// Verify branch is main
+	gitCmd = exec.Command("git", "branch", "--show-current")
+	gitCmd.Dir = repoPath
+	out, err := gitCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git branch failed: %v\n%s", err, out)
+	}
+	if strings.TrimSpace(string(out)) != "main" {
+		t.Errorf("branch = %q, want main", strings.TrimSpace(string(out)))
+	}
+}
+
+// TestRepoConvertRegular_AlreadyRegular tests error when repo is already regular.
+//
+// Scenario: User runs `wt repo convert --clone-mode regular` on regular repo
+// Expected: Command fails with error
+func TestRepoConvertRegular_AlreadyRegular(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "already-regular")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+	cmd := newRepoConvertCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "regular"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Error("expected error for already regular repo")
+	}
+	if !strings.Contains(err.Error(), "already using regular") {
+		t.Errorf("expected error about already regular, got: %v", err)
+	}
+}
+
+// TestRepoConvertRegular_RoundTrip tests bare→regular→bare round-trip.
+//
+// Scenario: User converts regular→bare→regular→bare
+// Expected: Each conversion succeeds and repo structure is correct
+func TestRepoConvertRegular_RoundTrip(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "roundtrip")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	// Step 1: regular → bare
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+	cmd := newRepoConvertCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("convert to bare (1) failed: %v", err)
+	}
+
+	// Step 2: bare → regular
+	ctx = testContextWithConfig(t, cfg, tmpDir)
+	cmd = newRepoConvertCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "regular"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("convert to regular failed: %v", err)
+	}
+
+	// Step 3: regular → bare again
+	ctx = testContextWithConfig(t, cfg, tmpDir)
+	cmd = newRepoConvertCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("convert to bare (2) failed: %v", err)
+	}
+
+	// Verify final state: bare with main worktree
+	mainWT := filepath.Join(repoPath, "main")
+	if _, err := os.Stat(mainWT); os.IsNotExist(err) {
+		t.Error("main worktree should exist after second bare conversion")
+	}
+
+	// Verify git status works in main worktree
+	gitCmd := exec.Command("git", "status")
+	gitCmd.Dir = mainWT
+	if out, err := gitCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git status failed: %v\n%s", err, out)
+	}
+}
+
+// TestRepoConvertRegular_DryRun tests dry run for bare→regular conversion.
+//
+// Scenario: User runs `wt repo convert --clone-mode regular --dry-run`
+// Expected: Shows plan without making changes
+func TestRepoConvertRegular_DryRun(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "dryrun-regular")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	// First convert to bare
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+	bareCmd := newRepoConvertCmd()
+	bareCmd.SetContext(ctx)
+	bareCmd.SetArgs([]string{repoPath, "--clone-mode", "bare"})
+	if err := bareCmd.Execute(); err != nil {
+		t.Fatalf("convert to bare failed: %v", err)
+	}
+
+	// Now try dry run of regular conversion
+	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, tmpDir)
+	regCmd := newRepoConvertCmd()
+	regCmd.SetContext(ctx)
+	regCmd.SetArgs([]string{repoPath, "--clone-mode", "regular", "--dry-run"})
+	if err := regCmd.Execute(); err != nil {
+		t.Fatalf("convert dry run failed: %v", err)
+	}
+
+	// Verify dry run message
+	if !strings.Contains(out.String(), "dry run") {
+		t.Error("expected dry run message in output")
+	}
+
+	// Verify the main worktree still exists (no conversion happened)
+	mainWT := filepath.Join(repoPath, "main")
+	if _, err := os.Stat(mainWT); os.IsNotExist(err) {
+		t.Error("main worktree should still exist after dry run")
 	}
 }
