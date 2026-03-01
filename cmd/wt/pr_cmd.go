@@ -305,7 +305,7 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
 	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
 	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-checkout hook")
-	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable KEY=VALUE")
+	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
 
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
@@ -611,7 +611,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 	cmd.Flags().BoolVarP(&keep, "keep", "k", false, "Keep worktree after merge")
 	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
 	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-merge hook")
-	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable KEY=VALUE")
+	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
 
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)

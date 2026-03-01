@@ -516,8 +516,9 @@ worktree_format = "{repo}-{branch}"
 #   {repo}         - folder name of git repo
 #   {origin}       - repo name from git origin (falls back to {repo})
 #   {trigger}      - command that triggered the hook (checkout, pr, prune, merge)
-#   {key}          - custom variable passed via --arg key=value
+#   {key}          - custom variable passed via --arg key=value (or --arg key)
 #   {key:-def}     - custom variable with default value if not provided
+#   {key:+text}    - conditional: includes text only if key is set and non-empty
 #
 # === Editor Examples ===
 #
@@ -545,6 +546,12 @@ worktree_format = "{repo}-{branch}"
 # command = "cd {worktree-dir} && claude -p {prompt}"
 # description = "Run Claude with a task"
 # Run with: wt hook claude-task --arg prompt="implement feature X"
+#
+# Claude Code with conditional flags (use -a skip to skip permissions)
+# [hooks.claude-auto]
+# command = "cd {worktree-dir} && claude {skip:+--dangerously-skip-permissions} -p {prompt:-help}"
+# description = "Run Claude with optional permission skip"
+# Run with: wt hook claude-auto -a skip -a prompt="implement feature X"
 #
 # Claude Code in new terminal tab (kitty example)
 # [hooks.claude-tab]

@@ -161,14 +161,20 @@ func runHook(goCtx context.Context, name string, hook *config.Hook, ctx Context,
 	return nil
 }
 
-// ParseEnv parses a slice of "key=value" strings into a map.
-// Returns an error if any entry doesn't contain "=".
+// ParseEnv parses a slice of "key=value" or bare "key" strings into a map.
+// Bare keys without "=" are treated as boolean flags with value "true".
+// Returns an error if a key is empty.
 func ParseEnv(envSlice []string) (map[string]string, error) {
 	result := make(map[string]string)
 	for _, e := range envSlice {
 		key, value, ok := strings.Cut(e, "=")
 		if !ok {
-			return nil, fmt.Errorf("invalid env format %q: expected KEY=VALUE", e)
+			// Bare key without "=" - treat as boolean flag
+			if e == "" {
+				return nil, fmt.Errorf("invalid env format %q: key cannot be empty", e)
+			}
+			result[e] = "true"
+			continue
 		}
 		if key == "" {
 			return nil, fmt.Errorf("invalid env format %q: key cannot be empty", e)
@@ -221,8 +227,9 @@ func ParseEnvWithStdin(envSlice []string) (map[string]string, error) {
 	return ParseEnvWithCachedStdin(envSlice, stdinContent)
 }
 
-// ParseEnvWithCachedStdin parses a slice of "key=value" strings into a map,
+// ParseEnvWithCachedStdin parses a slice of "key=value" or bare "key" strings into a map,
 // using pre-read stdin content for any "-" values.
+// Bare keys without "=" are treated as boolean flags with value "true".
 // Returns an error if stdin is needed but stdinContent is empty.
 func ParseEnvWithCachedStdin(envSlice []string, stdinContent string) (map[string]string, error) {
 	result := make(map[string]string)
@@ -230,7 +237,12 @@ func ParseEnvWithCachedStdin(envSlice []string, stdinContent string) (map[string
 	for _, e := range envSlice {
 		key, value, ok := strings.Cut(e, "=")
 		if !ok {
-			return nil, fmt.Errorf("invalid env format %q: expected KEY=VALUE", e)
+			// Bare key without "=" - treat as boolean flag
+			if e == "" {
+				return nil, fmt.Errorf("invalid env format %q: key cannot be empty", e)
+			}
+			result[e] = "true"
+			continue
 		}
 		if key == "" {
 			return nil, fmt.Errorf("invalid env format %q: key cannot be empty", e)
@@ -248,19 +260,21 @@ func ParseEnvWithCachedStdin(envSlice []string, stdinContent string) (map[string
 	return result, nil
 }
 
-// envPlaceholderRegex matches {key} or {key:-default} patterns for env variables.
+// envPlaceholderRegex matches {key}, {key:-default}, and {key:+text} patterns for env variables.
 // This is used after static replacements to expand custom env placeholders.
 // Supported formats:
 //   - {key}           - value from --arg key=value
 //   - {key:-default}  - value with default if key not set
-var envPlaceholderRegex = regexp.MustCompile(`\{([a-zA-Z_][a-zA-Z0-9_]*)(?::-([^}]*))?\}`)
+//   - {key:+text}     - conditional: expands to text if key is set and non-empty
+var envPlaceholderRegex = regexp.MustCompile(`\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([-+])([^}]*))?\}`)
 
 // SubstitutePlaceholders replaces {placeholder} with values from Context.
 //
 // Static placeholders: {worktree-dir}, {repo-dir}, {branch}, {repo}, {origin}, {trigger}
-// Env placeholders (from Context.Env via --arg key=value):
+// Env placeholders (from Context.Env via --arg key=value or --arg key):
 //   - {key}           - value from --arg key=value
 //   - {key:-default}  - value with default if key not set
+//   - {key:+text}     - expands to text if key is set and non-empty, otherwise empty
 func SubstitutePlaceholders(command string, ctx Context) string {
 	// First, handle static replacements
 	replacements := map[string]string{
@@ -277,25 +291,42 @@ func SubstitutePlaceholders(command string, ctx Context) string {
 		result = strings.ReplaceAll(result, placeholder, value)
 	}
 
-	// Then, handle env placeholders with optional defaults: {key} or {key:-default}
+	// Then, handle env placeholders: {key}, {key:-default}, {key:+text}
 	result = envPlaceholderRegex.ReplaceAllStringFunc(result, func(match string) string {
-		// Parse the match to extract key and optional default
 		submatch := envPlaceholderRegex.FindStringSubmatch(match)
 		if submatch == nil {
 			return match
 		}
 		key := submatch[1]
-		defaultVal := submatch[2] // empty string if no default specified
+		operator := submatch[2] // "-", "+", or "" (no operator)
+		operand := submatch[3]  // text after the operator
 
 		// Look up value in env map
+		val, isSet := "", false
 		if ctx.Env != nil {
-			if val, ok := ctx.Env[key]; ok {
-				return val
-			}
+			val, isSet = ctx.Env[key]
 		}
 
-		// Use default if specified, otherwise empty string
-		return defaultVal
+		switch operator {
+		case "+":
+			// {key:+text} - if key is set and non-empty, expand to text; otherwise empty
+			if isSet && val != "" {
+				return operand
+			}
+			return ""
+		case "-":
+			// {key:-default} - if key is set, use value; otherwise use default
+			if isSet {
+				return val
+			}
+			return operand
+		default:
+			// {key} - if key is set, use value; otherwise empty string
+			if isSet {
+				return val
+			}
+			return ""
+		}
 	})
 
 	return result

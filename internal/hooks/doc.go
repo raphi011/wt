@@ -32,10 +32,11 @@
 //   - {origin}: Repository name from git origin (falls back to {repo})
 //   - {trigger}: Command that triggered the hook (checkout, pr, prune, merge)
 //
-// Custom variables via --arg key=value:
+// Custom variables via --arg key=value or --arg key (bare boolean):
 //
 //   - {key}: Value from --arg key=value
 //   - {key:-default}: Value with fallback if not provided
+//   - {key:+text}: Expands to text if key is set and non-empty, otherwise empty
 //
 // # Execution Context
 //
