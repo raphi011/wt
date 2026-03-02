@@ -133,7 +133,10 @@ func TestGetCommitMeta(t *testing.T) {
 		}
 		sha := strings.TrimSpace(string(output))
 
-		metas := GetCommitMeta(ctx, repoPath, []string{sha})
+		metas, err := GetCommitMeta(ctx, repoPath, []string{sha})
+		if err != nil {
+			t.Fatalf("GetCommitMeta failed: %v", err)
+		}
 		if metas == nil {
 			t.Fatal("expected non-nil map")
 		}
@@ -154,12 +157,18 @@ func TestGetCommitMeta(t *testing.T) {
 		repoPath := setupTestRepo(t)
 		ctx := context.Background()
 
-		metas := GetCommitMeta(ctx, repoPath, nil)
+		metas, err := GetCommitMeta(ctx, repoPath, nil)
+		if err != nil {
+			t.Fatalf("GetCommitMeta(nil) failed: %v", err)
+		}
 		if metas != nil {
 			t.Errorf("expected nil for empty input, got %v", metas)
 		}
 
-		metas = GetCommitMeta(ctx, repoPath, []string{})
+		metas, err = GetCommitMeta(ctx, repoPath, []string{})
+		if err != nil {
+			t.Fatalf("GetCommitMeta([]) failed: %v", err)
+		}
 		if metas != nil {
 			t.Errorf("expected nil for empty slice, got %v", metas)
 		}
@@ -170,7 +179,10 @@ func TestGetCommitMeta(t *testing.T) {
 		repoPath := setupTestRepo(t)
 		ctx := context.Background()
 
-		metas := GetCommitMeta(ctx, repoPath, []string{"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"})
+		metas, err := GetCommitMeta(ctx, repoPath, []string{"deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"})
+		if err == nil {
+			t.Error("expected error for invalid SHA")
+		}
 		if len(metas) != 0 {
 			t.Errorf("expected empty map for invalid SHA, got %v", metas)
 		}
@@ -203,7 +215,10 @@ func TestGetCommitMeta(t *testing.T) {
 			t.Fatalf("expected at least 2 SHAs, got %d", len(shas))
 		}
 
-		metas := GetCommitMeta(ctx, repoPath, shas)
+		metas, err := GetCommitMeta(ctx, repoPath, shas)
+		if err != nil {
+			t.Fatalf("GetCommitMeta failed: %v", err)
+		}
 		for _, sha := range shas {
 			meta, ok := metas[sha]
 			if !ok {

@@ -1,10 +1,11 @@
 // Package config handles loading and validation of wt configuration.
 //
 // Configuration is read from ~/.wt/config.toml with environment
-// variable overrides for directory settings.
+// variable overrides for select settings.
 //
 // # Configuration Sources (highest priority first)
 //
+//   - Environment variables (WT_THEME, WT_THEME_MODE)
 //   - Config file settings
 //   - Default values
 //
@@ -38,9 +39,4 @@
 //	type = "gitlab"
 //
 // The [hosts] section maps custom domains to forge types for self-hosted instances.
-//
-// # Path Validation
-//
-// Directory paths must be absolute or start with ~ (no relative paths like "."
-// or "..") to avoid confusion about the working directory.
 package config

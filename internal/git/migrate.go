@@ -57,8 +57,9 @@ type WorktreeMigration struct {
 
 // MigrateToBareResult contains the result of a successful migration
 type MigrateToBareResult struct {
-	MainWorktreePath string // Path to the new main worktree (e.g., repo/main)
-	GitDir           string // Path to the .git directory
+	MainWorktreePath string   // Path to the new main worktree (e.g., repo/main)
+	GitDir           string   // Path to the .git directory
+	Warnings         []string // Non-fatal issues encountered during migration
 }
 
 // ValidateMigration checks if a repo can be migrated and returns the migration plan.
@@ -223,12 +224,15 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 		return nil, fmt.Errorf("set core.bare: %w", err)
 	}
 
-	// Set fetch refspec (only if origin exists)
+	// Set fetch refspec (only if origin exists) — fatal because a bare repo
+	// without proper refspec cannot fetch, breaking downstream workflows.
 	if HasRemote(ctx, oldGitDir, "origin") {
 		if err := runGit(ctx, oldGitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to set fetch refspec: %v\n", err)
+			return nil, fmt.Errorf("set fetch refspec (repo at %s may need manual fix: run 'git config remote.origin.fetch +refs/heads/*:refs/remotes/origin/*'): %w", oldGitDir, err)
 		}
 	}
+
+	var warnings []string
 
 	// Phase 4: Create main worktree directory (using computed path from plan)
 	mainWorktreePath := plan.MainWorktreePath
@@ -367,12 +371,11 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 		return nil, fmt.Errorf("worktree repair failed after conversion (run 'git worktree repair' manually from %s): %w", oldGitDir, err)
 	}
 
-	// Phase 10: Restore upstream tracking
-	// Only restore if origin remote exists and the remote branch exists
+	// Phase 10: Restore upstream tracking (best-effort, non-fatal)
 	if plan.MainBranchUpstream != "" && HasRemote(ctx, oldGitDir, "origin") {
 		if RemoteBranchExists(ctx, mainWorktreePath, plan.MainBranchUpstream) {
 			if err := SetUpstreamBranch(ctx, mainWorktreePath, plan.CurrentBranch, plan.MainBranchUpstream); err != nil {
-				fmt.Fprintf(os.Stderr, "Note: could not restore upstream tracking for %s: %v\n", plan.CurrentBranch, err)
+				warnings = append(warnings, fmt.Sprintf("could not restore upstream tracking for %s: %v", plan.CurrentBranch, err))
 			}
 		}
 	}
@@ -381,7 +384,7 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 		if wt.Upstream != "" {
 			if RemoteBranchExists(ctx, wt.NewPath, wt.Upstream) {
 				if err := SetUpstreamBranch(ctx, wt.NewPath, wt.Branch, wt.Upstream); err != nil {
-					fmt.Fprintf(os.Stderr, "Note: could not restore upstream tracking for %s: %v\n", wt.Branch, err)
+					warnings = append(warnings, fmt.Sprintf("could not restore upstream tracking for %s: %v", wt.Branch, err))
 				}
 			}
 		}
@@ -390,6 +393,7 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 	return &MigrateToBareResult{
 		MainWorktreePath: mainWorktreePath,
 		GitDir:           oldGitDir,
+		Warnings:         warnings,
 	}, nil
 }
 
@@ -445,18 +449,20 @@ func updateWorktreeLinks(_ context.Context, repoPath string, wt WorktreeMigratio
 
 // RegularMigrationPlan describes what will be done during bare→regular migration
 type RegularMigrationPlan struct {
-	RepoPath        string              // Repository root (contains .git/)
-	GitDir          string              // .git directory (bare repo)
-	DefaultBranch   string              // Branch to move to repo root
-	DefaultBranchWT string              // Current worktree path for default branch
-	DefaultUpstream string              // Upstream tracking for default branch
-	WorktreesToFix  []WorktreeMigration // Other worktrees to reformat
+	RepoPath          string              // Repository root (contains .git/)
+	GitDir            string              // .git directory (bare repo)
+	DefaultBranch     string              // Branch to move to repo root
+	DefaultBranchWT   string              // Current worktree path for default branch
+	DefaultUpstream   string              // Upstream tracking for default branch
+	WorktreesToFix    []WorktreeMigration // Other worktrees to reformat
+	DetachedWorktrees []string            // Paths of detached HEAD worktrees (skipped during migration)
 }
 
 // MigrateToRegularResult contains the result of a successful bare→regular migration
 type MigrateToRegularResult struct {
-	RepoPath string // Repo root (now has working tree)
-	GitDir   string // .git directory
+	RepoPath string   // Repo root (now has working tree)
+	GitDir   string   // .git directory
+	Warnings []string // Non-fatal issues encountered during migration
 }
 
 // ValidateMigrationToRegular checks if a bare repo can be converted to regular and returns the plan.
@@ -565,8 +571,9 @@ func ValidateMigrationToRegular(ctx context.Context, repoPath string, opts Migra
 
 	// Plan reformatting for other worktrees
 	for _, wt := range otherWTs {
-		// Skip detached HEAD worktrees
+		// Record detached HEAD worktrees (cannot be migrated by branch name)
 		if wt.Branch == "(detached)" {
+			plan.DetachedWorktrees = append(plan.DetachedWorktrees, wt.Path)
 			continue
 		}
 
@@ -656,12 +663,13 @@ func MigrateToRegular(ctx context.Context, plan *RegularMigrationPlan) (*Migrate
 
 	// Phase 5: Remove the now-empty default branch worktree directory
 	// (It may still have the .git file, remove it first)
+	var warnings []string
 	if err := os.Remove(filepath.Join(plan.DefaultBranchWT, ".git")); err != nil && !os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Note: could not remove old .git file in %s: %v\n", plan.DefaultBranchWT, err)
+		warnings = append(warnings, fmt.Sprintf("could not remove old .git file in %s: %v", plan.DefaultBranchWT, err))
 	}
 	if err := os.Remove(plan.DefaultBranchWT); err != nil && !os.IsNotExist(err) {
 		// Not fatal — directory might have been inside repo root
-		fmt.Fprintf(os.Stderr, "Note: could not remove old worktree dir %s: %v\n", plan.DefaultBranchWT, err)
+		warnings = append(warnings, fmt.Sprintf("could not remove old worktree dir %s: %v", plan.DefaultBranchWT, err))
 	}
 
 	// NOTE: From this point on, files have been moved and metadata removed.
@@ -695,7 +703,7 @@ func MigrateToRegular(ctx context.Context, plan *RegularMigrationPlan) (*Migrate
 	if plan.DefaultUpstream != "" && HasRemote(ctx, gitDir, "origin") {
 		if RemoteBranchExists(ctx, repoPath, plan.DefaultUpstream) {
 			if err := SetUpstreamBranch(ctx, repoPath, plan.DefaultBranch, plan.DefaultUpstream); err != nil {
-				fmt.Fprintf(os.Stderr, "Note: could not restore upstream tracking for %s: %v\n", plan.DefaultBranch, err)
+				warnings = append(warnings, fmt.Sprintf("could not restore upstream tracking for %s: %v", plan.DefaultBranch, err))
 			}
 		}
 	}
@@ -704,7 +712,7 @@ func MigrateToRegular(ctx context.Context, plan *RegularMigrationPlan) (*Migrate
 		if wt.Upstream != "" {
 			if RemoteBranchExists(ctx, wt.NewPath, wt.Upstream) {
 				if err := SetUpstreamBranch(ctx, wt.NewPath, wt.Branch, wt.Upstream); err != nil {
-					fmt.Fprintf(os.Stderr, "Note: could not restore upstream tracking for %s: %v\n", wt.Branch, err)
+					warnings = append(warnings, fmt.Sprintf("could not restore upstream tracking for %s: %v", wt.Branch, err))
 				}
 			}
 		}
@@ -712,11 +720,12 @@ func MigrateToRegular(ctx context.Context, plan *RegularMigrationPlan) (*Migrate
 
 	// Phase 11: Prune stale worktree refs (best-effort, non-fatal)
 	if err := runGit(ctx, repoPath, "worktree", "prune"); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: could not prune stale worktree refs: %v\nRun 'git worktree prune' manually from %s\n", err, repoPath)
+		warnings = append(warnings, fmt.Sprintf("could not prune stale worktree refs: %v (run 'git worktree prune' manually from %s)", err, repoPath))
 	}
 
 	return &MigrateToRegularResult{
 		RepoPath: repoPath,
 		GitDir:   gitDir,
+		Warnings: warnings,
 	}, nil
 }

@@ -81,7 +81,12 @@ func loadWorktreesForRepo(ctx context.Context, repo RepoRef) ([]Worktree, *LoadW
 			shas = append(shas, wti.CommitHash)
 		}
 	}
-	commitMetas := GetCommitMeta(ctx, repo.Path, shas)
+	commitMetas, err := GetCommitMeta(ctx, repo.Path, shas)
+	if err != nil {
+		// Non-fatal: worktrees will render with empty age columns.
+		// We still have the (empty) map, so the loop below works.
+		commitMetas = make(map[string]CommitMeta)
+	}
 
 	worktrees := make([]Worktree, 0, len(wtInfos))
 	for _, wti := range wtInfos {
