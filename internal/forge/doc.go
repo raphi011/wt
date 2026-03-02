@@ -14,8 +14,8 @@
 //
 // # Platform Detection
 //
-// Use [Detect] or [DetectFromRepo] to automatically determine the forge from
-// a repository's origin URL. Detection checks:
+// Use [Detect] to automatically determine the forge from a repository's origin URL.
+// Detection checks:
 //
 //  1. Custom host mappings from config (for self-hosted instances)
 //  2. URL patterns (gitlab.com, gitlab.* domains)
@@ -23,8 +23,8 @@
 //
 // # Usage
 //
-//	forge := forge.DetectFromRepo(repoPath, hostMap)
-//	pr, err := forge.GetPRForBranch(originURL, branch)
+//	f := forge.Detect(originURL, hostMap, forgeConfig)
+//	pr, err := f.GetPRForBranch(originURL, branch)
 //
 // # Platform Differences
 //

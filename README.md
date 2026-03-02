@@ -372,8 +372,6 @@ auto_fetch = true
 [prune]
 # Delete local branches after worktree removal (default: false)
 # delete_local_branches = false
-
-[list]
 # Days before a worktree's commit age is highlighted as stale (default: 14, 0 = disabled)
 # stale_days = 14
 ```

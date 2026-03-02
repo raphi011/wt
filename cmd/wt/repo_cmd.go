@@ -716,12 +716,27 @@ The conversion:
 
 			l.Debug("validating conversion", "path", absPath, "format", effectiveFormat, "target", cloneMode)
 
+			p := convertParams{
+				ctx:               ctx,
+				out:               out,
+				l:                 l,
+				cfg:               cfg,
+				reg:               reg,
+				absPath:           absPath,
+				repoName:          repoName,
+				effectiveFormat:   effectiveFormat,
+				worktreeFormat:    worktreeFormat,
+				labels:            labels,
+				dryRun:            dryRun,
+				alreadyRegistered: alreadyRegistered,
+			}
+
 			// Route based on clone-mode
 			switch cloneMode {
 			case "bare":
-				return convertToBare(ctx, out, l, cfg, reg, absPath, repoName, effectiveFormat, worktreeFormat, labels, dryRun, alreadyRegistered)
+				return convertToBare(p)
 			case "regular":
-				return convertToRegular(ctx, out, l, cfg, reg, absPath, repoName, effectiveFormat, worktreeFormat, labels, dryRun, alreadyRegistered)
+				return convertToRegular(p)
 			default:
 				return fmt.Errorf("invalid clone-mode: %s", cloneMode)
 			}
@@ -753,176 +768,172 @@ The conversion:
 	return cmd
 }
 
-func convertToBare(ctx context.Context, out *output.Printer, l *log.Logger, cfg *config.Config, reg *registry.Registry, absPath, repoName, effectiveFormat, worktreeFormat string, labels []string, dryRun, alreadyRegistered bool) error {
-	opts := git.MigrationOptions{
-		WorktreeFormat: effectiveFormat,
-		RepoName:       repoName,
-	}
-	plan, err := git.ValidateMigration(ctx, absPath, opts)
-	if err != nil {
-		return err
-	}
+// convertParams holds the common parameters for convertToBare and convertToRegular.
+type convertParams struct {
+	ctx               context.Context
+	out               *output.Printer
+	l                 *log.Logger
+	cfg               *config.Config
+	reg               *registry.Registry
+	absPath           string
+	repoName          string
+	effectiveFormat   string
+	worktreeFormat    string
+	labels            []string
+	dryRun            bool
+	alreadyRegistered bool
+}
 
-	// Show migration plan
-	out.Printf("Conversion plan for: %s (→ bare)\n\n", absPath)
-	out.Printf("  Current branch: %s\n", plan.CurrentBranch)
-	out.Printf("  Main worktree will be at: %s\n", plan.MainWorktreePath)
-	out.Printf("  Worktree format: %s\n", effectiveFormat)
-
-	if len(plan.WorktreesToFix) > 0 {
-		out.Printf("\n  Existing worktrees:\n")
-		for _, wt := range plan.WorktreesToFix {
-			if wt.NeedsMove {
-				out.Printf("    %s → %s\n", wt.OldPath, wt.NewPath)
-			} else {
-				out.Printf("    %s (links will be updated)\n", wt.OldPath)
-			}
-		}
+// registerAndVerify registers the repo (if not already registered) and lists worktrees for verification.
+func registerAndVerify(p convertParams, warnings []string) error {
+	for _, w := range warnings {
+		p.l.Printf("Warning: %s\n", w)
 	}
 
-	out.Printf("\n  Registry name: %s\n", repoName)
-	if len(labels) > 0 {
-		out.Printf("  Labels: %v\n", labels)
-	}
-
-	if dryRun {
-		out.Printf("\n  (dry run - no changes made)\n")
-		return nil
-	}
-
-	out.Printf("\n")
-
-	l.Debug("performing conversion to bare")
-	result, err := git.MigrateToBare(ctx, plan)
-	if err != nil {
-		return fmt.Errorf("conversion failed: %w", err)
-	}
-
-	// Register the repo (skip if already registered)
-	if !alreadyRegistered {
+	if !p.alreadyRegistered {
 		repo := registry.Repo{
-			Path:           absPath,
-			Name:           repoName,
-			WorktreeFormat: worktreeFormat,
-			Labels:         labels,
+			Path:           p.absPath,
+			Name:           p.repoName,
+			WorktreeFormat: p.worktreeFormat,
+			Labels:         p.labels,
 		}
 
-		if err := reg.Add(repo); err != nil {
+		if err := p.reg.Add(repo); err != nil {
 			return fmt.Errorf("register repo: %w", err)
 		}
 
-		if err := reg.Save(cfg.RegistryPath); err != nil {
+		if err := p.reg.Save(p.cfg.RegistryPath); err != nil {
 			return fmt.Errorf("save registry: %w", err)
 		}
 	}
 
-	out.Printf("Conversion complete!\n")
-	out.Printf("  Main worktree: %s\n", result.MainWorktreePath)
-	if alreadyRegistered {
-		out.Printf("  Already registered as: %s\n", repoName)
+	if p.alreadyRegistered {
+		p.out.Printf("  Already registered as: %s\n", p.repoName)
 	} else {
-		out.Printf("  Registered as: %s\n", repoName)
+		p.out.Printf("  Registered as: %s\n", p.repoName)
 	}
 
-	// Verify by listing worktrees
-	worktrees, err := git.ListWorktreesFromRepo(ctx, absPath)
+	worktrees, err := git.ListWorktreesFromRepo(p.ctx, p.absPath)
 	if err != nil {
-		l.Printf("Warning: could not list worktrees after conversion: %v\n", err)
-		l.Printf("Run 'git worktree list' manually to verify the conversion\n")
+		p.l.Printf("Warning: could not list worktrees after conversion: %v\n", err)
+		p.l.Printf("Run 'git worktree list' manually to verify the conversion\n")
 	} else if len(worktrees) > 0 {
-		out.Printf("\n  Worktrees:\n")
+		p.out.Printf("\n  Worktrees:\n")
 		for _, wt := range worktrees {
-			out.Printf("    %s (%s)\n", wt.Path, wt.Branch)
+			p.out.Printf("    %s (%s)\n", wt.Path, wt.Branch)
 		}
 	}
 
 	return nil
 }
 
-func convertToRegular(ctx context.Context, out *output.Printer, l *log.Logger, cfg *config.Config, reg *registry.Registry, absPath, repoName, effectiveFormat, worktreeFormat string, labels []string, dryRun, alreadyRegistered bool) error {
+func convertToBare(p convertParams) error {
 	opts := git.MigrationOptions{
-		WorktreeFormat: effectiveFormat,
-		RepoName:       repoName,
+		WorktreeFormat: p.effectiveFormat,
+		RepoName:       p.repoName,
 	}
-	plan, err := git.ValidateMigrationToRegular(ctx, absPath, opts)
+	plan, err := git.ValidateMigration(p.ctx, p.absPath, opts)
+	if err != nil {
+		return err
+	}
+
+	// Show migration plan
+	p.out.Printf("Conversion plan for: %s (→ bare)\n\n", p.absPath)
+	p.out.Printf("  Current branch: %s\n", plan.CurrentBranch)
+	p.out.Printf("  Main worktree will be at: %s\n", plan.MainWorktreePath)
+	p.out.Printf("  Worktree format: %s\n", p.effectiveFormat)
+
+	if len(plan.WorktreesToFix) > 0 {
+		p.out.Printf("\n  Existing worktrees:\n")
+		for _, wt := range plan.WorktreesToFix {
+			if wt.NeedsMove {
+				p.out.Printf("    %s → %s\n", wt.OldPath, wt.NewPath)
+			} else {
+				p.out.Printf("    %s (links will be updated)\n", wt.OldPath)
+			}
+		}
+	}
+
+	p.out.Printf("\n  Registry name: %s\n", p.repoName)
+	if len(p.labels) > 0 {
+		p.out.Printf("  Labels: %v\n", p.labels)
+	}
+
+	if p.dryRun {
+		p.out.Printf("\n  (dry run - no changes made)\n")
+		return nil
+	}
+
+	p.out.Printf("\n")
+
+	p.l.Debug("performing conversion to bare")
+	result, err := git.MigrateToBare(p.ctx, plan)
+	if err != nil {
+		return fmt.Errorf("conversion failed: %w", err)
+	}
+
+	p.out.Printf("Conversion complete!\n")
+	p.out.Printf("  Main worktree: %s\n", result.MainWorktreePath)
+
+	return registerAndVerify(p, result.Warnings)
+}
+
+func convertToRegular(p convertParams) error {
+	opts := git.MigrationOptions{
+		WorktreeFormat: p.effectiveFormat,
+		RepoName:       p.repoName,
+	}
+	plan, err := git.ValidateMigrationToRegular(p.ctx, p.absPath, opts)
 	if err != nil {
 		return err
 	}
 
 	// Show conversion plan
-	out.Printf("Conversion plan for: %s (→ regular)\n\n", absPath)
-	out.Printf("  Default branch: %s\n", plan.DefaultBranch)
-	out.Printf("  Working tree from: %s\n", plan.DefaultBranchWT)
-	out.Printf("  Worktree format: %s\n", effectiveFormat)
+	p.out.Printf("Conversion plan for: %s (→ regular)\n\n", p.absPath)
+	p.out.Printf("  Default branch: %s\n", plan.DefaultBranch)
+	p.out.Printf("  Working tree from: %s\n", plan.DefaultBranchWT)
+	p.out.Printf("  Worktree format: %s\n", p.effectiveFormat)
 
 	if len(plan.WorktreesToFix) > 0 {
-		out.Printf("\n  Worktrees to reformat:\n")
+		p.out.Printf("\n  Worktrees to reformat:\n")
 		for _, wt := range plan.WorktreesToFix {
 			if wt.NeedsMove {
-				out.Printf("    %s → %s\n", wt.OldPath, wt.NewPath)
+				p.out.Printf("    %s → %s\n", wt.OldPath, wt.NewPath)
 			} else {
-				out.Printf("    %s (links will be updated)\n", wt.OldPath)
+				p.out.Printf("    %s (links will be updated)\n", wt.OldPath)
 			}
 		}
 	}
 
-	out.Printf("\n  Registry name: %s\n", repoName)
-	if len(labels) > 0 {
-		out.Printf("  Labels: %v\n", labels)
+	if len(plan.DetachedWorktrees) > 0 {
+		p.l.Printf("Warning: %d detached HEAD worktree(s) will be skipped (may need manual repair after conversion):\n", len(plan.DetachedWorktrees))
+		for _, path := range plan.DetachedWorktrees {
+			p.l.Printf("  %s\n", path)
+		}
 	}
 
-	if dryRun {
-		out.Printf("\n  (dry run - no changes made)\n")
+	p.out.Printf("\n  Registry name: %s\n", p.repoName)
+	if len(p.labels) > 0 {
+		p.out.Printf("  Labels: %v\n", p.labels)
+	}
+
+	if p.dryRun {
+		p.out.Printf("\n  (dry run - no changes made)\n")
 		return nil
 	}
 
-	out.Printf("\n")
+	p.out.Printf("\n")
 
-	l.Debug("performing conversion to regular")
-	_, err = git.MigrateToRegular(ctx, plan)
+	p.l.Debug("performing conversion to regular")
+	result, err := git.MigrateToRegular(p.ctx, plan)
 	if err != nil {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 
-	// Register the repo (skip if already registered)
-	if !alreadyRegistered {
-		repo := registry.Repo{
-			Path:           absPath,
-			Name:           repoName,
-			WorktreeFormat: worktreeFormat,
-			Labels:         labels,
-		}
+	p.out.Printf("Conversion complete!\n")
+	p.out.Printf("  Repo root: %s\n", p.absPath)
 
-		if err := reg.Add(repo); err != nil {
-			return fmt.Errorf("register repo: %w", err)
-		}
-
-		if err := reg.Save(cfg.RegistryPath); err != nil {
-			return fmt.Errorf("save registry: %w", err)
-		}
-	}
-
-	out.Printf("Conversion complete!\n")
-	out.Printf("  Repo root: %s\n", absPath)
-	if alreadyRegistered {
-		out.Printf("  Already registered as: %s\n", repoName)
-	} else {
-		out.Printf("  Registered as: %s\n", repoName)
-	}
-
-	// Verify by listing worktrees
-	worktrees, err := git.ListWorktreesFromRepo(ctx, absPath)
-	if err != nil {
-		l.Printf("Warning: could not list worktrees after conversion: %v\n", err)
-		l.Printf("Run 'git worktree list' manually to verify the conversion\n")
-	} else if len(worktrees) > 0 {
-		out.Printf("\n  Worktrees:\n")
-		for _, wt := range worktrees {
-			out.Printf("    %s (%s)\n", wt.Path, wt.Branch)
-		}
-	}
-
-	return nil
+	return registerAndVerify(p, result.Warnings)
 }
 
 // completeLabels provides completion for label flags

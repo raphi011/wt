@@ -5,14 +5,14 @@
 //
 // # Usage
 //
-//	cmd := exec.Command("git", "status")
-//	if err := cmd.Run(cmd); err != nil {
+//	err := cmd.RunContext(ctx, dir, "git", "status")
+//	if err != nil {
 //	    // err contains stderr output if available
 //	    return fmt.Errorf("git failed: %w", err)
 //	}
 //
 //	// For commands that return output:
-//	output, err := cmd.Output(exec.Command("git", "branch"))
+//	output, err := cmd.OutputContext(ctx, dir, "git", "branch")
 //	if err != nil {
 //	    // err contains stderr output
 //	}

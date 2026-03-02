@@ -18,10 +18,11 @@ type CommitMeta struct {
 
 // GetCommitMeta returns commit metadata for the given SHAs in one batched git call.
 // Uses `git show -s --format=%H|%ct|%cr` to get both unix timestamps and relative times.
-// Returns a map of full SHA → CommitMeta. Returns nil for empty input, empty map on error (non-fatal).
-func GetCommitMeta(ctx context.Context, repoPath string, shas []string) map[string]CommitMeta {
+// Returns a map of full SHA → CommitMeta. Returns nil map for empty input.
+// On git failure, returns an empty map and the error (callers can treat as non-fatal).
+func GetCommitMeta(ctx context.Context, repoPath string, shas []string) (map[string]CommitMeta, error) {
 	if len(shas) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	args := []string{"show", "-s", "--format=%H|%ct|%cr"}
@@ -29,7 +30,7 @@ func GetCommitMeta(ctx context.Context, repoPath string, shas []string) map[stri
 
 	output, err := outputGit(ctx, repoPath, args...)
 	if err != nil {
-		return make(map[string]CommitMeta)
+		return make(map[string]CommitMeta), fmt.Errorf("get commit metadata: %w", err)
 	}
 
 	metas := make(map[string]CommitMeta, len(shas))
@@ -48,7 +49,7 @@ func GetCommitMeta(ctx context.Context, repoPath string, shas []string) map[stri
 		}
 		metas[sha] = CommitMeta{Age: age, Date: commitDate}
 	}
-	return metas
+	return metas, nil
 }
 
 // GetRepoDisplayName returns the folder name of the repository.
@@ -249,7 +250,6 @@ func GetCurrentRepoMainPathFrom(ctx context.Context, path string) string {
 	// The main repo is the parent of the git common directory
 	// For regular repos: /path/to/repo/.git -> /path/to/repo
 	// For bare-in-.git: /path/to/repo/.git -> /path/to/repo
-	// For bare-in-.bare: /path/to/repo/.bare -> /path/to/repo
 	return filepath.Dir(gitCommonDir)
 }
 
@@ -546,7 +546,9 @@ func GetGitDir(repoPath string, repoType RepoType) string {
 // Cleans up the destination directory on failure.
 func CloneRegular(ctx context.Context, url, destPath string) error {
 	if err := runGit(ctx, "", "clone", url, destPath); err != nil {
-		os.RemoveAll(destPath)
+		if removeErr := os.RemoveAll(destPath); removeErr != nil {
+			return fmt.Errorf("git clone failed: %w (additionally, cleanup of %s failed: %v)", err, destPath, removeErr)
+		}
 		return fmt.Errorf("git clone failed: %w", err)
 	}
 	return nil
@@ -568,14 +570,17 @@ func CloneBareWithWorktreeSupport(ctx context.Context, url, destPath string) err
 	// Clone as bare directly into .git subdirectory
 	gitDir := filepath.Join(destPath, ".git")
 	if err := runGit(ctx, "", "clone", "--bare", url, gitDir); err != nil {
-		// Clean up on failure
-		os.RemoveAll(destPath)
+		if removeErr := os.RemoveAll(destPath); removeErr != nil {
+			return fmt.Errorf("git clone failed: %w (additionally, cleanup of %s failed: %v)", err, destPath, removeErr)
+		}
 		return fmt.Errorf("git clone failed: %w", err)
 	}
 
 	// Set fetch refspec to get all branches (bare clones don't set this up by default)
 	if err := runGit(ctx, gitDir, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
-		os.RemoveAll(destPath)
+		if removeErr := os.RemoveAll(destPath); removeErr != nil {
+			return fmt.Errorf("failed to configure fetch refspec: %w (additionally, cleanup of %s failed: %v)", err, destPath, removeErr)
+		}
 		return fmt.Errorf("failed to configure fetch refspec: %w", err)
 	}
 

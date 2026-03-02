@@ -44,8 +44,8 @@
 //   - Worktree path for checkout/pr hooks
 //   - Main repo path for prune hooks (worktree is deleted)
 //
-// Hook failures are logged but don't stop batch operations (RunForEach).
-// Use [RunAll] when hook failure should stop execution.
+// Hook failures are logged but don't stop batch operations ([RunForEach]).
+// Use [RunSingle] for individual hook execution where errors are returned to the caller.
 //
 // # Stdin Support
 //

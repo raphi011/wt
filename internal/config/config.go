@@ -90,11 +90,7 @@ type MergeConfig struct {
 // PruneConfig holds prune-related configuration
 type PruneConfig struct {
 	DeleteLocalBranches bool `toml:"delete_local_branches"`
-}
-
-// ListConfig holds list-related configuration
-type ListConfig struct {
-	StaleDays int `toml:"stale_days"` // days after which worktrees are highlighted as stale (0 = disabled)
+	StaleDays           int  `toml:"stale_days"` // days after which worktrees are highlighted as stale (0 = disabled)
 }
 
 // PreserveConfig holds file preservation settings for worktree creation.
@@ -165,7 +161,6 @@ type Config struct {
 	Forge         ForgeConfig       `toml:"forge"`
 	Merge         MergeConfig       `toml:"merge"`
 	Prune         PruneConfig       `toml:"prune"`
-	List          ListConfig        `toml:"list"`     // list display settings
 	Preserve      PreserveConfig    `toml:"preserve"` // file preservation for new worktrees
 	Hosts         map[string]string `toml:"hosts"`    // domain -> forge type mapping
 	Theme         ThemeConfig       `toml:"theme"`    // UI theme/colors for interactive mode
@@ -204,7 +199,7 @@ func Default() Config {
 		Forge: ForgeConfig{
 			Default: "github",
 		},
-		List: ListConfig{
+		Prune: PruneConfig{
 			StaleDays: 14,
 		},
 	}
@@ -228,10 +223,10 @@ type rawConfig struct {
 	Checkout      CheckoutConfig `toml:"checkout"`
 	Forge         ForgeConfig    `toml:"forge"`
 	Merge         MergeConfig    `toml:"merge"`
-	Prune         PruneConfig    `toml:"prune"`
-	List          struct {
-		StaleDays *int `toml:"stale_days"`
-	} `toml:"list"`
+	Prune         struct {
+		DeleteLocalBranches bool `toml:"delete_local_branches"`
+		StaleDays           *int `toml:"stale_days"`
+	} `toml:"prune"`
 	Preserve PreserveConfig    `toml:"preserve"`
 	Hosts    map[string]string `toml:"hosts"`
 	Theme    ThemeConfig       `toml:"theme"`
@@ -275,10 +270,12 @@ func Load() (Config, error) {
 		Checkout:      raw.Checkout,
 		Forge:         raw.Forge,
 		Merge:         raw.Merge,
-		Prune:         raw.Prune,
-		Preserve:      raw.Preserve,
-		Hosts:         raw.Hosts,
-		Theme:         raw.Theme,
+		Prune: PruneConfig{
+			DeleteLocalBranches: raw.Prune.DeleteLocalBranches,
+		},
+		Preserve: raw.Preserve,
+		Hosts:    raw.Hosts,
+		Theme:    raw.Theme,
 	}
 
 	// Validate enum fields
@@ -323,10 +320,10 @@ func Load() (Config, error) {
 	if cfg.Clone.Mode == "" {
 		cfg.Clone.Mode = "bare"
 	}
-	if raw.List.StaleDays != nil {
-		cfg.List.StaleDays = *raw.List.StaleDays
+	if raw.Prune.StaleDays != nil {
+		cfg.Prune.StaleDays = *raw.Prune.StaleDays
 	} else {
-		cfg.List.StaleDays = 14
+		cfg.Prune.StaleDays = 14
 	}
 
 	// Apply env var overrides (after loading config file)
@@ -494,10 +491,6 @@ worktree_format = "{repo}-{branch}"
 #   "branch"  - sort by branch name
 # default_sort = "date"
 
-# List display settings
-# [list]
-# stale_days = 14  # Days before a worktree is highlighted as stale (0 = disabled, default: 14)
-
 # Hooks - run commands after worktree creation/removal
 # Use --hook=name to run a specific hook, --no-hook to skip all hooks
 #
@@ -614,9 +607,10 @@ worktree_format = "{repo}-{branch}"
 # strategy = "squash"  # squash, rebase, or merge (default: squash)
 #                      # Note: rebase is not supported on GitLab
 
-# Prune settings for "wt prune"
+# Prune settings for "wt prune" and stale worktree highlighting
 # [prune]
 # delete_local_branches = false  # Delete local branches after worktree removal
+# stale_days = 14                # Days before a worktree is highlighted as stale (0 = disabled, default: 14)
 
 # Host mappings - for self-hosted GitHub Enterprise or GitLab instances
 # Maps custom domains to forge type for automatic detection

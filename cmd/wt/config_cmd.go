@@ -73,7 +73,7 @@ With --local, creates per-repo config at .wt.toml in the current repo root.`,
 }
 
 func initGlobalConfig(force, stdout bool) error {
-	configContent := defaultConfig()
+	configContent := config.DefaultConfig()
 
 	if stdout {
 		fmt.Print(configContent)
@@ -354,50 +354,4 @@ When inside a repo (or with --repo), shows merged hooks with source annotations.
 	cmd.RegisterFlagCompletionFunc("repo", completeRepoNames)
 
 	return cmd
-}
-
-// defaultConfig returns the default configuration content
-func defaultConfig() string {
-	return `# wt configuration
-# Config location: ~/.wt/config.toml
-
-# Default labels for newly registered repos
-# default_labels = []
-
-# Default sort order for 'wt list'
-# default_sort = "date"
-
-# Checkout settings
-[checkout]
-# Worktree naming format
-# Placeholders: {repo}, {branch}
-# Path prefixes:
-#   "{branch}" or "./{branch}" = nested inside repo
-#   "../{repo}-{branch}" = sibling to repo
-#   "~/worktrees/{repo}-{branch}" = centralized folder
-worktree_format = "{branch}"
-
-# Base ref mode for new branches (wt checkout -b)
-# "remote" = use origin/<branch> (default)
-# "local" = use local <branch>
-# base_ref = "remote"
-
-# Auto-fetch from origin before checkout
-# auto_fetch = false
-
-# Hooks - run commands after worktree creation/removal
-# [hooks.code]
-# command = "code {worktree-dir}"
-# description = "Open in VS Code"
-# on = ["checkout"]
-
-# Forge settings
-# [forge]
-# default = "github"
-# default_org = "my-org"
-
-# Merge settings
-# [merge]
-# strategy = "squash"
-`
 }

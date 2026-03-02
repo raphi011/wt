@@ -566,7 +566,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 			}
 
 			// Run hooks
-			hookMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandPrune)
+			hookMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandMerge)
 			if err != nil {
 				return err
 			}

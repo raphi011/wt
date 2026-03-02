@@ -146,7 +146,7 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 			// Build table rows
 			var rows [][]string
 			for _, wt := range allWorktrees {
-				rows = append(rows, static.WorktreeTableRow(wt, cfg.List.StaleDays))
+				rows = append(rows, static.WorktreeTableRow(wt, cfg.Prune.StaleDays))
 			}
 
 			out.Print(static.RenderTable(static.WorktreeTableHeaders, rows))

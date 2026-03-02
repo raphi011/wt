@@ -822,50 +822,50 @@ func TestCloneConfigResolveIsBare(t *testing.T) {
 	}
 }
 
-func TestListConfigParsing(t *testing.T) {
+func TestStaleDaysConfigParsing(t *testing.T) {
 	t.Parallel()
 
 	input := `
-[list]
+[prune]
 stale_days = 30
 `
 	var raw rawConfig
 	if err := toml.Unmarshal([]byte(input), &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if raw.List.StaleDays == nil {
+	if raw.Prune.StaleDays == nil {
 		t.Fatal("stale_days should not be nil")
 	}
-	if *raw.List.StaleDays != 30 {
-		t.Errorf("stale_days = %d, want 30", *raw.List.StaleDays)
+	if *raw.Prune.StaleDays != 30 {
+		t.Errorf("stale_days = %d, want 30", *raw.Prune.StaleDays)
 	}
 }
 
-func TestListConfigDefault(t *testing.T) {
+func TestStaleDaysConfigDefault(t *testing.T) {
 	t.Parallel()
 
 	cfg := Default()
-	if cfg.List.StaleDays != 14 {
-		t.Errorf("default stale_days = %d, want 14", cfg.List.StaleDays)
+	if cfg.Prune.StaleDays != 14 {
+		t.Errorf("default stale_days = %d, want 14", cfg.Prune.StaleDays)
 	}
 }
 
-func TestListConfigDisabled(t *testing.T) {
+func TestStaleDaysConfigDisabled(t *testing.T) {
 	t.Parallel()
 
 	input := `
-[list]
+[prune]
 stale_days = 0
 `
 	var raw rawConfig
 	if err := toml.Unmarshal([]byte(input), &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if raw.List.StaleDays == nil {
+	if raw.Prune.StaleDays == nil {
 		t.Fatal("stale_days should not be nil when explicitly set to 0")
 	}
-	if *raw.List.StaleDays != 0 {
-		t.Errorf("stale_days = %d, want 0", *raw.List.StaleDays)
+	if *raw.Prune.StaleDays != 0 {
+		t.Errorf("stale_days = %d, want 0", *raw.Prune.StaleDays)
 	}
 }
 
@@ -905,8 +905,6 @@ strategy = "rebase"
 
 [prune]
 delete_local_branches = true
-
-[list]
 stale_days = 30
 
 [preserve]
@@ -940,10 +938,12 @@ on = ["checkout"]
 		Checkout:      raw.Checkout,
 		Forge:         raw.Forge,
 		Merge:         raw.Merge,
-		Prune:         raw.Prune,
-		Preserve:      raw.Preserve,
-		Hosts:         raw.Hosts,
-		Theme:         raw.Theme,
+		Prune: PruneConfig{
+			DeleteLocalBranches: raw.Prune.DeleteLocalBranches,
+		},
+		Preserve: raw.Preserve,
+		Hosts:    raw.Hosts,
+		Theme:    raw.Theme,
 	}
 
 	// Validate enums
@@ -983,10 +983,10 @@ on = ["checkout"]
 	if cfg.Forge.Default == "" {
 		cfg.Forge.Default = "github"
 	}
-	if raw.List.StaleDays != nil {
-		cfg.List.StaleDays = *raw.List.StaleDays
+	if raw.Prune.StaleDays != nil {
+		cfg.Prune.StaleDays = *raw.Prune.StaleDays
 	} else {
-		cfg.List.StaleDays = 14
+		cfg.Prune.StaleDays = 14
 	}
 
 	// Apply clone default
@@ -1028,8 +1028,8 @@ on = ["checkout"]
 	if !cfg.Prune.DeleteLocalBranches {
 		t.Error("Prune.DeleteLocalBranches should be true")
 	}
-	if cfg.List.StaleDays != 30 {
-		t.Errorf("List.StaleDays = %d, want 30", cfg.List.StaleDays)
+	if cfg.Prune.StaleDays != 30 {
+		t.Errorf("Prune.StaleDays = %d, want 30", cfg.Prune.StaleDays)
 	}
 	if len(cfg.Preserve.Patterns) != 2 {
 		t.Errorf("len(Preserve.Patterns) = %d, want 2", len(cfg.Preserve.Patterns))
