@@ -1,4 +1,4 @@
-package storage
+package fs
 
 import (
 	"os"
@@ -159,5 +159,56 @@ func TestSaveJSON_Atomic(t *testing.T) {
 	}
 	if loaded["v"] != 2 {
 		t.Errorf("expected v=2, got v=%d", loaded["v"])
+	}
+}
+
+func TestResolvePath_Symlink(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks: %v", err)
+	}
+
+	realDir := filepath.Join(resolved, "real")
+	if err := os.MkdirAll(realDir, 0755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+
+	linkDir := filepath.Join(resolved, "link")
+	if err := os.Symlink(realDir, linkDir); err != nil {
+		t.Fatalf("symlink failed: %v", err)
+	}
+
+	got := ResolvePath(linkDir)
+	if got != realDir {
+		t.Errorf("ResolvePath(symlink) = %q, want %q", got, realDir)
+	}
+}
+
+func TestResolvePath_NonExistent(t *testing.T) {
+	t.Parallel()
+
+	// Non-existent path should be returned unchanged
+	path := "/nonexistent/path/that/does/not/exist"
+	got := ResolvePath(path)
+	if got != path {
+		t.Errorf("ResolvePath(nonexistent) = %q, want %q (unchanged)", got, path)
+	}
+}
+
+func TestResolvePath_AlreadyCanonical(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks: %v", err)
+	}
+
+	got := ResolvePath(resolved)
+	if got != resolved {
+		t.Errorf("ResolvePath(canonical) = %q, want %q (unchanged)", got, resolved)
 	}
 }

@@ -259,6 +259,116 @@ func TestFindByPath(t *testing.T) {
 	}
 }
 
+func TestFindByPath_Symlink(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks: %v", err)
+	}
+
+	realPath := filepath.Join(resolved, "real-wt")
+	if err := os.MkdirAll(realPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	linkPath := filepath.Join(resolved, "linked-wt")
+	if err := os.Symlink(realPath, linkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	h := &History{
+		Entries: []Entry{
+			{Path: realPath, RepoName: "repo", Branch: "main"},
+		},
+	}
+
+	// Look up via symlink — should find the entry
+	entry := h.FindByPath(linkPath)
+	if entry == nil {
+		t.Fatal("FindByPath(symlink) returned nil, want entry")
+	}
+	if entry.Branch != "main" {
+		t.Errorf("Branch = %q, want %q", entry.Branch, "main")
+	}
+}
+
+func TestRemoveByPath_Symlink(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks: %v", err)
+	}
+
+	realPath := filepath.Join(resolved, "real-wt")
+	if err := os.MkdirAll(realPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	linkPath := filepath.Join(resolved, "linked-wt")
+	if err := os.Symlink(realPath, linkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	h := &History{
+		Entries: []Entry{
+			{Path: realPath, RepoName: "repo", Branch: "main"},
+		},
+	}
+
+	// Remove via symlink — should find and remove
+	if !h.RemoveByPath(linkPath) {
+		t.Error("RemoveByPath(symlink) returned false, want true")
+	}
+	if len(h.Entries) != 0 {
+		t.Errorf("expected 0 entries after remove, got %d", len(h.Entries))
+	}
+}
+
+func TestRecordAccess_StoresCanonicalPath(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks: %v", err)
+	}
+
+	realPath := filepath.Join(resolved, "real-wt")
+	if err := os.MkdirAll(realPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	linkPath := filepath.Join(resolved, "linked-wt")
+	if err := os.Symlink(realPath, linkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	historyFile := filepath.Join(resolved, "history.json")
+
+	// Record via symlink path
+	if err := RecordAccess(linkPath, "repo", "main", historyFile); err != nil {
+		t.Fatalf("RecordAccess(symlink) failed: %v", err)
+	}
+
+	h, err := Load(historyFile)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if len(h.Entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(h.Entries))
+	}
+
+	// Stored path should be canonical
+	if h.Entries[0].Path != realPath {
+		t.Errorf("stored path = %q, want canonical %q", h.Entries[0].Path, realPath)
+	}
+}
+
 func TestLoad_OldFormat(t *testing.T) {
 	t.Parallel()
 

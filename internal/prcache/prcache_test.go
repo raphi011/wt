@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/raphi011/wt/internal/forge"
-	"github.com/raphi011/wt/internal/storage"
+	"github.com/raphi011/wt/internal/fs"
 )
 
 func TestFromForge(t *testing.T) {
@@ -235,12 +235,12 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 		},
 	}
 
-	if err := storage.SaveJSON(path, original); err != nil {
+	if err := fs.SaveJSON(path, original); err != nil {
 		t.Fatalf("SaveJSON failed: %v", err)
 	}
 
 	var loaded Cache
-	if err := storage.LoadJSON(path, &loaded); err != nil {
+	if err := fs.LoadJSON(path, &loaded); err != nil {
 		t.Fatalf("LoadJSON failed: %v", err)
 	}
 
@@ -300,13 +300,13 @@ func TestLoadSave(t *testing.T) {
 	c.Set("/repo:main", &PRInfo{Number: 1, State: "OPEN", Fetched: true})
 	c.Set("/repo:feature", &PRInfo{Number: 2, State: "MERGED", Fetched: true})
 
-	if err := storage.SaveJSON(path, c); err != nil {
+	if err := fs.SaveJSON(path, c); err != nil {
 		t.Fatalf("SaveJSON failed: %v", err)
 	}
 
 	// Load back
 	var loaded Cache
-	if err := storage.LoadJSON(path, &loaded); err != nil {
+	if err := fs.LoadJSON(path, &loaded); err != nil {
 		t.Fatalf("LoadJSON failed: %v", err)
 	}
 	if loaded.PRs == nil {

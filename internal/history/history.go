@@ -11,7 +11,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/raphi011/wt/internal/storage"
+	"github.com/raphi011/wt/internal/fs"
 )
 
 // maxEntries is the maximum number of history entries kept.
@@ -44,7 +44,7 @@ func DefaultPath() string {
 // History struct because unknown JSON keys are silently dropped.
 func Load(path string) (*History, error) {
 	var h History
-	if err := storage.LoadJSON(path, &h); err != nil {
+	if err := fs.LoadJSON(path, &h); err != nil {
 		if os.IsNotExist(err) {
 			return &History{}, nil
 		}
@@ -55,13 +55,15 @@ func Load(path string) (*History, error) {
 
 // Save writes the history to disk atomically at the given path.
 func (h *History) Save(path string) error {
-	return storage.SaveJSON(path, h)
+	return fs.SaveJSON(path, h)
 }
 
 // FindByPath returns the entry matching the given path, or nil if not found.
+// Resolves symlinks so lookups match regardless of path form.
 func (h *History) FindByPath(path string) *Entry {
+	resolved := fs.ResolvePath(path)
 	for i := range h.Entries {
-		if h.Entries[i].Path == path {
+		if fs.ResolvePath(h.Entries[i].Path) == resolved {
 			return &h.Entries[i]
 		}
 	}
@@ -70,9 +72,11 @@ func (h *History) FindByPath(path string) *Entry {
 
 // RemoveByPath removes the entry with the given path.
 // Returns true if an entry was removed.
+// Resolves symlinks so removal works regardless of path form.
 func (h *History) RemoveByPath(path string) bool {
+	resolved := fs.ResolvePath(path)
 	for i, e := range h.Entries {
-		if e.Path == path {
+		if fs.ResolvePath(e.Path) == resolved {
 			h.Entries = append(h.Entries[:i], h.Entries[i+1:]...)
 			return true
 		}
@@ -113,6 +117,9 @@ func RecordAccess(path, repoName, branch, historyPath string) error {
 	if path == "" {
 		return fmt.Errorf("path must not be empty")
 	}
+
+	// Store canonical path so future lookups match regardless of symlink form.
+	path = fs.ResolvePath(path)
 
 	h, err := Load(historyPath)
 	if err != nil {

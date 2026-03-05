@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/raphi011/wt/internal/fs"
 )
 
 // CommitMeta holds commit metadata fetched in a single batched git call.
@@ -250,7 +252,12 @@ func GetCurrentRepoMainPathFrom(ctx context.Context, path string) string {
 	// The main repo is the parent of the git common directory
 	// For regular repos: /path/to/repo/.git -> /path/to/repo
 	// For bare-in-.git: /path/to/repo/.git -> /path/to/repo
-	return filepath.Dir(gitCommonDir)
+	mainPath := filepath.Dir(gitCommonDir)
+
+	// Resolve symlinks so callers always get a canonical path.
+	// This prevents mismatches when comparing against registry entries
+	// (e.g., macOS /var -> /private/var).
+	return fs.ResolvePath(mainPath)
 }
 
 // GetOriginURL gets the origin URL for a repository
