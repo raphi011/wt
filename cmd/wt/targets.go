@@ -11,6 +11,19 @@ import (
 	"github.com/raphi011/wt/internal/registry"
 )
 
+// resolveEffectiveConfig returns the effective config for a repo path,
+// falling back to global config if local config can't be loaded.
+func resolveEffectiveConfig(ctx context.Context, repoPath string) *config.Config {
+	l := log.FromContext(ctx)
+	resolver := config.ResolverFromContext(ctx)
+	effCfg, err := resolver.ConfigForRepo(repoPath)
+	if err != nil {
+		l.Printf("Warning: failed to load local config for %s: %v\n", repoPath, err)
+		return config.FromContext(ctx)
+	}
+	return effCfg
+}
+
 // reposToRefs converts registry repos to git.RepoRef for the parallel loader.
 func reposToRefs(repos []registry.Repo) []git.RepoRef {
 	refs := make([]git.RepoRef, len(repos))
