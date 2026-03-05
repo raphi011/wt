@@ -242,6 +242,31 @@ func TestCopyFile(t *testing.T) {
 		}
 	})
 
+	t.Run("cleans up dst when src cannot be opened", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+
+		src := filepath.Join(tmpDir, "src", "secret")
+		dst := filepath.Join(tmpDir, "dst", "secret")
+
+		if err := os.MkdirAll(filepath.Dir(src), 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.WriteFile(src, []byte("content\n"), 0000); err != nil {
+			t.Fatalf("setup: write file failed: %v", err)
+		}
+
+		_, err := CopyFile(src, dst)
+		if err == nil {
+			t.Fatal("CopyFile() should return error when src cannot be opened")
+		}
+
+		// dst should have been cleaned up
+		if _, statErr := os.Stat(dst); !os.IsNotExist(statErr) {
+			t.Error("dst should not exist after failed copy")
+		}
+	})
+
 	t.Run("skips symlinks", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
