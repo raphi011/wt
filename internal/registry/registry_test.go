@@ -273,6 +273,39 @@ func TestRegistryLabels(t *testing.T) {
 	}
 }
 
+func TestLoadExplicitPath(t *testing.T) {
+	t.Parallel()
+
+	t.Run("non-existent file returns empty registry", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "nonexistent.json")
+
+		reg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load() error = %v", err)
+		}
+		if len(reg.Repos) != 0 {
+			t.Errorf("expected 0 repos, got %d", len(reg.Repos))
+		}
+	})
+
+	t.Run("corrupted JSON returns error", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "bad.json")
+
+		if err := os.WriteFile(path, []byte("{not valid json"), 0644); err != nil {
+			t.Fatalf("setup: write failed: %v", err)
+		}
+
+		_, err := Load(path)
+		if err == nil {
+			t.Error("expected error for corrupted JSON")
+		}
+	})
+}
+
 func TestRegistrySaveLoad(t *testing.T) {
 	t.Parallel()
 

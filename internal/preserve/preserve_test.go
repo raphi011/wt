@@ -1,9 +1,18 @@
+//go:build !integration
+
 package preserve
 
 import (
+	"context"
+	"errors"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/log"
 )
 
 func TestMatchesPattern(t *testing.T) {
@@ -295,6 +304,395 @@ func TestCopyFile(t *testing.T) {
 		// dst should not exist
 		if _, err := os.Stat(dst); !os.IsNotExist(err) {
 			t.Error("dst should not exist when source is a symlink")
+		}
+	})
+}
+
+func resolveTempDir(t *testing.T) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks for %s: %v", tmpDir, err)
+	}
+	return resolved
+}
+
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	c := exec.Command("git", args...)
+	if dir != "" {
+		c.Dir = dir
+	}
+	out, err := c.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, out)
+	}
+}
+
+func testContext() context.Context {
+	l := log.New(io.Discard, false, true)
+	return log.WithLogger(context.Background(), l)
+}
+
+// initBareRepoWithWorktree creates a bare-like repo setup with a main worktree
+// and returns (gitDir, mainWorktreePath).
+func initBareRepoWithWorktree(t *testing.T, baseDir string) (string, string) {
+	t.Helper()
+
+	repoDir := filepath.Join(baseDir, "repo.git")
+	if err := os.MkdirAll(repoDir, 0755); err != nil {
+		t.Fatalf("setup: mkdir failed: %v", err)
+	}
+	runGit(t, repoDir, "init", "--bare", "-b", "main")
+
+	// Create an initial commit via a temporary clone
+	cloneDir := filepath.Join(baseDir, "tmp-clone")
+	runGit(t, baseDir, "clone", repoDir, cloneDir)
+	runGit(t, cloneDir, "config", "user.email", "test@test.com")
+	runGit(t, cloneDir, "config", "user.name", "Test")
+
+	readmePath := filepath.Join(cloneDir, "README.md")
+	if err := os.WriteFile(readmePath, []byte("init\n"), 0644); err != nil {
+		t.Fatalf("setup: write file failed: %v", err)
+	}
+	runGit(t, cloneDir, "add", ".")
+	runGit(t, cloneDir, "commit", "-m", "initial")
+	runGit(t, cloneDir, "push", "-u", "origin", "HEAD")
+
+	// Add a main worktree from the bare repo
+	mainWT := filepath.Join(baseDir, "main-wt")
+	runGit(t, repoDir, "worktree", "add", mainWT, "main")
+
+	return repoDir, mainWT
+}
+
+func TestFindSourceWorktree(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns default branch worktree", func(t *testing.T) {
+		t.Parallel()
+		baseDir := resolveTempDir(t)
+		ctx := testContext()
+
+		repoDir, mainWT := initBareRepoWithWorktree(t, baseDir)
+
+		// Create a feature branch and worktree
+		featureWT := filepath.Join(baseDir, "feature-wt")
+		runGit(t, mainWT, "checkout", "-b", "feature")
+		runGit(t, mainWT, "checkout", "main")
+		runGit(t, repoDir, "worktree", "add", featureWT, "feature")
+
+		got, err := FindSourceWorktree(ctx, repoDir, featureWT)
+		if err != nil {
+			t.Fatalf("FindSourceWorktree() error = %v", err)
+		}
+		if got != mainWT {
+			t.Errorf("FindSourceWorktree() = %q, want %q", got, mainWT)
+		}
+	})
+
+	t.Run("falls back to first non-target worktree", func(t *testing.T) {
+		t.Parallel()
+		baseDir := resolveTempDir(t)
+		ctx := testContext()
+
+		repoDir, mainWT := initBareRepoWithWorktree(t, baseDir)
+
+		// Create two feature worktrees
+		runGit(t, mainWT, "checkout", "-b", "feat-a")
+		runGit(t, mainWT, "checkout", "main")
+		runGit(t, mainWT, "checkout", "-b", "feat-b")
+		runGit(t, mainWT, "checkout", "main")
+
+		featAWT := filepath.Join(baseDir, "feat-a-wt")
+		runGit(t, repoDir, "worktree", "add", featAWT, "feat-a")
+
+		featBWT := filepath.Join(baseDir, "feat-b-wt")
+		runGit(t, repoDir, "worktree", "add", featBWT, "feat-b")
+
+		// Target is mainWT — default branch worktree is excluded, so it should
+		// fall back. But mainWT IS the default branch. Let's target feat-b
+		// and check we get something other than feat-b.
+		// Actually, let's test the fallback by targeting mainWT so default branch
+		// match is excluded, then it falls back to first non-target.
+		got, err := FindSourceWorktree(ctx, repoDir, mainWT)
+		if err != nil {
+			t.Fatalf("FindSourceWorktree() error = %v", err)
+		}
+		// Should return one of the feature worktrees (first non-target after
+		// default branch worktree is excluded because it IS the target)
+		if got == mainWT {
+			t.Errorf("FindSourceWorktree() returned target path %q", mainWT)
+		}
+		if got != featAWT && got != featBWT {
+			t.Errorf("FindSourceWorktree() = %q, want one of %q or %q", got, featAWT, featBWT)
+		}
+	})
+
+	t.Run("returns error when only target exists", func(t *testing.T) {
+		t.Parallel()
+		baseDir := resolveTempDir(t)
+		ctx := testContext()
+
+		repoDir, mainWT := initBareRepoWithWorktree(t, baseDir)
+
+		_, err := FindSourceWorktree(ctx, repoDir, mainWT)
+		if !errors.Is(err, ErrNoSourceWorktree) {
+			t.Errorf("FindSourceWorktree() error = %v, want %v", err, ErrNoSourceWorktree)
+		}
+	})
+}
+
+func TestFindIgnoredFiles(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns ignored files", func(t *testing.T) {
+		t.Parallel()
+		baseDir := resolveTempDir(t)
+		ctx := testContext()
+
+		// Create a git repo
+		runGit(t, baseDir, "init")
+		runGit(t, baseDir, "config", "user.email", "test@test.com")
+		runGit(t, baseDir, "config", "user.name", "Test")
+
+		// Create .gitignore
+		if err := os.WriteFile(filepath.Join(baseDir, ".gitignore"), []byte(".env\n"), 0644); err != nil {
+			t.Fatalf("setup: write .gitignore failed: %v", err)
+		}
+		runGit(t, baseDir, "add", ".gitignore")
+		runGit(t, baseDir, "commit", "-m", "add gitignore")
+
+		// Create an ignored file
+		if err := os.WriteFile(filepath.Join(baseDir, ".env"), []byte("SECRET=123\n"), 0644); err != nil {
+			t.Fatalf("setup: write .env failed: %v", err)
+		}
+
+		got, err := FindIgnoredFiles(ctx, baseDir)
+		if err != nil {
+			t.Fatalf("FindIgnoredFiles() error = %v", err)
+		}
+		if len(got) != 1 || got[0] != ".env" {
+			t.Errorf("FindIgnoredFiles() = %v, want [.env]", got)
+		}
+	})
+
+	t.Run("returns nil for no ignored files", func(t *testing.T) {
+		t.Parallel()
+		baseDir := resolveTempDir(t)
+		ctx := testContext()
+
+		runGit(t, baseDir, "init")
+		runGit(t, baseDir, "config", "user.email", "test@test.com")
+		runGit(t, baseDir, "config", "user.name", "Test")
+
+		// Create a tracked file so we have at least one commit
+		if err := os.WriteFile(filepath.Join(baseDir, "README.md"), []byte("hi\n"), 0644); err != nil {
+			t.Fatalf("setup: write file failed: %v", err)
+		}
+		runGit(t, baseDir, "add", ".")
+		runGit(t, baseDir, "commit", "-m", "init")
+
+		got, err := FindIgnoredFiles(ctx, baseDir)
+		if err != nil {
+			t.Fatalf("FindIgnoredFiles() error = %v", err)
+		}
+		if got != nil {
+			t.Errorf("FindIgnoredFiles() = %v, want nil", got)
+		}
+	})
+}
+
+func TestPreserveFiles(t *testing.T) {
+	t.Parallel()
+
+	t.Run("copies matching files", func(t *testing.T) {
+		t.Parallel()
+		baseDir := resolveTempDir(t)
+		ctx := testContext()
+
+		sourceDir := filepath.Join(baseDir, "source")
+		targetDir := filepath.Join(baseDir, "target")
+		if err := os.MkdirAll(sourceDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+
+		// Init git repo in source
+		runGit(t, sourceDir, "init")
+		runGit(t, sourceDir, "config", "user.email", "test@test.com")
+		runGit(t, sourceDir, "config", "user.name", "Test")
+
+		// Add .gitignore
+		if err := os.WriteFile(filepath.Join(sourceDir, ".gitignore"), []byte(".env\n"), 0644); err != nil {
+			t.Fatalf("setup: write .gitignore failed: %v", err)
+		}
+		runGit(t, sourceDir, "add", ".gitignore")
+		runGit(t, sourceDir, "commit", "-m", "init")
+
+		// Create ignored file
+		if err := os.WriteFile(filepath.Join(sourceDir, ".env"), []byte("SECRET=abc\n"), 0644); err != nil {
+			t.Fatalf("setup: write .env failed: %v", err)
+		}
+
+		cfg := config.PreserveConfig{
+			Patterns: []string{".env"},
+		}
+
+		copied, err := PreserveFiles(ctx, cfg, sourceDir, targetDir)
+		if err != nil {
+			t.Fatalf("PreserveFiles() error = %v", err)
+		}
+		if len(copied) != 1 || copied[0] != ".env" {
+			t.Errorf("PreserveFiles() copied = %v, want [.env]", copied)
+		}
+
+		// Verify file was actually copied
+		got, err := os.ReadFile(filepath.Join(targetDir, ".env"))
+		if err != nil {
+			t.Fatalf("failed to read copied file: %v", err)
+		}
+		if string(got) != "SECRET=abc\n" {
+			t.Errorf("copied file content = %q, want %q", got, "SECRET=abc\n")
+		}
+	})
+
+	t.Run("skips non-matching files", func(t *testing.T) {
+		t.Parallel()
+		baseDir := resolveTempDir(t)
+		ctx := testContext()
+
+		sourceDir := filepath.Join(baseDir, "source")
+		targetDir := filepath.Join(baseDir, "target")
+		if err := os.MkdirAll(sourceDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+
+		runGit(t, sourceDir, "init")
+		runGit(t, sourceDir, "config", "user.email", "test@test.com")
+		runGit(t, sourceDir, "config", "user.name", "Test")
+
+		if err := os.WriteFile(filepath.Join(sourceDir, ".gitignore"), []byte("*.log\n"), 0644); err != nil {
+			t.Fatalf("setup: write .gitignore failed: %v", err)
+		}
+		runGit(t, sourceDir, "add", ".gitignore")
+		runGit(t, sourceDir, "commit", "-m", "init")
+
+		// Create ignored file that does NOT match preserve patterns
+		if err := os.WriteFile(filepath.Join(sourceDir, "random.log"), []byte("log data\n"), 0644); err != nil {
+			t.Fatalf("setup: write random.log failed: %v", err)
+		}
+
+		cfg := config.PreserveConfig{
+			Patterns: []string{".env"},
+		}
+
+		copied, err := PreserveFiles(ctx, cfg, sourceDir, targetDir)
+		if err != nil {
+			t.Fatalf("PreserveFiles() error = %v", err)
+		}
+		if len(copied) != 0 {
+			t.Errorf("PreserveFiles() copied = %v, want empty", copied)
+		}
+
+		// Verify file was NOT copied
+		if _, err := os.Stat(filepath.Join(targetDir, "random.log")); !os.IsNotExist(err) {
+			t.Error("non-matching file should not be copied to target")
+		}
+	})
+
+	t.Run("skips excluded directories", func(t *testing.T) {
+		t.Parallel()
+		baseDir := resolveTempDir(t)
+		ctx := testContext()
+
+		sourceDir := filepath.Join(baseDir, "source")
+		targetDir := filepath.Join(baseDir, "target")
+		if err := os.MkdirAll(sourceDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+
+		runGit(t, sourceDir, "init")
+		runGit(t, sourceDir, "config", "user.email", "test@test.com")
+		runGit(t, sourceDir, "config", "user.name", "Test")
+
+		if err := os.WriteFile(filepath.Join(sourceDir, ".gitignore"), []byte("node_modules/\n.env\n"), 0644); err != nil {
+			t.Fatalf("setup: write .gitignore failed: %v", err)
+		}
+		runGit(t, sourceDir, "add", ".gitignore")
+		runGit(t, sourceDir, "commit", "-m", "init")
+
+		// Create ignored file inside excluded directory
+		nmDir := filepath.Join(sourceDir, "node_modules")
+		if err := os.MkdirAll(nmDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(nmDir, ".env"), []byte("NM_SECRET=x\n"), 0644); err != nil {
+			t.Fatalf("setup: write .env failed: %v", err)
+		}
+
+		cfg := config.PreserveConfig{
+			Patterns: []string{".env"},
+			Exclude:  []string{"node_modules"},
+		}
+
+		copied, err := PreserveFiles(ctx, cfg, sourceDir, targetDir)
+		if err != nil {
+			t.Fatalf("PreserveFiles() error = %v", err)
+		}
+		if len(copied) != 0 {
+			t.Errorf("PreserveFiles() copied = %v, want empty (excluded dir)", copied)
+		}
+
+		// Verify file was NOT copied
+		if _, err := os.Stat(filepath.Join(targetDir, "node_modules", ".env")); !os.IsNotExist(err) {
+			t.Error("excluded directory file should not be copied to target")
+		}
+	})
+
+	t.Run("handles empty ignored files", func(t *testing.T) {
+		t.Parallel()
+		baseDir := resolveTempDir(t)
+		ctx := testContext()
+
+		sourceDir := filepath.Join(baseDir, "source")
+		targetDir := filepath.Join(baseDir, "target")
+		if err := os.MkdirAll(sourceDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+
+		runGit(t, sourceDir, "init")
+		runGit(t, sourceDir, "config", "user.email", "test@test.com")
+		runGit(t, sourceDir, "config", "user.name", "Test")
+
+		if err := os.WriteFile(filepath.Join(sourceDir, "README.md"), []byte("hi\n"), 0644); err != nil {
+			t.Fatalf("setup: write file failed: %v", err)
+		}
+		runGit(t, sourceDir, "add", ".")
+		runGit(t, sourceDir, "commit", "-m", "init")
+
+		cfg := config.PreserveConfig{
+			Patterns: []string{".env"},
+		}
+
+		copied, err := PreserveFiles(ctx, cfg, sourceDir, targetDir)
+		if err != nil {
+			t.Fatalf("PreserveFiles() error = %v", err)
+		}
+		if len(copied) != 0 {
+			t.Errorf("PreserveFiles() copied = %v, want empty", copied)
 		}
 	})
 }

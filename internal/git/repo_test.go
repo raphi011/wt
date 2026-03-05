@@ -273,10 +273,43 @@ func TestGetMainRepoPath(t *testing.T) {
 func TestGetDefaultBranch(t *testing.T) {
 	t.Parallel()
 
-	result := GetDefaultBranch(context.Background(), "/nonexistent/path")
-	if result != "main" && result != "master" {
-		t.Errorf("expected main or master as fallback, got %s", result)
-	}
+	t.Run("fallback for non-git dir", func(t *testing.T) {
+		t.Parallel()
+		result := GetDefaultBranch(context.Background(), "/nonexistent/path")
+		if result != "main" && result != "master" {
+			t.Errorf("expected main or master as fallback, got %s", result)
+		}
+	})
+
+	t.Run("detects default branch from origin HEAD", func(t *testing.T) {
+		t.Parallel()
+		repoPath, _ := setupTestRepoWithOrigin(t)
+		ctx := context.Background()
+
+		// Set origin/HEAD to point to main
+		if err := runGit(ctx, repoPath, "remote", "set-head", "origin", "main"); err != nil {
+			t.Fatalf("failed to set origin HEAD: %v", err)
+		}
+
+		branch := GetDefaultBranch(ctx, repoPath)
+		if branch != "main" {
+			t.Errorf("GetDefaultBranch() = %q, want main", branch)
+		}
+	})
+
+	t.Run("falls back to origin/main", func(t *testing.T) {
+		t.Parallel()
+		repoPath, _ := setupTestRepoWithOrigin(t)
+		ctx := context.Background()
+
+		// Remove origin/HEAD so symbolic-ref fails, but origin/main still exists
+		_ = runGit(ctx, repoPath, "remote", "set-head", "origin", "-d")
+
+		branch := GetDefaultBranch(ctx, repoPath)
+		if branch != "main" {
+			t.Errorf("GetDefaultBranch() = %q, want main", branch)
+		}
+	})
 }
 
 func TestWorktreeStruct(t *testing.T) {
@@ -433,6 +466,65 @@ func TestDetectRepoType(t *testing.T) {
 			t.Error("expected error for non-git directory")
 		}
 	})
+
+	t.Run("bare-in-dot-git pattern", func(t *testing.T) {
+		t.Parallel()
+		_, originPath := setupTestRepoWithOrigin(t)
+		tmpDir := resolveTempDir(t)
+		destPath := filepath.Join(tmpDir, "bare-in-git")
+		ctx := context.Background()
+
+		if err := CloneBareWithWorktreeSupport(ctx, originPath, destPath); err != nil {
+			t.Fatalf("CloneBareWithWorktreeSupport failed: %v", err)
+		}
+
+		repoType, err := DetectRepoType(destPath)
+		if err != nil {
+			t.Fatalf("DetectRepoType failed: %v", err)
+		}
+		if repoType != RepoTypeBare {
+			t.Errorf("expected RepoTypeBare, got %v", repoType)
+		}
+	})
+
+	t.Run("dot-git file pointing to worktree", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		tmpDir := filepath.Dir(repoPath)
+		ctx := context.Background()
+
+		wtPath := filepath.Join(tmpDir, "wt-detect-test")
+		if err := runGit(ctx, repoPath, "worktree", "add", "-b", "detect-test", wtPath); err != nil {
+			t.Fatalf("failed to create worktree: %v", err)
+		}
+
+		_, err := DetectRepoType(wtPath)
+		if err == nil {
+			t.Error("expected error for worktree path")
+		}
+		if !strings.Contains(err.Error(), "worktree") {
+			t.Errorf("error should mention worktree, got: %v", err)
+		}
+	})
+
+	t.Run("invalid dot-git file format", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+
+		// Create a .git file with invalid content
+		gitFile := filepath.Join(tmpDir, ".git")
+		if err := os.WriteFile(gitFile, []byte("invalid content\n"), 0644); err != nil {
+			t.Fatalf("setup: write failed: %v", err)
+		}
+
+		_, err := DetectRepoType(tmpDir)
+		if err == nil {
+			t.Error("expected error for invalid .git file")
+		}
+		if !strings.Contains(err.Error(), "invalid .git file format") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
 }
 
 func TestGetGitDir(t *testing.T) {
@@ -501,6 +593,30 @@ func TestGetCurrentBranch(t *testing.T) {
 		}
 		if branch != "feature-x" {
 			t.Errorf("branch = %q, want feature-x", branch)
+		}
+	})
+
+	t.Run("detached HEAD", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		// Get HEAD sha and detach
+		output, err := outputGit(ctx, repoPath, "rev-parse", "HEAD")
+		if err != nil {
+			t.Fatalf("failed to get HEAD: %v", err)
+		}
+		sha := strings.TrimSpace(string(output))
+		if err := runGit(ctx, repoPath, "checkout", sha); err != nil {
+			t.Fatalf("failed to detach HEAD: %v", err)
+		}
+
+		branch, err := GetCurrentBranch(ctx, repoPath)
+		if err != nil {
+			t.Fatalf("GetCurrentBranch failed: %v", err)
+		}
+		if branch != "(detached)" {
+			t.Errorf("branch = %q, want (detached)", branch)
 		}
 	})
 }
