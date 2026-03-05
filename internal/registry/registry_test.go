@@ -400,6 +400,214 @@ func TestFindByPath(t *testing.T) {
 	}
 }
 
+func TestFindByPath_Symlink(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks: %v", err)
+	}
+
+	realPath := filepath.Join(resolved, "real-repo")
+	if err := os.MkdirAll(realPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	// Create symlink → real-repo
+	linkPath := filepath.Join(resolved, "linked-repo")
+	if err := os.Symlink(realPath, linkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	reg := &Registry{
+		Repos: []Repo{
+			{Name: "myrepo", Path: realPath},
+		},
+	}
+
+	// Look up via symlink path — should find the repo
+	repo, err := reg.FindByPath(linkPath)
+	if err != nil {
+		t.Fatalf("FindByPath(symlink) failed: %v", err)
+	}
+	if repo.Name != "myrepo" {
+		t.Errorf("expected myrepo, got %s", repo.Name)
+	}
+}
+
+func TestAdd_SymlinkDuplicate(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks: %v", err)
+	}
+
+	realPath := filepath.Join(resolved, "real-repo")
+	if err := os.MkdirAll(realPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	// Create symlink → real-repo
+	linkPath := filepath.Join(resolved, "linked-repo")
+	if err := os.Symlink(realPath, linkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	reg := &Registry{Repos: []Repo{}}
+
+	// Register at real path
+	if err := reg.Add(Repo{Name: "myrepo", Path: realPath}); err != nil {
+		t.Fatalf("Add(real) failed: %v", err)
+	}
+
+	// Try to add again via symlink path — should detect duplicate
+	err = reg.Add(Repo{Name: "myrepo-alias", Path: linkPath})
+	if err == nil {
+		t.Error("expected error adding duplicate via symlink path")
+	}
+}
+
+func TestAdd_StoresCanonicalPath(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks: %v", err)
+	}
+
+	realPath := filepath.Join(resolved, "real-repo")
+	if err := os.MkdirAll(realPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	// Create symlink → real-repo
+	linkPath := filepath.Join(resolved, "linked-repo")
+	if err := os.Symlink(realPath, linkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	reg := &Registry{Repos: []Repo{}}
+
+	// Add via symlink path
+	if err := reg.Add(Repo{Name: "myrepo", Path: linkPath}); err != nil {
+		t.Fatalf("Add(symlink) failed: %v", err)
+	}
+
+	// Stored path should be the canonical (real) path
+	if reg.Repos[0].Path != realPath {
+		t.Errorf("stored path = %q, want canonical %q", reg.Repos[0].Path, realPath)
+	}
+}
+
+func TestRemove_Symlink(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks: %v", err)
+	}
+
+	realPath := filepath.Join(resolved, "real-repo")
+	if err := os.MkdirAll(realPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	linkPath := filepath.Join(resolved, "linked-repo")
+	if err := os.Symlink(realPath, linkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	reg := &Registry{
+		Repos: []Repo{
+			{Name: "myrepo", Path: realPath},
+		},
+	}
+
+	// Remove via symlink path — should find and remove
+	if err := reg.Remove(linkPath); err != nil {
+		t.Fatalf("Remove(symlink) failed: %v", err)
+	}
+	if len(reg.Repos) != 0 {
+		t.Errorf("expected 0 repos after remove, got %d", len(reg.Repos))
+	}
+}
+
+func TestFind_Symlink(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks: %v", err)
+	}
+
+	realPath := filepath.Join(resolved, "real-repo")
+	if err := os.MkdirAll(realPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	linkPath := filepath.Join(resolved, "linked-repo")
+	if err := os.Symlink(realPath, linkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	reg := &Registry{
+		Repos: []Repo{
+			{Name: "myrepo", Path: realPath},
+		},
+	}
+
+	// Find via symlink path — should find the repo
+	repo, err := reg.Find(linkPath)
+	if err != nil {
+		t.Fatalf("Find(symlink) failed: %v", err)
+	}
+	if repo.Name != "myrepo" {
+		t.Errorf("expected myrepo, got %s", repo.Name)
+	}
+}
+
+func TestFindByPath_ReverseSymlink(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to resolve symlinks: %v", err)
+	}
+
+	realPath := filepath.Join(resolved, "real-repo")
+	if err := os.MkdirAll(realPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	linkPath := filepath.Join(resolved, "linked-repo")
+	if err := os.Symlink(realPath, linkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	// Simulate legacy data: registry stores symlinked (non-canonical) path
+	reg := &Registry{
+		Repos: []Repo{
+			{Name: "myrepo", Path: linkPath},
+		},
+	}
+
+	// Look up via real path — should still find the repo
+	repo, err := reg.FindByPath(realPath)
+	if err != nil {
+		t.Fatalf("FindByPath(real) with stored symlink failed: %v", err)
+	}
+	if repo.Name != "myrepo" {
+		t.Errorf("expected myrepo, got %s", repo.Name)
+	}
+}
+
 func TestUpdate(t *testing.T) {
 	t.Parallel()
 

@@ -1,5 +1,6 @@
-// Package storage provides atomic file operations for JSON data in ~/.wt/
-package storage
+// Package fs provides filesystem utilities: atomic JSON storage, path
+// resolution (symlink canonicalization), and the ~/.wt/ data directory.
+package fs
 
 import (
 	"encoding/json"
@@ -54,4 +55,16 @@ func LoadJSON(path string, dest any) error {
 	}
 
 	return json.Unmarshal(data, dest)
+}
+
+// ResolvePath returns the canonical form of path by resolving symlinks.
+// On macOS, /var is a symlink to /private/var, so paths through /var
+// won't match paths through /private/var unless resolved.
+// Returns the original path unchanged if symlink resolution fails
+// (e.g., broken symlink, permission denied).
+func ResolvePath(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return path
 }

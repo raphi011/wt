@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/raphi011/wt/internal/forge"
-	"github.com/raphi011/wt/internal/storage"
+	"github.com/raphi011/wt/internal/fs"
 )
 
 // CacheMaxAge is the maximum age of cached PR info before it's considered stale
@@ -64,7 +64,7 @@ func Path() string {
 // the file is missing or corrupted.
 func Load() *Cache {
 	var cache Cache
-	if err := storage.LoadJSON(Path(), &cache); err != nil {
+	if err := fs.LoadJSON(Path(), &cache); err != nil {
 		return New()
 	}
 
@@ -78,7 +78,7 @@ func Load() *Cache {
 
 // Save saves the PR cache to disk atomically
 func (c *Cache) Save() error {
-	return storage.SaveJSON(Path(), c)
+	return fs.SaveJSON(Path(), c)
 }
 
 // Set stores PR info for a cache key

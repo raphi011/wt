@@ -869,4 +869,24 @@ func TestGetCurrentRepoMainPathFrom(t *testing.T) {
 	if got != "" {
 		t.Errorf("from non-git dir: got %q, want empty", got)
 	}
+
+	t.Run("via symlink", func(t *testing.T) {
+		t.Parallel()
+
+		symRepo := setupTestRepo(t)
+		symTmpDir := filepath.Dir(symRepo)
+		symCtx := context.Background()
+
+		// Create a symlink pointing to the repo
+		linkPath := filepath.Join(symTmpDir, "linked-repo")
+		if err := os.Symlink(symRepo, linkPath); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
+
+		// Call from the symlinked path — should resolve to the canonical path
+		got := GetCurrentRepoMainPathFrom(symCtx, linkPath)
+		if got != symRepo {
+			t.Errorf("via symlink: got %q, want %q (canonical)", got, symRepo)
+		}
+	})
 }

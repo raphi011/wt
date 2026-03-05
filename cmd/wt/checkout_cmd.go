@@ -117,7 +117,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				// New branch without scope - use current repo
 				repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
 				if err != nil {
-					return fmt.Errorf("not in a repo, use scope:branch to specify target")
+					return fmt.Errorf("not in a repo, use scope:branch to specify target: %w", err)
 				}
 				repos = []registry.Repo{repo}
 			} else {
@@ -265,15 +265,9 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 		if mainPath == "" {
 			return fmt.Errorf("--autostash: cannot determine repo from working directory %s (are you in a git repository?)", workDir)
 		}
-		mainPathResolved, err := filepath.EvalSymlinks(mainPath)
-		if err != nil {
-			return fmt.Errorf("--autostash: cannot resolve path %s: %w", mainPath, err)
-		}
-		repoPathResolved, err := filepath.EvalSymlinks(repo.Path)
-		if err != nil {
-			return fmt.Errorf("--autostash: cannot resolve repo path %s: %w", repo.Path, err)
-		}
-		if mainPathResolved != repoPathResolved {
+		// Both paths are already canonical (symlinks resolved by
+		// GetCurrentRepoMainPathFrom and the registry).
+		if mainPath != repo.Path {
 			return fmt.Errorf("--autostash requires running from a worktree of %s", repo.Name)
 		}
 		if repoHasCommits {

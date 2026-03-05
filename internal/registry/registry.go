@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/raphi011/wt/internal/storage"
+	"github.com/raphi011/wt/internal/fs"
 )
 
 // Repo represents a registered git repository
@@ -26,7 +26,7 @@ type Registry struct {
 
 // registryPath returns the path to ~/.wt/repos.json
 func registryPath() (string, error) {
-	dir, err := storage.WtDir()
+	dir, err := fs.WtDir()
 	if err != nil {
 		return "", fmt.Errorf("get wt directory: %w", err)
 	}
@@ -45,7 +45,7 @@ func Load(path string) (*Registry, error) {
 	}
 
 	var reg Registry
-	if err := storage.LoadJSON(path, &reg); err != nil {
+	if err := fs.LoadJSON(path, &reg); err != nil {
 		if os.IsNotExist(err) {
 			return &Registry{Repos: []Repo{}}, nil
 		}
@@ -65,7 +65,7 @@ func (r *Registry) Save(path string) error {
 		}
 	}
 
-	if err := storage.SaveJSON(path, r); err != nil {
+	if err := fs.SaveJSON(path, r); err != nil {
 		return fmt.Errorf("save registry: %w", err)
 	}
 
@@ -74,16 +74,18 @@ func (r *Registry) Save(path string) error {
 
 // Add registers a new repo. Returns error if path already registered.
 func (r *Registry) Add(repo Repo) error {
-	// Normalize path
+	// Normalize path: absolute + symlink resolution so the registry
+	// always stores canonical paths.
 	absPath, err := filepath.Abs(repo.Path)
 	if err != nil {
 		return fmt.Errorf("resolve path: %w", err)
 	}
-	repo.Path = absPath
+	repo.Path = fs.ResolvePath(absPath)
 
-	// Check for duplicate path
+	// Check for duplicate path (resolve stored paths too,
+	// in case pre-existing entries have non-canonical paths)
 	for _, existing := range r.Repos {
-		if existing.Path == repo.Path {
+		if fs.ResolvePath(existing.Path) == repo.Path {
 			return fmt.Errorf("repo already registered: %s", repo.Path)
 		}
 	}
@@ -99,10 +101,22 @@ func (r *Registry) Add(repo Repo) error {
 	return nil
 }
 
+// resolveAsPath converts a value that may be a path to its canonical form
+// (absolute + symlinks resolved). If the value isn't a valid path, returns
+// it unchanged — callers also compare by name, so this is safe.
+func resolveAsPath(nameOrPath string) string {
+	abs, err := filepath.Abs(nameOrPath)
+	if err != nil {
+		return nameOrPath
+	}
+	return fs.ResolvePath(abs)
+}
+
 // Remove unregisters a repo by name or path
 func (r *Registry) Remove(nameOrPath string) error {
+	resolvedInput := resolveAsPath(nameOrPath)
 	for i, repo := range r.Repos {
-		if repo.Name == nameOrPath || repo.Path == nameOrPath {
+		if repo.Name == nameOrPath || fs.ResolvePath(repo.Path) == resolvedInput {
 			r.Repos = slices.Delete(r.Repos, i, i+1)
 			return nil
 		}
@@ -112,8 +126,9 @@ func (r *Registry) Remove(nameOrPath string) error {
 
 // Find looks up a repo by name or path
 func (r *Registry) Find(ref string) (Repo, error) {
+	resolvedRef := resolveAsPath(ref)
 	for _, repo := range r.Repos {
-		if repo.Name == ref || repo.Path == ref {
+		if repo.Name == ref || fs.ResolvePath(repo.Path) == resolvedRef {
 			return repo, nil
 		}
 	}
@@ -146,9 +161,10 @@ func (r *Registry) FindByPath(path string) (Repo, error) {
 	if err != nil {
 		return Repo{}, err
 	}
+	absPath = fs.ResolvePath(absPath)
 
 	for _, repo := range r.Repos {
-		if repo.Path == absPath {
+		if fs.ResolvePath(repo.Path) == absPath {
 			return repo, nil
 		}
 	}

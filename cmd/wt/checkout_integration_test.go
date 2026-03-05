@@ -2865,3 +2865,69 @@ func TestCheckout_AutoStash_LabelTarget(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+// TestCheckout_NewBranchViaSymlink tests that checkout -b works when the working
+// directory is reached through a symlink.
+//
+// Reproduces a bug where GetCurrentRepoMainPathFrom returned a non-canonical path
+// (with unresolved symlinks), causing FindByPath to fail against registry entries,
+// and auto-register to fail with "repo name already exists".
+func TestCheckout_NewBranchViaSymlink(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Create repo at real path
+	repoPath := setupTestRepo(t, tmpDir, "real-repo")
+
+	// Create symlink → real-repo
+	linkPath := filepath.Join(tmpDir, "linked-repo")
+	if err := os.Symlink(repoPath, linkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	// Register repo at its real (canonical) path
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "real-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+	}
+
+	// Set workDir to the SYMLINK path — this is the key: simulates being
+	// inside the repo via a symlink (e.g., macOS /var -> /private/var).
+	ctx := testContextWithConfig(t, cfg, linkPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "symlink-test-branch"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout -b via symlink failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "real-repo-symlink-test-branch")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Errorf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify it's on the correct branch
+	branch := getGitBranch(t, wtPath)
+	if branch != "symlink-test-branch" {
+		t.Errorf("expected branch 'symlink-test-branch', got %q", branch)
+	}
+}

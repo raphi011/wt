@@ -61,7 +61,7 @@ internal/output/         - Context-aware output (stdout)
 internal/prcache/        - PR cache (simple JSON at ~/.wt/prs.json)
 internal/preserve/       - Worktree preservation logic (protect branches from pruning)
 internal/registry/       - Repository registry (tracks managed repos)
-internal/storage/        - Generic JSON file storage (used by registry, prcache, history)
+internal/fs/             - Filesystem utilities: JSON storage, path resolution (symlink canonicalization)
 internal/worktree/       - Worktree path formatting (template expansion)
 internal/ui/             - Terminal UI components
   ├── static/            - Non-interactive output (table formatting)
@@ -140,6 +140,8 @@ internal/ui/             - Terminal UI components
 **Always use `config.WorkDirFromContext(ctx)` for the working directory** - Never call `os.Getwd()` in command implementations. The working directory is captured once in `root.go` and stored in context. Use `config.WorkDirFromContext(ctx)` to retrieve it. For git operations that need a path, use `git.GetCurrentRepoMainPathFrom(ctx, workDir)`. Direct `os.Getwd()` calls break parallel test isolation.
 
 **Avoid magic strings** - Use named constants for repeated string values (e.g., PR states, merge strategies). Define constants in the package that owns the concept (e.g., `forge.PRStateMerged` for PR states). Never compare against string literals scattered across files.
+
+**Always canonicalize paths before comparing** - On macOS, `/var` is a symlink to `/private/var` and `/tmp` to `/private/tmp`. If one path goes through the symlink and another is resolved, string comparison fails even though they point to the same location. Use `fs.ResolvePath(path)` (from `internal/fs`) to resolve symlinks before storing or comparing paths. The registry, history, and `git.GetCurrentRepoMainPathFrom` all canonicalize paths — any new code that compares filesystem paths must do the same.
 
 **Interactive Mode (`-i` flag)** - When implementing interactive wizard mode for commands:
 
