@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/fs"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
@@ -74,13 +75,18 @@ func testContextWithOutput(t *testing.T) (context.Context, *strings.Builder) {
 	return ctx, &out
 }
 
-// resolvePath resolves symlinks in a path.
-// This is needed on macOS where /var is a symlink to /private/var.
+// resolvePath canonicalizes a path by resolving symlinks and normalizing
+// case on macOS. This prevents false mismatches in assertions when the
+// OS returns a different casing than what was used to create the path.
 func resolvePath(t *testing.T, path string) string {
 	t.Helper()
-	resolved, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		t.Fatalf("failed to resolve path %s: %v", path, err)
+	resolved := fs.ResolvePath(path)
+	if resolved == path {
+		// fs.ResolvePath returns the original on failure; do a stricter
+		// check so test setup failures surface immediately.
+		if _, err := filepath.EvalSymlinks(path); err != nil {
+			t.Fatalf("failed to resolve path %s: %v", path, err)
+		}
 	}
 	return resolved
 }

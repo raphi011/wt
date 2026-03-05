@@ -57,14 +57,16 @@ func LoadJSON(path string, dest any) error {
 	return json.Unmarshal(data, dest)
 }
 
-// ResolvePath returns the canonical form of path by resolving symlinks.
+// ResolvePath returns the canonical form of path by resolving symlinks
+// and normalizing case on case-insensitive filesystems (macOS).
+//
 // On macOS, /var is a symlink to /private/var, so paths through /var
-// won't match paths through /private/var unless resolved.
-// Returns the original path unchanged if symlink resolution fails
+// won't match paths through /private/var unless resolved. Additionally,
+// APFS is case-insensitive by default, so /Users/foo/Git and
+// /Users/foo/git refer to the same directory but won't match as strings.
+//
+// Returns the original path unchanged if resolution fails
 // (e.g., broken symlink, permission denied).
 func ResolvePath(path string) string {
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		return resolved
-	}
-	return path
+	return canonicalizeCase(path)
 }

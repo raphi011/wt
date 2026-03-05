@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/raphi011/wt/internal/fs"
 	"github.com/raphi011/wt/internal/worktree"
 )
 
@@ -69,17 +70,12 @@ func ValidateMigration(ctx context.Context, repoPath string, opts MigrationOptio
 		return nil, err
 	}
 
-	// Resolve to absolute path
+	// Resolve to absolute path with symlink + case normalization
 	absPath, err := filepath.Abs(repoPath)
 	if err != nil {
 		return nil, fmt.Errorf("resolve path: %w", err)
 	}
-
-	// Resolve symlinks (on macOS, /tmp -> /private/tmp)
-	absPath, err = filepath.EvalSymlinks(absPath)
-	if err != nil {
-		return nil, fmt.Errorf("resolve symlinks: %w", err)
-	}
+	absPath = fs.ResolvePath(absPath)
 
 	// Check if it's a git repo
 	gitDir := filepath.Join(absPath, ".git")
@@ -471,17 +467,12 @@ func ValidateMigrationToRegular(ctx context.Context, repoPath string, opts Migra
 		return nil, err
 	}
 
-	// Resolve to absolute path
+	// Resolve to absolute path with symlink + case normalization
 	absPath, err := filepath.Abs(repoPath)
 	if err != nil {
 		return nil, fmt.Errorf("resolve path: %w", err)
 	}
-
-	// Resolve symlinks (on macOS, /tmp -> /private/tmp)
-	absPath, err = filepath.EvalSymlinks(absPath)
-	if err != nil {
-		return nil, fmt.Errorf("resolve symlinks: %w", err)
-	}
+	absPath = fs.ResolvePath(absPath)
 
 	// Check if it's a git repo with bare-in-.git structure
 	gitDir := filepath.Join(absPath, ".git")
