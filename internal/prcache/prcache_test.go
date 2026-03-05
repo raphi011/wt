@@ -1,6 +1,7 @@
 package prcache
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -264,6 +265,126 @@ func TestDirtyFlag(t *testing.T) {
 	if !c.dirty {
 		t.Error("dirty should be true after Reset")
 	}
+}
+
+func TestLoadFrom(t *testing.T) {
+	t.Parallel()
+
+	t.Run("loads valid cache", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "prs.json")
+
+		original := New()
+		original.Set("/repo:main", &forge.PRInfo{Number: 42, State: "OPEN", Fetched: true})
+		if err := original.SaveTo(path); err != nil {
+			t.Fatalf("SaveTo failed: %v", err)
+		}
+
+		loaded := LoadFrom(path)
+		if loaded.PRs == nil {
+			t.Fatal("loaded PRs map is nil")
+		}
+		pr := loaded.Get("/repo:main")
+		if pr == nil {
+			t.Fatal("expected /repo:main entry")
+		}
+		if pr.Number != 42 {
+			t.Errorf("Number = %d, want 42", pr.Number)
+		}
+	})
+
+	t.Run("returns empty cache for missing file", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "nonexistent.json")
+
+		loaded := LoadFrom(path)
+		if loaded == nil {
+			t.Fatal("LoadFrom returned nil")
+		}
+		if loaded.PRs == nil {
+			t.Fatal("PRs map should be initialized")
+		}
+		if len(loaded.PRs) != 0 {
+			t.Errorf("expected 0 entries, got %d", len(loaded.PRs))
+		}
+	})
+
+	t.Run("returns empty cache for corrupted JSON", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "bad.json")
+
+		if err := os.WriteFile(path, []byte("{not valid json"), 0644); err != nil {
+			t.Fatalf("setup: write failed: %v", err)
+		}
+
+		loaded := LoadFrom(path)
+		if loaded == nil {
+			t.Fatal("LoadFrom returned nil")
+		}
+		if loaded.PRs == nil {
+			t.Fatal("PRs map should be initialized")
+		}
+		if len(loaded.PRs) != 0 {
+			t.Errorf("expected 0 entries, got %d", len(loaded.PRs))
+		}
+	})
+
+	t.Run("initializes nil PRs map", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "empty.json")
+
+		// Write valid JSON with null prs field
+		if err := os.WriteFile(path, []byte(`{"prs":null}`), 0644); err != nil {
+			t.Fatalf("setup: write failed: %v", err)
+		}
+
+		loaded := LoadFrom(path)
+		if loaded.PRs == nil {
+			t.Fatal("PRs map should be initialized even when null in JSON")
+		}
+	})
+
+	t.Run("round-trip SaveTo then LoadFrom", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "rt.json")
+
+		now := time.Now().Truncate(time.Second)
+		original := New()
+		original.Set("/repo:feat", &forge.PRInfo{
+			Number:   99,
+			State:    "MERGED",
+			Author:   "alice",
+			CachedAt: now,
+			Fetched:  true,
+		})
+
+		if err := original.SaveTo(path); err != nil {
+			t.Fatalf("SaveTo failed: %v", err)
+		}
+
+		loaded := LoadFrom(path)
+		pr := loaded.Get("/repo:feat")
+		if pr == nil {
+			t.Fatal("missing /repo:feat entry after round-trip")
+		}
+		if pr.Number != 99 {
+			t.Errorf("Number = %d, want 99", pr.Number)
+		}
+		if pr.State != "MERGED" {
+			t.Errorf("State = %q, want MERGED", pr.State)
+		}
+		if pr.Author != "alice" {
+			t.Errorf("Author = %q, want alice", pr.Author)
+		}
+		if !pr.CachedAt.Equal(now) {
+			t.Errorf("CachedAt = %v, want %v", pr.CachedAt, now)
+		}
+	})
 }
 
 func TestSaveIfDirtyWhenDirty(t *testing.T) {

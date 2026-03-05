@@ -34,11 +34,11 @@ func Path() string {
 	return filepath.Join(home, ".wt", "prs.json")
 }
 
-// Load loads the PR cache from disk. Returns an empty cache if
+// LoadFrom loads the PR cache from the given path. Returns an empty cache if
 // the file is missing or corrupted.
-func Load() *Cache {
+func LoadFrom(path string) *Cache {
 	var cache Cache
-	if err := fs.LoadJSON(Path(), &cache); err != nil {
+	if err := fs.LoadJSON(path, &cache); err != nil {
 		return New()
 	}
 
@@ -50,9 +50,20 @@ func Load() *Cache {
 	return &cache
 }
 
+// Load loads the PR cache from disk. Returns an empty cache if
+// the file is missing or corrupted.
+func Load() *Cache {
+	return LoadFrom(Path())
+}
+
+// SaveTo saves the PR cache to the given path atomically.
+func (c *Cache) SaveTo(path string) error {
+	return fs.SaveJSON(path, c)
+}
+
 // Save saves the PR cache to disk atomically
 func (c *Cache) Save() error {
-	return fs.SaveJSON(Path(), c)
+	return c.SaveTo(Path())
 }
 
 // Set stores PR info for a cache key

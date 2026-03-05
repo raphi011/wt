@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/raphi011/wt/internal/config"
 )
 
 func TestNormalizeGitLabState(t *testing.T) {
@@ -158,5 +160,176 @@ func TestConfigureBareRepo(t *testing.T) {
 	want := "+refs/heads/*:refs/remotes/origin/*"
 	if got != want {
 		t.Errorf("fetch refspec = %q, want %q", got, want)
+	}
+}
+
+func TestGitHub_CloneRepo_Validation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		repoSpec string
+		wantErr  string
+	}{
+		{"no slash", "noslash", "invalid repo spec"},
+		{"empty org", "/repo", "org and repo must not be empty"},
+		{"empty repo", "org/", "org and repo must not be empty"},
+		{"empty string", "", "invalid repo spec"},
+		{"too many parts", "a/b/c", "invalid repo spec"},
+	}
+
+	gh := &GitHub{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := gh.CloneRepo(context.Background(), tt.repoSpec, t.TempDir())
+			if err == nil {
+				t.Fatalf("CloneRepo(%q) expected error, got nil", tt.repoSpec)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("CloneRepo(%q) error = %q, want it to contain %q", tt.repoSpec, err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestGitHub_CloneBareRepo_Validation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		repoSpec string
+		wantErr  string
+	}{
+		{"no slash", "noslash", "invalid repo spec"},
+		{"empty org", "/repo", "org and repo must not be empty"},
+		{"empty repo", "org/", "org and repo must not be empty"},
+		{"empty string", "", "invalid repo spec"},
+		{"too many parts", "a/b/c", "invalid repo spec"},
+	}
+
+	gh := &GitHub{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := gh.CloneBareRepo(context.Background(), tt.repoSpec, t.TempDir())
+			if err == nil {
+				t.Fatalf("CloneBareRepo(%q) expected error, got nil", tt.repoSpec)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("CloneBareRepo(%q) error = %q, want it to contain %q", tt.repoSpec, err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestGitLab_CloneRepo_Validation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		repoSpec string
+		wantErr  string
+	}{
+		{"no slash", "noslash", "invalid repo spec"},
+		{"empty group", "/repo", "group must not be empty"},
+		{"empty repo name", "group/", "repo name must not be empty"},
+		{"empty string", "", "invalid repo spec"},
+	}
+
+	gl := &GitLab{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := gl.CloneRepo(context.Background(), tt.repoSpec, t.TempDir())
+			if err == nil {
+				t.Fatalf("CloneRepo(%q) expected error, got nil", tt.repoSpec)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("CloneRepo(%q) error = %q, want it to contain %q", tt.repoSpec, err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestGitLab_CloneBareRepo_Validation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		repoSpec string
+		wantErr  string
+	}{
+		{"no slash", "noslash", "invalid repo spec"},
+		{"empty group", "/repo", "group must not be empty"},
+		{"empty repo name", "group/", "repo name must not be empty"},
+		{"empty string", "", "invalid repo spec"},
+	}
+
+	gl := &GitLab{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := gl.CloneBareRepo(context.Background(), tt.repoSpec, t.TempDir())
+			if err == nil {
+				t.Fatalf("CloneBareRepo(%q) expected error, got nil", tt.repoSpec)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("CloneBareRepo(%q) error = %q, want it to contain %q", tt.repoSpec, err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestGitHub_getUserForRepo(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		forgeConfig *config.ForgeConfig
+		repoPath    string
+		want        string
+	}{
+		{
+			name:        "nil ForgeConfig",
+			forgeConfig: nil,
+			repoPath:    "org/repo",
+			want:        "",
+		},
+		{
+			name: "matching rule",
+			forgeConfig: &config.ForgeConfig{
+				Rules: []config.ForgeRule{
+					{Pattern: "org/*", User: "my-user"},
+				},
+			},
+			repoPath: "org/repo",
+			want:     "my-user",
+		},
+		{
+			name: "no matching rule",
+			forgeConfig: &config.ForgeConfig{
+				Rules: []config.ForgeRule{
+					{Pattern: "other/*", User: "other-user"},
+				},
+			},
+			repoPath: "org/repo",
+			want:     "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			gh := &GitHub{ForgeConfig: tt.forgeConfig}
+			got := gh.getUserForRepo(tt.repoPath)
+			if got != tt.want {
+				t.Errorf("getUserForRepo(%q) = %q, want %q", tt.repoPath, got, tt.want)
+			}
+		})
 	}
 }
