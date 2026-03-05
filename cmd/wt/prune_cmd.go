@@ -371,7 +371,6 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 
 	l := log.FromContext(ctx)
 	cfg := config.FromContext(ctx)
-	resolver := config.ResolverFromContext(ctx)
 
 	// Load history for cleanup
 	hist, err := history.Load(cfg.GetHistoryPath())
@@ -389,11 +388,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 
 	for _, wt := range toRemove {
 		// Resolve per-repo config for hooks and delete_local_branches
-		effCfg, resolveErr := resolver.ConfigForRepo(wt.RepoPath)
-		if resolveErr != nil {
-			l.Printf("Warning: failed to load local config for %s: %v (using global config)\n", wt.RepoName, resolveErr)
-			effCfg = cfg
-		}
+		effCfg := resolveEffectiveConfig(ctx, wt.RepoPath)
 
 		if err := git.RemoveWorktree(ctx, wt, opts.Force); err != nil {
 			l.Printf("Warning: failed to remove %s: %v\n", wt.Path, err)

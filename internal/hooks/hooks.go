@@ -161,29 +161,6 @@ func runHook(goCtx context.Context, name string, hook *config.Hook, ctx Context,
 	return nil
 }
 
-// ParseEnv parses a slice of "key=value" or bare "key" strings into a map.
-// Bare keys without "=" are treated as boolean flags with value "true".
-// Returns an error if a key is empty.
-func ParseEnv(envSlice []string) (map[string]string, error) {
-	result := make(map[string]string)
-	for _, e := range envSlice {
-		key, value, ok := strings.Cut(e, "=")
-		if !ok {
-			// Bare key without "=" - treat as boolean flag
-			if e == "" {
-				return nil, fmt.Errorf("invalid env format %q: key cannot be empty", e)
-			}
-			result[e] = "true"
-			continue
-		}
-		if key == "" {
-			return nil, fmt.Errorf("invalid env format %q: key cannot be empty", e)
-		}
-		result[key] = value
-	}
-	return result, nil
-}
-
 // ReadStdinIfPiped reads all content from stdin if it's piped (not a TTY).
 // Returns empty string and nil if stdin is a TTY (interactive).
 func ReadStdinIfPiped() (string, error) {

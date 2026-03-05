@@ -96,15 +96,8 @@ func splitHookArgs(args []string, dashIdx int) (hookNames, targets []string) {
 
 // runHooksInRepo runs hooks in the repo's current worktree or main repo
 func runHooksInRepo(ctx context.Context, repo registry.Repo, hookNames []string, env map[string]string, dryRun bool, workDir string) error {
-	l := log.FromContext(ctx)
-
 	// Resolve effective config for this repo
-	resolver := config.ResolverFromContext(ctx)
-	effCfg, err := resolver.ConfigForRepo(repo.Path)
-	if err != nil {
-		l.Printf("Warning: failed to load local config for %s: %v\n", repo.Name, err)
-		effCfg = resolver.Global()
-	}
+	effCfg := resolveEffectiveConfig(ctx, repo.Path)
 
 	// Validate all hooks exist in effective config
 	var missing []string
@@ -144,9 +137,6 @@ func runHooksInRepo(ctx context.Context, repo registry.Repo, hookNames []string,
 
 // runHooksInTargets runs hooks in specified [scope:]branch targets
 func runHooksInTargets(ctx context.Context, reg *registry.Registry, hookNames []string, targets []string, env map[string]string, dryRun bool) error {
-	l := log.FromContext(ctx)
-	resolver := config.ResolverFromContext(ctx)
-
 	// Resolve all targets
 	wtTargets, err := resolveWorktreeTargets(ctx, reg, targets)
 	if err != nil {
@@ -157,11 +147,7 @@ func runHooksInTargets(ctx context.Context, reg *registry.Registry, hookNames []
 	var errs []error
 	for _, wt := range wtTargets {
 		// Resolve effective config for each repo
-		effCfg, resolveErr := resolver.ConfigForRepo(wt.RepoPath)
-		if resolveErr != nil {
-			l.Printf("Warning: failed to load local config for %s: %v\n", wt.RepoName, resolveErr)
-			effCfg = resolver.Global()
-		}
+		effCfg := resolveEffectiveConfig(ctx, wt.RepoPath)
 
 		// Validate hooks exist for this repo
 		var missing []string

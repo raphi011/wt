@@ -9,66 +9,6 @@ import (
 	"github.com/raphi011/wt/internal/fs"
 )
 
-func TestFromForge(t *testing.T) {
-	t.Parallel()
-
-	now := time.Now()
-	src := &forge.PRInfo{
-		Number:       42,
-		State:        forge.PRStateMerged,
-		IsDraft:      false,
-		URL:          "https://github.com/org/repo/pull/42",
-		Author:       "alice",
-		CommentCount: 3,
-		HasReviews:   true,
-		IsApproved:   true,
-		CachedAt:     now,
-		Fetched:      true,
-	}
-
-	got := FromForge(src)
-
-	if got.Number != src.Number {
-		t.Errorf("Number = %d, want %d", got.Number, src.Number)
-	}
-	if got.State != src.State {
-		t.Errorf("State = %q, want %q", got.State, src.State)
-	}
-	if got.IsDraft != src.IsDraft {
-		t.Errorf("IsDraft = %v, want %v", got.IsDraft, src.IsDraft)
-	}
-	if got.URL != src.URL {
-		t.Errorf("URL = %q, want %q", got.URL, src.URL)
-	}
-	if got.Author != src.Author {
-		t.Errorf("Author = %q, want %q", got.Author, src.Author)
-	}
-	if got.CommentCount != src.CommentCount {
-		t.Errorf("CommentCount = %d, want %d", got.CommentCount, src.CommentCount)
-	}
-	if got.HasReviews != src.HasReviews {
-		t.Errorf("HasReviews = %v, want %v", got.HasReviews, src.HasReviews)
-	}
-	if got.IsApproved != src.IsApproved {
-		t.Errorf("IsApproved = %v, want %v", got.IsApproved, src.IsApproved)
-	}
-	if !got.CachedAt.Equal(src.CachedAt) {
-		t.Errorf("CachedAt = %v, want %v", got.CachedAt, src.CachedAt)
-	}
-	if got.Fetched != src.Fetched {
-		t.Errorf("Fetched = %v, want %v", got.Fetched, src.Fetched)
-	}
-}
-
-func TestFromForge_Nil(t *testing.T) {
-	t.Parallel()
-
-	got := FromForge(nil)
-	if got != nil {
-		t.Errorf("FromForge(nil) = %v, want nil", got)
-	}
-}
-
 func TestNew(t *testing.T) {
 	t.Parallel()
 
@@ -111,39 +51,12 @@ func TestCacheKey(t *testing.T) {
 	}
 }
 
-func TestIsStale(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		cachedAt time.Time
-		want     bool
-	}{
-		{"zero time is stale", time.Time{}, true},
-		{"1h ago is fresh", time.Now().Add(-1 * time.Hour), false},
-		{"25h ago is stale", time.Now().Add(-25 * time.Hour), true},
-		{"exactly at boundary is fresh", time.Now().Add(-CacheMaxAge + time.Second), false},
-		{"just past boundary is stale", time.Now().Add(-CacheMaxAge - time.Second), true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			pr := &PRInfo{CachedAt: tt.cachedAt}
-			got := pr.IsStale()
-			if got != tt.want {
-				t.Errorf("IsStale() = %v, want %v (cachedAt: %v)", got, tt.want, tt.cachedAt)
-			}
-		})
-	}
-}
-
 func TestSetGet(t *testing.T) {
 	t.Parallel()
 
 	c := New()
 	key := "/repo:feature"
-	pr := &PRInfo{
+	pr := &forge.PRInfo{
 		Number: 42,
 		State:  "OPEN",
 		URL:    "https://github.com/org/repo/pull/42",
@@ -173,7 +86,7 @@ func TestDelete(t *testing.T) {
 
 	c := New()
 	key := "/repo:feature"
-	c.Set(key, &PRInfo{Number: 1})
+	c.Set(key, &forge.PRInfo{Number: 1})
 
 	c.Delete(key)
 	if c.Get(key) != nil {
@@ -188,8 +101,8 @@ func TestReset(t *testing.T) {
 	t.Parallel()
 
 	c := New()
-	c.Set("key1", &PRInfo{Number: 1})
-	c.Set("key2", &PRInfo{Number: 2})
+	c.Set("key1", &forge.PRInfo{Number: 1})
+	c.Set("key2", &forge.PRInfo{Number: 2})
 
 	c.Reset()
 
@@ -213,7 +126,7 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 	now := time.Now().Truncate(time.Second) // JSON loses sub-second precision
 
 	original := &Cache{
-		PRs: map[string]*PRInfo{
+		PRs: map[string]*forge.PRInfo{
 			"/repo:main": {
 				Number:       10,
 				State:        "MERGED",
@@ -297,8 +210,8 @@ func TestLoadSave(t *testing.T) {
 
 	// Create cache, set data, save to explicit path
 	c := New()
-	c.Set("/repo:main", &PRInfo{Number: 1, State: "OPEN", Fetched: true})
-	c.Set("/repo:feature", &PRInfo{Number: 2, State: "MERGED", Fetched: true})
+	c.Set("/repo:main", &forge.PRInfo{Number: 1, State: "OPEN", Fetched: true})
+	c.Set("/repo:feature", &forge.PRInfo{Number: 2, State: "MERGED", Fetched: true})
 
 	if err := fs.SaveJSON(path, c); err != nil {
 		t.Fatalf("SaveJSON failed: %v", err)
@@ -331,7 +244,7 @@ func TestDirtyFlag(t *testing.T) {
 	}
 
 	// After Set, cache is dirty
-	c.Set("key", &PRInfo{Number: 1})
+	c.Set("key", &forge.PRInfo{Number: 1})
 	if !c.dirty {
 		t.Error("dirty should be true after Set")
 	}

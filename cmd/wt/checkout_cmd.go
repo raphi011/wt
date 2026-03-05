@@ -226,12 +226,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 	l := log.FromContext(ctx)
 
 	// Resolve effective config for this repo (global + local .wt.toml)
-	resolver := config.ResolverFromContext(ctx)
-	cfg, err := resolver.ConfigForRepo(repo.Path)
-	if err != nil {
-		l.Printf("Warning: failed to load local config for %s: %v\n", repo.Name, err)
-		cfg = resolver.Global()
-	}
+	cfg := resolveEffectiveConfig(ctx, repo.Path)
 
 	// Override fetch with per-repo config if not explicitly set by CLI flag
 	if !fetchExplicit {

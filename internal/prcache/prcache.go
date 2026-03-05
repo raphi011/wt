@@ -6,36 +6,10 @@ package prcache
 import (
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/fs"
 )
-
-// CacheMaxAge is the maximum age of cached PR info before it's considered stale
-const CacheMaxAge = 24 * time.Hour
-
-// PRInfo represents pull request information
-type PRInfo struct {
-	Number       int       `json:"number"`
-	State        string    `json:"state"`    // Normalized: OPEN, MERGED, CLOSED
-	IsDraft      bool      `json:"is_draft"` // true if PR is a draft
-	URL          string    `json:"url"`
-	Author       string    `json:"author"`        // username/login
-	CommentCount int       `json:"comment_count"` // number of comments
-	HasReviews   bool      `json:"has_reviews"`   // any reviews submitted
-	IsApproved   bool      `json:"is_approved"`   // approved status
-	CachedAt     time.Time `json:"cached_at"`
-	Fetched      bool      `json:"fetched"` // true = API was queried (distinguishes "not fetched" from "no PR")
-}
-
-// IsStale returns true if the cache entry is older than CacheMaxAge
-func (p *PRInfo) IsStale() bool {
-	if p.CachedAt.IsZero() {
-		return true
-	}
-	return time.Since(p.CachedAt) > CacheMaxAge
-}
 
 // CacheKey returns the cache key for a worktree, namespaced by repo path.
 // Uses repoPath:branch since the PR is tied to the branch, not the folder.
@@ -45,13 +19,13 @@ func CacheKey(repoPath, branch string) string {
 
 // Cache stores PR info keyed by repoPath:branch
 type Cache struct {
-	PRs   map[string]*PRInfo `json:"prs"`
+	PRs   map[string]*forge.PRInfo `json:"prs"`
 	dirty bool
 }
 
 // New returns an empty, initialized cache.
 func New() *Cache {
-	return &Cache{PRs: make(map[string]*PRInfo)}
+	return &Cache{PRs: make(map[string]*forge.PRInfo)}
 }
 
 // Path returns the path to the PR cache file
@@ -70,7 +44,7 @@ func Load() *Cache {
 
 	// Initialize nil map
 	if cache.PRs == nil {
-		cache.PRs = make(map[string]*PRInfo)
+		cache.PRs = make(map[string]*forge.PRInfo)
 	}
 
 	return &cache
@@ -82,13 +56,13 @@ func (c *Cache) Save() error {
 }
 
 // Set stores PR info for a cache key
-func (c *Cache) Set(key string, pr *PRInfo) {
+func (c *Cache) Set(key string, pr *forge.PRInfo) {
 	c.PRs[key] = pr
 	c.dirty = true
 }
 
 // Get returns PR info for a cache key, or nil if not found
-func (c *Cache) Get(key string) *PRInfo {
+func (c *Cache) Get(key string) *forge.PRInfo {
 	return c.PRs[key]
 }
 
@@ -100,7 +74,7 @@ func (c *Cache) Delete(key string) {
 
 // Reset clears all cached data
 func (c *Cache) Reset() {
-	c.PRs = make(map[string]*PRInfo)
+	c.PRs = make(map[string]*forge.PRInfo)
 	c.dirty = true
 }
 
@@ -115,25 +89,4 @@ func (c *Cache) SaveIfDirty() error {
 	}
 	c.dirty = false
 	return nil
-}
-
-// FromForge converts a forge.PRInfo to a prcache.PRInfo.
-// Returns nil if pr is nil.
-func FromForge(pr *forge.PRInfo) *PRInfo {
-	if pr == nil {
-		return nil
-	}
-
-	return &PRInfo{
-		Number:       pr.Number,
-		State:        pr.State,
-		IsDraft:      pr.IsDraft,
-		URL:          pr.URL,
-		Author:       pr.Author,
-		CommentCount: pr.CommentCount,
-		HasReviews:   pr.HasReviews,
-		IsApproved:   pr.IsApproved,
-		CachedAt:     pr.CachedAt,
-		Fetched:      pr.Fetched,
-	}
 }

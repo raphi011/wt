@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -41,6 +42,59 @@ func newPrCmd() *cobra.Command {
 	cmd.AddCommand(newPrViewCmd())
 
 	return cmd
+}
+
+type repoForgeResult struct {
+	repo      registry.Repo
+	effCfg    *config.Config
+	originURL string
+	forge     forge.Forge
+	branch    string // current branch
+}
+
+// resolveRepoForge loads registry, resolves repo from optional arg or cwd,
+// resolves effective config, gets origin URL, detects/checks forge,
+// and resolves the current branch.
+func resolveRepoForge(ctx context.Context, repoArg string) (*repoForgeResult, error) {
+	cfg := config.FromContext(ctx)
+
+	reg, err := registry.Load(cfg.RegistryPath)
+	if err != nil {
+		return nil, fmt.Errorf("load registry: %w", err)
+	}
+
+	var repo registry.Repo
+	if repoArg != "" {
+		repo, err = reg.FindByName(repoArg)
+		if err != nil {
+			return nil, fmt.Errorf("repository %q not found", repoArg)
+		}
+	} else {
+		repo, err = findOrRegisterCurrentRepoFromContext(ctx, reg)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	effCfg := resolveEffectiveConfig(ctx, repo.Path)
+
+	originURL, err := git.GetOriginURL(ctx, repo.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get origin URL: %w", err)
+	}
+
+	f := forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
+	if err := f.Check(ctx); err != nil {
+		return nil, err
+	}
+
+	cwd := config.WorkDirFromContext(ctx)
+	branch, err := git.GetCurrentBranch(ctx, cwd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current branch: %w", err)
+	}
+
+	return &repoForgeResult{repo: repo, effCfg: effCfg, originURL: originURL, forge: f, branch: branch}, nil
 }
 
 func newPrCheckoutCmd() *cobra.Command {
@@ -179,12 +233,7 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 			}
 
 			// Resolve effective config for this repo
-			resolver := config.ResolverFromContext(ctx)
-			effCfg, resolveErr := resolver.ConfigForRepo(repoPath)
-			if resolveErr != nil {
-				l.Printf("Warning: failed to load local config: %v\n", resolveErr)
-				effCfg = cfg
-			}
+			effCfg := resolveEffectiveConfig(ctx, repoPath)
 
 			// Get origin URL and detect forge
 			originURL, err := git.GetOriginURL(ctx, repoPath)
@@ -250,7 +299,7 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 			if err != nil {
 				l.Debug("failed to fetch PR info", "branch", branch, "error", err)
 			} else {
-				cache.Set(prcache.CacheKey(repoPath, branch), prcache.FromForge(prInfo))
+				cache.Set(prcache.CacheKey(repoPath, branch), prInfo)
 				if err := cache.Save(); err != nil {
 					l.Printf("Warning: failed to save PR cache: %v\n", err)
 				}
@@ -345,53 +394,15 @@ func newPrCreateCmd() *cobra.Command {
   wt pr create --title "Add feature" -w      # Open in browser`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			out := output.FromContext(ctx)
 
-			// Load registry
-			reg, err := registry.Load(cfg.RegistryPath)
-			if err != nil {
-				return fmt.Errorf("load registry: %w", err)
-			}
-
-			// Determine target repo
-			var repo registry.Repo
+			var repoArg string
 			if len(args) > 0 {
-				repo, err = reg.FindByName(args[0])
-				if err != nil {
-					return fmt.Errorf("repository %q not found", args[0])
-				}
-			} else {
-				repo, err = findOrRegisterCurrentRepoFromContext(ctx, reg)
-				if err != nil {
-					return err
-				}
+				repoArg = args[0]
 			}
-
-			// Resolve effective config for this repo
-			resolver := config.ResolverFromContext(ctx)
-			effCfg, resolveErr := resolver.ConfigForRepo(repo.Path)
-			if resolveErr != nil {
-				l.Printf("Warning: failed to load local config: %v\n", resolveErr)
-				effCfg = cfg
-			}
-
-			// Get current branch
-			cwd := config.WorkDirFromContext(ctx)
-			branch, err := git.GetCurrentBranch(ctx, cwd)
+			res, err := resolveRepoForge(ctx, repoArg)
 			if err != nil {
-				return fmt.Errorf("failed to get current branch: %w", err)
-			}
-
-			// Get origin URL and detect forge
-			originURL, err := git.GetOriginURL(ctx, repo.Path)
-			if err != nil {
-				return fmt.Errorf("failed to get origin URL: %w", err)
-			}
-
-			f := forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
-			if err := f.Check(ctx); err != nil {
 				return err
 			}
 
@@ -405,21 +416,21 @@ func newPrCreateCmd() *cobra.Command {
 				prBody = string(content)
 			}
 
-			l.Debug("pr create", "title", title, "branch", branch, "base", base)
+			l.Debug("pr create", "title", title, "branch", res.branch, "base", base)
 
 			// Push branch first
-			l.Printf("Pushing branch %s...\n", branch)
-			if err := git.RunGitCommand(ctx, repo.Path, "push", "-u", "origin", branch); err != nil {
+			l.Printf("Pushing branch %s...\n", res.branch)
+			if err := git.RunGitCommand(ctx, res.repo.Path, "push", "-u", "origin", res.branch); err != nil {
 				return fmt.Errorf("push failed: %w", err)
 			}
 
 			// Create PR
 			l.Printf("Creating PR...\n")
-			result, err := f.CreatePR(ctx, originURL, forge.CreatePRParams{
+			result, err := res.forge.CreatePR(ctx, res.originURL, forge.CreatePRParams{
 				Title: title,
 				Body:  prBody,
 				Base:  base,
-				Head:  branch,
+				Head:  res.branch,
 				Draft: draft,
 			})
 			if err != nil {
@@ -478,72 +489,34 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
   wt pr merge -s rebase        # Use rebase strategy`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			out := output.FromContext(ctx)
 
-			// Load registry
-			reg, err := registry.Load(cfg.RegistryPath)
-			if err != nil {
-				return fmt.Errorf("load registry: %w", err)
-			}
-
-			// Determine target repo
-			var repo registry.Repo
+			var repoArg string
 			if len(args) > 0 {
-				repo, err = reg.FindByName(args[0])
-				if err != nil {
-					return fmt.Errorf("repository %q not found", args[0])
-				}
-			} else {
-				repo, err = findOrRegisterCurrentRepoFromContext(ctx, reg)
-				if err != nil {
-					return err
-				}
+				repoArg = args[0]
 			}
-
-			// Resolve effective config for this repo
-			resolver := config.ResolverFromContext(ctx)
-			effCfg, resolveErr := resolver.ConfigForRepo(repo.Path)
-			if resolveErr != nil {
-				l.Printf("Warning: failed to load local config: %v\n", resolveErr)
-				effCfg = cfg
-			}
-
-			// Apply merge strategy from config if not explicitly set
-			if !cmd.Flags().Changed("strategy") && effCfg.Merge.Strategy != "" {
-				strategy = effCfg.Merge.Strategy
-			}
-
-			// Get current branch and worktree path
-			cwd := config.WorkDirFromContext(ctx)
-			branch, err := git.GetCurrentBranch(ctx, cwd)
+			res, err := resolveRepoForge(ctx, repoArg)
 			if err != nil {
-				return fmt.Errorf("failed to get current branch: %w", err)
-			}
-
-			// Get origin URL and detect forge
-			originURL, err := git.GetOriginURL(ctx, repo.Path)
-			if err != nil {
-				return fmt.Errorf("failed to get origin URL: %w", err)
-			}
-
-			f := forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
-			if err := f.Check(ctx); err != nil {
 				return err
 			}
 
-			l.Debug("pr merge", "branch", branch, "strategy", strategy)
+			// Apply merge strategy from config if not explicitly set
+			if !cmd.Flags().Changed("strategy") && res.effCfg.Merge.Strategy != "" {
+				strategy = res.effCfg.Merge.Strategy
+			}
+
+			l.Debug("pr merge", "branch", res.branch, "strategy", strategy)
 
 			// Get PR for branch
-			pr, err := f.GetPRForBranch(ctx, originURL, branch)
+			pr, err := res.forge.GetPRForBranch(ctx, res.originURL, res.branch)
 			if err != nil {
-				return fmt.Errorf("no PR found for branch %s: %w", branch, err)
+				return fmt.Errorf("no PR found for branch %s: %w", res.branch, err)
 			}
 
 			// Load PR cache for updates
 			cache := prcache.Load()
-			cacheKey := prcache.CacheKey(repo.Path, branch)
+			cacheKey := prcache.CacheKey(res.repo.Path, res.branch)
 
 			if pr.State == forge.PRStateMerged {
 				out.Printf("PR #%d is already merged\n", pr.Number)
@@ -552,21 +525,21 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 			} else {
 				// Merge the PR
 				l.Printf("Merging PR #%d...\n", pr.Number)
-				if err := f.MergePR(ctx, originURL, pr.Number, strategy); err != nil {
+				if err := res.forge.MergePR(ctx, res.originURL, pr.Number, strategy); err != nil {
 					return fmt.Errorf("merge failed: %w", err)
 				}
 				out.Printf("Merged PR #%d\n", pr.Number)
 
 				// Update cache with merged state
 				pr.State = forge.PRStateMerged
-				cache.Set(cacheKey, prcache.FromForge(pr))
+				cache.Set(cacheKey, pr)
 				if err := cache.Save(); err != nil {
 					l.Printf("Warning: failed to save PR cache: %v\n", err)
 				}
 			}
 
 			// Run hooks
-			hookMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandMerge)
+			hookMatches, err := hooks.SelectHooks(res.effCfg.Hooks, hookNames, noHook, hooks.CommandMerge)
 			if err != nil {
 				return err
 			}
@@ -576,20 +549,21 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 				return err
 			}
 
+			cwd := config.WorkDirFromContext(ctx)
 			hookCtx := hooks.Context{
 				WorktreeDir: cwd,
-				RepoDir:     repo.Path,
-				Branch:      branch,
-				Repo:        repo.Name,
-				Origin:      repo.Name,
+				RepoDir:     res.repo.Path,
+				Branch:      res.branch,
+				Repo:        res.repo.Name,
+				Origin:      res.repo.Name,
 				Trigger:     "merge",
 				Env:         hookEnv,
 			}
-			hooks.RunForEach(ctx, hookMatches, hookCtx, repo.Path)
+			hooks.RunForEach(ctx, hookMatches, hookCtx, res.repo.Path)
 
 			// Remove worktree unless --keep
 			if !keep {
-				wt := git.Worktree{Path: cwd, RepoPath: repo.Path}
+				wt := git.Worktree{Path: cwd, RepoPath: res.repo.Path}
 				l.Printf("Removing worktree...\n")
 				if err := git.RemoveWorktree(ctx, wt, false); err != nil {
 					l.Printf("Warning: failed to remove worktree: %v\n", err)
@@ -638,62 +612,24 @@ func newPrViewCmd() *cobra.Command {
   wt pr view -w           # Open PR in browser`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			out := output.FromContext(ctx)
 
-			// Load registry
-			reg, err := registry.Load(cfg.RegistryPath)
-			if err != nil {
-				return fmt.Errorf("load registry: %w", err)
-			}
-
-			// Determine target repo
-			var repo registry.Repo
+			var repoArg string
 			if len(args) > 0 {
-				repo, err = reg.FindByName(args[0])
-				if err != nil {
-					return fmt.Errorf("repository %q not found", args[0])
-				}
-			} else {
-				repo, err = findOrRegisterCurrentRepoFromContext(ctx, reg)
-				if err != nil {
-					return err
-				}
+				repoArg = args[0]
 			}
-
-			// Resolve effective config for this repo
-			resolver := config.ResolverFromContext(ctx)
-			effCfg, resolveErr := resolver.ConfigForRepo(repo.Path)
-			if resolveErr != nil {
-				l.Printf("Warning: failed to load local config: %v\n", resolveErr)
-				effCfg = cfg
-			}
-
-			// Get current branch
-			cwd := config.WorkDirFromContext(ctx)
-			branch, err := git.GetCurrentBranch(ctx, cwd)
+			res, err := resolveRepoForge(ctx, repoArg)
 			if err != nil {
-				return fmt.Errorf("failed to get current branch: %w", err)
-			}
-
-			// Get origin URL and detect forge
-			originURL, err := git.GetOriginURL(ctx, repo.Path)
-			if err != nil {
-				return fmt.Errorf("failed to get origin URL: %w", err)
-			}
-
-			f := forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
-			if err := f.Check(ctx); err != nil {
 				return err
 			}
 
-			l.Debug("pr view", "branch", branch)
+			l.Debug("pr view", "branch", res.branch)
 
 			// Get PR for branch
-			pr, err := f.GetPRForBranch(ctx, originURL, branch)
+			pr, err := res.forge.GetPRForBranch(ctx, res.originURL, res.branch)
 			if err != nil {
-				return fmt.Errorf("no PR found for branch %s", branch)
+				return fmt.Errorf("no PR found for branch %s", res.branch)
 			}
 
 			if web {

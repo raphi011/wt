@@ -106,7 +106,7 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 			}
 
 			prMutex.Lock()
-			prCache.Set(item.cacheKey, prcache.FromForge(pr))
+			prCache.Set(item.cacheKey, pr)
 			prMutex.Unlock()
 
 			countMutex.Lock()
