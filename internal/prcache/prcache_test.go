@@ -265,3 +265,33 @@ func TestDirtyFlag(t *testing.T) {
 		t.Error("dirty should be true after Reset")
 	}
 }
+
+func TestSaveIfDirtyWhenDirty(t *testing.T) {
+	// Not parallel: t.Setenv modifies process-global HOME
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	c := New()
+	c.Set("/repo:main", &forge.PRInfo{Number: 1, State: "OPEN"})
+
+	if !c.dirty {
+		t.Fatal("expected dirty=true after Set")
+	}
+
+	if err := c.SaveIfDirty(); err != nil {
+		t.Fatalf("SaveIfDirty failed: %v", err)
+	}
+
+	if c.dirty {
+		t.Error("dirty should be false after successful SaveIfDirty")
+	}
+
+	// Verify the file was actually written
+	var loaded Cache
+	if err := fs.LoadJSON(filepath.Join(tmpDir, ".wt", "prs.json"), &loaded); err != nil {
+		t.Fatalf("failed to load saved cache: %v", err)
+	}
+	if loaded.PRs["/repo:main"] == nil {
+		t.Error("saved cache should contain /repo:main entry")
+	}
+}

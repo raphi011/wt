@@ -108,3 +108,64 @@ func TestWorktreeTableRowStaleDisabled(t *testing.T) {
 		t.Errorf("disabled stale: AGE cell should be plain text, got %q", row[3])
 	}
 }
+
+func TestRenderTableEmptyRows(t *testing.T) {
+	t.Parallel()
+
+	result := RenderTable([]string{"COL1", "COL2"}, nil)
+
+	if result != "" {
+		t.Errorf("empty rows: expected empty string, got %q", result)
+	}
+}
+
+func TestRenderTableSingleRow(t *testing.T) {
+	t.Parallel()
+
+	headers := []string{"NAME", "STATUS"}
+	rows := [][]string{{"alice", "active"}}
+
+	result := RenderTable(headers, rows)
+
+	if result == "" {
+		t.Fatal("single row: expected non-empty output")
+	}
+	if !strings.Contains(result, "NAME") {
+		t.Errorf("single row: output should contain header %q, got %q", "NAME", result)
+	}
+	if !strings.Contains(result, "STATUS") {
+		t.Errorf("single row: output should contain header %q, got %q", "STATUS", result)
+	}
+	if !strings.Contains(result, "alice") {
+		t.Errorf("single row: output should contain row value %q, got %q", "alice", result)
+	}
+	if !strings.Contains(result, "active") {
+		t.Errorf("single row: output should contain row value %q, got %q", "active", result)
+	}
+}
+
+func TestRenderTableMultipleRows(t *testing.T) {
+	t.Parallel()
+
+	headers := []string{"REPO", "BRANCH", "COMMIT"}
+	rows := [][]string{
+		{"repo-a", "main", "abc1234"},
+		{"repo-b", "feature-x", "def5678"},
+		{"repo-c", "bugfix-y", "ghi9012"},
+	}
+
+	result := RenderTable(headers, rows)
+
+	for _, header := range headers {
+		if !strings.Contains(result, header) {
+			t.Errorf("multiple rows: output should contain header %q", header)
+		}
+	}
+	for _, row := range rows {
+		for _, cell := range row {
+			if !strings.Contains(result, cell) {
+				t.Errorf("multiple rows: output should contain cell value %q", cell)
+			}
+		}
+	}
+}
