@@ -124,6 +124,46 @@ func TestPruneDescriptionRenderer_InvalidValue(t *testing.T) {
 	}
 }
 
+func TestPruneDescriptionRenderer_StalePrunable(t *testing.T) {
+	opt := framework.Option{
+		Label:       "repo:branch",
+		Description: "⏳ Stale (3w)",
+		Value: pruneOptionValue{
+			ID:         4,
+			IsPrunable: true,
+			IsStale:    true,
+			Reason:     "⏳ Stale (3w)",
+		},
+	}
+
+	// Stale prunable items should be rendered in warning style (orange), not success
+	result := pruneDescriptionRenderer(opt, false)
+
+	if !strings.Contains(result, "Stale (3w)") {
+		t.Errorf("expected result to contain 'Stale (3w)', got %q", result)
+	}
+}
+
+func TestPruneDescriptionRenderer_MergedNotStale(t *testing.T) {
+	// A merged (non-stale) prunable item should use success style, not warning
+	opt := framework.Option{
+		Label:       "repo:branch",
+		Description: "● Merged",
+		Value: pruneOptionValue{
+			ID:         5,
+			IsPrunable: true,
+			IsStale:    false,
+			Reason:     "● Merged",
+		},
+	}
+
+	result := pruneDescriptionRenderer(opt, false)
+
+	if !strings.Contains(result, "Merged") {
+		t.Errorf("expected result to contain 'Merged', got %q", result)
+	}
+}
+
 func TestPruneWorktreeInfo_Structure(t *testing.T) {
 	info := PruneWorktreeInfo{
 		ID:         42,

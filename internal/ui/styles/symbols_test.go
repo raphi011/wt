@@ -195,6 +195,26 @@ func TestFormatPRRef_Hyperlink(t *testing.T) {
 	}
 }
 
+func TestFormatStaleReason(t *testing.T) {
+	tests := []struct {
+		commitAge string
+		expected  string
+	}{
+		{"3w", "⏳ Stale (3w)"},
+		{"2mo", "⏳ Stale (2mo)"},
+		{"", "⏳ Stale ()"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.commitAge, func(t *testing.T) {
+			got := FormatStaleReason(tt.commitAge)
+			if got != tt.expected {
+				t.Errorf("FormatStaleReason(%q) = %q, want %q", tt.commitAge, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestCurrentSymbols(t *testing.T) {
 	SetNerdfont(false)
 	symbols := CurrentSymbols()

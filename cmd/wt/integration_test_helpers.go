@@ -243,6 +243,32 @@ func addCommit(t *testing.T, path, filename, message string) {
 	}
 }
 
+// addCommitWithDate adds a file and commits it with a specific date (ISO 8601 format).
+func addCommitWithDate(t *testing.T, path, filename, message, date string) {
+	t.Helper()
+
+	filePath := filepath.Join(path, filename)
+	if err := os.WriteFile(filePath, []byte("content\n"), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	addCmd := exec.Command("git", "add", filename)
+	addCmd.Dir = path
+	if out, err := addCmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to git add: %v\n%s", err, out)
+	}
+
+	commitCmd := exec.Command("git", "commit", "-m", message)
+	commitCmd.Dir = path
+	commitCmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_DATE="+date,
+		"GIT_COMMITTER_DATE="+date,
+	)
+	if out, err := commitCmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to git commit with date: %v\n%s", err, out)
+	}
+}
+
 // getGitBranch returns the current git branch
 func getGitBranch(t *testing.T, path string) string {
 	t.Helper()

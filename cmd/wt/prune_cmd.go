@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -36,6 +37,7 @@ func newPruneCmd() *cobra.Command {
 		interactive      bool
 		deleteBranches   bool
 		noDeleteBranches bool
+		stale            bool
 	)
 
 	cmd := &cobra.Command{
@@ -46,12 +48,14 @@ func newPruneCmd() *cobra.Command {
 		Long: `Remove worktrees with merged PRs.
 
 Without arguments, removes all worktrees with merged PRs in current repo.
+Use --stale to also prune worktrees older than stale_days (default 14).
 Use --global to prune all registered repos.
 Use --interactive to select worktrees to prune.
 
 Target specific worktrees using [scope:]branch arguments where scope can be
 a repo name or label. Use -f when targeting specific worktrees.`,
 		Example: `  wt prune                         # Remove worktrees with merged PRs
+  wt prune --stale                 # Also prune stale worktrees
   wt prune --global                # Prune all repos
   wt prune -d                      # Dry-run: preview without removing
   wt prune -i                      # Interactive mode
@@ -156,8 +160,9 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 			var toSkip []git.Worktree
 
 			for _, wt := range allWorktrees {
-				// Only auto-prune worktrees with merged PRs
 				if wt.PRState == forge.PRStateMerged {
+					toRemove = append(toRemove, wt)
+				} else if stale && isStaleWorktree(wt, cfg.Prune.StaleDays) {
 					toRemove = append(toRemove, wt)
 				} else {
 					toSkip = append(toSkip, wt)
@@ -169,12 +174,20 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				wizardInfos := make([]flows.PruneWorktreeInfo, 0, len(allWorktrees))
 				for i, wt := range allWorktrees {
 					isPrunable := wt.PRState == forge.PRStateMerged
+					isStaleWt := false
+					reason := styles.FormatPRState(wt.PRState, wt.PRDraft)
+					if !isPrunable && stale && isStaleWorktree(wt, cfg.Prune.StaleDays) {
+						isPrunable = true
+						isStaleWt = true
+						reason = styles.FormatStaleReason(wt.CommitAge)
+					}
 					wizardInfos = append(wizardInfos, flows.PruneWorktreeInfo{
 						ID:         i + 1, // Use index as ID
 						RepoName:   wt.RepoName,
 						Branch:     wt.Branch,
-						Reason:     styles.FormatPRState(wt.PRState, wt.PRDraft),
+						Reason:     reason,
 						IsPrunable: isPrunable,
+						IsStale:    isStaleWt,
 					})
 				}
 
@@ -268,6 +281,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-removal hooks")
 	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode")
+	cmd.Flags().BoolVar(&stale, "stale", false, "Also prune stale worktrees (older than stale_days)")
 	cmd.Flags().BoolVarP(&deleteBranches, "delete-branches", "b", false, "Delete local branches after removal")
 	cmd.Flags().BoolVar(&noDeleteBranches, "no-delete-branches", false, "Keep local branches (overrides config)")
 
@@ -291,6 +305,14 @@ type pruneOpts struct {
 	NoHook                 bool
 	Env                    []string
 	PRCache                *prcache.Cache
+}
+
+// isStaleWorktree returns true if the worktree's last commit is older than staleDays.
+func isStaleWorktree(wt git.Worktree, staleDays int) bool {
+	if staleDays <= 0 || wt.CommitDate.IsZero() {
+		return false
+	}
+	return time.Since(wt.CommitDate) > time.Duration(staleDays)*24*time.Hour
 }
 
 // runPruneTargets handles removal of specific worktrees by [scope:]branch args.

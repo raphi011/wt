@@ -2,6 +2,9 @@ package main
 
 import (
 	"testing"
+	"time"
+
+	"github.com/raphi011/wt/internal/git"
 )
 
 func TestParseBranchTarget(t *testing.T) {
@@ -24,5 +27,68 @@ func TestParseBranchTarget(t *testing.T) {
 			t.Errorf("parseBranchTarget(%q) = (%q, %q), want (%q, %q)",
 				tt.input, repo, branch, tt.wantRepo, tt.wantBranch)
 		}
+	}
+}
+
+func TestIsStaleWorktree(t *testing.T) {
+	now := time.Now()
+
+	tests := []struct {
+		name      string
+		wt        git.Worktree
+		staleDays int
+		want      bool
+	}{
+		{
+			name:      "stale worktree",
+			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour)},
+			staleDays: 14,
+			want:      true,
+		},
+		{
+			name:      "fresh worktree",
+			wt:        git.Worktree{CommitDate: now.Add(-1 * 24 * time.Hour)},
+			staleDays: 14,
+			want:      false,
+		},
+		{
+			name:      "disabled staleDays=0",
+			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour)},
+			staleDays: 0,
+			want:      false,
+		},
+		{
+			name:      "zero commit date",
+			wt:        git.Worktree{},
+			staleDays: 14,
+			want:      false,
+		},
+		{
+			name:      "exactly at boundary",
+			wt:        git.Worktree{CommitDate: now.Add(-14*24*time.Hour - time.Second)},
+			staleDays: 14,
+			want:      true,
+		},
+		{
+			name:      "just before boundary",
+			wt:        git.Worktree{CommitDate: now.Add(-14*24*time.Hour + time.Hour)},
+			staleDays: 14,
+			want:      false,
+		},
+		{
+			name:      "negative staleDays",
+			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour)},
+			staleDays: -1,
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isStaleWorktree(tt.wt, tt.staleDays)
+			if got != tt.want {
+				t.Errorf("isStaleWorktree() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
