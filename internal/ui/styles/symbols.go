@@ -131,6 +131,9 @@ func FormatPRRef(number int, state string, isDraft bool, url string) string {
 
 // FormatStaleReason returns a formatted stale reason string with the commit age.
 func FormatStaleReason(commitAge string) string {
+	if commitAge == "" {
+		return "⏳ Stale"
+	}
 	return "⏳ Stale (" + commitAge + ")"
 }
 

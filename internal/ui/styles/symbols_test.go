@@ -202,7 +202,7 @@ func TestFormatStaleReason(t *testing.T) {
 	}{
 		{"3w", "⏳ Stale (3w)"},
 		{"2mo", "⏳ Stale (2mo)"},
-		{"", "⏳ Stale ()"},
+		{"", "⏳ Stale"},
 	}
 
 	for _, tt := range tests {

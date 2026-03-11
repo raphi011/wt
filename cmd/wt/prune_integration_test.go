@@ -1179,6 +1179,58 @@ func TestPrune_StaleFlag_Disabled(t *testing.T) {
 	}
 }
 
+// TestPrune_WithoutStaleFlag_KeepsStaleWorktrees tests that stale worktrees
+// are NOT pruned when the --stale flag is omitted.
+//
+// Scenario: A worktree has a very old commit, StaleDays=1, but --stale is NOT passed
+// Expected: Worktree survives (stale pruning is opt-in)
+func TestPrune_WithoutStaleFlag_KeepsStaleWorktrees(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"stale-branch"})
+	wtPath := createTestWorktree(t, repoPath, "stale-branch")
+
+	// Backdate the commit to make it stale
+	addCommitWithDate(t, wtPath, "old-file.txt", "old commit", "2020-01-01T00:00:00+00:00")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Prune: config.PruneConfig{
+			StaleDays: 1, // Would be stale, but --stale not passed
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{}) // No --stale flag
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Verify worktree still exists (stale pruning is opt-in)
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Error("stale worktree should NOT be removed without --stale flag")
+	}
+}
+
 // TestPrune_LocalConfigOverridesDeleteBranches tests that a per-repo .wt.toml
 // overrides the global config's delete_local_branches setting.
 //
