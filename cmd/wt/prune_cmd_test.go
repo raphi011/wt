@@ -31,6 +31,8 @@ func TestParseBranchTarget(t *testing.T) {
 }
 
 func TestIsStaleWorktree(t *testing.T) {
+	t.Parallel()
+
 	now := time.Now()
 
 	tests := []struct {

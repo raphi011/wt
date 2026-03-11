@@ -159,6 +159,10 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 			var toRemove []git.Worktree
 			var toSkip []git.Worktree
 
+			if stale && cfg.Prune.StaleDays <= 0 {
+				l.Println("Warning: --stale has no effect because stale_days is 0 (disabled)")
+			}
+
 			for _, wt := range allWorktrees {
 				if wt.PRState == forge.PRStateMerged {
 					toRemove = append(toRemove, wt)
