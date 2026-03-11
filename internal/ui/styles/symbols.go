@@ -129,6 +129,11 @@ func FormatPRRef(number int, state string, isDraft bool, url string) string {
 	return style.Render(text)
 }
 
+// FormatStaleReason returns a formatted stale reason string with the commit age.
+func FormatStaleReason(commitAge string) string {
+	return "⏳ Stale (" + commitAge + ")"
+}
+
 // PRStateSymbol returns just the symbol for a PR state
 func PRStateSymbol(state string, isDraft bool) string {
 	switch state {

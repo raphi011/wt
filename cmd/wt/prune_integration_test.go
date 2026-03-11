@@ -907,6 +907,278 @@ func TestPrune_ForceDeleteBranch_MergedPRState(t *testing.T) {
 	}
 }
 
+// TestPrune_StaleFlag_RemovesOldWorktrees tests that --stale removes worktrees
+// with old commits.
+//
+// Scenario: A worktree has a commit from 30 days ago, StaleDays=1
+// Expected: Worktree is removed with --stale flag
+func TestPrune_StaleFlag_RemovesOldWorktrees(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"stale-branch"})
+	wtPath := createTestWorktree(t, repoPath, "stale-branch")
+
+	// Backdate the commit in the worktree to 30 days ago
+	addCommitWithDate(t, wtPath, "old-file.txt", "old commit", "2020-01-01T00:00:00+00:00")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Prune: config.PruneConfig{
+			StaleDays: 1, // 1 day, so the 30-day-old commit is definitely stale
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--stale"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune --stale command failed: %v", err)
+	}
+
+	// Verify worktree was removed
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("stale worktree should be removed with --stale flag")
+	}
+}
+
+// TestPrune_StaleFlag_KeepsFreshWorktrees tests that --stale keeps fresh worktrees.
+//
+// Scenario: A worktree has a recent commit, StaleDays=14
+// Expected: Worktree is kept (not stale)
+func TestPrune_StaleFlag_KeepsFreshWorktrees(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"fresh-branch"})
+	wtPath := createTestWorktree(t, repoPath, "fresh-branch")
+
+	// Add a recent commit (no date override = now)
+	addCommit(t, wtPath, "new-file.txt", "recent commit")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Prune: config.PruneConfig{
+			StaleDays: 14,
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--stale"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune --stale command failed: %v", err)
+	}
+
+	// Verify worktree still exists
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Error("fresh worktree should NOT be removed with --stale")
+	}
+}
+
+// TestPrune_StaleFlag_MergedAlwaysPruned tests that merged PRs are always pruned
+// regardless of --stale flag.
+//
+// Scenario: A worktree has a merged PR (via PR cache), no --stale flag
+// Expected: Worktree is removed (merged PRs always pruned)
+func TestPrune_StaleFlag_MergedAlwaysPruned(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"merged-branch"})
+	wtPath := createTestWorktree(t, repoPath, "merged-branch")
+
+	// Add a recent commit (not stale)
+	addCommit(t, wtPath, "merged-file.txt", "merged commit")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Prune: config.PruneConfig{
+			StaleDays: 14,
+		},
+	}
+
+	// Directly test pruneWorktrees with a merged worktree
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	toRemove := []git.Worktree{
+		{
+			Path:     wtPath,
+			Branch:   "merged-branch",
+			RepoName: "test-repo",
+			RepoPath: repoPath,
+			PRState:  forge.PRStateMerged,
+		},
+	}
+
+	removed, failed := pruneWorktrees(ctx, toRemove, pruneOpts{
+		Force: true,
+	})
+
+	if len(failed) > 0 {
+		t.Fatalf("expected no failures, got %d", len(failed))
+	}
+	if len(removed) != 1 {
+		t.Fatalf("expected 1 removed, got %d", len(removed))
+	}
+
+	// Verify worktree was removed
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("merged worktree should always be removed (without --stale)")
+	}
+}
+
+// TestPrune_StaleFlag_DryRun tests that --stale with --dry-run doesn't remove.
+//
+// Scenario: A stale worktree exists, user runs `wt prune --stale -d`
+// Expected: Worktree survives (dry-run)
+func TestPrune_StaleFlag_DryRun(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"stale-branch"})
+	wtPath := createTestWorktree(t, repoPath, "stale-branch")
+
+	// Backdate the commit
+	addCommitWithDate(t, wtPath, "old-file.txt", "old commit", "2020-01-01T00:00:00+00:00")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Prune: config.PruneConfig{
+			StaleDays: 1,
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--stale", "-d"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune --stale -d command failed: %v", err)
+	}
+
+	// Verify worktree still exists (dry-run)
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Error("stale worktree should survive dry-run")
+	}
+}
+
+// TestPrune_StaleFlag_Disabled tests that StaleDays=0 disables stale pruning.
+//
+// Scenario: StaleDays=0, worktree is very old, --stale flag is set
+// Expected: Worktree is NOT removed (stale detection disabled)
+func TestPrune_StaleFlag_Disabled(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"old-branch"})
+	wtPath := createTestWorktree(t, repoPath, "old-branch")
+
+	// Backdate the commit
+	addCommitWithDate(t, wtPath, "old-file.txt", "old commit", "2020-01-01T00:00:00+00:00")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Prune: config.PruneConfig{
+			StaleDays: 0, // Disabled
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--stale"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune --stale command failed: %v", err)
+	}
+
+	// Verify worktree still exists (stale detection disabled)
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Error("worktree should NOT be removed when StaleDays=0")
+	}
+}
+
 // TestPrune_LocalConfigOverridesDeleteBranches tests that a per-repo .wt.toml
 // overrides the global config's delete_local_branches setting.
 //

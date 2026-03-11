@@ -90,7 +90,7 @@ type MergeConfig struct {
 // PruneConfig holds prune-related configuration
 type PruneConfig struct {
 	DeleteLocalBranches bool `toml:"delete_local_branches"`
-	StaleDays           int  `toml:"stale_days"` // days after which worktrees are highlighted as stale (0 = disabled)
+	StaleDays           int  `toml:"stale_days"` // days after which worktrees are highlighted as stale and eligible for --stale pruning (0 = disabled)
 }
 
 // PreserveConfig holds file preservation settings for worktree creation.
@@ -610,7 +610,7 @@ worktree_format = "{repo}-{branch}"
 # Prune settings for "wt prune" and stale worktree highlighting
 # [prune]
 # delete_local_branches = false  # Delete local branches after worktree removal
-# stale_days = 14                # Days before a worktree is highlighted as stale (0 = disabled, default: 14)
+# stale_days = 14                # Days before a worktree is highlighted as stale and eligible for --stale pruning (0 = disabled, default: 14)
 
 # Host mappings - for self-hosted GitHub Enterprise or GitLab instances
 # Maps custom domains to forge type for automatic detection

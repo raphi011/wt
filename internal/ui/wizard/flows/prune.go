@@ -13,6 +13,7 @@ import (
 type pruneOptionValue struct {
 	ID         int
 	IsPrunable bool
+	IsStale    bool
 	Reason     string
 }
 
@@ -27,8 +28,9 @@ type PruneWorktreeInfo struct {
 	ID         int
 	RepoName   string
 	Branch     string
-	Reason     string // PR state display string (e.g. "● Merged", "○ Open")
-	IsPrunable bool   // Whether worktree can be auto-pruned (merged PR)
+	Reason     string // PR state display string (e.g. "● Merged", "○ Open", "⏳ Stale (3w)")
+	IsPrunable bool   // Whether worktree can be auto-pruned (merged PR or stale)
+	IsStale    bool   // Whether worktree is stale (old commit, not merged)
 	Worktree   git.Worktree
 }
 
@@ -58,6 +60,7 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 			Value: pruneOptionValue{
 				ID:         wt.ID,
 				IsPrunable: wt.IsPrunable,
+				IsStale:    wt.IsStale,
 				Reason:     wt.Reason,
 			},
 			Description: wt.Reason, // Fallback for default renderer
@@ -135,7 +138,11 @@ func pruneDescriptionRenderer(opt framework.Option, isSelected bool) string {
 	}
 
 	if val.IsPrunable {
-		// Prunable: show reason in success color
+		if val.IsStale {
+			// Stale: show reason in warning color (orange)
+			return styles.WarningStyle.Render(val.Reason)
+		}
+		// Merged: show reason in success color (green)
 		return styles.SuccessStyle.Render(val.Reason)
 	}
 
