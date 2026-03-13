@@ -373,7 +373,7 @@ func TestSelectHooks_OnAll(t *testing.T) {
 	}
 
 	// "all" should match all command types
-	for _, cmdType := range []CommandType{CommandCheckout, CommandPR, CommandPrune} {
+	for _, cmdType := range []CommandType{CommandCd, CommandCheckout, CommandPR, CommandPrune, CommandMerge} {
 		matches, err := SelectHooks(hooksConfig, nil, false, cmdType)
 		if err != nil {
 			t.Errorf("unexpected error for %s: %v", cmdType, err)
