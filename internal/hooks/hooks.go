@@ -18,6 +18,7 @@ import (
 type CommandType string
 
 const (
+	CommandCd       CommandType = "cd"
 	CommandCheckout CommandType = "checkout"
 	CommandPR       CommandType = "pr"
 	CommandPrune    CommandType = "prune"
@@ -29,9 +30,9 @@ type Context struct {
 	WorktreeDir string            // absolute worktree path
 	RepoDir     string            // absolute main repo path
 	Branch      string            // branch name
-	Repo        string            // folder name of git repo
-	Origin      string            // repo name from git origin URL (falls back to Repo)
-	Trigger     string            // command that triggered the hook (checkout, pr, prune, merge)
+	Repo        string            // registered repo name (as shown in wt repo list)
+	Origin      string            // folder name of the git repo (filepath.Base of repo path)
+	Trigger     string            // command that triggered the hook (checkout, cd, prune, merge)
 	Env         map[string]string // custom variables from --arg key=value flags
 	DryRun      bool              // if true, print command instead of executing
 }

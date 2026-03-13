@@ -13,6 +13,7 @@ import (
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/history"
+	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
@@ -22,6 +23,10 @@ import (
 func newCdCmd() *cobra.Command {
 	var interactive bool
 	var copyToClipboard bool
+	var global bool
+	var hookNames []string
+	var noHook bool
+	var env []string
 
 	cmd := &cobra.Command{
 		Use:     "cd [repo:]branch",
@@ -36,12 +41,17 @@ The argument can be:
   - branch name: searches all repos, errors if ambiguous
   - repo:branch: finds exact worktree in specified repo
 
-With no arguments, returns the most recently accessed worktree.`,
+With no arguments, returns the most recently accessed worktree.
+
+Interactive mode (-i) is repo-aware: inside a repo it shows only that
+repo's worktrees. Use -g to show all repos.`,
 		Example: `  cd $(wt cd)              # cd to most recently accessed worktree
   cd $(wt cd feature-x)    # cd to feature-x worktree (error if ambiguous)
   cd $(wt cd wt:feature-x) # cd to feature-x worktree in wt repo
-  cd $(wt cd -i)           # interactive fuzzy search for worktree
-  wt cd --copy feature-x   # copy worktree path to clipboard`,
+  cd $(wt cd -i)           # interactive: current repo's worktrees
+  cd $(wt cd -i -g)        # interactive: all repos' worktrees
+  wt cd --copy feature-x   # copy worktree path to clipboard
+  wt cd feature-x --hook setup  # run "setup" hook after cd`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
@@ -56,7 +66,7 @@ With no arguments, returns the most recently accessed worktree.`,
 			var targetPath, repoName, branchName string
 
 			if interactive {
-				// Interactive mode: show fuzzy list of all worktrees
+				// Interactive mode: repo-aware worktree list
 				l := log.FromContext(ctx)
 
 				// Load history for recency ranking
@@ -66,9 +76,21 @@ With no arguments, returns the most recently accessed worktree.`,
 					hist = &history.History{}
 				}
 
-				allRepos := filterOrphanedRepos(l, reg.Repos)
+				var repos []registry.Repo
+				if global {
+					repos = reg.Repos
+				} else {
+					repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
+					if err != nil {
+						l.Debug("could not detect current repo, showing all", "error", err)
+						repos = reg.Repos
+					} else {
+						repos = []registry.Repo{repo}
+					}
+				}
+				repos = filterOrphanedRepos(l, repos)
 
-				loaded, warnings := git.LoadWorktreesForRepos(ctx, reposToRefs(allRepos))
+				loaded, warnings := git.LoadWorktreesForRepos(ctx, reposToRefs(repos))
 				for _, w := range warnings {
 					l.Debug("skipping repo", "repo", w.RepoName, "error", w.Err)
 				}
@@ -250,6 +272,36 @@ With no arguments, returns the most recently accessed worktree.`,
 				l.Printf("Warning: failed to record history: %v\n", err)
 			}
 
+			// Run hooks
+			hookEnv, err := hooks.ParseEnvWithStdin(env)
+			if err != nil {
+				return err
+			}
+
+			var repoPath string
+			if repo, err := reg.FindByName(repoName); err == nil {
+				repoPath = repo.Path
+			}
+			effCfg := resolveEffectiveConfig(ctx, repoPath)
+
+			hookMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandCd)
+			if err != nil {
+				return err
+			}
+
+			if len(hookMatches) > 0 {
+				hookCtx := hooks.Context{
+					WorktreeDir: targetPath,
+					RepoDir:     repoPath,
+					Branch:      branchName,
+					Repo:        repoName,
+					Origin:      git.GetRepoDisplayName(repoPath),
+					Trigger:     "cd",
+					Env:         hookEnv,
+				}
+				hooks.RunAllNonFatal(ctx, hookMatches, hookCtx, targetPath)
+			}
+
 			// Copy to clipboard if requested
 			if copyToClipboard {
 				l := log.FromContext(ctx)
@@ -278,6 +330,13 @@ With no arguments, returns the most recently accessed worktree.`,
 
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode with fuzzy search")
 	cmd.Flags().BoolVar(&copyToClipboard, "copy", false, "Copy path to clipboard")
+	cmd.Flags().BoolVarP(&global, "global", "g", false, "Show worktrees from all repos (interactive mode)")
+	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
+	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip cd hooks")
+	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable (KEY=VALUE)")
+	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
+	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
+	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
 
 	// Register completions
 	cmd.ValidArgsFunction = completeCdArg

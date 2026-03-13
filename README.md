@@ -46,14 +46,31 @@ Requires `git` in PATH. For GitHub repos: `gh` CLI. For GitLab repos: `glab` CLI
 
 ## Getting Started
 
-### 1. Create Config
+### 1. Shell Completions
+
+Completions are installed automatically when using Homebrew. For manual installs:
+
+```bash
+# Fish
+wt completion fish > ~/.config/fish/completions/wt.fish
+
+# Bash
+wt completion bash > ~/.local/share/bash-completion/completions/wt
+
+# Zsh — ensure ~/.zfunc exists and is on fpath, then generate
+mkdir -p ~/.zfunc
+echo 'fpath=(~/.zfunc $fpath)' >> ~/.zshrc  # add once, before compinit
+wt completion zsh > ~/.zfunc/_wt
+```
+
+### 2. Create Config
 
 ```bash
 wt config init            # Create ~/.wt/config.toml
 wt config init -s         # Print default config to stdout (for review)
 ```
 
-### 2. Register Repos
+### 3. Register Repos
 
 ```bash
 # Register a repo you already have cloned
@@ -65,13 +82,13 @@ wt repo clone git@github.com:org/repo.git
 
 Repos are also auto-registered the first time you run `wt checkout` inside one.
 
-### 3. Create a Worktree
+### 4. Create a Worktree
 
 ```bash
 wt checkout -b new-branch    # Create worktree with new branch (from default branch)
 ```
 
-### 4. List Worktrees
+### 5. List Worktrees
 
 ```bash
 wt list -g
@@ -421,9 +438,31 @@ description = "Open Claude with prompt"
 # No "on" = only runs via: wt hook claude --arg prompt="..."
 ```
 
-**Hook triggers:** `checkout`, `pr`, `prune`, `merge`, `all` (see `on` field in config)
+**Triggers** — values for the `on` field in hook config:
 
-**Placeholders:** `{worktree-dir}`, `{repo-dir}`, `{branch}`, `{repo}`, `{origin}`, `{trigger}`, `{key}`, `{key:-default}`, `{key:+text}`
+| Trigger | Command | Description |
+|---------|---------|-------------|
+| `checkout` | `wt checkout`, `wt pr checkout` | After creating/checking out a worktree |
+| `cd` | `wt cd` | After resolving the target worktree path |
+| `prune` | `wt prune` | After removing each worktree |
+| `merge` | `wt pr merge` | After merging a pull request |
+| `all` | (any) | Matches all command types |
+
+Hooks without `on` only run when invoked explicitly via `wt hook <name>` or `--hook <name>`.
+
+**Placeholders** — substituted in the hook `command` before execution:
+
+| Placeholder | Description |
+|-------------|-------------|
+| `{worktree-dir}` | Absolute path to the worktree |
+| `{repo-dir}` | Absolute path to the main repo (bare root or `.git` parent) |
+| `{branch}` | Branch name |
+| `{repo}` | Repo name (as registered in `wt repo list`) |
+| `{origin}` | Folder name of the git repo (from path) |
+| `{trigger}` | Command that triggered the hook (`checkout`, `cd`, `prune`, `merge`) |
+| `{key}` | Custom variable from `--arg key=value` (empty if unset) |
+| `{key:-default}` | Custom variable with fallback value if unset |
+| `{key:+text}` | Expands to `text` if key is set and non-empty, otherwise empty |
 
 **Args:** Pass `--arg key=value` or `--arg key` (bare boolean, sets to `"true"`)
 
@@ -661,21 +700,6 @@ eval "$(wt init zsh)"
 
 # Fish - add to ~/.config/fish/config.fish
 wt init fish | source
-```
-
-## Shell Completions
-
-Completions are installed automatically when using Homebrew. For manual installs:
-
-```bash
-# Fish
-wt completion fish > ~/.config/fish/completions/wt.fish
-
-# Bash
-wt completion bash > ~/.local/share/bash-completion/completions/wt
-
-# Zsh (add ~/.zfunc to fpath in .zshrc)
-wt completion zsh > ~/.zfunc/_wt
 ```
 
 ## Development
