@@ -106,6 +106,7 @@ internal/ui/             - Terminal UI components
   - `branch` - searches current repo, or all repos for existing branches
   - `repo:branch` - targets specific repo
   - `label:branch` - targets all repos with that label (resolved after checking repo names)
+  - `wt hook [[scope:]branch] <hookname>` - optional target before hook name (1 hook per invocation)
 
 - **Repo targeting**: `wt pr create/merge/view`, `wt list`, `wt label`, `wt repo list`
   - `wt list [scope...]` - positional args for repo name or label filtering

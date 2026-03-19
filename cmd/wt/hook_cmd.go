@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -23,23 +22,24 @@ func newHookCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:               "hook <name>... [-- [scope:]branch...]",
+		Use:               "hook [[scope:]branch] <name>",
 		Short:             "Run configured hook",
 		Aliases:           []string{"h"},
 		GroupID:           GroupUtility,
-		Args:              cobra.MinimumNArgs(1),
+		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: completeHookArg,
-		Long: `Run one or more configured hooks.
+		Long: `Run a configured hook.
 
 Hooks are defined in config.toml and can use placeholders.
-By default runs in current worktree. Use -- followed by targets to run in specific worktrees.
+With one argument, runs in the current worktree.
+With two arguments, the first is a [scope:]branch target and the second is the hook name.
 
 Target worktrees using [scope:]branch format where scope can be a repo name or label.`,
 		Example: `  wt hook code                        # Run 'code' hook in current worktree
-  wt hook code idea                   # Run multiple hooks
-  wt hook code -- main                # Run in main worktree (all repos)
-  wt hook code -- myrepo:main         # Run in specific repo's worktree
-  wt hook code -- backend:main        # Run in backend label's main worktrees
+  wt hook main code                   # Run 'code' in main worktree (all repos)
+  wt hook myrepo:main code            # Run in specific repo's worktree
+  wt hook backend:main code           # Run in backend label's main worktrees
+  wt hook code -a prompt="do X"       # Pass custom variable
   wt hook code -d                     # Dry-run: print command without executing`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -47,8 +47,16 @@ Target worktrees using [scope:]branch format where scope can be a repo name or l
 			workDir := config.WorkDirFromContext(ctx)
 			l := log.FromContext(ctx)
 
-			// Split args at "--" into hook names and targets
-			hookNames, targets := splitHookArgs(args, cmd.ArgsLenAtDash())
+			// Parse positional args: [[scope:]branch] <hookname>
+			var hookName string
+			var target string
+
+			if len(args) == 2 {
+				target = args[0]
+				hookName = args[1]
+			} else {
+				hookName = args[0]
+			}
 
 			// Parse env variables
 			hookEnv, err := hooks.ParseEnvWithStdin(env)
@@ -62,19 +70,19 @@ Target worktrees using [scope:]branch format where scope can be a repo name or l
 				return fmt.Errorf("load registry: %w", err)
 			}
 
-			l.Debug("running hooks", "hooks", hookNames, "targets", targets, "dryRun", dryRun)
+			l.Debug("running hook", "hook", hookName, "target", target, "dryRun", dryRun)
 
-			// If no targets, run in current worktree
-			if len(targets) == 0 {
+			// If no target, run in current worktree
+			if target == "" {
 				repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
 				if err != nil {
 					return err
 				}
-				return runHooksInRepo(ctx, repo, hookNames, hookEnv, dryRun, workDir)
+				return runHookInRepo(ctx, repo, hookName, hookEnv, dryRun, workDir)
 			}
 
-			// Run hooks in specified targets
-			return runHooksInTargets(ctx, reg, hookNames, targets, hookEnv, dryRun)
+			// Run hook in specified target
+			return runHookInTargets(ctx, reg, hookName, target, hookEnv, dryRun)
 		},
 	}
 
@@ -85,42 +93,17 @@ Target worktrees using [scope:]branch format where scope can be a repo name or l
 	return cmd
 }
 
-// splitHookArgs splits args into hook names and worktree targets based on -- position
-func splitHookArgs(args []string, dashIdx int) (hookNames, targets []string) {
-	if dashIdx == -1 {
-		// No --, all args are hook names
-		return args, nil
-	}
-	return args[:dashIdx], args[dashIdx:]
-}
-
-// runHooksInRepo runs hooks in the repo's current worktree or main repo
-func runHooksInRepo(ctx context.Context, repo registry.Repo, hookNames []string, env map[string]string, dryRun bool, workDir string) error {
-	// Resolve effective config for this repo
+// runHookInRepo runs a hook in the repo's current worktree or main repo
+func runHookInRepo(ctx context.Context, repo registry.Repo, hookName string, env map[string]string, dryRun bool, workDir string) error {
 	effCfg := resolveEffectiveConfig(ctx, repo.Path)
 
-	// Validate all hooks exist in effective config
-	var missing []string
-	for _, name := range hookNames {
-		if _, exists := effCfg.Hooks.Hooks[name]; !exists {
-			missing = append(missing, name)
-		}
-	}
-	if len(missing) > 0 {
-		var available []string
-		for name := range effCfg.Hooks.Hooks {
-			available = append(available, name)
-		}
-		if len(available) == 0 {
-			return fmt.Errorf("unknown hook(s) %v (no hooks configured)", missing)
-		}
-		return fmt.Errorf("unknown hook(s) %v (available: %v)", missing, available)
+	hook, exists := effCfg.Hooks.Hooks[hookName]
+	if !exists {
+		return unknownHookError(hookName, effCfg.Hooks.Hooks)
 	}
 
-	// Get current branch if in a worktree
 	branch, _ := git.GetCurrentBranch(ctx, workDir)
 
-	// Create hook context
 	hookCtx := hooks.Context{
 		WorktreeDir: workDir,
 		RepoDir:     repo.Path,
@@ -132,32 +115,26 @@ func runHooksInRepo(ctx context.Context, repo registry.Repo, hookNames []string,
 		DryRun:      dryRun,
 	}
 
-	return runHooksForContext(ctx, hookNames, effCfg.Hooks.Hooks, hookCtx, repo.Path)
+	if err := hooks.RunSingle(ctx, hookName, &hook, hookCtx); err != nil {
+		return fmt.Errorf("hook %s: %w", hookName, err)
+	}
+	return nil
 }
 
-// runHooksInTargets runs hooks in specified [scope:]branch targets
-func runHooksInTargets(ctx context.Context, reg *registry.Registry, hookNames []string, targets []string, env map[string]string, dryRun bool) error {
-	// Resolve all targets
-	wtTargets, err := resolveWorktreeTargets(ctx, reg, targets)
+// runHookInTargets runs a hook in the specified [scope:]branch target
+func runHookInTargets(ctx context.Context, reg *registry.Registry, hookName string, target string, env map[string]string, dryRun bool) error {
+	wtTargets, err := resolveWorktreeTargets(ctx, reg, []string{target})
 	if err != nil {
 		return err
 	}
 
-	// Run hooks in each target
 	var errs []error
 	for _, wt := range wtTargets {
-		// Resolve effective config for each repo
 		effCfg := resolveEffectiveConfig(ctx, wt.RepoPath)
 
-		// Validate hooks exist for this repo
-		var missing []string
-		for _, name := range hookNames {
-			if _, exists := effCfg.Hooks.Hooks[name]; !exists {
-				missing = append(missing, name)
-			}
-		}
-		if len(missing) > 0 {
-			errs = append(errs, fmt.Errorf("%s:%s: unknown hook(s) %v", wt.RepoName, wt.Branch, missing))
+		hook, exists := effCfg.Hooks.Hooks[hookName]
+		if !exists {
+			errs = append(errs, fmt.Errorf("%s:%s: %w", wt.RepoName, wt.Branch, unknownHookError(hookName, effCfg.Hooks.Hooks)))
 			continue
 		}
 
@@ -171,66 +148,53 @@ func runHooksInTargets(ctx context.Context, reg *registry.Registry, hookNames []
 			Env:         env,
 			DryRun:      dryRun,
 		}
-		if err := runHooksForContext(ctx, hookNames, effCfg.Hooks.Hooks, hookCtx, wt.RepoPath); err != nil {
-			errs = append(errs, fmt.Errorf("%s:%s: %w", wt.RepoName, wt.Branch, err))
+		if err := hooks.RunSingle(ctx, hookName, &hook, hookCtx); err != nil {
+			errs = append(errs, fmt.Errorf("%s:%s: hook %s: %w", wt.RepoName, wt.Branch, hookName, err))
 		}
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("failed to run hooks in some worktrees:\n%w", errors.Join(errs...))
+		return fmt.Errorf("failed to run hook in some worktrees:\n%w", errors.Join(errs...))
 	}
 	return nil
 }
 
-// runHooksForContext runs the specified hooks in the given context
-func runHooksForContext(ctx context.Context, hookNames []string, hooksMap map[string]config.Hook, hookCtx hooks.Context, _ string) error {
-	// Collect matching hooks
-	var toRun []config.Hook
-	for _, name := range hookNames {
-		if hook, ok := hooksMap[name]; ok {
-			toRun = append(toRun, hook)
-		}
+// unknownHookError returns a formatted error for an unknown hook name
+func unknownHookError(hookName string, hooksMap map[string]config.Hook) error {
+	var available []string
+	for name := range hooksMap {
+		available = append(available, name)
 	}
-
-	// Run each hook
-	for i, name := range hookNames {
-		if err := hooks.RunSingle(ctx, name, &toRun[i], hookCtx); err != nil {
-			return fmt.Errorf("hook %s: %w", name, err)
-		}
+	if len(available) == 0 {
+		return fmt.Errorf("unknown hook %q (no hooks configured)", hookName)
 	}
-
-	return nil
+	return fmt.Errorf("unknown hook %q (available: %v)", hookName, available)
 }
 
-// completeHookArg provides completion for hook command arguments
+// completeHookArg provides completion for hook command arguments.
+// Position 0: hook names + [scope:]branch targets (could be either).
+// Position 1: hook names only (position 0 was a target).
 func completeHookArg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	ctx := cmd.Context()
 
-	// After --, complete worktree targets
-	if slices.Contains(args, "--") {
-		return completeScopedWorktreeArg(cmd, nil, toComplete)
+	if len(args) >= 2 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	// Check if user is typing after --
-	if strings.HasPrefix(toComplete, "--") {
-		return []string{"--"}, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	// Use resolver to get effective hooks (includes local hooks if in a repo)
+	// Get hook names for completion
 	hooksMap := getEffectiveHooksForCompletion(ctx)
-
-	// Complete hook names
-	var hookNames []string
+	var completions []string
 	for name := range hooksMap {
 		if strings.HasPrefix(name, toComplete) {
-			hookNames = append(hookNames, name)
+			completions = append(completions, name)
 		}
 	}
 
-	// Also suggest -- to switch to target completion
-	if toComplete == "" || strings.HasPrefix("--", toComplete) {
-		hookNames = append(hookNames, "--")
+	if len(args) == 0 {
+		// Position 0: could be a hook name or a [scope:]branch target
+		targets, _ := completeScopedWorktreeArg(cmd, nil, toComplete)
+		completions = append(completions, targets...)
 	}
 
-	return hookNames, cobra.ShellCompDirectiveNoFileComp
+	return completions, cobra.ShellCompDirectiveNoFileComp
 }

@@ -102,8 +102,15 @@ func TestHook_UnknownHook(t *testing.T) {
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"nonexistent"})
 
-	if err := cmd.Execute(); err == nil {
-		t.Error("expected error for unknown hook")
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for unknown hook")
+	}
+	if !strings.Contains(err.Error(), `unknown hook "nonexistent"`) {
+		t.Errorf("error should mention unknown hook name, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "no hooks configured") {
+		t.Errorf("error should mention no hooks configured, got: %v", err)
 	}
 }
 
@@ -220,7 +227,7 @@ func TestHook_WithEnvVar(t *testing.T) {
 
 // TestHook_WithRepoBranchFormat tests hook with repo:branch format.
 //
-// Scenario: User has two repos with same branch name, runs `wt hook myhook -- repo1:feature`
+// Scenario: User has two repos with same branch name, runs `wt hook repo1:feature myhook`
 // Expected: Hook runs only in the specified repo's worktree
 func TestHook_WithRepoBranchFormat(t *testing.T) {
 	t.Parallel()
@@ -272,8 +279,8 @@ func TestHook_WithRepoBranchFormat(t *testing.T) {
 	ctx := testContextWithConfig(t, cfg, otherDir)
 	cmd := newHookCmd()
 	cmd.SetContext(ctx)
-	// Use -- repo:branch format to target only repo1's worktree
-	cmd.SetArgs([]string{"myhook", "--", "repo1:feature"})
+	// Use repo:branch hookname format to target only repo1's worktree
+	cmd.SetArgs([]string{"repo1:feature", "myhook"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("hook command failed: %v", err)
@@ -293,7 +300,7 @@ func TestHook_WithRepoBranchFormat(t *testing.T) {
 
 // TestHook_RepoBranchFormat_BranchNotFound tests error when branch in repo:branch format is not found.
 //
-// Scenario: User runs `wt hook myhook -- myrepo:nonexistent`
+// Scenario: User runs `wt hook myrepo:nonexistent myhook`
 // Expected: Command fails with informative error
 func TestHook_RepoBranchFormat_BranchNotFound(t *testing.T) {
 	t.Parallel()
@@ -331,8 +338,8 @@ func TestHook_RepoBranchFormat_BranchNotFound(t *testing.T) {
 
 	cmd := newHookCmd()
 	cmd.SetContext(ctx)
-	// Use nonexistent branch name with -- format
-	cmd.SetArgs([]string{"myhook", "--", "myrepo:nonexistent"})
+	// Use nonexistent branch name with target hookname format
+	cmd.SetArgs([]string{"myrepo:nonexistent", "myhook"})
 
 	err := cmd.Execute()
 	if err == nil {
@@ -342,5 +349,129 @@ func TestHook_RepoBranchFormat_BranchNotFound(t *testing.T) {
 	// Error should mention the branch
 	if !strings.Contains(err.Error(), "nonexistent") {
 		t.Errorf("error should mention nonexistent branch, got: %v", err)
+	}
+}
+
+// TestHook_BareBranchTarget tests hook with unscoped branch as target.
+//
+// Scenario: User runs `wt hook feature myhook` (no repo: prefix)
+// Expected: Hook runs in the worktree matching the branch across repos
+func TestHook_BareBranchTarget(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	markerPath := filepath.Join(tmpDir, "hook-ran-in")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"myhook": {
+					Command:     "echo {worktree-dir} > " + markerPath,
+					Description: "Test hook",
+				},
+			},
+		},
+	}
+
+	// Work from a different directory (not inside any repo)
+	otherDir := filepath.Join(tmpDir, "other")
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create other dir: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, cfg, otherDir)
+	cmd := newHookCmd()
+	cmd.SetContext(ctx)
+	// Bare branch (no scope prefix) as target
+	cmd.SetArgs([]string{"feature", "myhook"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("hook command failed: %v", err)
+	}
+
+	content, err := os.ReadFile(markerPath)
+	if err != nil {
+		t.Fatalf("failed to read marker: %v", err)
+	}
+
+	worktreePath := strings.TrimSpace(string(content))
+	if worktreePath != wtPath {
+		t.Errorf("hook should run in worktree %q, but ran in %q", wtPath, worktreePath)
+	}
+}
+
+// TestHook_UnknownHookWithTarget tests unknown hook error via the target code path.
+//
+// Scenario: User runs `wt hook myrepo:feature nonexistent`
+// Expected: Error mentions repo:branch context and unknown hook name
+func TestHook_UnknownHookWithTarget(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
+	createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"myhook": {
+					Command:     "echo test",
+					Description: "Test hook",
+				},
+			},
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cmd := newHookCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"myrepo:feature", "nonexistent"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for unknown hook")
+	}
+	if !strings.Contains(err.Error(), "myrepo") {
+		t.Errorf("error should mention repo name, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), `unknown hook "nonexistent"`) {
+		t.Errorf("error should mention unknown hook name, got: %v", err)
 	}
 }
