@@ -315,14 +315,11 @@ wt exec myrepo:main -- code .
 # Run a hook on current worktree
 wt hook vscode
 
-# Run multiple hooks
-wt hook vscode kitty
-
-# Run on specific worktree (repo:branch format)
-wt hook vscode -- myrepo:feature
+# Run on specific worktree ([scope:]branch format)
+wt hook myrepo:feature vscode
 
 # Run across worktrees by label
-wt hook build -- backend:main
+wt hook backend:main build
 
 # Pass custom variables
 wt hook claude --arg prompt="implement feature X"
