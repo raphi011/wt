@@ -416,6 +416,28 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		// Resolve per-repo config for hooks and delete_local_branches
 		effCfg := resolveEffectiveConfig(ctx, wt.RepoPath)
 
+		// Run before-prune hooks (can skip this worktree)
+		beforeMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.HookNames, opts.NoHook, hooks.CommandPrune, "", "before")
+		if err != nil {
+			l.Printf("Warning: failed to select before hooks for %s: %v\n", wt.RepoName, err)
+		}
+		if len(beforeMatches) > 0 {
+			beforeHookCtx := hooks.Context{
+				WorktreeDir: wt.Path,
+				RepoDir:     wt.RepoPath,
+				Branch:      wt.Branch,
+				Repo:        filepath.Base(wt.RepoPath),
+				Origin:      wt.RepoName,
+				Trigger:     string(hooks.CommandPrune),
+				Phase:       "before",
+				Env:         hookEnv,
+			}
+			if err := hooks.RunBeforeHooks(ctx, beforeMatches, beforeHookCtx, wt.Path); err != nil {
+				l.Printf("Skipping %s: before-hook aborted\n", wt.Branch)
+				continue
+			}
+		}
+
 		if err := git.RemoveWorktree(ctx, wt, opts.Force); err != nil {
 			l.Printf("Warning: failed to remove %s: %v\n", wt.Path, err)
 			failed = append(failed, wt)
@@ -452,12 +474,12 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 			}
 		}
 
-		// Select and run hooks per-repo
-		hookMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.HookNames, opts.NoHook, hooks.CommandPrune, "", "after")
+		// Select and run after hooks per-repo
+		afterMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.HookNames, opts.NoHook, hooks.CommandPrune, "", "after")
 		if err != nil {
 			l.Printf("Warning: failed to select hooks for %s: %v\n", wt.RepoName, err)
 		}
-		if hookMatches != nil {
+		if afterMatches != nil {
 			hookCtx := hooks.Context{
 				WorktreeDir: wt.Path,
 				RepoDir:     wt.RepoPath,
@@ -465,9 +487,10 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 				Repo:        filepath.Base(wt.RepoPath),
 				Origin:      wt.RepoName,
 				Trigger:     string(hooks.CommandPrune),
+				Phase:       "after",
 				Env:         hookEnv,
 			}
-			hooks.RunForEach(ctx, hookMatches, hookCtx, wt.RepoPath)
+			hooks.RunForEach(ctx, afterMatches, hookCtx, wt.RepoPath)
 		}
 	}
 

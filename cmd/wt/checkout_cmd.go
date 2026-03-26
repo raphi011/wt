@@ -411,22 +411,40 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 		return err
 	}
 
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, "", "after")
+	action := "open"
+	if newBranch {
+		action = "create"
+	}
+
+	hookCtx := hooks.Context{
+		WorktreeDir: wtPath,
+		RepoDir:     repo.Path,
+		Branch:      branch,
+		Repo:        repo.Name,
+		Origin:      git.GetRepoDisplayName(repo.Path),
+		Trigger:     "checkout",
+		Action:      action,
+		Env:         hookEnv,
+	}
+
+	// Run before hooks (can abort)
+	beforeMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, action, "before")
 	if err != nil {
 		return err
 	}
+	hookCtx.Phase = "before"
+	if err := hooks.RunBeforeHooks(ctx, beforeMatches, hookCtx, wtPath); err != nil {
+		return fmt.Errorf("before-hook aborted checkout: %w", err)
+	}
 
-	if len(hookMatches) > 0 {
-		hookCtx := hooks.Context{
-			WorktreeDir: wtPath,
-			RepoDir:     repo.Path,
-			Branch:      branch,
-			Repo:        repo.Name,
-			Origin:      git.GetRepoDisplayName(repo.Path),
-			Trigger:     "checkout",
-			Env:         hookEnv,
-		}
-		hooks.RunAllNonFatal(ctx, hookMatches, hookCtx, wtPath)
+	// Run after hooks
+	afterMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, action, "after")
+	if err != nil {
+		return err
+	}
+	if len(afterMatches) > 0 {
+		hookCtx.Phase = "after"
+		hooks.RunAllNonFatal(ctx, afterMatches, hookCtx, wtPath)
 	}
 
 	return nil
