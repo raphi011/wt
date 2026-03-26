@@ -70,13 +70,33 @@ wt config init            # Create ~/.wt/config.toml
 wt config init -s         # Print default config to stdout (for review)
 ```
 
+The most important setting is `checkout.worktree_format` — it controls where worktrees are placed. The format supports `{repo}` and `{branch}` placeholders, and the path prefix determines placement:
+
+```toml
+[checkout]
+# Nested inside repo (default): ~/Git/myrepo/myrepo-feature-branch
+worktree_format = "{repo}-{branch}"
+
+# Sibling to repo dir: ~/Git/myrepo-feature-branch
+worktree_format = "../{repo}-{branch}"
+
+# Nested with subfolder: ~/Git/myrepo/.worktrees/feature-branch
+worktree_format = ".worktrees/{branch}"
+
+# Centralized folder: ~/worktrees/myrepo-feature-branch
+worktree_format = "~/worktrees/{repo}-{branch}"
+
+# Absolute path: /tmp/worktrees/myrepo-feature-branch
+worktree_format = "/tmp/worktrees/{repo}-{branch}"
+```
+
 ### 3. Register Repos
 
 ```bash
 # Register a repo you already have cloned
 wt repo add ~/path/to/myrepo
 
-# Or clone and register a new repo
+# Or clone and register a new repo (clones into current directory)
 wt repo clone git@github.com:org/repo.git
 ```
 
@@ -85,26 +105,47 @@ Repos are also auto-registered the first time you run `wt checkout` inside one.
 ### 4. Create a Worktree
 
 ```bash
-wt checkout -b new-branch    # Create worktree with new branch (from default branch)
+# From inside a registered repo
+wt checkout -b new-branch              # Create worktree with new branch (from default branch)
+
+# From anywhere — target a repo by name (as shown in wt repo list)
+wt checkout -b myrepo:new-branch
 ```
 
-### 5. List Worktrees
+### 5. Configure Hooks
+
+Hooks run automatically when creating, opening, merging, or removing worktrees. Add them to `~/.wt/config.toml`:
+
+```toml
+# Open VS Code when checking out or opening a worktree
+[hooks.vscode]
+command = "code '{worktree-dir}'"
+on = ["checkout", "cd"]
+
+# Open a new terminal tab (kitty example)
+[hooks.kitty]
+command = "kitty @ launch --type=tab --cwd='{worktree-dir}'"
+on = ["checkout"]
+
+# Run setup after checkout
+[hooks.setup]
+command = "npm install --prefix '{worktree-dir}'"
+on = ["checkout"]
+
+# Manual-only hook — only runs via: wt hook claude --arg prompt="..."
+[hooks.claude]
+command = "cd '{worktree-dir}' && claude '{prompt:-help me}'"
+```
+
+See [Hooks](#hooks) and [Writing Hooks](#writing-hooks) for the full placeholder reference and advanced patterns.
+
+### 6. List Worktrees
 
 ```bash
 wt list -g
 ```
 
-You're ready to go! See Scenarios below for common workflows.
-
-## Interactive Mode
-
-For guided worktree creation, use the `-i` flag:
-
-```bash
-wt checkout -i
-```
-
-This launches a step-by-step wizard that guides you through the checkout process.
+You're ready to go! Most commands also support `-i` for an interactive wizard mode (e.g. `wt checkout -i`).
 
 ## Scenarios
 
@@ -134,15 +175,6 @@ wt checkout -b myrepo:feature-login
 
 # Combine with other flags
 wt checkout -b myrepo:feature-login --base develop -f
-```
-
-With hooks configured, your editor opens automatically:
-
-```toml
-# ~/.wt/config.toml
-[hooks.vscode]
-command = "code '{worktree-dir}'"
-on = ["checkout"]
 ```
 
 ### Reviewing a Pull Request
@@ -235,33 +267,7 @@ wt prune myrepo:feature-login -f
 
 ### Working Across Multiple Repos
 
-Register and label repos for batch operations:
-
-```bash
-# Register a repo (from inside the repo)
-wt repo add .
-
-# Register a repo by path
-wt repo add ~/path/to/myrepo
-
-# Clone and register a new repo
-wt repo clone git@github.com:org/repo.git
-
-# Convert an existing repo to bare structure (for faster worktrees)
-wt repo convert --clone-mode bare ./myrepo
-
-# Convert a bare repo back to regular structure
-wt repo convert --clone-mode regular ./myrepo
-
-# Unregister a repo
-wt repo remove myrepo
-
-# List all repos
-wt repo list
-wt repo list backend    # Filter by label
-```
-
-Label your repos for batch operations:
+Label repos for batch operations:
 
 ```bash
 # Add labels to repos
@@ -368,7 +374,7 @@ default_sort = "date"
 # default_labels = ["work"]
 
 [checkout]
-# Folder naming: {repo}, {branch}, {origin}
+# Folder naming: {repo}, {branch}
 worktree_format = "{repo}-{branch}"
 
 # Base ref for new branches: "remote" (default) or "local"
@@ -414,26 +420,7 @@ Explicit remote refs (`origin/branch`, `upstream/branch`) always override `base_
 
 ### Hooks
 
-```toml
-[hooks.vscode]
-command = "code '{worktree-dir}'"
-description = "Open VS Code"
-on = ["checkout", "pr"]  # Auto-run for these commands
-
-[hooks.kitty]
-command = "kitty @ launch --type=tab --cwd='{worktree-dir}'"
-description = "Open new kitty tab"
-on = ["checkout"]
-
-[hooks.cleanup]
-command = "echo 'Removed {branch}'"
-on = ["prune"]
-
-[hooks.claude]
-command = "kitty @ launch --cwd='{worktree-dir}' -- claude '{prompt:-help me}'"
-description = "Open Claude with prompt"
-# No "on" = only runs via: wt hook claude --arg prompt="..."
-```
+See [Getting Started > Configure Hooks](#5-configure-hooks) for examples. Each hook has a `command`, optional `description`, and optional `on` triggers.
 
 **Triggers** — values for the `on` field in hook config:
 
