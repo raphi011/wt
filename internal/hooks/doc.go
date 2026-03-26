@@ -15,7 +15,7 @@
 //
 //	[hooks.vscode]
 //	command = "code {worktree-dir}"
-//	on = ["checkout", "pr"]  # auto-run for checkout and pr commands
+//	on = ["checkout"]  # auto-run for checkout commands
 //
 //	[hooks.cleanup]
 //	command = "echo 'Done with {branch}'"
@@ -30,7 +30,9 @@
 //   - {branch}: Branch name
 //   - {repo}: Folder name of git repo
 //   - {origin}: Repository name from git origin (falls back to {repo})
-//   - {trigger}: Command that triggered the hook (checkout, pr, prune, merge)
+//   - {trigger}: Command that triggered the hook (checkout, prune, merge)
+//   - {action}: Checkout subtype: create, open, pr, or manual (for wt hook)
+//   - {phase}: Hook timing: before or after
 //
 // Custom variables via --arg key=value or --arg key (bare boolean):
 //

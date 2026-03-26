@@ -117,20 +117,20 @@ wt checkout -b myrepo:new-branch
 Hooks run automatically when creating, opening, merging, or removing worktrees. Add them to `~/.wt/config.toml`:
 
 ```toml
-# Open VS Code when checking out or opening a worktree
+# Open VS Code after every checkout
 [hooks.vscode]
 command = "code '{worktree-dir}'"
-on = ["checkout", "cd"]
+on = ["checkout"]
 
 # Open a new terminal tab (kitty example)
 [hooks.kitty]
 command = "kitty @ launch --type=tab --cwd='{worktree-dir}'"
 on = ["checkout"]
 
-# Run setup after checkout
-[hooks.setup]
-command = "npm install --prefix '{worktree-dir}'"
-on = ["checkout"]
+# Run Claude to review PR when checking out a PR
+[hooks.claude-review]
+command = "cd '{worktree-dir}' && claude -p 'review this PR'"
+on = ["checkout:pr"]
 
 # Manual-only hook — only runs via: wt hook claude --arg prompt="..."
 [hooks.claude]
@@ -422,15 +422,32 @@ Explicit remote refs (`origin/branch`, `upstream/branch`) always override `base_
 
 See [Getting Started > Configure Hooks](#5-configure-hooks) for examples. Each hook has a `command`, optional `description`, and optional `on` triggers.
 
-**Triggers** — values for the `on` field in hook config:
+**Triggers** — syntax for the `on` field: `[before:|after:]trigger[:subtype]`
 
-| Trigger | Command | Description |
-|---------|---------|-------------|
-| `checkout` | `wt checkout`, `wt pr checkout` | After creating/checking out a worktree |
-| `cd` | `wt cd` | After resolving the target worktree path |
-| `prune` | `wt prune` | After removing each worktree |
-| `merge` | `wt pr merge` | After merging a pull request |
-| `all` | (any) | Matches all command types |
+| Trigger | Subtypes | Description |
+|---------|----------|-------------|
+| `checkout` | `create`, `open`, `pr` | Worktree checkout |
+| `prune` | — | Worktree removal |
+| `merge` | — | PR merge |
+| `all` | — | Matches all triggers |
+
+**Timing prefix:**
+
+| Prefix | Default | Description |
+|--------|---------|-------------|
+| *(none)* | `after` | Runs after the operation |
+| `after:` | — | Explicit after (same as no prefix) |
+| `before:` | — | Runs before the operation; non-zero exit aborts |
+
+**Examples:**
+
+```toml
+on = ["checkout"]              # All checkouts (after)
+on = ["checkout:pr"]           # PR checkouts only
+on = ["before:prune"]          # Pre-prune guard (can abort)
+on = ["before:checkout:pr"]    # Before PR checkout only
+on = ["checkout", "merge"]     # Multiple triggers
+```
 
 Hooks without `on` only run when invoked explicitly via `wt hook <name>` or `--hook <name>`.
 
@@ -443,7 +460,9 @@ Hooks without `on` only run when invoked explicitly via `wt hook <name>` or `--h
 | `{branch}` | Branch name |
 | `{repo}` | Repo name (as registered in `wt repo list`) |
 | `{origin}` | Folder name of the git repo (from path) |
-| `{trigger}` | Command that triggered the hook (`checkout`, `cd`, `prune`, `merge`) |
+| `{trigger}` | Command that triggered the hook (`checkout`, `prune`, `merge`, `run`) |
+| `{action}` | Checkout subtype: `create`, `open`, `pr`, or `manual` (for `wt hook`) |
+| `{phase}` | Hook timing: `before` or `after` |
 | `{key}` | Custom variable from `--arg key=value` (empty if unset) |
 | `{key:-default}` | Custom variable with fallback value if unset |
 | `{key:+text}` | Expands to `text` if key is set and non-empty, otherwise empty |
