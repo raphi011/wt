@@ -13,7 +13,6 @@ import (
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/history"
-	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
@@ -24,9 +23,6 @@ func newCdCmd() *cobra.Command {
 	var interactive bool
 	var copyToClipboard bool
 	var global bool
-	var hookNames []string
-	var noHook bool
-	var env []string
 
 	cmd := &cobra.Command{
 		Use:     "cd [repo:]branch",
@@ -50,8 +46,7 @@ repo's worktrees. Use -g to show all repos.`,
   cd $(wt cd wt:feature-x) # cd to feature-x worktree in wt repo
   cd $(wt cd -i)           # interactive: current repo's worktrees
   cd $(wt cd -i -g)        # interactive: all repos' worktrees
-  wt cd --copy feature-x   # copy worktree path to clipboard
-  wt cd feature-x --hook setup  # run "setup" hook after cd`,
+  wt cd --copy feature-x   # copy worktree path to clipboard`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
@@ -272,36 +267,6 @@ repo's worktrees. Use -g to show all repos.`,
 				l.Printf("Warning: failed to record history: %v\n", err)
 			}
 
-			// Run hooks
-			hookEnv, err := hooks.ParseEnvWithStdin(env)
-			if err != nil {
-				return err
-			}
-
-			var repoPath string
-			if repo, err := reg.FindByName(repoName); err == nil {
-				repoPath = repo.Path
-			}
-			effCfg := resolveEffectiveConfig(ctx, repoPath)
-
-			hookMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandCheckout, "", "after")
-			if err != nil {
-				return err
-			}
-
-			if len(hookMatches) > 0 {
-				hookCtx := hooks.Context{
-					WorktreeDir: targetPath,
-					RepoDir:     repoPath,
-					Branch:      branchName,
-					Repo:        repoName,
-					Origin:      git.GetRepoDisplayName(repoPath),
-					Trigger:     "cd",
-					Env:         hookEnv,
-				}
-				hooks.RunAllNonFatal(ctx, hookMatches, hookCtx, targetPath)
-			}
-
 			// Copy to clipboard if requested
 			if copyToClipboard {
 				l := log.FromContext(ctx)
@@ -331,12 +296,6 @@ repo's worktrees. Use -g to show all repos.`,
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode with fuzzy search")
 	cmd.Flags().BoolVar(&copyToClipboard, "copy", false, "Copy path to clipboard")
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "Show worktrees from all repos (interactive mode)")
-	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
-	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip cd hooks")
-	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable (KEY=VALUE)")
-	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
-	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
-	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
 
 	// Register completions
 	cmd.ValidArgsFunction = completeCdArg
