@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/BurntSushi/toml"
@@ -1042,5 +1043,76 @@ on = ["checkout"]
 	}
 	if len(cfg.Hooks.Hooks) != 1 {
 		t.Errorf("len(Hooks) = %d, want 1", len(cfg.Hooks.Hooks))
+	}
+}
+
+func TestValidateHookTriggers(t *testing.T) {
+	tests := []struct {
+		name    string
+		hooks   map[string]Hook
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "valid checkout",
+			hooks:   map[string]Hook{"h": {Command: "echo", On: []string{"checkout"}}},
+			wantErr: false,
+		},
+		{
+			name:    "valid checkout:pr",
+			hooks:   map[string]Hook{"h": {Command: "echo", On: []string{"checkout:pr"}}},
+			wantErr: false,
+		},
+		{
+			name:    "valid before:prune",
+			hooks:   map[string]Hook{"h": {Command: "echo", On: []string{"before:prune"}}},
+			wantErr: false,
+		},
+		{
+			name:    "valid multiple triggers",
+			hooks:   map[string]Hook{"h": {Command: "echo", On: []string{"checkout:pr", "before:merge"}}},
+			wantErr: false,
+		},
+		{
+			name:    "no on field is valid",
+			hooks:   map[string]Hook{"h": {Command: "echo"}},
+			wantErr: false,
+		},
+		{
+			name:    "invalid cd trigger",
+			hooks:   map[string]Hook{"h": {Command: "echo", On: []string{"cd"}}},
+			wantErr: true,
+			errMsg:  "no longer a valid trigger",
+		},
+		{
+			name:    "invalid subtype",
+			hooks:   map[string]Hook{"h": {Command: "echo", On: []string{"checkout:foo"}}},
+			wantErr: true,
+			errMsg:  "unknown subtype",
+		},
+		{
+			name:    "prune with subtype",
+			hooks:   map[string]Hook{"h": {Command: "echo", On: []string{"prune:create"}}},
+			wantErr: true,
+			errMsg:  "does not support subtypes",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateHookTriggers(tt.hooks)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("error = %q, want containing %q", err.Error(), tt.errMsg)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
 	}
 }

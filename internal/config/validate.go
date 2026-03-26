@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/raphi011/wt/internal/hooktrigger"
 )
 
 // Valid enum values for configuration fields.
@@ -30,6 +32,18 @@ func validateEnum(value, field string, allowed []string) error {
 	}
 	if !slices.Contains(allowed, value) {
 		return fmt.Errorf("invalid %s %q: must be %s", field, value, formatOptions(allowed))
+	}
+	return nil
+}
+
+// ValidateHookTriggers validates all "on" values in hook config.
+func ValidateHookTriggers(hooksMap map[string]Hook) error {
+	for name, hook := range hooksMap {
+		for _, on := range hook.On {
+			if _, err := hooktrigger.ParseTrigger(on); err != nil {
+				return fmt.Errorf("invalid hook trigger %q in hook %q: %w", on, name, err)
+			}
+		}
 	}
 	return nil
 }

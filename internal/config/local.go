@@ -104,6 +104,9 @@ func LoadLocal(repoPath string) (*LocalConfig, error) {
 	if err := validatePreservePatterns(local.Preserve.Patterns, configFile); err != nil {
 		return nil, err
 	}
+	if err := ValidateHookTriggers(local.Hooks.Hooks); err != nil {
+		return nil, fmt.Errorf("%s: %w", configFile, err)
+	}
 
 	return local, nil
 }
