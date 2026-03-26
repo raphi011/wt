@@ -18,9 +18,7 @@ import (
 type CommandType string
 
 const (
-	CommandCd       CommandType = "cd"
 	CommandCheckout CommandType = "checkout"
-	CommandPR       CommandType = "pr"
 	CommandPrune    CommandType = "prune"
 	CommandMerge    CommandType = "merge"
 )
@@ -32,7 +30,9 @@ type Context struct {
 	Branch      string            // branch name
 	Repo        string            // registered repo name (as shown in wt repo list)
 	Origin      string            // folder name of the git repo (filepath.Base of repo path)
-	Trigger     string            // command that triggered the hook (checkout, cd, prune, merge)
+	Trigger     string            // command that triggered the hook (checkout, prune, merge)
+	Action      string            // checkout subtype: create, open, pr, manual (for wt hook)
+	Phase       string            // "before" or "after"
 	Env         map[string]string // custom variables from --arg key=value flags
 	DryRun      bool              // if true, print command instead of executing
 }
@@ -47,7 +47,7 @@ type HookMatch struct {
 // Returns all matching hooks. If hookNames are specified, those hooks run.
 // Otherwise, all hooks with matching "on" conditions run.
 // Returns nil slice if no hooks should run, error if any specified hook doesn't exist.
-func SelectHooks(cfg config.HooksConfig, hookNames []string, noHook bool, cmdType CommandType) ([]HookMatch, error) {
+func SelectHooks(cfg config.HooksConfig, hookNames []string, noHook bool, cmdType CommandType, subtype, phase string) ([]HookMatch, error) {
 	if noHook {
 		return nil, nil
 	}
@@ -66,17 +66,17 @@ func SelectHooks(cfg config.HooksConfig, hookNames []string, noHook bool, cmdTyp
 	}
 
 	// Find all hooks with matching "on" conditions
-	return findMatchingHooks(cfg, cmdType), nil
+	return findMatchingHooks(cfg, cmdType, subtype, phase), nil
 }
 
 // findMatchingHooks returns all hooks that have the command type in their "on" list.
 // Hooks without "on" are skipped (they only run via explicit --hook=name).
-func findMatchingHooks(cfg config.HooksConfig, cmdType CommandType) []HookMatch {
+func findMatchingHooks(cfg config.HooksConfig, cmdType CommandType, subtype, phase string) []HookMatch {
 	var matches []HookMatch
 
 	for name, hook := range cfg.Hooks {
 		// Only include hooks with explicit "on" conditions that match
-		if len(hook.On) > 0 && hookMatchesCommand(hook, cmdType) {
+		if len(hook.On) > 0 && hookMatchesCommand(hook, cmdType, subtype, phase) {
 			hookCopy := hook
 			matches = append(matches, HookMatch{Hook: &hookCopy, Name: name})
 		}
@@ -85,11 +85,14 @@ func findMatchingHooks(cfg config.HooksConfig, cmdType CommandType) []HookMatch 
 	return matches
 }
 
-// hookMatchesCommand returns true if cmdType is in the hook's "on" list.
-// Special value "all" matches all command types.
-func hookMatchesCommand(hook config.Hook, cmdType CommandType) bool {
-	for _, cmd := range hook.On {
-		if cmd == "all" || cmd == string(cmdType) {
+// hookMatchesCommand returns true if cmdType/subtype/phase match any of the hook's "on" triggers.
+func hookMatchesCommand(hook config.Hook, cmdType CommandType, subtype, phase string) bool {
+	for _, on := range hook.On {
+		parsed, err := ParseTrigger(on)
+		if err != nil {
+			continue // already validated at config load time
+		}
+		if parsed.Phase == phase && parsed.Matches(string(cmdType), subtype) {
 			return true
 		}
 	}
@@ -123,6 +126,18 @@ func RunForEach(goCtx context.Context, matches []HookMatch, ctx Context, workDir
 			l.Printf("Warning: hook %q failed for %s: %v\n", match.Name, ctx.Branch, err)
 		}
 	}
+}
+
+// RunBeforeHooks runs all matched hooks for a before phase, aborting on first failure.
+func RunBeforeHooks(goCtx context.Context, matches []HookMatch, ctx Context, workDir string) error {
+	l := log.FromContext(goCtx)
+	for _, match := range matches {
+		if err := runHook(goCtx, match.Name, match.Hook, ctx, workDir); err != nil {
+			l.Printf("Hook %q failed — aborting operation for %s\n", match.Name, ctx.Branch)
+			return err
+		}
+	}
+	return nil
 }
 
 // RunSingle runs a single hook by name with the given context.
@@ -262,6 +277,8 @@ func SubstitutePlaceholders(command string, ctx Context) string {
 		"{repo}":         ctx.Repo,
 		"{origin}":       ctx.Origin,
 		"{trigger}":      ctx.Trigger,
+		"{action}":       ctx.Action,
+		"{phase}":        ctx.Phase,
 	}
 
 	result := command

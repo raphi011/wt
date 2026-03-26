@@ -411,7 +411,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 		return err
 	}
 
-	hookMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout)
+	hookMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, "", "after")
 	if err != nil {
 		return err
 	}

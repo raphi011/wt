@@ -453,7 +453,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		}
 
 		// Select and run hooks per-repo
-		hookMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.HookNames, opts.NoHook, hooks.CommandPrune)
+		hookMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.HookNames, opts.NoHook, hooks.CommandPrune, "", "after")
 		if err != nil {
 			l.Printf("Warning: failed to select hooks for %s: %v\n", wt.RepoName, err)
 		}
