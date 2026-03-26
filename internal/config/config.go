@@ -494,27 +494,43 @@ worktree_format = "{repo}-{branch}"
 #   "branch"  - sort by branch name
 # default_sort = "date"
 
-# Hooks - run commands after worktree creation/removal
+# Hooks - run commands when creating, removing, or merging worktrees
 # Use --hook=name to run a specific hook, --no-hook to skip all hooks
 #
 # Hooks with "on" run automatically for matching commands.
-# Hooks without "on" only run when explicitly called with --hook=name.
+# Hooks without "on" only run when explicitly called with --hook=name or wt hook.
 #
-# Available "on" values: "checkout", "pr", "prune", "merge", "all"
+# Trigger syntax: [before:|after:]trigger[:subtype]
+#   Triggers: checkout, prune, merge, all
+#   Subtypes (checkout only): create, open, pr
+#   Timing: before (can cancel operation), after (default)
+#
+# Examples:
+#   on = ["checkout"]              - all checkouts (after)
+#   on = ["checkout:pr"]           - PR checkouts only
+#   on = ["before:prune"]          - pre-prune guard (can abort deletion)
+#   on = ["before:checkout:pr"]    - before PR checkout only
+#   on = ["all"]                   - all triggers (after)
+#
+# Before-hooks: non-zero exit aborts the operation.
+# After-hooks: failures are logged as warnings.
 #
 # Hooks run with working directory set to the worktree path.
-# For "prune" hooks, working directory is the main repo (worktree is deleted).
+# For "prune" after-hooks, working directory is the main repo (worktree is deleted).
+# For "prune" before-hooks, working directory is the worktree (still exists).
 #
 # Available placeholders:
-#   {worktree-dir} - absolute worktree path
-#   {repo-dir}     - absolute main repo path
-#   {branch}       - branch name
-#   {repo}         - folder name of git repo
-#   {origin}       - repo name from git origin (falls back to {repo})
-#   {trigger}      - command that triggered the hook (checkout, pr, prune, merge)
-#   {key}          - custom variable passed via --arg key=value (or --arg key)
-#   {key:-def}     - custom variable with default value if not provided
-#   {key:+text}    - conditional: includes text only if key is set and non-empty
+#   {worktree-dir}      - absolute worktree path
+#   {repo-dir}          - absolute main repo path
+#   {branch}            - branch name
+#   {repo}              - registered repo name
+#   {origin}            - folder name of git repo
+#   {trigger}           - command trigger (checkout, prune, merge, run)
+#   {action}            - checkout subtype (create, open, pr, manual)
+#   {phase}             - hook timing (before, after)
+#   {key}               - custom variable passed via --arg key=value
+#   {key:-def}          - custom variable with default
+#   {key:+text}         - conditional: includes text only if key is set
 #
 # === Editor Examples ===
 #
