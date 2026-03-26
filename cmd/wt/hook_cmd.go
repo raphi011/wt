@@ -28,13 +28,29 @@ func newHookCmd() *cobra.Command {
 		GroupID:           GroupUtility,
 		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: completeHookArg,
-		Long: `Run a configured hook.
+		Long: `Run a configured hook manually.
 
-Hooks are defined in config.toml and can use placeholders.
+Hooks are defined in config.toml with an "on" trigger and optional placeholders.
+When run manually, the hook always executes as an "after" hook
+({phase}=after, {trigger}=run, {action}=manual).
+
 With one argument, runs in the current worktree.
 With two arguments, the first is a [scope:]branch target and the second is the hook name.
 
-Target worktrees using [scope:]branch format where scope can be a repo name or label.`,
+Target worktrees using [scope:]branch format where scope can be a repo name or label.
+
+Trigger syntax for "on" field:
+  [before:|after:]trigger[:subtype]
+
+  Triggers: checkout, prune, merge, all
+  Subtypes (checkout only): create, open, pr
+  Timing: before (can cancel operation), after (default)
+
+Examples:
+  on = ["checkout"]              # All checkouts (after)
+  on = ["checkout:pr"]           # PR checkouts only
+  on = ["before:prune"]          # Pre-prune guard (can abort)
+  on = ["before:checkout:pr"]    # Before PR checkout only`,
 		Example: `  wt hook code                        # Run 'code' hook in current worktree
   wt hook main code                   # Run 'code' in main worktree (all repos)
   wt hook myrepo:main code            # Run in specific repo's worktree
@@ -111,6 +127,8 @@ func runHookInRepo(ctx context.Context, repo registry.Repo, hookName string, env
 		Repo:        repo.Name,
 		Origin:      repo.Name,
 		Trigger:     "run",
+		Action:      "manual",
+		Phase:       "after",
 		Env:         env,
 		DryRun:      dryRun,
 	}
@@ -145,6 +163,8 @@ func runHookInTargets(ctx context.Context, reg *registry.Registry, hookName stri
 			Repo:        wt.RepoName,
 			Origin:      wt.RepoName,
 			Trigger:     "run",
+			Action:      "manual",
+			Phase:       "after",
 			Env:         env,
 			DryRun:      dryRun,
 		}

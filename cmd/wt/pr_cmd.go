@@ -324,11 +324,6 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 			}
 
 			// Run hooks
-			hookMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandCheckout, "", "after")
-			if err != nil {
-				return err
-			}
-
 			hookEnv, err := hooks.ParseEnvWithStdin(env)
 			if err != nil {
 				return err
@@ -341,9 +336,27 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 				Repo:        repo.Name,
 				Origin:      repo.Name,
 				Trigger:     string(hooks.CommandCheckout),
+				Action:      "pr",
 				Env:         hookEnv,
 			}
-			hooks.RunForEach(ctx, hookMatches, hookCtx, repoPath)
+
+			// Run before hooks
+			beforeMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandCheckout, "pr", "before")
+			if err != nil {
+				return err
+			}
+			hookCtx.Phase = "before"
+			if err := hooks.RunBeforeHooks(ctx, beforeMatches, hookCtx, repoPath); err != nil {
+				return fmt.Errorf("before-hook aborted pr checkout: %w", err)
+			}
+
+			// Run after hooks
+			afterMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandCheckout, "pr", "after")
+			if err != nil {
+				return err
+			}
+			hookCtx.Phase = "after"
+			hooks.RunForEach(ctx, afterMatches, hookCtx, repoPath)
 
 			return nil
 		},
@@ -518,6 +531,31 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 			cache := prcache.Load()
 			cacheKey := prcache.CacheKey(res.repo.Path, res.branch)
 
+			// Run before-merge hooks (can abort)
+			hookEnv, err := hooks.ParseEnvWithStdin(env)
+			if err != nil {
+				return err
+			}
+			cwd := config.WorkDirFromContext(ctx)
+			hookCtx := hooks.Context{
+				WorktreeDir: cwd,
+				RepoDir:     res.repo.Path,
+				Branch:      res.branch,
+				Repo:        res.repo.Name,
+				Origin:      res.repo.Name,
+				Trigger:     "merge",
+				Env:         hookEnv,
+			}
+
+			beforeMatches, err := hooks.SelectHooks(res.effCfg.Hooks, hookNames, noHook, hooks.CommandMerge, "", "before")
+			if err != nil {
+				return err
+			}
+			hookCtx.Phase = "before"
+			if err := hooks.RunBeforeHooks(ctx, beforeMatches, hookCtx, res.repo.Path); err != nil {
+				return fmt.Errorf("before-hook aborted merge: %w", err)
+			}
+
 			if pr.State == forge.PRStateMerged {
 				out.Printf("PR #%d is already merged\n", pr.Number)
 			} else if pr.State == forge.PRStateClosed {
@@ -538,28 +576,12 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 				}
 			}
 
-			// Run hooks
-			hookMatches, err := hooks.SelectHooks(res.effCfg.Hooks, hookNames, noHook, hooks.CommandMerge, "", "after")
+			afterMatches, err := hooks.SelectHooks(res.effCfg.Hooks, hookNames, noHook, hooks.CommandMerge, "", "after")
 			if err != nil {
 				return err
 			}
-
-			hookEnv, err := hooks.ParseEnvWithStdin(env)
-			if err != nil {
-				return err
-			}
-
-			cwd := config.WorkDirFromContext(ctx)
-			hookCtx := hooks.Context{
-				WorktreeDir: cwd,
-				RepoDir:     res.repo.Path,
-				Branch:      res.branch,
-				Repo:        res.repo.Name,
-				Origin:      res.repo.Name,
-				Trigger:     "merge",
-				Env:         hookEnv,
-			}
-			hooks.RunForEach(ctx, hookMatches, hookCtx, res.repo.Path)
+			hookCtx.Phase = "after"
+			hooks.RunForEach(ctx, afterMatches, hookCtx, res.repo.Path)
 
 			// Remove worktree unless --keep
 			if !keep {
