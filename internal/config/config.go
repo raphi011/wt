@@ -307,6 +307,9 @@ func Load() (Config, error) {
 	if err := validatePreservePatterns(cfg.Preserve.Patterns, ""); err != nil {
 		return Default(), err
 	}
+	if err := ValidateHookTriggers(cfg.Hooks.Hooks); err != nil {
+		return Default(), err
+	}
 
 	// Note: theme.name is validated at runtime with a warning, not an error
 
