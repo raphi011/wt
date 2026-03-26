@@ -18,6 +18,8 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		Repo:        "repo",
 		Origin:      "myrepo",
 		Trigger:     "checkout",
+		Action:      "pr",
+		Phase:       "after",
 	}
 
 	tests := []struct {
@@ -37,8 +39,8 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		},
 		{
 			name:     "all placeholders",
-			command:  "{worktree-dir} {branch} {repo} {origin} {repo-dir} {trigger}",
-			expected: "/home/user/worktrees/repo-branch feature-branch repo myrepo /home/user/repo checkout",
+			command:  "{worktree-dir} {branch} {repo} {origin} {repo-dir} {trigger} {action} {phase}",
+			expected: "/home/user/worktrees/repo-branch feature-branch repo myrepo /home/user/repo checkout pr after",
 		},
 		{
 			name:     "no placeholders",
@@ -54,6 +56,16 @@ func TestSubstitutePlaceholders(t *testing.T) {
 			name:     "trigger placeholder",
 			command:  "echo triggered by {trigger}",
 			expected: "echo triggered by checkout",
+		},
+		{
+			name:     "action placeholder",
+			command:  "echo {action}",
+			expected: "echo pr",
+		},
+		{
+			name:     "phase placeholder",
+			command:  "echo {phase}",
+			expected: "echo after",
 		},
 	}
 
@@ -125,7 +137,7 @@ func TestSelectHooks(t *testing.T) {
 			},
 			"pr-setup": {
 				Command: "npm install",
-				On:      []string{"pr"},
+				On:      []string{"checkout:pr"},
 			},
 		},
 	}
@@ -135,6 +147,7 @@ func TestSelectHooks(t *testing.T) {
 		hookFlags   []string
 		noHook      bool
 		cmdType     CommandType
+		subtype     string
 		expectCount int
 		expectNames []string
 		expectError bool
@@ -146,10 +159,10 @@ func TestSelectHooks(t *testing.T) {
 			expectNames: []string{"kitty"},
 		},
 		{
-			name:        "hook with on=pr runs for pr",
-			cmdType:     CommandPR,
-			expectCount: 1,
-			expectNames: []string{"pr-setup"},
+			name:        "hook with on=checkout:pr runs for checkout with pr subtype",
+			cmdType:     CommandCheckout,
+			subtype:     "pr",
+			expectCount: 2,
 		},
 		{
 			name:        "explicit hook runs regardless of on condition",
@@ -187,7 +200,7 @@ func TestSelectHooks(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			matches, err := SelectHooks(hooksConfig, tt.hookFlags, tt.noHook, tt.cmdType)
+			matches, err := SelectHooks(hooksConfig, tt.hookFlags, tt.noHook, tt.cmdType, tt.subtype, "after")
 
 			if tt.expectError {
 				if err == nil {
@@ -226,7 +239,7 @@ func TestSelectHooks_NoOnCondition(t *testing.T) {
 	}
 
 	// Without explicit --hook, hooks without "on" don't run
-	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout)
+	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout, "", "after")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -235,7 +248,7 @@ func TestSelectHooks_NoOnCondition(t *testing.T) {
 	}
 
 	// With explicit --hook, it runs
-	matches, err = SelectHooks(hooksConfig, []string{"vscode"}, false, CommandCheckout)
+	matches, err = SelectHooks(hooksConfig, []string{"vscode"}, false, CommandCheckout, "", "after")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -249,7 +262,7 @@ func TestSelectHooks_EmptyConfig(t *testing.T) {
 		Hooks: map[string]config.Hook{},
 	}
 
-	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout)
+	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout, "", "after")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -267,7 +280,7 @@ func TestSelectHooks_OnCondition(t *testing.T) {
 			},
 			"pr-setup": {
 				Command: "npm install && code {worktree-dir}",
-				On:      []string{"pr"},
+				On:      []string{"checkout:pr"},
 			},
 			"universal": {
 				Command: "echo {worktree-dir}",
@@ -279,6 +292,7 @@ func TestSelectHooks_OnCondition(t *testing.T) {
 	tests := []struct {
 		name        string
 		cmdType     CommandType
+		subtype     string
 		expectCount int
 		expectNames []string
 	}{
@@ -289,16 +303,16 @@ func TestSelectHooks_OnCondition(t *testing.T) {
 			expectNames: []string{"editor"},
 		},
 		{
-			name:        "on=pr runs for pr command",
-			cmdType:     CommandPR,
-			expectCount: 1,
-			expectNames: []string{"pr-setup"},
+			name:        "on=checkout:pr runs for checkout with pr subtype",
+			cmdType:     CommandCheckout,
+			subtype:     "pr",
+			expectCount: 2,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			matches, err := SelectHooks(hooksConfig, nil, false, tt.cmdType)
+			matches, err := SelectHooks(hooksConfig, nil, false, tt.cmdType, tt.subtype, "after")
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
@@ -323,13 +337,13 @@ func TestSelectHooks_OnConditionNoMatch(t *testing.T) {
 		Hooks: map[string]config.Hook{
 			"pr-only": {
 				Command: "npm install",
-				On:      []string{"pr"},
+				On:      []string{"checkout:pr"},
 			},
 		},
 	}
 
-	// Hook with on=pr doesn't match "create"
-	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout)
+	// Hook with on=checkout:pr doesn't match checkout with no subtype
+	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout, "", "after")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -353,7 +367,7 @@ func TestSelectHooks_MultipleMatches(t *testing.T) {
 	}
 
 	// Both hooks match "checkout", should return both
-	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout)
+	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout, "", "after")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -373,8 +387,8 @@ func TestSelectHooks_OnAll(t *testing.T) {
 	}
 
 	// "all" should match all command types
-	for _, cmdType := range []CommandType{CommandCd, CommandCheckout, CommandPR, CommandPrune, CommandMerge} {
-		matches, err := SelectHooks(hooksConfig, nil, false, cmdType)
+	for _, cmdType := range []CommandType{CommandCheckout, CommandPrune, CommandMerge} {
+		matches, err := SelectHooks(hooksConfig, nil, false, cmdType, "", "after")
 		if err != nil {
 			t.Errorf("unexpected error for %s: %v", cmdType, err)
 		}
@@ -400,7 +414,7 @@ func TestSelectHooks_PruneCommand(t *testing.T) {
 	}
 
 	// Prune hook runs for prune command
-	matches, err := SelectHooks(hooksConfig, nil, false, CommandPrune)
+	matches, err := SelectHooks(hooksConfig, nil, false, CommandPrune, "", "after")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -412,7 +426,7 @@ func TestSelectHooks_PruneCommand(t *testing.T) {
 	}
 
 	// Prune hook does NOT run for checkout command
-	matches, err = SelectHooks(hooksConfig, nil, false, CommandCheckout)
+	matches, err = SelectHooks(hooksConfig, nil, false, CommandCheckout, "", "after")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -1020,5 +1034,127 @@ func TestRunForEach_EmptyMatches(t *testing.T) {
 	// RunForEach does NOT print "No hooks matched" (unlike RunAllNonFatal)
 	if strings.Contains(buf.String(), "No hooks matched") {
 		t.Errorf("RunForEach should not print 'No hooks matched', got %q", buf.String())
+	}
+}
+
+func TestSelectHooks_BeforeAfter(t *testing.T) {
+	hooksConfig := config.HooksConfig{
+		Hooks: map[string]config.Hook{
+			"guard":   {Command: "test -f .env", On: []string{"before:prune"}},
+			"cleanup": {Command: "echo removed", On: []string{"prune"}},
+		},
+	}
+
+	// Before hooks: only "guard" matches
+	matches, err := SelectHooks(hooksConfig, nil, false, CommandPrune, "", "before")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Errorf("expected 1 before hook, got %d", len(matches))
+	}
+	if len(matches) > 0 && matches[0].Name != "guard" {
+		t.Errorf("expected guard hook, got %s", matches[0].Name)
+	}
+
+	// After hooks: only "cleanup" matches (no phase = "after")
+	matches, err = SelectHooks(hooksConfig, nil, false, CommandPrune, "", "after")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Errorf("expected 1 after hook, got %d", len(matches))
+	}
+	if len(matches) > 0 && matches[0].Name != "cleanup" {
+		t.Errorf("expected cleanup hook, got %s", matches[0].Name)
+	}
+}
+
+func TestSelectHooks_CheckoutSubtypes(t *testing.T) {
+	hooksConfig := config.HooksConfig{
+		Hooks: map[string]config.Hook{
+			"editor":    {Command: "code .", On: []string{"checkout"}},
+			"pr-review": {Command: "claude review", On: []string{"checkout:pr"}},
+		},
+	}
+
+	// checkout:create — only editor matches (generic checkout matches all subtypes)
+	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout, "create", "after")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Errorf("expected 1 match for create subtype, got %d", len(matches))
+	}
+	if len(matches) > 0 && matches[0].Name != "editor" {
+		t.Errorf("expected editor hook, got %s", matches[0].Name)
+	}
+
+	// checkout:pr — both match
+	matches, err = SelectHooks(hooksConfig, nil, false, CommandCheckout, "pr", "after")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(matches) != 2 {
+		t.Errorf("expected 2 matches for pr subtype, got %d", len(matches))
+	}
+}
+
+func TestRunBeforeHooks_Empty(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	ctx := logCtx(&buf)
+	hookCtx := Context{WorktreeDir: t.TempDir(), Branch: "main"}
+
+	err := RunBeforeHooks(ctx, nil, hookCtx, hookCtx.WorktreeDir)
+	if err != nil {
+		t.Errorf("RunBeforeHooks(empty) = %v, want nil", err)
+	}
+}
+
+func TestRunBeforeHooks_AllPass(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	ctx := logCtx(&buf)
+	hook1 := config.Hook{Command: "echo first"}
+	hook2 := config.Hook{Command: "echo second"}
+	matches := []HookMatch{
+		{Hook: &hook1, Name: "first"},
+		{Hook: &hook2, Name: "second"},
+	}
+	hookCtx := Context{WorktreeDir: t.TempDir(), Branch: "main"}
+
+	err := RunBeforeHooks(ctx, matches, hookCtx, hookCtx.WorktreeDir)
+	if err != nil {
+		t.Errorf("RunBeforeHooks(all pass) = %v, want nil", err)
+	}
+}
+
+func TestRunBeforeHooks_AbortsOnFailure(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	ctx := logCtx(&buf)
+	failHook := config.Hook{Command: "sh -c 'exit 1'"}
+	successHook := config.Hook{Command: "echo should-not-run"}
+	matches := []HookMatch{
+		{Hook: &failHook, Name: "guard"},
+		{Hook: &successHook, Name: "after-guard"},
+	}
+	hookCtx := Context{WorktreeDir: t.TempDir(), Branch: "feature/test"}
+
+	err := RunBeforeHooks(ctx, matches, hookCtx, hookCtx.WorktreeDir)
+	if err == nil {
+		t.Error("RunBeforeHooks(failing hook) = nil, want error")
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "Hook \"guard\" failed") {
+		t.Errorf("output = %q, want abort message", out)
+	}
+	if strings.Contains(out, "should-not-run") {
+		t.Errorf("output = %q, second hook should not have run", out)
 	}
 }

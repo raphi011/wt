@@ -284,7 +284,7 @@ repo's worktrees. Use -g to show all repos.`,
 			}
 			effCfg := resolveEffectiveConfig(ctx, repoPath)
 
-			hookMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandCd)
+			hookMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandCheckout, "", "after")
 			if err != nil {
 				return err
 			}

@@ -324,7 +324,7 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 			}
 
 			// Run hooks
-			hookMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandCheckout)
+			hookMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandCheckout, "", "after")
 			if err != nil {
 				return err
 			}
@@ -539,7 +539,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 			}
 
 			// Run hooks
-			hookMatches, err := hooks.SelectHooks(res.effCfg.Hooks, hookNames, noHook, hooks.CommandMerge)
+			hookMatches, err := hooks.SelectHooks(res.effCfg.Hooks, hookNames, noHook, hooks.CommandMerge, "", "after")
 			if err != nil {
 				return err
 			}
