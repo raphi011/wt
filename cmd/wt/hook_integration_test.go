@@ -475,3 +475,60 @@ func TestHook_UnknownHookWithTarget(t *testing.T) {
 		t.Errorf("error should mention unknown hook name, got: %v", err)
 	}
 }
+
+// TestHook_ActionPhasePlaceholders tests that manual hook gets correct action/phase/trigger values.
+//
+// Scenario: User runs `wt hook myhook` which writes {action} {phase} {trigger} to a file
+// Expected: File contains "manual after run"
+func TestHook_ActionPhasePlaceholders(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	outputPath := filepath.Join(tmpDir, "placeholders.txt")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"myhook": {
+					Command: "echo {action} {phase} {trigger} > " + outputPath,
+				},
+			},
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cmd := newHookCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"myhook"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("hook command failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+
+	got := strings.TrimSpace(string(content))
+	if got != "manual after run" {
+		t.Errorf("expected 'manual after run', got %q", got)
+	}
+}

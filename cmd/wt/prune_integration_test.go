@@ -1299,3 +1299,462 @@ func TestPrune_LocalConfigOverridesDeleteBranches(t *testing.T) {
 		t.Error("branch should be deleted when local .wt.toml sets delete_local_branches=true")
 	}
 }
+
+// TestPrune_AfterHookRuns tests that a prune hook with on=["prune"] fires after pruning.
+//
+// Scenario: User runs `wt prune feature -f` with a hook on=["prune"]
+// Expected: Worktree is removed and hook runs
+func TestPrune_AfterHookRuns(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	markerPath := filepath.Join(tmpDir, "prune-hook-ran")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"cleanup": {
+					Command: "touch " + markerPath,
+					On:      []string{"prune"},
+				},
+			},
+		},
+	}
+
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatal("worktree should exist before prune")
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("worktree should be removed after prune")
+	}
+
+	if _, err := os.Stat(markerPath); os.IsNotExist(err) {
+		t.Error("prune hook should have run")
+	}
+}
+
+// TestPrune_BeforeHookAborts tests that a failing before:prune hook prevents removal.
+//
+// Scenario: User has a before:prune hook that exits 1
+// Expected: Worktree is NOT removed
+func TestPrune_BeforeHookAborts(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"guard": {
+					Command: "exit 1",
+					On:      []string{"before:prune"},
+				},
+			},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	// Prune should succeed (before-hook abort is logged, not fatal for the command)
+	// but the worktree should still exist because the abort skips that worktree
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Worktree should still exist — before hook aborted its removal
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Error("worktree should still exist after before-hook abort")
+	}
+}
+
+// TestPrune_BeforeHookCWD tests that before:prune hooks run in the worktree directory.
+//
+// Scenario: Before-prune hook writes pwd to a file
+// Expected: Output matches the worktree path
+func TestPrune_BeforeHookCWD(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	outputPath := filepath.Join(tmpDir, "before-pwd.txt")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"pwd-before": {
+					Command: "pwd > " + outputPath,
+					On:      []string{"before:prune"},
+				},
+			},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read pwd output: %v", err)
+	}
+
+	got := strings.TrimSpace(string(content))
+	if got != wtPath {
+		t.Errorf("before-prune hook CWD should be worktree path\nexpected: %s\ngot:      %s", wtPath, got)
+	}
+}
+
+// TestPrune_AfterHookCWD tests that after:prune hooks run in the repo root directory.
+//
+// Scenario: After-prune hook writes pwd to a file
+// Expected: Output matches the repo root path (worktree is already deleted)
+func TestPrune_AfterHookCWD(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	outputPath := filepath.Join(tmpDir, "after-pwd.txt")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"pwd-after": {
+					Command: "pwd > " + outputPath,
+					On:      []string{"prune"},
+				},
+			},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read pwd output: %v", err)
+	}
+
+	got := strings.TrimSpace(string(content))
+	if got != repoPath {
+		t.Errorf("after-prune hook CWD should be repo root\nexpected: %s\ngot:      %s", repoPath, got)
+	}
+}
+
+// TestPrune_AllTriggerMatchesPrune tests that on=["all"] matches prune.
+//
+// Scenario: Hook with on=["all"], user prunes a worktree
+// Expected: Hook fires
+func TestPrune_AllTriggerMatchesPrune(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	markerPath := filepath.Join(tmpDir, "all-hook-ran")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"catch-all": {
+					Command: "touch " + markerPath,
+					On:      []string{"all"},
+				},
+			},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	if _, err := os.Stat(markerPath); os.IsNotExist(err) {
+		t.Error("hook with on=[\"all\"] should have run for prune")
+	}
+}
+
+// TestPrune_Placeholders tests that prune hooks get correct placeholder values.
+//
+// Scenario: After-prune hook writes trigger/phase/branch to a file
+// Expected: File contains "prune after feature"
+func TestPrune_Placeholders(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	outputPath := filepath.Join(tmpDir, "placeholders.txt")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"placeholder-test": {
+					Command: "echo {trigger} {phase} {branch} > " + outputPath,
+					On:      []string{"prune"},
+				},
+			},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read placeholder output: %v", err)
+	}
+
+	got := strings.TrimSpace(string(content))
+	if got != "prune after feature" {
+		t.Errorf("expected 'prune after feature', got %q", got)
+	}
+}
+
+// TestPrune_NoHookFlag tests that --no-hook suppresses prune hooks.
+//
+// Scenario: User runs `wt prune feature -f --no-hook` with a default prune hook
+// Expected: Worktree is removed but hook does not run
+func TestPrune_NoHookFlag(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	markerPath := filepath.Join(tmpDir, "should-not-exist")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"cleanup": {
+					Command: "touch " + markerPath,
+					On:      []string{"prune"},
+				},
+			},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f", "--no-hook"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	if _, err := os.Stat(markerPath); err == nil {
+		t.Error("hook should NOT have run with --no-hook flag")
+	}
+}
+
+// TestPrune_ExplicitHookFlag tests that --hook runs only the named hook.
+//
+// Scenario: User runs `wt prune feature -f --hook myhook` with two hooks
+// Expected: Only the named hook runs, not the default one
+func TestPrune_ExplicitHookFlag(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	explicitMarker := filepath.Join(tmpDir, "explicit-hook-ran")
+	defaultMarker := filepath.Join(tmpDir, "default-hook-ran")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"myhook": {
+					Command: "touch " + explicitMarker,
+				},
+				"default-cleanup": {
+					Command: "touch " + defaultMarker,
+					On:      []string{"prune"},
+				},
+			},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f", "--hook", "myhook"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	if _, err := os.Stat(explicitMarker); os.IsNotExist(err) {
+		t.Error("explicit hook should have run")
+	}
+
+	if _, err := os.Stat(defaultMarker); err == nil {
+		t.Error("default hook should NOT have run when --hook is used")
+	}
+}

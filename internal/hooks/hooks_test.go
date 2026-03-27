@@ -1158,3 +1158,28 @@ func TestRunBeforeHooks_AbortsOnFailure(t *testing.T) {
 		t.Errorf("output = %q, second hook should not have run", out)
 	}
 }
+
+func TestFindMatchingHooks_AlphabeticalOrder(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.HooksConfig{
+		Hooks: map[string]config.Hook{
+			"charlie": {Command: "echo c", On: []string{"checkout"}},
+			"alpha":   {Command: "echo a", On: []string{"checkout"}},
+			"bravo":   {Command: "echo b", On: []string{"checkout"}},
+		},
+	}
+
+	matches := findMatchingHooks(cfg, CommandCheckout, "", "after")
+
+	if len(matches) != 3 {
+		t.Fatalf("expected 3 matches, got %d", len(matches))
+	}
+
+	expected := []string{"alpha", "bravo", "charlie"}
+	for i, name := range expected {
+		if matches[i].Name != name {
+			t.Errorf("matches[%d] = %q, want %q", i, matches[i].Name, name)
+		}
+	}
+}
