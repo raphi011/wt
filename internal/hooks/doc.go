@@ -1,7 +1,7 @@
-// Package hooks provides post-operation hook execution with placeholder substitution.
+// Package hooks provides hook execution with placeholder substitution.
 //
-// Hooks are shell commands defined in config that run after wt operations like
-// checkout, pr checkout, prune, or merge. They enable workflow automation such as
+// Hooks are shell commands defined in config that run before or after wt operations
+// like checkout, pr checkout, prune, or merge. They enable workflow automation such as
 // opening editors, installing dependencies, or sending notifications.
 //
 // # Hook Selection
@@ -21,6 +21,11 @@
 //	command = "echo 'Done with {branch}'"
 //	# no "on" - only runs via --hook=cleanup
 //
+// # Execution Order
+//
+// Hooks run in alphabetical order by name. Use naming prefixes to control ordering
+// (e.g., "01-install", "02-lint", "99-editor").
+//
 // # Placeholder Substitution
 //
 // Static placeholders available in all hooks:
@@ -30,7 +35,7 @@
 //   - {branch}: Branch name
 //   - {repo}: Folder name of git repo
 //   - {origin}: Repository name from git origin (falls back to {repo})
-//   - {trigger}: Command that triggered the hook (checkout, prune, merge)
+//   - {trigger}: Command that triggered the hook (checkout, prune, merge, run)
 //   - {action}: Checkout subtype: create, open, pr, or manual (for wt hook)
 //   - {phase}: Hook timing: before or after
 //
@@ -43,10 +48,14 @@
 // # Execution Context
 //
 // Hooks run with the working directory set to:
-//   - Worktree path for checkout/pr hooks
-//   - Main repo path for prune hooks (worktree is deleted)
+//   - Worktree path for checkout hooks (both before and after)
+//   - Repo root for pr checkout hooks (both before and after)
+//   - Worktree path for before:prune hooks (worktree still exists)
+//   - Main repo path for after:prune hooks (worktree is deleted)
+//   - Repo root for merge hooks (both before and after)
 //
-// Hook failures are logged but don't stop batch operations ([RunForEach]).
+// Before hooks abort the operation on failure. After hook failures are logged
+// but don't stop batch operations ([RunForEach]).
 // Use [RunSingle] for individual hook execution where errors are returned to the caller.
 //
 // # Stdin Support

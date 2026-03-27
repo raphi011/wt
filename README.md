@@ -129,12 +129,12 @@ on = ["checkout"]
 
 # Run Claude to review PR when checking out a PR
 [hooks.claude-review]
-command = "cd '{worktree-dir}' && claude -p 'review this PR'"
+command = "claude -p 'review this PR'"
 on = ["checkout:pr"]
 
 # Manual-only hook — only runs via: wt hook claude --arg prompt="..."
 [hooks.claude]
-command = "cd '{worktree-dir}' && claude '{prompt:-help me}'"
+command = "claude '{prompt:-help me}'"
 ```
 
 See [Hooks](#hooks) and [Writing Hooks](#writing-hooks) for the full placeholder reference and advanced patterns.
@@ -593,6 +593,41 @@ enabled = false
 
 Hooks are shell commands executed via `sh -c`. Placeholders like `{worktree-dir}` are replaced with raw text before the command runs — no automatic escaping or quoting is applied.
 
+### Hook Working Directory
+
+Hooks run with a working directory that depends on the command and phase:
+
+| Command | `before` CWD | `after` CWD |
+|---------|-------------|------------|
+| `checkout` | Worktree directory | Worktree directory |
+| `checkout:pr` (via `wt pr checkout`) | Repo root | Repo root |
+| `prune` | Worktree directory (still exists) | Repo root (worktree deleted) |
+| `merge` | Repo root | Repo root |
+
+For checkout hooks, the worktree already exists when before hooks run. A failing before hook aborts the command but does not roll back the worktree.
+
+Since the working directory is already set, `cd '{worktree-dir}'` is unnecessary in checkout hooks. For other commands, use `{worktree-dir}` or `{repo-dir}` placeholders if you need a specific directory.
+
+### Hook Execution Order
+
+Hooks run in **alphabetical order** by name. Use naming prefixes to control ordering:
+
+```toml
+[hooks.01-install]
+command = "npm install"
+on = ["checkout"]
+
+[hooks.02-lint]
+command = "npm run lint"
+on = ["checkout"]
+
+[hooks.99-open-editor]
+command = "code '{worktree-dir}'"
+on = ["checkout"]
+```
+
+TUI programs (editors, `claude`, interactive CLIs) work as hooks because they inherit the terminal's stdin/stdout/stderr. Place them last alphabetically so non-interactive hooks complete first.
+
 ### Quoting Placeholders
 
 Since values are substituted as-is, paths with spaces or special characters will break unquoted placeholders:
@@ -622,17 +657,17 @@ Use `{key:+text}` to include text only when an arg is set (and non-empty). This 
 
 ```toml
 [hooks.claude]
-command = "cd '{worktree-dir}' && claude {skip:+--dangerously-skip-permissions} -p '{prompt:-help}'"
+command = "claude {skip:+--dangerously-skip-permissions} -p '{prompt:-help}'"
 ```
 
 ```bash
 # Without skip — flag omitted
 wt hook claude -a prompt="implement auth"
-# → cd '/path' && claude  -p 'implement auth'
+# → claude  -p 'implement auth'
 
 # With skip — flag included (bare -a key sets value to "true")
 wt hook claude -a skip -a prompt="implement auth"
-# → cd '/path' && claude --dangerously-skip-permissions -p 'implement auth'
+# → claude --dangerously-skip-permissions -p 'implement auth'
 ```
 
 ### Multiline Hooks
@@ -642,7 +677,6 @@ Use TOML triple-quoted strings for multi-step hooks:
 ```toml
 [hooks.setup]
 command = '''
-cd '{worktree-dir}'
 npm install
 npm run build
 '''
@@ -655,7 +689,6 @@ on = ["checkout"]
 [hooks.setup]
 command = '''
 set -e
-cd '{worktree-dir}'
 npm install
 npm run build
 '''
