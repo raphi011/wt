@@ -53,7 +53,9 @@
 //   - Main repo path for after:prune hooks (worktree is deleted)
 //   - Repo root for merge hooks (both before and after)
 //
-// Before hooks abort the operation on failure. After hook failures are logged
+// Before hooks abort the current item on failure. For checkout and merge, this
+// stops the command. For prune batches, the individual worktree is skipped but
+// remaining worktrees are still processed. After hook failures are logged
 // but don't stop batch operations ([RunForEach]).
 // Use [RunSingle] for individual hook execution where errors are returned to the caller.
 //

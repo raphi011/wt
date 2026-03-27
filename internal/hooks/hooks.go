@@ -47,7 +47,7 @@ type Context struct {
 	RepoDir     string            // absolute main repo path
 	Branch      string            // branch name
 	Repo        string            // registered repo name (as shown in wt repo list)
-	Trigger     string            // command that triggered the hook (checkout, prune, merge)
+	Trigger     string            // command that triggered the hook (checkout, prune, merge, run)
 	Action      string            // checkout subtype: create, open, pr, manual (for wt hook)
 	Phase       string            // "before" or "after"
 	Env         map[string]string // custom variables from --arg key=value flags
@@ -69,8 +69,13 @@ func SelectHooks(cfg config.HooksConfig, hookNames []string, noHook bool, cmdTyp
 		return nil, nil
 	}
 
-	// If explicit hooks specified, use them directly (ignores "on" condition)
+	// If explicit hooks specified, use them directly (ignores "on" condition).
+	// Only return explicit hooks in the "after" phase to avoid running them twice
+	// (once in before-hooks and once in after-hooks).
 	if len(hookNames) > 0 {
+		if phase == PhaseBefore {
+			return nil, nil
+		}
 		var matches []HookMatch
 		for _, hookName := range hookNames {
 			hook, exists := cfg.Hooks[hookName]

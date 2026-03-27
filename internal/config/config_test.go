@@ -1047,6 +1047,8 @@ on = ["checkout"]
 }
 
 func TestValidateHookTriggers(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		hooks   map[string]Hook
@@ -1100,6 +1102,7 @@ func TestValidateHookTriggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			err := ValidateHookTriggers(tt.hooks)
 			if tt.wantErr {
 				if err == nil {
