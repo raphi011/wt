@@ -548,20 +548,20 @@ worktree_format = "{repo}-{branch}"
 #
 # === AI Assistant Examples ===
 #
-# Claude Code - start Claude in the worktree (interactive)
+# Claude Code - start Claude in the worktree
 # [hooks.claude]
-# command = "cd {worktree-dir} && claude"
+# command = "claude"
 # description = "Start Claude Code session"
 #
 # Claude Code with custom prompt
 # [hooks.claude-task]
-# command = "cd {worktree-dir} && claude -p {prompt}"
+# command = "claude -p {prompt}"
 # description = "Run Claude with a task"
 # Run with: wt hook claude-task --arg prompt="implement feature X"
 #
 # Claude Code with conditional flags (use -a skip to skip permissions)
 # [hooks.claude-auto]
-# command = "cd {worktree-dir} && claude {skip:+--dangerously-skip-permissions} -p {prompt:-help}"
+# command = "claude {skip:+--dangerously-skip-permissions} -p {prompt:-help}"
 # description = "Run Claude with optional permission skip"
 # Run with: wt hook claude-auto -a skip -a prompt="implement feature X"
 #

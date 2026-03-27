@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/mattn/go-isatty"
@@ -71,6 +72,7 @@ func SelectHooks(cfg config.HooksConfig, hookNames []string, noHook bool, cmdTyp
 
 // findMatchingHooks returns all hooks that have the command type in their "on" list.
 // Hooks without "on" are skipped (they only run via explicit --hook=name).
+// Results are sorted alphabetically by hook name for deterministic execution order.
 func findMatchingHooks(cfg config.HooksConfig, cmdType CommandType, subtype, phase string) []HookMatch {
 	var matches []HookMatch
 
@@ -81,6 +83,10 @@ func findMatchingHooks(cfg config.HooksConfig, cmdType CommandType, subtype, pha
 			matches = append(matches, HookMatch{Hook: &hookCopy, Name: name})
 		}
 	}
+
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].Name < matches[j].Name
+	})
 
 	return matches
 }
@@ -100,6 +106,7 @@ func hookMatchesCommand(hook config.Hook, cmdType CommandType, subtype, phase st
 }
 
 // RunAllNonFatal runs all matched hooks, logging failures as warnings instead of returning errors.
+// Hooks run in alphabetical order by name (determined by SelectHooks).
 // Prints "No hooks matched" if matches is empty.
 func RunAllNonFatal(goCtx context.Context, matches []HookMatch, ctx Context, workDir string) {
 	l := log.FromContext(goCtx)
@@ -117,6 +124,7 @@ func RunAllNonFatal(goCtx context.Context, matches []HookMatch, ctx Context, wor
 }
 
 // RunForEach runs all matched hooks for a single item (e.g., one worktree in a batch).
+// Hooks run in alphabetical order by name (determined by SelectHooks).
 // Logs failures as warnings with branch context. Does NOT print "no hooks matched".
 func RunForEach(goCtx context.Context, matches []HookMatch, ctx Context, workDir string) {
 	l := log.FromContext(goCtx)
@@ -158,14 +166,12 @@ func runHook(goCtx context.Context, name string, hook *config.Hook, ctx Context,
 
 	l.Printf("Running hook '%s'...\n", name)
 
-	shellCmd := exec.Command("sh", "-c", cmd)
+	shell, args := shellCommand(cmd)
+	shellCmd := exec.Command(shell, args...)
 	shellCmd.Dir = workDir
 	shellCmd.Stdin = os.Stdin
-
-	if l.IsVerbose() {
-		shellCmd.Stdout = os.Stdout
-		shellCmd.Stderr = os.Stderr
-	}
+	shellCmd.Stdout = os.Stdout
+	shellCmd.Stderr = os.Stderr
 
 	if err := shellCmd.Run(); err != nil {
 		return fmt.Errorf("command failed: %s", cmd)
