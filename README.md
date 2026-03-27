@@ -46,22 +46,9 @@ Requires `git` in PATH. For GitHub repos: `gh` CLI. For GitLab repos: `glab` CLI
 
 ## Getting Started
 
-### 1. Shell Completions
+### 1. Shell Integration
 
-Completions are installed automatically when using Homebrew. For manual installs:
-
-```bash
-# Fish
-wt completion fish > ~/.config/fish/completions/wt.fish
-
-# Bash
-wt completion bash > ~/.local/share/bash-completion/completions/wt
-
-# Zsh — ensure ~/.zfunc exists and is on fpath, then generate
-mkdir -p ~/.zfunc
-echo 'fpath=(~/.zfunc $fpath)' >> ~/.zshrc  # add once, before compinit
-wt completion zsh > ~/.zfunc/_wt
-```
+Set up shell completions and the shell wrapper so that `wt cd` can change your directory. See [Shell Integration](#shell-integration) for instructions.
 
 ### 2. Create Config
 
@@ -459,7 +446,6 @@ Hooks without `on` only run when invoked explicitly via `wt hook <name>` or `--h
 | `{repo-dir}` | Absolute path to the main repo (bare root or `.git` parent) |
 | `{branch}` | Branch name |
 | `{repo}` | Repo name (as registered in `wt repo list`) |
-| `{origin}` | Folder name of the git repo (from path) |
 | `{trigger}` | Command that triggered the hook (`checkout`, `prune`, `merge`, `run`) |
 | `{action}` | Checkout subtype: `create`, `open`, `pr`, or `manual` (for `wt hook`) |
 | `{phase}` | Hook timing: `before` or `after` |
@@ -644,7 +630,7 @@ command = "code '{worktree-dir}'"
 
 > **Note:** Single quotes protect against spaces and most special characters, but not against values containing literal single quotes. This is a limitation of raw text substitution.
 
-The same applies to all placeholders (`{repo-dir}`, `{branch}`, `{repo}`, `{origin}`, `{trigger}`) and custom `--arg` variables:
+The same applies to all placeholders (`{repo-dir}`, `{branch}`, `{repo}`, `{trigger}`) and custom `--arg` variables:
 
 ```toml
 [hooks.claude]
@@ -709,6 +695,40 @@ Multiple keys can read from the same stdin (all keys receive identical content):
 cat spec.md | wt hook claude --arg prompt=- --arg context=-
 ```
 
+## Shell Integration
+
+### Shell Wrapper
+
+`wt cd` prints the worktree path to stdout but can't change your shell's directory on its own. `wt init` outputs a shell wrapper that intercepts `wt cd` and performs the actual `cd`.
+
+```bash
+# Fish - add to ~/.config/fish/config.fish
+wt init fish | source
+
+# Bash - add to ~/.bashrc
+eval "$(wt init bash)"
+
+# Zsh - add to ~/.zshrc
+eval "$(wt init zsh)"
+```
+
+### Shell Completions
+
+Completions are installed automatically when using Homebrew. For manual installs:
+
+```bash
+# Fish
+wt completion fish > ~/.config/fish/completions/wt.fish
+
+# Bash
+wt completion bash > ~/.local/share/bash-completion/completions/wt
+
+# Zsh — ensure ~/.zfunc exists and is on fpath, then generate
+mkdir -p ~/.zfunc
+echo 'fpath=(~/.zfunc $fpath)' >> ~/.zshrc  # add once, before compinit
+wt completion zsh > ~/.zfunc/_wt
+```
+
 ## Integration with gh-dash
 
 `wt` works great with [gh-dash](https://github.com/dlvhdr/gh-dash). Add a keybinding to checkout PRs as worktrees:
@@ -722,21 +742,6 @@ keybindings:
 ```
 
 Press `O` to checkout PR → hooks auto-open your editor.
-
-## Shell Integration
-
-`wt cd` prints the worktree path to stdout but can't change your shell's directory on its own. `wt init` outputs a shell wrapper that intercepts `wt cd` and performs the actual `cd`.
-
-```bash
-# Bash - add to ~/.bashrc
-eval "$(wt init bash)"
-
-# Zsh - add to ~/.zshrc
-eval "$(wt init zsh)"
-
-# Fish - add to ~/.config/fish/config.fish
-wt init fish | source
-```
 
 ## Development
 
