@@ -462,10 +462,8 @@ const defaultConfig = `# wt configuration
 [checkout]
 # Worktree folder naming format
 # Available placeholders:
-#   {repo}    - folder name of git repo
+#   {repo}    - registered repo name (as shown in wt repo list)
 #   {branch}  - the branch name as provided
-#   {origin}  - repo name from git origin URL (falls back to {repo})
-# Example: "{origin}_{branch}" creates "origin-name_feature-branch"
 worktree_format = "{repo}-{branch}"
 
 # Base ref mode for new branches (wt checkout -b)
@@ -524,7 +522,6 @@ worktree_format = "{repo}-{branch}"
 #   {repo-dir}          - absolute main repo path
 #   {branch}            - branch name
 #   {repo}              - registered repo name
-#   {origin}            - folder name of git repo
 #   {trigger}           - command trigger (checkout, prune, merge, run)
 #   {action}            - checkout subtype (create, open, pr, manual)
 #   {phase}             - hook timing (before, after)

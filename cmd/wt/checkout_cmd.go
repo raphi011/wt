@@ -421,7 +421,6 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 		RepoDir:     repo.Path,
 		Branch:      branch,
 		Repo:        repo.Name,
-		Origin:      git.GetRepoDisplayName(repo.Path),
 		Trigger:     string(hooks.CommandCheckout),
 		Action:      action,
 		Env:         hookEnv,

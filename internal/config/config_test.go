@@ -883,7 +883,7 @@ default_labels = ["team-a", "team-b"]
 mode = "regular"
 
 [checkout]
-worktree_format = "{origin}-{branch}"
+worktree_format = "{repo}-{branch}"
 base_ref = "local"
 auto_fetch = true
 set_upstream = true
@@ -1005,8 +1005,8 @@ on = ["checkout"]
 	if len(cfg.DefaultLabels) != 2 {
 		t.Errorf("len(DefaultLabels) = %d, want 2", len(cfg.DefaultLabels))
 	}
-	if cfg.Checkout.WorktreeFormat != "{origin}-{branch}" {
-		t.Errorf("WorktreeFormat = %q, want %q", cfg.Checkout.WorktreeFormat, "{origin}-{branch}")
+	if cfg.Checkout.WorktreeFormat != "{repo}-{branch}" {
+		t.Errorf("WorktreeFormat = %q, want %q", cfg.Checkout.WorktreeFormat, "{repo}-{branch}")
 	}
 	if cfg.Checkout.BaseRef != "local" {
 		t.Errorf("BaseRef = %q, want %q", cfg.Checkout.BaseRef, "local")
