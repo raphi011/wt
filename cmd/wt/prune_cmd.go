@@ -417,7 +417,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		effCfg := resolveEffectiveConfig(ctx, wt.RepoPath)
 
 		// Run before-prune hooks (can skip this worktree)
-		beforeMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.HookNames, opts.NoHook, hooks.CommandPrune, "", "before")
+		beforeMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.HookNames, opts.NoHook, hooks.CommandPrune, "", hooks.PhaseBefore)
 		if err != nil {
 			l.Printf("Warning: failed to select before hooks for %s: %v\n", wt.RepoName, err)
 		}
@@ -429,7 +429,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 				Repo:        filepath.Base(wt.RepoPath),
 				Origin:      wt.RepoName,
 				Trigger:     string(hooks.CommandPrune),
-				Phase:       "before",
+				Phase:       hooks.PhaseBefore,
 				Env:         hookEnv,
 			}
 			if err := hooks.RunBeforeHooks(ctx, beforeMatches, beforeHookCtx, wt.Path); err != nil {
@@ -475,7 +475,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		}
 
 		// Select and run after hooks per-repo
-		afterMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.HookNames, opts.NoHook, hooks.CommandPrune, "", "after")
+		afterMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.HookNames, opts.NoHook, hooks.CommandPrune, "", hooks.PhaseAfter)
 		if err != nil {
 			l.Printf("Warning: failed to select hooks for %s: %v\n", wt.RepoName, err)
 		}
@@ -487,7 +487,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 				Repo:        filepath.Base(wt.RepoPath),
 				Origin:      wt.RepoName,
 				Trigger:     string(hooks.CommandPrune),
-				Phase:       "after",
+				Phase:       hooks.PhaseAfter,
 				Env:         hookEnv,
 			}
 			hooks.RunForEach(ctx, afterMatches, hookCtx, wt.RepoPath)
