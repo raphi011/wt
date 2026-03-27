@@ -420,6 +420,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		beforeMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.HookNames, opts.NoHook, hooks.CommandPrune, "", hooks.PhaseBefore)
 		if err != nil {
 			l.Printf("Warning: failed to select before hooks for %s: %v\n", wt.RepoName, err)
+			continue
 		}
 		if len(beforeMatches) > 0 {
 			beforeHookCtx := hooks.Context{
@@ -432,7 +433,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 				Env:         hookEnv,
 			}
 			if err := hooks.RunBeforeHooks(ctx, beforeMatches, beforeHookCtx, wt.Path); err != nil {
-				l.Printf("Skipping %s: before-hook aborted\n", wt.Branch)
+				l.Printf("Skipping %s: before-hook aborted: %v\n", wt.Branch, err)
 				continue
 			}
 		}

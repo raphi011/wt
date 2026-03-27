@@ -256,6 +256,34 @@ func TestSelectHooks_NoOnCondition(t *testing.T) {
 	}
 }
 
+func TestSelectHooks_ExplicitHooksSkipBeforePhase(t *testing.T) {
+	t.Parallel()
+
+	hooksConfig := config.HooksConfig{
+		Hooks: map[string]config.Hook{
+			"guard": {Command: "echo guard", On: []string{"before:checkout"}},
+		},
+	}
+
+	// Explicit hooks should NOT run in before phase (to avoid double execution)
+	matches, err := SelectHooks(hooksConfig, []string{"guard"}, false, CommandCheckout, "", PhaseBefore)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Errorf("expected no hooks in before phase with explicit --hook, got %d", len(matches))
+	}
+
+	// Explicit hooks should run in after phase
+	matches, err = SelectHooks(hooksConfig, []string{"guard"}, false, CommandCheckout, "", PhaseAfter)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Errorf("expected 1 hook in after phase with explicit --hook, got %d", len(matches))
+	}
+}
+
 func TestSelectHooks_EmptyConfig(t *testing.T) {
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{},
