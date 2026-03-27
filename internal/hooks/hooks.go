@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/log"
+	"github.com/raphi011/wt/internal/ui/styles"
 )
 
 // CommandType identifies which command is triggering the hook
@@ -45,7 +47,6 @@ type Context struct {
 	RepoDir     string            // absolute main repo path
 	Branch      string            // branch name
 	Repo        string            // registered repo name (as shown in wt repo list)
-	Origin      string            // folder name of the git repo (filepath.Base of repo path)
 	Trigger     string            // command that triggered the hook (checkout, prune, merge)
 	Action      string            // checkout subtype: create, open, pr, manual (for wt hook)
 	Phase       string            // "before" or "after"
@@ -179,7 +180,11 @@ func runHook(goCtx context.Context, name string, hook *config.Hook, ctx Context,
 		return nil
 	}
 
-	l.Printf("Running hook '%s'...\n", name)
+	desc := hook.Description
+	if desc == "" {
+		desc = name
+	}
+	l.Printf("%s\n", styles.PrimaryStyle.Render(fmt.Sprintf("Running %s...", desc)))
 
 	shell, args := shellCommand(cmd)
 	shellCmd := exec.Command(shell, args...)
@@ -189,12 +194,15 @@ func runHook(goCtx context.Context, name string, hook *config.Hook, ctx Context,
 	shellCmd.Stderr = os.Stderr
 
 	if err := shellCmd.Run(); err != nil {
-		return fmt.Errorf("command failed: %s", cmd)
+		exitCode := 1
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			exitCode = exitErr.ExitCode()
+		}
+		return fmt.Errorf("command failed (exit %d): %s", exitCode, cmd)
 	}
 
-	if hook.Description != "" {
-		l.Printf("  ✓ %s\n", hook.Description)
-	}
+	l.Debug("hook completed", "name", name)
 	return nil
 }
 
@@ -284,7 +292,7 @@ var envPlaceholderRegex = regexp.MustCompile(`\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([-+
 
 // SubstitutePlaceholders replaces {placeholder} with values from Context.
 //
-// Static placeholders: {worktree-dir}, {repo-dir}, {branch}, {repo}, {origin}, {trigger}
+// Static placeholders: {worktree-dir}, {repo-dir}, {branch}, {repo}, {trigger}
 // Env placeholders (from Context.Env via --arg key=value or --arg key):
 //   - {key}           - value from --arg key=value
 //   - {key:-default}  - value with default if key not set
@@ -296,7 +304,6 @@ func SubstitutePlaceholders(command string, ctx Context) string {
 		"{repo-dir}":     ctx.RepoDir,
 		"{branch}":       ctx.Branch,
 		"{repo}":         ctx.Repo,
-		"{origin}":       ctx.Origin,
 		"{trigger}":      ctx.Trigger,
 		"{action}":       ctx.Action,
 		"{phase}":        ctx.Phase,

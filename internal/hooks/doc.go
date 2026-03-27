@@ -33,8 +33,7 @@
 //   - {worktree-dir}: Absolute worktree path
 //   - {repo-dir}: Absolute main repo path
 //   - {branch}: Branch name
-//   - {repo}: Folder name of git repo
-//   - {origin}: Repository name from git origin (falls back to {repo})
+//   - {repo}: Registered repo name (as shown in wt repo list)
 //   - {trigger}: Command that triggered the hook (checkout, prune, merge, run)
 //   - {action}: Checkout subtype: create, open, pr, or manual (for wt hook)
 //   - {phase}: Hook timing: before or after

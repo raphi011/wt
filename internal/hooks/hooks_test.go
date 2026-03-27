@@ -16,7 +16,6 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		RepoDir:     "/home/user/repo",
 		Branch:      "feature-branch",
 		Repo:        "repo",
-		Origin:      "myrepo",
 		Trigger:     "checkout",
 		Action:      "pr",
 		Phase:       "after",
@@ -39,8 +38,8 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		},
 		{
 			name:     "all placeholders",
-			command:  "{worktree-dir} {branch} {repo} {origin} {repo-dir} {trigger} {action} {phase}",
-			expected: "/home/user/worktrees/repo-branch feature-branch repo myrepo /home/user/repo checkout pr after",
+			command:  "{worktree-dir} {branch} {repo} {repo-dir} {trigger} {action} {phase}",
+			expected: "/home/user/worktrees/repo-branch feature-branch repo /home/user/repo checkout pr after",
 		},
 		{
 			name:     "no placeholders",
@@ -906,11 +905,8 @@ func TestRunSingle_Success(t *testing.T) {
 	}
 
 	out := buf.String()
-	if !strings.Contains(out, "Running hook 'test-hook'") {
-		t.Errorf("output = %q, want to contain running message", out)
-	}
-	if !strings.Contains(out, "Say hello") {
-		t.Errorf("output = %q, want to contain description", out)
+	if !strings.Contains(out, "Running Say hello...") {
+		t.Errorf("output = %q, want to contain running message with description", out)
 	}
 }
 
@@ -936,7 +932,7 @@ func TestRunSingle_DryRun(t *testing.T) {
 	if !strings.Contains(out, "[dry-run]") {
 		t.Errorf("output = %q, want to contain [dry-run]", out)
 	}
-	if strings.Contains(out, "Running hook") {
+	if strings.Contains(out, "Running") {
 		t.Errorf("output = %q, should not contain running message in dry-run", out)
 	}
 }
@@ -957,8 +953,8 @@ func TestRunSingle_Failure(t *testing.T) {
 	if err == nil {
 		t.Error("RunSingle(failing command) = nil, want error")
 	}
-	if !strings.Contains(err.Error(), "command failed") {
-		t.Errorf("error = %q, want to contain 'command failed'", err.Error())
+	if !strings.Contains(err.Error(), "command failed (exit 1)") {
+		t.Errorf("error = %q, want to contain 'command failed (exit 1)'", err.Error())
 	}
 }
 
@@ -995,7 +991,7 @@ func TestRunAllNonFatal_WithFailures(t *testing.T) {
 	if !strings.Contains(out, "Warning: hook \"failing\" failed") {
 		t.Errorf("output = %q, want warning for failing hook", out)
 	}
-	if !strings.Contains(out, "Running hook 'passing'") {
+	if !strings.Contains(out, "Running OK...") {
 		t.Errorf("output = %q, want running message for passing hook", out)
 	}
 }
