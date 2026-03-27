@@ -22,6 +22,21 @@ const (
 	CommandCheckout CommandType = "checkout"
 	CommandPrune    CommandType = "prune"
 	CommandMerge    CommandType = "merge"
+	CommandRun      CommandType = "run"
+)
+
+// Phase constants for hook execution timing.
+const (
+	PhaseBefore = "before"
+	PhaseAfter  = "after"
+)
+
+// Action constants for checkout subtypes and manual invocation.
+const (
+	ActionCreate = "create"
+	ActionOpen   = "open"
+	ActionPR     = "pr"
+	ActionManual = "manual"
 )
 
 // Context holds the values for placeholder substitution

@@ -118,7 +118,10 @@ func runHookInRepo(ctx context.Context, repo registry.Repo, hookName string, env
 		return unknownHookError(hookName, effCfg.Hooks.Hooks)
 	}
 
-	branch, _ := git.GetCurrentBranch(ctx, workDir)
+	branch, err := git.GetCurrentBranch(ctx, workDir)
+	if err != nil {
+		return fmt.Errorf("get current branch: %w", err)
+	}
 
 	hookCtx := hooks.Context{
 		WorktreeDir: workDir,
@@ -126,9 +129,9 @@ func runHookInRepo(ctx context.Context, repo registry.Repo, hookName string, env
 		Branch:      branch,
 		Repo:        repo.Name,
 		Origin:      repo.Name,
-		Trigger:     "run",
-		Action:      "manual",
-		Phase:       "after",
+		Trigger:     string(hooks.CommandRun),
+		Action:      hooks.ActionManual,
+		Phase:       hooks.PhaseAfter,
 		Env:         env,
 		DryRun:      dryRun,
 	}
@@ -162,9 +165,9 @@ func runHookInTargets(ctx context.Context, reg *registry.Registry, hookName stri
 			Branch:      wt.Branch,
 			Repo:        wt.RepoName,
 			Origin:      wt.RepoName,
-			Trigger:     "run",
-			Action:      "manual",
-			Phase:       "after",
+			Trigger:     string(hooks.CommandRun),
+			Action:      hooks.ActionManual,
+			Phase:       hooks.PhaseAfter,
 			Env:         env,
 			DryRun:      dryRun,
 		}

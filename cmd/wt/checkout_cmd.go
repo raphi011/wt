@@ -411,9 +411,9 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 		return err
 	}
 
-	action := "open"
+	action := hooks.ActionOpen
 	if newBranch {
-		action = "create"
+		action = hooks.ActionCreate
 	}
 
 	hookCtx := hooks.Context{
@@ -422,28 +422,28 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 		Branch:      branch,
 		Repo:        repo.Name,
 		Origin:      git.GetRepoDisplayName(repo.Path),
-		Trigger:     "checkout",
+		Trigger:     string(hooks.CommandCheckout),
 		Action:      action,
 		Env:         hookEnv,
 	}
 
 	// Run before hooks (can abort)
-	beforeMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, action, "before")
+	beforeMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, action, hooks.PhaseBefore)
 	if err != nil {
 		return err
 	}
-	hookCtx.Phase = "before"
+	hookCtx.Phase = hooks.PhaseBefore
 	if err := hooks.RunBeforeHooks(ctx, beforeMatches, hookCtx, wtPath); err != nil {
 		return fmt.Errorf("before-hook aborted checkout: %w", err)
 	}
 
 	// Run after hooks
-	afterMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, action, "after")
+	afterMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, action, hooks.PhaseAfter)
 	if err != nil {
 		return err
 	}
 	if len(afterMatches) > 0 {
-		hookCtx.Phase = "after"
+		hookCtx.Phase = hooks.PhaseAfter
 		hooks.RunAllNonFatal(ctx, afterMatches, hookCtx, wtPath)
 	}
 
