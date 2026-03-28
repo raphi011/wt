@@ -28,7 +28,9 @@ func WorktreeTableRow(wt git.Worktree, staleDays int) []string {
 		commit = commit[:7]
 	}
 	pr := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.PRDraft, wt.PRURL)
-	if pr == "" && wt.LocallyMerged {
+	if pr == "" && wt.WtMerged != "" {
+		pr = styles.FormatWtMerged()
+	} else if pr == "" && wt.LocallyMerged {
 		pr = styles.FormatLocallyMerged()
 	}
 

@@ -142,6 +142,11 @@ func FormatLocallyMerged() string {
 	return MergedStyle.Render("✓ Merged (local)")
 }
 
+// FormatWtMerged returns a formatted string indicating the branch was merged via wt.
+func FormatWtMerged() string {
+	return MergedStyle.Render("✓ Merged (wt)")
+}
+
 // PRStateSymbol returns just the symbol for a PR state
 func PRStateSymbol(state string, isDraft bool) string {
 	switch state {

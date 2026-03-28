@@ -166,6 +166,8 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 			for _, wt := range allWorktrees {
 				if wt.PRState == forge.PRStateMerged {
 					toRemove = append(toRemove, wt)
+				} else if wt.WtMerged != "" {
+					toRemove = append(toRemove, wt)
 				} else if wt.LocallyMerged {
 					toRemove = append(toRemove, wt)
 				} else if stale && isStaleWorktree(wt, cfg.Prune.StaleDays) {
@@ -185,6 +187,10 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 					if !isPrunable && wt.LocallyMerged {
 						isPrunable = true
 						reason = styles.FormatLocallyMerged()
+					}
+					if !isPrunable && wt.WtMerged != "" {
+						isPrunable = true
+						reason = styles.FormatWtMerged()
 					}
 					if !isPrunable && stale && isStaleWorktree(wt, cfg.Prune.StaleDays) {
 						isPrunable = true
@@ -483,7 +489,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 			// where git's own ancestry check in -d provides a safety net).
 			// Note: PRState is empty for targeted prune (no forge lookup),
 			// so forceDelete is always false in that path — this is intentional.
-			forceDelete := wt.PRState == forge.PRStateMerged
+			forceDelete := wt.PRState == forge.PRStateMerged || wt.WtMerged != ""
 			if err := git.DeleteLocalBranch(ctx, wt.RepoPath, wt.Branch, forceDelete); err != nil {
 				l.Printf("Warning: failed to delete branch %s: %v\n", wt.Branch, err)
 			} else {
