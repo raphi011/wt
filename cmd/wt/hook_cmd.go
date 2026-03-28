@@ -123,6 +123,11 @@ func runHookInRepo(ctx context.Context, repo registry.Repo, hookName string, env
 		return fmt.Errorf("get current branch: %w", err)
 	}
 
+	configDir, err := effCfg.GetWtDir()
+	if err != nil {
+		return fmt.Errorf("config dir: %w", err)
+	}
+
 	hookCtx := hooks.Context{
 		WorktreeDir: workDir,
 		RepoDir:     repo.Path,
@@ -131,6 +136,7 @@ func runHookInRepo(ctx context.Context, repo registry.Repo, hookName string, env
 		Trigger:     string(hooks.CommandRun),
 		Action:      hooks.ActionManual,
 		Phase:       hooks.PhaseAfter,
+		ConfigDir:   configDir,
 		Env:         env,
 		DryRun:      dryRun,
 	}
@@ -158,6 +164,12 @@ func runHookInTargets(ctx context.Context, reg *registry.Registry, hookName stri
 			continue
 		}
 
+		configDir, err := effCfg.GetWtDir()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s:%s: config dir: %w", wt.RepoName, wt.Branch, err))
+			continue
+		}
+
 		hookCtx := hooks.Context{
 			WorktreeDir: wt.Path,
 			RepoDir:     wt.RepoPath,
@@ -166,6 +178,7 @@ func runHookInTargets(ctx context.Context, reg *registry.Registry, hookName stri
 			Trigger:     string(hooks.CommandRun),
 			Action:      hooks.ActionManual,
 			Phase:       hooks.PhaseAfter,
+			ConfigDir:   configDir,
 			Env:         env,
 			DryRun:      dryRun,
 		}

@@ -169,14 +169,30 @@ type Config struct {
 // DefaultWorktreeFormat is the default format for worktree folder names
 const DefaultWorktreeFormat = "{repo}-{branch}"
 
+// GetWtDir returns the effective wt config directory path.
+// Returns filepath.Dir(RegistryPath) if set (for testing), otherwise returns default ~/.wt/.
+func (c *Config) GetWtDir() (string, error) {
+	if c.RegistryPath != "" {
+		return filepath.Dir(c.RegistryPath), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine config directory: %w", err)
+	}
+	return filepath.Join(home, ".wt"), nil
+}
+
 // GetHistoryPath returns the effective history file path.
 // Returns HistoryPath if set (for testing), otherwise returns default ~/.wt/history.json.
-func (c *Config) GetHistoryPath() string {
+func (c *Config) GetHistoryPath() (string, error) {
 	if c.HistoryPath != "" {
-		return c.HistoryPath
+		return c.HistoryPath, nil
 	}
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".wt", "history.json")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine history path: %w", err)
+	}
+	return filepath.Join(home, ".wt", "history.json"), nil
 }
 
 // ShouldSetUpstream returns true if upstream tracking should be set (default: false)
@@ -525,6 +541,7 @@ worktree_format = "{repo}-{branch}"
 #   {trigger}           - command trigger (checkout, prune, merge, run)
 #   {action}            - checkout subtype (create, open, pr, manual)
 #   {phase}             - hook timing (before, after)
+#   {config-dir}        - absolute path to ~/.wt/ config directory
 #   {key}               - custom variable passed via --arg key=value
 #   {key:-def}          - custom variable with default
 #   {key:+text}         - conditional: includes text only if key is set

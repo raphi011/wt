@@ -560,7 +560,10 @@ If destination is not specified, clones into the current directory.`,
 						fmt.Printf("Created worktree: %s (%s)\n", wtPath, worktreeBranch)
 
 						// Record to history for wt cd
-						if err := history.RecordAccess(wtPath, repoName, worktreeBranch, cfg.GetHistoryPath()); err != nil {
+						histPath, err := cfg.GetHistoryPath()
+						if err != nil {
+							l.Printf("Warning: failed to determine history path: %v\n", err)
+						} else if err := history.RecordAccess(wtPath, repoName, worktreeBranch, histPath); err != nil {
 							l.Printf("Warning: failed to record history: %v\n", err)
 						}
 					}

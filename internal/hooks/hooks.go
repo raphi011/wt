@@ -50,6 +50,7 @@ type Context struct {
 	Trigger     string            // command that triggered the hook (checkout, prune, merge, run)
 	Action      string            // checkout subtype: create, open, pr, manual (for wt hook)
 	Phase       string            // "before" or "after"
+	ConfigDir   string            // absolute path to ~/.wt/ config directory
 	Env         map[string]string // custom variables from --arg key=value flags
 	DryRun      bool              // if true, print command instead of executing
 }
@@ -297,7 +298,7 @@ var envPlaceholderRegex = regexp.MustCompile(`\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([-+
 
 // SubstitutePlaceholders replaces {placeholder} with values from Context.
 //
-// Static placeholders: {worktree-dir}, {repo-dir}, {branch}, {repo}, {trigger}
+// Static placeholders: {worktree-dir}, {repo-dir}, {branch}, {repo}, {trigger}, {config-dir}
 // Env placeholders (from Context.Env via --arg key=value or --arg key):
 //   - {key}           - value from --arg key=value
 //   - {key:-default}  - value with default if key not set
@@ -312,6 +313,7 @@ func SubstitutePlaceholders(command string, ctx Context) string {
 		"{trigger}":      ctx.Trigger,
 		"{action}":       ctx.Action,
 		"{phase}":        ctx.Phase,
+		"{config-dir}":   ctx.ConfigDir,
 	}
 
 	result := command

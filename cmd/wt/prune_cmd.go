@@ -399,7 +399,11 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 	cfg := config.FromContext(ctx)
 
 	// Load history for cleanup
-	hist, err := history.Load(cfg.GetHistoryPath())
+	histPath, err := cfg.GetHistoryPath()
+	if err != nil {
+		l.Printf("Warning: failed to determine history path: %v\n", err)
+	}
+	hist, err := history.Load(histPath)
 	if err != nil {
 		l.Printf("Warning: failed to load history for prune cleanup: %v\n", err)
 		hist = &history.History{}
@@ -410,6 +414,11 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 	if err != nil {
 		l.Printf("Warning: failed to parse hook env, skipping hooks: %v\n", err)
 		opts.NoHook = true
+	}
+
+	configDir, err := cfg.GetWtDir()
+	if err != nil {
+		l.Printf("Warning: failed to determine config dir: %v\n", err)
 	}
 
 	for _, wt := range toRemove {
@@ -430,6 +439,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 				Repo:        filepath.Base(wt.RepoPath),
 				Trigger:     string(hooks.CommandPrune),
 				Phase:       hooks.PhaseBefore,
+				ConfigDir:   configDir,
 				Env:         hookEnv,
 			}
 			if err := hooks.RunBeforeHooks(ctx, beforeMatches, beforeHookCtx, wt.Path); err != nil {
@@ -487,6 +497,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 				Repo:        filepath.Base(wt.RepoPath),
 				Trigger:     string(hooks.CommandPrune),
 				Phase:       hooks.PhaseAfter,
+				ConfigDir:   configDir,
 				Env:         hookEnv,
 			}
 			hooks.RunForEach(ctx, afterMatches, hookCtx, wt.RepoPath)
@@ -495,7 +506,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 
 	// Save history if any entries were removed
 	if historyChanged {
-		if err := hist.Save(cfg.GetHistoryPath()); err != nil {
+		if err := hist.Save(histPath); err != nil {
 			l.Printf("Warning: failed to save history after prune: %v\n", err)
 		}
 	}
