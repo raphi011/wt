@@ -61,14 +61,14 @@ The most important setting is `checkout.worktree_format` — it controls where w
 
 ```toml
 [checkout]
-# Nested inside repo (default): ~/Git/myrepo/myrepo-feature-branch
+# Nested with subfolder (default): ~/Git/myrepo/.worktrees/feature-branch
+worktree_format = ".worktrees/{branch}"
+
+# Nested inside repo: ~/Git/myrepo/myrepo-feature-branch
 worktree_format = "{repo}-{branch}"
 
 # Sibling to repo dir: ~/Git/myrepo-feature-branch
 worktree_format = "../{repo}-{branch}"
-
-# Nested with subfolder: ~/Git/myrepo/.worktrees/feature-branch
-worktree_format = ".worktrees/{branch}"
 
 # Centralized folder: ~/worktrees/myrepo-feature-branch
 worktree_format = "~/worktrees/{repo}-{branch}"
@@ -224,7 +224,7 @@ wt pr create --title "Add feature" myrepo
 # See what worktrees exist
 wt list
 
-# Remove merged worktrees (uses cached PR status)
+# Remove merged worktrees (detects PR merges and local merges via ancestry)
 wt prune
 
 # Refresh PR status from GitHub/GitLab first
@@ -362,7 +362,7 @@ default_sort = "date"
 
 [checkout]
 # Folder naming: {repo}, {branch}
-worktree_format = "{repo}-{branch}"
+worktree_format = ".worktrees/{branch}"
 
 # Base ref for new branches: "remote" (default) or "local"
 # - "remote": branches from origin/<base> (ensures latest remote state)
@@ -449,6 +449,7 @@ Hooks without `on` only run when invoked explicitly via `wt hook <name>` or `--h
 | `{trigger}` | Command that triggered the hook (`checkout`, `prune`, `merge`, `run`) |
 | `{action}` | Checkout subtype: `create`, `open`, `pr`, or `manual` (for `wt hook`) |
 | `{phase}` | Hook timing: `before` or `after` |
+| `{config-dir}` | Absolute path to the wt config directory (`~/.wt/`) |
 | `{key}` | Custom variable from `--arg key=value` (empty if unset) |
 | `{key:-default}` | Custom variable with fallback value if unset |
 | `{key:+text}` | Expands to `text` if key is set and non-empty, otherwise empty |

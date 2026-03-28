@@ -11,9 +11,9 @@ import (
 	"github.com/raphi011/wt/internal/registry"
 )
 
-// TestRepoClone_BareRepo tests cloning a repository as bare (default behavior).
+// TestRepoClone_BareRepo tests cloning a repository as bare with explicit --clone-mode bare.
 //
-// Scenario: User runs `wt repo clone file:///path/to/repo`
+// Scenario: User runs `wt repo clone file:///path/to/repo --clone-mode bare`
 // Expected: Bare repo is cloned into .git directory and registered in registry,
 // with a worktree automatically created for the default branch (main)
 func TestRepoClone_BareRepo(t *testing.T) {
@@ -37,7 +37,7 @@ func TestRepoClone_BareRepo(t *testing.T) {
 
 	cmd := newRepoCloneCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"file://" + sourceRepo, "cloned-repo"})
+	cmd.SetArgs([]string{"file://" + sourceRepo, "cloned-repo", "--clone-mode", "bare"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("clone command failed: %v", err)
@@ -61,8 +61,7 @@ func TestRepoClone_BareRepo(t *testing.T) {
 	}
 
 	// Verify worktree was created for default branch (main)
-	// Uses default worktree format: {repo}-{branch}
-	worktreePath := filepath.Join(clonedPath, "cloned-repo-main")
+	worktreePath := filepath.Join(clonedPath, ".worktrees", "main")
 	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
 		t.Error("worktree for default branch should be created automatically")
 	}
@@ -77,6 +76,76 @@ func TestRepoClone_BareRepo(t *testing.T) {
 		t.Fatalf("expected 1 repo, got %d", len(reg.Repos))
 	}
 
+	if reg.Repos[0].Name != "cloned-repo" {
+		t.Errorf("expected name 'cloned-repo', got %q", reg.Repos[0].Name)
+	}
+}
+
+// TestRepoClone_DefaultRegularClone tests that cloning without --clone-mode uses regular clone (default).
+//
+// Scenario: User runs `wt repo clone file:///path/to/repo` without specifying clone mode
+// Expected: Regular (non-bare) clone is created with worktree at .worktrees/{branch}
+func TestRepoClone_DefaultRegularClone(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	cfg := testConfig()
+	cfg.RegistryPath = regFile
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newRepoCloneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"file://" + sourceRepo, "cloned-repo"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("clone command failed: %v", err)
+	}
+
+	clonedPath := filepath.Join(tmpDir, "cloned-repo")
+
+	// Verify it's a regular clone (not bare) — .git should be a directory, not a file
+	gitDir := filepath.Join(clonedPath, ".git")
+	info, err := os.Lstat(gitDir)
+	if err != nil {
+		t.Fatalf(".git should exist: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error("expected .git to be a directory (regular clone), not a file (bare clone)")
+	}
+
+	// Verify working tree exists at root (regular clone has files at root level)
+	entries, err := os.ReadDir(clonedPath)
+	if err != nil {
+		t.Fatalf("failed to read cloned dir: %v", err)
+	}
+	hasNonGitFile := false
+	for _, e := range entries {
+		if e.Name() != ".git" && e.Name() != ".worktrees" {
+			hasNonGitFile = true
+			break
+		}
+	}
+	if !hasNonGitFile {
+		t.Error("regular clone should have working tree files at root level")
+	}
+
+	// Verify repo was registered
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	if len(reg.Repos) != 1 {
+		t.Fatalf("expected 1 repo, got %d", len(reg.Repos))
+	}
 	if reg.Repos[0].Name != "cloned-repo" {
 		t.Errorf("expected name 'cloned-repo', got %q", reg.Repos[0].Name)
 	}
@@ -113,7 +182,7 @@ func TestRepoClone_MasterDefaultBranch(t *testing.T) {
 
 	cmd := newRepoCloneCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"file://" + sourceRepo, "cloned-repo"})
+	cmd.SetArgs([]string{"file://" + sourceRepo, "cloned-repo", "--clone-mode", "bare"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("clone command failed: %v", err)
@@ -122,13 +191,13 @@ func TestRepoClone_MasterDefaultBranch(t *testing.T) {
 	clonedPath := filepath.Join(tmpDir, "cloned-repo")
 
 	// Verify worktree was created for master (not main)
-	masterWorktree := filepath.Join(clonedPath, "cloned-repo-master")
+	masterWorktree := filepath.Join(clonedPath, ".worktrees", "master")
 	if _, err := os.Stat(masterWorktree); os.IsNotExist(err) {
 		t.Error("worktree for master branch should be created")
 	}
 
 	// Verify main worktree was NOT created
-	mainWorktree := filepath.Join(clonedPath, "cloned-repo-main")
+	mainWorktree := filepath.Join(clonedPath, ".worktrees", "main")
 	if _, err := os.Stat(mainWorktree); !os.IsNotExist(err) {
 		t.Error("worktree for main should NOT be created when repo uses master")
 	}
@@ -422,7 +491,7 @@ func TestRepoClone_ExplicitBranchSkipsAutoDetect(t *testing.T) {
 
 	cmd := newRepoCloneCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"file://" + sourceRepo, "cloned-repo", "-b", "feature"})
+	cmd.SetArgs([]string{"file://" + sourceRepo, "cloned-repo", "-b", "feature", "--clone-mode", "bare"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("clone command failed: %v", err)
@@ -431,13 +500,13 @@ func TestRepoClone_ExplicitBranchSkipsAutoDetect(t *testing.T) {
 	clonedPath := filepath.Join(tmpDir, "cloned-repo")
 
 	// Verify feature worktree was created
-	featureWorktree := filepath.Join(clonedPath, "cloned-repo-feature")
+	featureWorktree := filepath.Join(clonedPath, ".worktrees", "feature")
 	if _, err := os.Stat(featureWorktree); os.IsNotExist(err) {
 		t.Error("worktree for feature branch should be created")
 	}
 
 	// Verify main worktree was NOT created (explicit -b overrides auto-detect)
-	mainWorktree := filepath.Join(clonedPath, "cloned-repo-main")
+	mainWorktree := filepath.Join(clonedPath, ".worktrees", "main")
 	if _, err := os.Stat(mainWorktree); !os.IsNotExist(err) {
 		t.Error("worktree for main should NOT be created when -b is specified")
 	}
@@ -473,7 +542,7 @@ func TestRepoClone_EmptyRepoSkipsWorktree(t *testing.T) {
 
 	cmd := newRepoCloneCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"file://" + emptyRepo, "cloned-empty"})
+	cmd.SetArgs([]string{"file://" + emptyRepo, "cloned-empty", "--clone-mode", "bare"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("clone command failed: %v", err)

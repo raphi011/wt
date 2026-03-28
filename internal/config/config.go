@@ -102,12 +102,12 @@ type PreserveConfig struct {
 
 // CloneConfig holds clone-related configuration
 type CloneConfig struct {
-	Mode string `toml:"mode"` // "bare" or "regular" (default: "bare")
+	Mode string `toml:"mode"` // "bare" or "regular" (default: "regular")
 }
 
-// IsBare returns true if the clone mode is bare (the default).
+// IsBare returns true if the clone mode is bare.
 func (c *CloneConfig) IsBare() bool {
-	return c.Mode == "" || c.Mode == "bare"
+	return c.Mode == "bare"
 }
 
 // ResolveIsBare resolves the effective clone mode from a CLI flag override
@@ -123,7 +123,7 @@ func (c *CloneConfig) ResolveIsBare(cliOverride string) (bool, error) {
 			return false, err
 		}
 	}
-	return mode == "" || mode == "bare", nil
+	return mode == "bare", nil
 }
 
 // CheckoutConfig holds checkout-related configuration
@@ -167,7 +167,7 @@ type Config struct {
 }
 
 // DefaultWorktreeFormat is the default format for worktree folder names
-const DefaultWorktreeFormat = "{repo}-{branch}"
+const DefaultWorktreeFormat = ".worktrees/{branch}"
 
 // GetWtDir returns the effective wt config directory path.
 // Returns filepath.Dir(RegistryPath) if set (for testing), otherwise returns default ~/.wt/.
@@ -207,7 +207,7 @@ func (c *CheckoutConfig) ShouldSetUpstream() bool {
 func Default() Config {
 	return Config{
 		Clone: CloneConfig{
-			Mode: "bare",
+			Mode: "regular",
 		},
 		Checkout: CheckoutConfig{
 			WorktreeFormat: DefaultWorktreeFormat,
@@ -337,7 +337,7 @@ func Load() (Config, error) {
 		cfg.Forge.Default = "github"
 	}
 	if cfg.Clone.Mode == "" {
-		cfg.Clone.Mode = "bare"
+		cfg.Clone.Mode = "regular"
 	}
 	if raw.Prune.StaleDays != nil {
 		cfg.Prune.StaleDays = *raw.Prune.StaleDays
@@ -469,10 +469,10 @@ const defaultConfig = `# wt configuration
 
 # Clone settings - controls how repos are cloned by "wt repo clone" and "wt pr checkout"
 # [clone]
-# Clone mode: "bare" (default) or "regular"
-#   bare    - clone into .git/ directory, worktrees as siblings (recommended for wt)
-#   regular - standard git clone with working tree at root
-# mode = "bare"
+# Clone mode: "bare" or "regular" (default)
+#   bare    - clone into .git/ directory, worktrees as siblings
+#   regular - standard git clone with working tree at root (default)
+# mode = "regular"
 
 # Checkout settings - controls worktree creation behavior
 [checkout]
@@ -480,7 +480,7 @@ const defaultConfig = `# wt configuration
 # Available placeholders:
 #   {repo}    - registered repo name (as shown in wt repo list)
 #   {branch}  - the branch name as provided
-worktree_format = "{repo}-{branch}"
+worktree_format = ".worktrees/{branch}"
 
 # Base ref mode for new branches (wt checkout -b)
 # Controls which ref to use when creating new branches:

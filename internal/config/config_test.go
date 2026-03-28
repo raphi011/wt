@@ -739,7 +739,7 @@ func TestCloneConfigIsBare(t *testing.T) {
 	}{
 		{"bare mode", "bare", true},
 		{"regular mode", "regular", false},
-		{"empty defaults to bare", "", true},
+		{"empty defaults to regular", "", false},
 	}
 
 	for _, tt := range tests {
@@ -786,11 +786,11 @@ func TestCloneConfigDefault(t *testing.T) {
 	t.Parallel()
 
 	cfg := Default()
-	if cfg.Clone.Mode != "bare" {
-		t.Errorf("default Clone.Mode = %q, want %q", cfg.Clone.Mode, "bare")
+	if cfg.Clone.Mode != "regular" {
+		t.Errorf("default Clone.Mode = %q, want %q", cfg.Clone.Mode, "regular")
 	}
-	if !cfg.Clone.IsBare() {
-		t.Error("default Clone.IsBare() = false, want true")
+	if cfg.Clone.IsBare() {
+		t.Error("default Clone.IsBare() = true, want false")
 	}
 }
 
@@ -845,7 +845,7 @@ func TestCloneConfigResolveIsBare(t *testing.T) {
 	}{
 		{"config bare, no override", "bare", "", true, false},
 		{"config regular, no override", "regular", "", false, false},
-		{"config empty, no override", "", "", true, false},
+		{"config empty, no override", "", "", false, false},
 		{"cli overrides config to regular", "bare", "regular", false, false},
 		{"cli overrides config to bare", "regular", "bare", true, false},
 		{"invalid cli override", "bare", "shallow", false, true},
@@ -1035,7 +1035,7 @@ on = ["checkout"]
 
 	// Apply clone default
 	if cfg.Clone.Mode == "" {
-		cfg.Clone.Mode = "bare"
+		cfg.Clone.Mode = "regular"
 	}
 
 	// Verify parsed values
