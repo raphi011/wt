@@ -339,22 +339,24 @@ func GetWorktreeBranches(ctx context.Context, repoPath string) map[string]bool {
 	return branches
 }
 
-// GetAllBranchConfig returns branch notes and upstreams for a repository in one call.
+// GetAllBranchConfig returns branch notes, upstreams, and wt-merged values for a repository in one call.
 // Uses: `git config --get-regexp 'branch\.'`
-// Returns: notes map (branch -> note), upstreams map (branch -> upstream ref)
-func GetAllBranchConfig(ctx context.Context, repoPath string) (notes map[string]string, upstreams map[string]bool) {
+// Returns: notes map (branch -> note), upstreams map (branch -> has upstream), wtMerged map (branch -> wt-merged value)
+func GetAllBranchConfig(ctx context.Context, repoPath string) (notes map[string]string, upstreams map[string]bool, wtMerged map[string]string) {
 	notes = make(map[string]string)
 	upstreams = make(map[string]bool)
+	wtMerged = make(map[string]string)
 
 	output, err := outputGit(ctx, repoPath, "config", "--get-regexp", `branch\.`)
 	if err != nil {
 		// No config is not an error
-		return notes, upstreams
+		return notes, upstreams, wtMerged
 	}
 
 	// Parse output lines like:
 	// branch.feature-x.description Note text here
 	// branch.feature-x.merge refs/heads/feature-x
+	// branch.feature-x.wt-merged squash:main@2026-03-28T14:30:00Z
 	for line := range strings.SplitSeq(string(output), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -383,9 +385,17 @@ func GetAllBranchConfig(ctx context.Context, repoPath string) (notes map[string]
 				upstreams[branch] = true
 			}
 		}
+
+		// Handle branch.<name>.wt-merged
+		if strings.HasPrefix(key, "branch.") && strings.HasSuffix(key, ".wt-merged") {
+			branch := key[7 : len(key)-10] // Remove "branch." prefix and ".wt-merged" suffix
+			if branch != "" && len(parts) == 2 {
+				wtMerged[branch] = parts[1]
+			}
+		}
 	}
 
-	return notes, upstreams
+	return notes, upstreams, wtMerged
 }
 
 // GetMergedBranches returns the set of local branch names that are fully merged

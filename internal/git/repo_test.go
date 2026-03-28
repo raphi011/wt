@@ -696,7 +696,7 @@ func TestGetAllBranchConfig(t *testing.T) {
 		t.Fatalf("failed to set merge: %v", err)
 	}
 
-	notes, upstreams := GetAllBranchConfig(ctx, repoPath)
+	notes, upstreams, _ := GetAllBranchConfig(ctx, repoPath)
 
 	if notes["feature-a"] != "Working on A" {
 		t.Errorf("notes[feature-a] = %q, want %q", notes["feature-a"], "Working on A")
