@@ -2,11 +2,14 @@ package git
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"slices"
 	"strings"
 	"time"
 )
+
+const wtMergedSuffix = ".wt-merged"
 
 // ParseWtMerged parses a wt-merged config value like "squash:main@2026-03-28T14:30:00Z"
 // into its strategy, target branch, and timestamp components.
@@ -26,7 +29,7 @@ func ParseWtMerged(value string) (strategy, target string, ts time.Time) {
 	rest := after
 
 	// Split rest on "@" to get target and timestamp
-	before, after, ok := strings.Cut(rest, "@")
+	before, after, ok = strings.Cut(rest, "@")
 	if !ok {
 		// No timestamp
 		return strategy, rest, time.Time{}
@@ -71,7 +74,7 @@ func HasNoCommitFlag(args []string) bool {
 // GetWtMerged reads the branch.<name>.wt-merged config value.
 // Returns empty string if the key does not exist.
 func GetWtMerged(ctx context.Context, repoPath, branch string) (string, error) {
-	output, err := outputGit(ctx, repoPath, "config", "branch."+branch+".wt-merged")
+	output, err := outputGit(ctx, repoPath, "config", "branch."+branch+wtMergedSuffix)
 	if err != nil {
 		// Exit code 1 means the config key doesn't exist - not an error
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
@@ -85,12 +88,12 @@ func GetWtMerged(ctx context.Context, repoPath, branch string) (string, error) {
 
 // SetWtMerged writes the branch.<name>.wt-merged config value.
 func SetWtMerged(ctx context.Context, repoPath, branch, value string) error {
-	return runGit(ctx, repoPath, "config", "branch."+branch+".wt-merged", value)
+	return runGit(ctx, repoPath, "config", "branch."+branch+wtMergedSuffix, value)
 }
 
 // ClearWtMerged removes the branch.<name>.wt-merged config value.
 func ClearWtMerged(ctx context.Context, repoPath, branch string) error {
-	if err := runGit(ctx, repoPath, "config", "--unset", "branch."+branch+".wt-merged"); err != nil {
+	if err := runGit(ctx, repoPath, "config", "--unset", "branch."+branch+wtMergedSuffix); err != nil {
 		// Exit code 5 means the key doesn't exist - not an error for clearing
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 5 {
 			return nil
@@ -104,7 +107,7 @@ func ClearWtMerged(ctx context.Context, repoPath, branch string) error {
 func IsWorktreeClean(ctx context.Context, worktreePath string) (bool, error) {
 	output, err := outputGit(ctx, worktreePath, "status", "--porcelain")
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to check worktree status: %w", err)
 	}
 
 	return strings.TrimSpace(string(output)) == "", nil

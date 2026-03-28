@@ -695,8 +695,11 @@ func TestGetAllBranchConfig(t *testing.T) {
 	if err := runGit(ctx, repoPath, "config", "branch.feature-b.merge", "refs/heads/feature-b"); err != nil {
 		t.Fatalf("failed to set merge: %v", err)
 	}
+	if err := runGit(ctx, repoPath, "config", "branch.feature-a.wt-merged", "squash:main@2026-03-28T14:30:00Z"); err != nil {
+		t.Fatalf("set wt-merged: %v", err)
+	}
 
-	notes, upstreams, _ := GetAllBranchConfig(ctx, repoPath)
+	notes, upstreams, wtMerged := GetAllBranchConfig(ctx, repoPath)
 
 	if notes["feature-a"] != "Working on A" {
 		t.Errorf("notes[feature-a] = %q, want %q", notes["feature-a"], "Working on A")
@@ -706,6 +709,12 @@ func TestGetAllBranchConfig(t *testing.T) {
 	}
 	if upstreams["feature-a"] {
 		t.Error("upstreams[feature-a] should be false")
+	}
+	if wtMerged["feature-a"] != "squash:main@2026-03-28T14:30:00Z" {
+		t.Errorf("wtMerged[feature-a] = %q, want %q", wtMerged["feature-a"], "squash:main@2026-03-28T14:30:00Z")
+	}
+	if _, ok := wtMerged["feature-b"]; ok {
+		t.Error("wtMerged[feature-b] should not be set")
 	}
 }
 
