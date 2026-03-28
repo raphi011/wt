@@ -11,7 +11,7 @@
 //
 // # Key Settings
 //
-//   - checkout.worktree_format: Template for worktree folder names (default: "{repo}-{branch}")
+//   - checkout.worktree_format: Template for worktree folder names (default: ".worktrees/{branch}")
 //   - checkout.base_ref: "local" or "remote" for new branch base (default: "remote")
 //   - checkout.auto_fetch: Fetch from origin before checkout (default: false)
 //   - default_sort: Default sort order for "wt list"

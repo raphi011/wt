@@ -169,10 +169,10 @@ func setupTestRepoWithBranches(t *testing.T, dir, name string, branches []string
 func testConfig() *config.Config {
 	return &config.Config{
 		Clone: config.CloneConfig{
-			Mode: "bare",
+			Mode: "regular",
 		},
 		Checkout: config.CheckoutConfig{
-			WorktreeFormat: "{repo}-{branch}",
+			WorktreeFormat: ".worktrees/{branch}",
 		},
 		Forge: config.ForgeConfig{
 			Default: "github",

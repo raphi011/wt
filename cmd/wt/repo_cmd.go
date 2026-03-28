@@ -372,15 +372,14 @@ func newRepoCloneCmd() *cobra.Command {
 		Args:    cobra.RangeArgs(1, 2),
 		Long: `Clone a git repository and register it.
 
-By default, clones as bare into .git (no working tree):
+By default, clones as a regular repo with a working tree at root:
   repo/
-  └── .git/    # bare git repo contents (HEAD, objects/, refs/, etc.)
+  ├── .git/    # git directory
+  └── ...      # working tree files
 
-This allows worktrees to be created as siblings to .git.
+Use --clone-mode bare for a bare clone (git data in .git, no working tree at root).
 
-Use --clone-mode regular for a standard clone with a working tree at root.
-
-By default (bare mode), creates a worktree for the default branch (main/master).
+When cloning bare, creates a worktree for the default branch (main/master).
 Use -b to specify a different branch instead.
 
 Supports both full URLs and short-form org/repo format:

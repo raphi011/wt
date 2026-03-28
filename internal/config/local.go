@@ -118,8 +118,8 @@ const defaultLocalConfig = `# wt local config (per-repo overrides)
 
 # Clone settings
 # [clone]
-# mode: "bare" (default, recommended) or "regular"
-# mode = "bare"
+# mode: "bare" or "regular" (default)
+# mode = "regular"
 
 # Checkout settings
 # [checkout]
