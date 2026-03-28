@@ -19,6 +19,7 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		Trigger:     "checkout",
 		Action:      "pr",
 		Phase:       "after",
+		ConfigDir:   "/home/user/.wt",
 	}
 
 	tests := []struct {
@@ -38,8 +39,13 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		},
 		{
 			name:     "all placeholders",
-			command:  "{worktree-dir} {branch} {repo} {repo-dir} {trigger} {action} {phase}",
-			expected: "/home/user/worktrees/repo-branch feature-branch repo /home/user/repo checkout pr after",
+			command:  "{worktree-dir} {branch} {repo} {repo-dir} {trigger} {action} {phase} {config-dir}",
+			expected: "/home/user/worktrees/repo-branch feature-branch repo /home/user/repo checkout pr after /home/user/.wt",
+		},
+		{
+			name:     "config-dir placeholder",
+			command:  "{config-dir}/scripts/setup.sh {branch}",
+			expected: "/home/user/.wt/scripts/setup.sh feature-branch",
 		},
 		{
 			name:     "no placeholders",

@@ -312,7 +312,10 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 			}
 
 			// Record to history for wt cd
-			if err := history.RecordAccess(wtPath, repo.Name, branch, effCfg.GetHistoryPath()); err != nil {
+			histPath, err := effCfg.GetHistoryPath()
+			if err != nil {
+				l.Printf("Warning: failed to determine history path: %v\n", err)
+			} else if err := history.RecordAccess(wtPath, repo.Name, branch, histPath); err != nil {
 				l.Printf("Warning: failed to record history: %v\n", err)
 			}
 
@@ -329,6 +332,11 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 				return err
 			}
 
+			configDir, err := cfg.GetWtDir()
+			if err != nil {
+				return fmt.Errorf("config dir: %w", err)
+			}
+
 			hookCtx := hooks.Context{
 				WorktreeDir: wtPath,
 				RepoDir:     repoPath,
@@ -336,6 +344,7 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 				Repo:        repo.Name,
 				Trigger:     string(hooks.CommandCheckout),
 				Action:      hooks.ActionPR,
+				ConfigDir:   configDir,
 				Env:         hookEnv,
 			}
 
@@ -536,12 +545,17 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 				return err
 			}
 			cwd := config.WorkDirFromContext(ctx)
+			mergeConfigDir, err := res.effCfg.GetWtDir()
+			if err != nil {
+				return fmt.Errorf("config dir: %w", err)
+			}
 			hookCtx := hooks.Context{
 				WorktreeDir: cwd,
 				RepoDir:     res.repo.Path,
 				Branch:      res.branch,
 				Repo:        res.repo.Name,
 				Trigger:     string(hooks.CommandMerge),
+				ConfigDir:   mergeConfigDir,
 				Env:         hookEnv,
 			}
 

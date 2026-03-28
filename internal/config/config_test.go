@@ -429,13 +429,50 @@ func TestWithWorkDir_FromContext(t *testing.T) {
 	})
 }
 
+func TestGetWtDir(t *testing.T) {
+	t.Parallel()
+
+	t.Run("with RegistryPath", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{RegistryPath: "/tmp/test/.wt/repos.json"}
+		got, err := cfg.GetWtDir()
+		if err != nil {
+			t.Fatalf("GetWtDir returned error: %v", err)
+		}
+		if got != "/tmp/test/.wt" {
+			t.Errorf("GetWtDir = %q, want %q", got, "/tmp/test/.wt")
+		}
+	})
+
+	t.Run("default", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{}
+		got, err := cfg.GetWtDir()
+		if err != nil {
+			t.Fatalf("GetWtDir returned error: %v", err)
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			t.Fatalf("os.UserHomeDir returned error: %v", err)
+		}
+		want := filepath.Join(home, ".wt")
+		if got != want {
+			t.Errorf("GetWtDir = %q, want %q", got, want)
+		}
+	})
+}
+
 func TestGetHistoryPath(t *testing.T) {
 	t.Parallel()
 
 	t.Run("override", func(t *testing.T) {
 		t.Parallel()
 		cfg := &Config{HistoryPath: "/custom/history.json"}
-		if got := cfg.GetHistoryPath(); got != "/custom/history.json" {
+		got, err := cfg.GetHistoryPath()
+		if err != nil {
+			t.Fatalf("GetHistoryPath returned error: %v", err)
+		}
+		if got != "/custom/history.json" {
 			t.Errorf("GetHistoryPath = %q, want %q", got, "/custom/history.json")
 		}
 	})
@@ -443,8 +480,14 @@ func TestGetHistoryPath(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
 		t.Parallel()
 		cfg := &Config{}
-		got := cfg.GetHistoryPath()
-		home, _ := os.UserHomeDir()
+		got, err := cfg.GetHistoryPath()
+		if err != nil {
+			t.Fatalf("GetHistoryPath returned error: %v", err)
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			t.Fatalf("os.UserHomeDir returned error: %v", err)
+		}
 		want := filepath.Join(home, ".wt", "history.json")
 		if got != want {
 			t.Errorf("GetHistoryPath = %q, want %q", got, want)

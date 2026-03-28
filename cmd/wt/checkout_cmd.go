@@ -365,7 +365,11 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 	fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
 
 	// Record to history for wt cd
-	if err := history.RecordAccess(wtPath, repo.Name, branch, cfg.GetHistoryPath()); err != nil {
+	histPath, err := cfg.GetHistoryPath()
+	if err != nil {
+		return fmt.Errorf("history path: %w", err)
+	}
+	if err := history.RecordAccess(wtPath, repo.Name, branch, histPath); err != nil {
 		l.Printf("Warning: failed to record history: %v\n", err)
 	}
 
@@ -416,6 +420,11 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 		action = hooks.ActionCreate
 	}
 
+	configDir, err := cfg.GetWtDir()
+	if err != nil {
+		return fmt.Errorf("config dir: %w", err)
+	}
+
 	hookCtx := hooks.Context{
 		WorktreeDir: wtPath,
 		RepoDir:     repo.Path,
@@ -423,6 +432,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 		Repo:        repo.Name,
 		Trigger:     string(hooks.CommandCheckout),
 		Action:      action,
+		ConfigDir:   configDir,
 		Env:         hookEnv,
 	}
 

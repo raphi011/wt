@@ -60,12 +60,17 @@ repo's worktrees. Use -g to show all repos.`,
 
 			var targetPath, repoName, branchName string
 
+			histPath, err := cfg.GetHistoryPath()
+			if err != nil {
+				return fmt.Errorf("history path: %w", err)
+			}
+
 			if interactive {
 				// Interactive mode: repo-aware worktree list
 				l := log.FromContext(ctx)
 
 				// Load history for recency ranking
-				hist, err := history.Load(cfg.GetHistoryPath())
+				hist, err := history.Load(histPath)
 				if err != nil {
 					l.Printf("Warning: failed to load history: %v\n", err)
 					hist = &history.History{}
@@ -109,7 +114,7 @@ repo's worktrees. Use -g to show all repos.`,
 
 				// Opportunistically clean stale history entries
 				if removed := hist.RemoveStale(); removed > 0 {
-					if err := hist.Save(cfg.GetHistoryPath()); err != nil {
+					if err := hist.Save(histPath); err != nil {
 						l.Printf("Warning: failed to save history after cleanup: %v\n", err)
 					}
 				}
@@ -148,7 +153,7 @@ repo's worktrees. Use -g to show all repos.`,
 				branchName = result.Branch
 			} else if len(args) == 0 {
 				// No arguments: return most recently accessed worktree
-				hist, err := history.Load(cfg.GetHistoryPath())
+				hist, err := history.Load(histPath)
 				if err != nil {
 					return fmt.Errorf("load history: %w", err)
 				}
@@ -158,7 +163,7 @@ repo's worktrees. Use -g to show all repos.`,
 
 				// Clean stale entries and find first valid
 				if removed := hist.RemoveStale(); removed > 0 {
-					if err := hist.Save(cfg.GetHistoryPath()); err != nil {
+					if err := hist.Save(histPath); err != nil {
 						l := log.FromContext(ctx)
 						l.Printf("Warning: failed to save history after cleanup: %v\n", err)
 					}
@@ -262,7 +267,7 @@ repo's worktrees. Use -g to show all repos.`,
 			}
 
 			// Record access to history for wt cd
-			if err := history.RecordAccess(targetPath, repoName, branchName, cfg.GetHistoryPath()); err != nil {
+			if err := history.RecordAccess(targetPath, repoName, branchName, histPath); err != nil {
 				l := log.FromContext(ctx)
 				l.Printf("Warning: failed to record history: %v\n", err)
 			}
