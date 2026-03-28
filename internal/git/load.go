@@ -89,16 +89,14 @@ func loadWorktreesForRepo(ctx context.Context, repo RepoRef) ([]Worktree, *LoadW
 	}
 
 	// Detect locally-merged branches via ancestry check.
-	// Uses the default branch (with remote tracking ref preferred) as the merge target.
+	// Uses the local default branch as the merge target, since local merges
+	// update the local ref — origin/<default> only updates after fetch/pull
+	// and those merges are typically PR-based (handled by the forge API).
 	defaultBranch := GetDefaultBranch(ctx, repo.Path)
-	mergeTarget := "origin/" + defaultBranch
-	if !RefExists(ctx, repo.Path, mergeTarget) {
-		// No remote tracking ref, fall back to local default branch
-		mergeTarget = defaultBranch
-	}
-	mergedBranches, err := GetMergedBranches(ctx, repo.Path, mergeTarget)
+	mergedBranches, err := GetMergedBranches(ctx, repo.Path, defaultBranch)
 	if err != nil {
-		// Non-fatal: locally-merged detection is best-effort.
+		// Non-fatal: locally-merged worktrees will not be flagged, so they
+		// will only be pruned if the forge API detects them as merged.
 		mergedBranches = make(map[string]bool)
 	}
 	// The default branch is always "merged into itself" — exclude it.

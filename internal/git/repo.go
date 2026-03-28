@@ -389,10 +389,13 @@ func GetAllBranchConfig(ctx context.Context, repoPath string) (notes map[string]
 }
 
 // GetMergedBranches returns the set of local branch names that are fully merged
-// into the given target ref (e.g., "origin/main"). Uses `git branch --merged`
+// into the given target ref (e.g., "main"). Uses `git branch --merged`
 // which checks ancestry: a branch is "merged" if its tip is reachable from the target.
 // This detects regular merges and fast-forward merges but NOT squash merges.
 func GetMergedBranches(ctx context.Context, repoPath, targetRef string) (map[string]bool, error) {
+	if targetRef == "" {
+		return nil, fmt.Errorf("targetRef must not be empty")
+	}
 	output, err := outputGit(ctx, repoPath, "branch", "--merged", targetRef, "--format=%(refname:short)")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list merged branches: %w", err)
