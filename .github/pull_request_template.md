@@ -1,3 +1,4 @@
+<!-- PR title = squash commit message = release note entry. Use conventional commits: feat:, fix:, docs:, chore:, test: -->
 <!-- Brief summary of changes (1-2 sentences) -->
 
 ## Breaking Changes
