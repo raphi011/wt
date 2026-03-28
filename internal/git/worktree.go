@@ -26,6 +26,7 @@ type Worktree struct {
 	PRState     string    `json:"pr_state,omitempty"`
 	PRURL       string    `json:"pr_url,omitempty"`
 	PRDraft     bool      `json:"pr_draft,omitempty"`
+	LocallyMerged bool   `json:"locally_merged,omitempty"`
 }
 
 // CreateWorktreeResult contains the result of creating a worktree

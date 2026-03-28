@@ -28,6 +28,9 @@ func WorktreeTableRow(wt git.Worktree, staleDays int) []string {
 		commit = commit[:7]
 	}
 	pr := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.PRDraft, wt.PRURL)
+	if pr == "" && wt.LocallyMerged {
+		pr = styles.FormatLocallyMerged()
+	}
 
 	age := wt.CommitAge
 	if staleDays > 0 && !wt.CommitDate.IsZero() &&

@@ -1006,3 +1006,166 @@ func TestGetCurrentRepoMainPathFrom(t *testing.T) {
 		}
 	})
 }
+
+func TestGetMergedBranches(t *testing.T) {
+	t.Parallel()
+
+	t.Run("regular merge detected", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		// Create and checkout a feature branch
+		if err := runGit(ctx, repoPath, "checkout", "-b", "feature-a"); err != nil {
+			t.Fatalf("failed to create branch: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(repoPath, "feature.txt"), []byte("feature\n"), 0644); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "add", "feature.txt"); err != nil {
+			t.Fatalf("failed to add: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "commit", "-m", "Add feature"); err != nil {
+			t.Fatalf("failed to commit: %v", err)
+		}
+
+		// Merge into main
+		if err := runGit(ctx, repoPath, "checkout", "main"); err != nil {
+			t.Fatalf("failed to checkout main: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "merge", "feature-a", "--no-ff", "-m", "Merge feature-a"); err != nil {
+			t.Fatalf("failed to merge: %v", err)
+		}
+
+		merged, err := GetMergedBranches(ctx, repoPath, "main")
+		if err != nil {
+			t.Fatalf("GetMergedBranches() error: %v", err)
+		}
+		if !merged["feature-a"] {
+			t.Errorf("expected feature-a to be merged, got %v", merged)
+		}
+	})
+
+	t.Run("fast-forward merge detected", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		// Create and checkout a feature branch
+		if err := runGit(ctx, repoPath, "checkout", "-b", "feature-ff"); err != nil {
+			t.Fatalf("failed to create branch: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(repoPath, "ff.txt"), []byte("ff\n"), 0644); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "add", "ff.txt"); err != nil {
+			t.Fatalf("failed to add: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "commit", "-m", "Add ff feature"); err != nil {
+			t.Fatalf("failed to commit: %v", err)
+		}
+
+		// Fast-forward merge into main
+		if err := runGit(ctx, repoPath, "checkout", "main"); err != nil {
+			t.Fatalf("failed to checkout main: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "merge", "--ff-only", "feature-ff"); err != nil {
+			t.Fatalf("failed to merge: %v", err)
+		}
+
+		merged, err := GetMergedBranches(ctx, repoPath, "main")
+		if err != nil {
+			t.Fatalf("GetMergedBranches() error: %v", err)
+		}
+		if !merged["feature-ff"] {
+			t.Errorf("expected feature-ff to be merged, got %v", merged)
+		}
+	})
+
+	t.Run("unmerged branch not detected", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		// Create a feature branch with a commit but don't merge
+		if err := runGit(ctx, repoPath, "checkout", "-b", "feature-unmerged"); err != nil {
+			t.Fatalf("failed to create branch: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(repoPath, "unmerged.txt"), []byte("unmerged\n"), 0644); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "add", "unmerged.txt"); err != nil {
+			t.Fatalf("failed to add: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "commit", "-m", "Unmerged feature"); err != nil {
+			t.Fatalf("failed to commit: %v", err)
+		}
+
+		if err := runGit(ctx, repoPath, "checkout", "main"); err != nil {
+			t.Fatalf("failed to checkout main: %v", err)
+		}
+
+		merged, err := GetMergedBranches(ctx, repoPath, "main")
+		if err != nil {
+			t.Fatalf("GetMergedBranches() error: %v", err)
+		}
+		if merged["feature-unmerged"] {
+			t.Errorf("expected feature-unmerged NOT to be merged, got %v", merged)
+		}
+	})
+
+	t.Run("main is always in its own merged set", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		merged, err := GetMergedBranches(ctx, repoPath, "main")
+		if err != nil {
+			t.Fatalf("GetMergedBranches() error: %v", err)
+		}
+		// main should be listed as merged into itself
+		if !merged["main"] {
+			t.Errorf("expected main to be in its own merged set, got %v", merged)
+		}
+	})
+
+	t.Run("squash merge not detected", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		// Create a feature branch
+		if err := runGit(ctx, repoPath, "checkout", "-b", "feature-squash"); err != nil {
+			t.Fatalf("failed to create branch: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(repoPath, "squash.txt"), []byte("squash\n"), 0644); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "add", "squash.txt"); err != nil {
+			t.Fatalf("failed to add: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "commit", "-m", "Squash feature"); err != nil {
+			t.Fatalf("failed to commit: %v", err)
+		}
+
+		// Squash merge into main
+		if err := runGit(ctx, repoPath, "checkout", "main"); err != nil {
+			t.Fatalf("failed to checkout main: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "merge", "--squash", "feature-squash"); err != nil {
+			t.Fatalf("failed to squash merge: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "commit", "-m", "Squashed feature-squash"); err != nil {
+			t.Fatalf("failed to commit squash: %v", err)
+		}
+
+		merged, err := GetMergedBranches(ctx, repoPath, "main")
+		if err != nil {
+			t.Fatalf("GetMergedBranches() error: %v", err)
+		}
+		// Squash merges are NOT detected by ancestry check — this is expected
+		if merged["feature-squash"] {
+			t.Errorf("expected feature-squash NOT to be detected (squash merge), got %v", merged)
+		}
+	})
+}
