@@ -12,21 +12,21 @@ const zeroHash = "0000000000000000000000000000000000000000"
 // Used as the unified struct across all commands (list, prune, cd, exec).
 // Fields tagged json:"-" are internal and excluded from user-facing JSON output.
 type Worktree struct {
-	Path        string    `json:"path"`
-	Branch      string    `json:"branch"`
-	CommitHash  string    `json:"commit"`
-	CommitAge   string    `json:"commit_age,omitempty"`
-	RepoName    string    `json:"repo"`
-	RepoPath    string    `json:"-"`
-	OriginURL   string    `json:"-"`
-	Note        string    `json:"note,omitempty"`
-	HasUpstream bool      `json:"-"`
-	CommitDate  time.Time `json:"commit_date"`
-	PRNumber    int       `json:"pr_number,omitempty"`
-	PRState     string    `json:"pr_state,omitempty"`
-	PRURL       string    `json:"pr_url,omitempty"`
-	PRDraft     bool      `json:"pr_draft,omitempty"`
-	LocallyMerged bool   `json:"locally_merged,omitempty"`
+	Path          string    `json:"path"`
+	Branch        string    `json:"branch"`
+	CommitHash    string    `json:"commit"`
+	CommitAge     string    `json:"commit_age,omitempty"`
+	RepoName      string    `json:"repo"`
+	RepoPath      string    `json:"-"`
+	OriginURL     string    `json:"-"`
+	Note          string    `json:"note,omitempty"`
+	HasUpstream   bool      `json:"-"`
+	CommitDate    time.Time `json:"commit_date"`
+	PRNumber      int       `json:"pr_number,omitempty"`
+	PRState       string    `json:"pr_state,omitempty"`
+	PRURL         string    `json:"pr_url,omitempty"`
+	PRDraft       bool      `json:"pr_draft,omitempty"`
+	LocallyMerged bool      `json:"locally_merged,omitempty"`
 }
 
 // CreateWorktreeResult contains the result of creating a worktree
