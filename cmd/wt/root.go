@@ -137,6 +137,7 @@ func init() {
 	rootCmd.AddCommand(newCheckoutCmd())
 	rootCmd.AddCommand(newListCmd())
 	rootCmd.AddCommand(newPruneCmd())
+	rootCmd.AddCommand(newMergeCmd())
 
 	// Registry commands
 	rootCmd.AddCommand(newRepoCmd())
