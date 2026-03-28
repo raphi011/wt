@@ -237,9 +237,11 @@ Key points for wizard tests:
 - Use `updateStep[T]()` generic helper for type-safe step updates
 - For TextInputStep, call `Init()` before typing (to focus the input)
 
-### Commit Messages
+### PRs & Release Notes
 
-Follow **Conventional Commits** for GoReleaser changelog grouping:
+PRs are **squash-merged** onto main. The PR title becomes the squash commit message and the release note entry. GoReleaser auto-generates changelog from commits on main, grouped by conventional commit type.
+
+**PR title must follow Conventional Commits** — it IS the release note:
 
 | Type | Changelog Group | Example |
 |------|-----------------|---------|
@@ -249,4 +251,10 @@ Follow **Conventional Commits** for GoReleaser changelog grouping:
 | `chore:` | (excluded) | `chore: update deps` |
 | `test:` | (excluded) | `test: add unit tests` |
 
-Format: `type(scope)!: description` - scope optional, `!` for breaking changes.
+Format: `type(scope)!: description` — scope optional, `!` for breaking changes.
+
+**Workflow:**
+1. Create a feature branch and make commits (commit messages within the branch don't matter for release notes)
+2. Open a PR with a conventional commit title (this becomes the release note line)
+3. PR description should provide context — it becomes the squash commit body
+4. Squash-merge the PR (GitHub is configured to only allow squash merges)
