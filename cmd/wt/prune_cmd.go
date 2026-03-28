@@ -166,6 +166,8 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 			for _, wt := range allWorktrees {
 				if wt.PRState == forge.PRStateMerged {
 					toRemove = append(toRemove, wt)
+				} else if wt.LocallyMerged {
+					toRemove = append(toRemove, wt)
 				} else if stale && isStaleWorktree(wt, cfg.Prune.StaleDays) {
 					toRemove = append(toRemove, wt)
 				} else {
@@ -180,6 +182,10 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 					isPrunable := wt.PRState == forge.PRStateMerged
 					isStaleWt := false
 					reason := styles.FormatPRState(wt.PRState, wt.PRDraft)
+					if !isPrunable && wt.LocallyMerged {
+						isPrunable = true
+						reason = styles.FormatLocallyMerged()
+					}
 					if !isPrunable && stale && isStaleWorktree(wt, cfg.Prune.StaleDays) {
 						isPrunable = true
 						isStaleWt = true
@@ -473,7 +479,8 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		}
 		if shouldDelete {
 			// Force delete if forge confirmed merge (handles squash merges),
-			// safe delete (-d) otherwise.
+			// safe delete (-d) otherwise (including locally-merged branches,
+			// where git's own ancestry check in -d provides a safety net).
 			// Note: PRState is empty for targeted prune (no forge lookup),
 			// so forceDelete is always false in that path — this is intentional.
 			forceDelete := wt.PRState == forge.PRStateMerged
