@@ -264,6 +264,11 @@ All arguments after -- are passed through to git merge.`,
 }
 
 func runMergeMark(ctx context.Context, out *output.Printer, repoPath, branch, target, strategy string, dryRun bool) error {
+	// Verify branch exists
+	if !git.LocalBranchExists(ctx, repoPath, branch) {
+		return fmt.Errorf("branch %q not found", branch)
+	}
+
 	if strategy == "" {
 		strategy = "merge"
 	}

@@ -390,3 +390,121 @@ func TestMerge_SameBranch(t *testing.T) {
 		t.Errorf("expected error about same branch, got %q", err.Error())
 	}
 }
+
+// TestMerge_SquashNoCommit tests that squash merge with --no-commit does not mark the branch.
+//
+// Scenario: Feature branch merged with --squash --no-commit
+// Expected: Output contains "not marked as merged" warning, wt-merged config NOT set
+func TestMerge_SquashNoCommit(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+	wtPath := createTestWorktree(t, repoPath, "feature")
+	addCommit(t, wtPath, "feature.txt", "add feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+
+	cmd := newMergeCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "--", "--squash", "--no-commit"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("merge command failed: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "not marked as merged") {
+		t.Errorf("expected output to contain 'not marked as merged', got %q", output)
+	}
+
+	// Verify wt-merged config is NOT set
+	merged, _ := runGitCommand(repoPath, "config", "branch.feature.wt-merged")
+	if strings.TrimSpace(merged) != "" {
+		t.Errorf("expected wt-merged config to be unset after --no-commit, got %q", strings.TrimSpace(merged))
+	}
+}
+
+// TestMerge_Conflict tests that merge fails on conflicting changes.
+//
+// Scenario: Both main and feature have conflicting changes to the same file
+// Expected: Command fails, wt-merged config NOT set
+func TestMerge_Conflict(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	// Add conflicting content on main
+	mainFile := filepath.Join(repoPath, "shared.txt")
+	if err := os.WriteFile(mainFile, []byte("main content\n"), 0644); err != nil {
+		t.Fatalf("failed to write main file: %v", err)
+	}
+	if _, err := runGitCommand(repoPath, "add", "shared.txt"); err != nil {
+		t.Fatalf("failed to git add on main: %v", err)
+	}
+	if _, err := runGitCommand(repoPath, "commit", "-m", "add shared on main"); err != nil {
+		t.Fatalf("failed to commit on main: %v", err)
+	}
+
+	// Add conflicting content on feature
+	featureFile := filepath.Join(wtPath, "shared.txt")
+	if err := os.WriteFile(featureFile, []byte("feature content\n"), 0644); err != nil {
+		t.Fatalf("failed to write feature file: %v", err)
+	}
+	if _, err := runGitCommand(wtPath, "add", "shared.txt"); err != nil {
+		t.Fatalf("failed to git add on feature: %v", err)
+	}
+	if _, err := runGitCommand(wtPath, "commit", "-m", "add shared on feature"); err != nil {
+		t.Fatalf("failed to commit on feature: %v", err)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cmd := newMergeCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected merge to fail due to conflict")
+	}
+
+	// Abort the merge to clean up git state, so we can check config
+	runGitCommand(repoPath, "merge", "--abort")
+
+	// Verify wt-merged config is NOT set
+	merged, _ := runGitCommand(repoPath, "config", "branch.feature.wt-merged")
+	if strings.TrimSpace(merged) != "" {
+		t.Errorf("expected wt-merged config to be unset after conflict, got %q", strings.TrimSpace(merged))
+	}
+}
