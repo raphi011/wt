@@ -184,13 +184,13 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 					isPrunable := wt.PRState == forge.PRStateMerged
 					isStaleWt := false
 					reason := styles.FormatPRState(wt.PRState, wt.PRDraft)
-					if !isPrunable && wt.LocallyMerged {
-						isPrunable = true
-						reason = styles.FormatLocallyMerged()
-					}
 					if !isPrunable && wt.WtMerged != "" {
 						isPrunable = true
 						reason = styles.FormatWtMerged()
+					}
+					if !isPrunable && wt.LocallyMerged {
+						isPrunable = true
+						reason = styles.FormatLocallyMerged()
 					}
 					if !isPrunable && stale && isStaleWorktree(wt, cfg.Prune.StaleDays) {
 						isPrunable = true

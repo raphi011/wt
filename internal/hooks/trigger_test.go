@@ -6,6 +6,8 @@ import (
 )
 
 func TestParseTrigger(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		input      string
@@ -49,6 +51,8 @@ func TestParseTrigger(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := ParseTrigger(tt.input)
 			if tt.wantErr {
 				if err == nil {
@@ -76,6 +80,8 @@ func TestParseTrigger(t *testing.T) {
 }
 
 func TestParsedTrigger_Matches(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		on      string
@@ -102,6 +108,8 @@ func TestParsedTrigger_Matches(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			parsed, err := ParseTrigger(tt.on)
 			if err != nil {
 				t.Fatalf("ParseTrigger(%q) error: %v", tt.on, err)

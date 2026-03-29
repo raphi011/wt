@@ -11,6 +11,8 @@ import (
 )
 
 func TestSubstitutePlaceholders(t *testing.T) {
+	t.Parallel()
+
 	ctx := Context{
 		WorktreeDir: "/home/user/worktrees/repo-branch",
 		RepoDir:     "/home/user/repo",
@@ -85,6 +87,8 @@ func TestSubstitutePlaceholders(t *testing.T) {
 }
 
 func TestSubstitutePlaceholders_SpecialChars(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		ctx      Context
@@ -128,6 +132,8 @@ func TestSubstitutePlaceholders_SpecialChars(t *testing.T) {
 }
 
 func TestSelectHooks(t *testing.T) {
+	t.Parallel()
+
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
 			"kitty": {
@@ -237,6 +243,8 @@ func TestSelectHooks(t *testing.T) {
 }
 
 func TestSelectHooks_NoOnCondition(t *testing.T) {
+	t.Parallel()
+
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
 			"vscode": {Command: "code {worktree-dir}"}, // no On - only via --hook
@@ -291,6 +299,8 @@ func TestSelectHooks_ExplicitHooksSkipBeforePhase(t *testing.T) {
 }
 
 func TestSelectHooks_EmptyConfig(t *testing.T) {
+	t.Parallel()
+
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{},
 	}
@@ -305,6 +315,8 @@ func TestSelectHooks_EmptyConfig(t *testing.T) {
 }
 
 func TestSelectHooks_OnCondition(t *testing.T) {
+	t.Parallel()
+
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
 			"editor": {
@@ -366,6 +378,8 @@ func TestSelectHooks_OnCondition(t *testing.T) {
 }
 
 func TestSelectHooks_OnConditionNoMatch(t *testing.T) {
+	t.Parallel()
+
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
 			"pr-only": {
@@ -386,6 +400,8 @@ func TestSelectHooks_OnConditionNoMatch(t *testing.T) {
 }
 
 func TestSelectHooks_MultipleMatches(t *testing.T) {
+	t.Parallel()
+
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
 			"editor": {
@@ -410,6 +426,8 @@ func TestSelectHooks_MultipleMatches(t *testing.T) {
 }
 
 func TestSelectHooks_OnAll(t *testing.T) {
+	t.Parallel()
+
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
 			"universal": {
@@ -432,6 +450,8 @@ func TestSelectHooks_OnAll(t *testing.T) {
 }
 
 func TestSelectHooks_PruneCommand(t *testing.T) {
+	t.Parallel()
+
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
 			"cleanup": {
@@ -469,6 +489,8 @@ func TestSelectHooks_PruneCommand(t *testing.T) {
 }
 
 func TestParseEnvWithStdin(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		input       []string
@@ -565,6 +587,8 @@ func TestParseEnvWithStdin(t *testing.T) {
 }
 
 func TestNeedsStdin(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		input    []string
@@ -618,6 +642,8 @@ func TestNeedsStdin(t *testing.T) {
 }
 
 func TestParseEnvWithCachedStdin(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name         string
 		input        []string
@@ -726,6 +752,8 @@ func TestParseEnvWithCachedStdin(t *testing.T) {
 }
 
 func TestSubstitutePlaceholders_EnvVariables(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		command  string
@@ -1068,6 +1096,8 @@ func TestRunForEach_EmptyMatches(t *testing.T) {
 }
 
 func TestSelectHooks_BeforeAfter(t *testing.T) {
+	t.Parallel()
+
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
 			"guard":   {Command: "test -f .env", On: []string{"before:prune"}},
@@ -1101,6 +1131,8 @@ func TestSelectHooks_BeforeAfter(t *testing.T) {
 }
 
 func TestSelectHooks_CheckoutSubtypes(t *testing.T) {
+	t.Parallel()
+
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
 			"editor":    {Command: "code .", On: []string{"checkout"}},

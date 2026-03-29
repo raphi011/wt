@@ -9,7 +9,7 @@ import (
 const zeroHash = "0000000000000000000000000000000000000000"
 
 // Worktree represents a git worktree with its metadata.
-// Used as the unified struct across all commands (list, prune, cd, exec).
+// Used as the unified struct across all commands (list, prune, cd, exec, merge).
 // Fields tagged json:"-" are internal and excluded from user-facing JSON output.
 type Worktree struct {
 	Path          string    `json:"path"`

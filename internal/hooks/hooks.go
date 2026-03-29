@@ -118,7 +118,7 @@ func hookMatchesCommand(hook config.Hook, cmdType CommandType, subtype, phase st
 	for _, on := range hook.On {
 		parsed, err := ParseTrigger(on)
 		if err != nil {
-			continue // already validated at config load time
+			continue // validated at config load; skip if bypassed
 		}
 		if parsed.Phase == phase && parsed.Matches(string(cmdType), subtype) {
 			return true

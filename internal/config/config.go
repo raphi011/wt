@@ -47,7 +47,7 @@ func WorkDirFromContext(ctx context.Context) string {
 // LocalConfigFileName is the name of the per-repo local config file
 const LocalConfigFileName = ".wt.toml"
 
-// Hook defines a post-create hook
+// Hook defines a configurable shell command that runs on wt operations
 type Hook struct {
 	Command     string   `toml:"command"`
 	Description string   `toml:"description"`
@@ -131,7 +131,7 @@ type CheckoutConfig struct {
 	WorktreeFormat string `toml:"worktree_format"` // Template for worktree folder names
 	BaseRef        string `toml:"base_ref"`        // "local" or "remote" (default: "remote")
 	AutoFetch      bool   `toml:"auto_fetch"`      // Fetch from origin before checkout
-	SetUpstream    *bool  `toml:"set_upstream"`    // Auto-set upstream tracking (default: true)
+	SetUpstream    *bool  `toml:"set_upstream"`    // Auto-set upstream tracking (default: false)
 }
 
 // ThemeConfig holds theme/color configuration for interactive UI
@@ -248,7 +248,7 @@ type rawConfig struct {
 	Theme    ThemeConfig       `toml:"theme"`
 }
 
-// Load reads config from ~/.config/wt/config.toml
+// Load reads config from ~/.wt/config.toml
 // Returns Default() if file doesn't exist (no error)
 // Returns error only if file exists but is invalid
 // Environment variables override config file values:
@@ -591,7 +591,7 @@ worktree_format = ".worktrees/{branch}"
 # [hooks.setup]
 # command = "npm install"
 # description = "Install dependencies"
-# on = ["checkout", "pr"]
+# on = ["checkout"]
 #
 # Cleanup notification
 # [hooks.cleanup]

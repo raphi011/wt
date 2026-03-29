@@ -13,7 +13,8 @@ const wtMergedSuffix = ".wt-merged"
 
 // ParseWtMerged parses a wt-merged config value like "squash:main@2026-03-28T14:30:00Z"
 // into its strategy, target branch, and timestamp components.
-// Returns zero values for any component that cannot be parsed.
+// Returns zero values for any component that cannot be parsed;
+// callers should treat a zero time.Time as "timestamp unavailable".
 func ParseWtMerged(value string) (strategy, target string, ts time.Time) {
 	if value == "" {
 		return "", "", time.Time{}

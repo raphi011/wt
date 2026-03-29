@@ -349,7 +349,9 @@ func GetAllBranchConfig(ctx context.Context, repoPath string) (notes map[string]
 
 	output, err := outputGit(ctx, repoPath, "config", "--get-regexp", `branch\.`)
 	if err != nil {
-		// No config is not an error
+		// Exit code 1 means no matching config keys — not an error.
+		// Any other failure (corrupt config, permission denied) is also
+		// treated as empty to keep the load pipeline non-fatal.
 		return notes, upstreams, wtMerged
 	}
 

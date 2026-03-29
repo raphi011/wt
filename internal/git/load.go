@@ -44,7 +44,10 @@ func LoadWorktreesForRepos(ctx context.Context, repos []RepoRef) ([]Worktree, []
 		})
 	}
 
-	_ = g.Wait() // Always nil — goroutines collect errors as warnings
+	// Always nil — goroutines collect errors as warnings, never return non-nil.
+	if err := g.Wait(); err != nil {
+		return nil, []LoadWarning{{RepoName: "unknown", Err: err}}
+	}
 
 	// Flatten results in stable order, collect warnings
 	var all []Worktree

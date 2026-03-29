@@ -1,7 +1,7 @@
 // Package hooks provides hook execution with placeholder substitution.
 //
 // Hooks are shell commands defined in config that run before or after wt operations
-// like checkout, pr checkout, prune, or merge. They enable workflow automation such as
+// like checkout, prune, or merge. They enable workflow automation such as
 // opening editors, installing dependencies, or sending notifications.
 //
 // # Hook Selection
@@ -37,6 +37,7 @@
 //   - {trigger}: Command that triggered the hook (checkout, prune, merge, run)
 //   - {action}: Checkout subtype: create, open, pr, or manual (for wt hook)
 //   - {phase}: Hook timing: before or after
+//   - {config-dir}: Absolute path to ~/.wt/ config directory
 //
 // Custom variables via --arg key=value or --arg key (bare boolean):
 //
@@ -51,7 +52,7 @@
 //   - Repo root for pr checkout hooks (both before and after)
 //   - Worktree path for before:prune hooks (worktree still exists)
 //   - Main repo path for after:prune hooks (worktree is deleted)
-//   - Repo root for merge hooks (both before and after)
+//   - Target branch worktree path for merge hooks (both before and after)
 //
 // Before hooks abort the current item on failure. For checkout and merge, this
 // stops the command. For prune batches, the individual worktree is skipped but
