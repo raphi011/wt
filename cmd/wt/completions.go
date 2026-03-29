@@ -444,3 +444,17 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 		return matches, cobra.ShellCompDirectiveNoFileComp
 	}
 }
+
+// registerMergeCompletions registers completions for the merge command.
+func registerMergeCompletions(cmd *cobra.Command) {
+	// Positional arg: [scope:]branch — same as checkout
+	cmd.ValidArgsFunction = completeScopedWorktreeArg
+
+	// --into flag: complete with branches that have worktrees
+	cmd.RegisterFlagCompletionFunc("into", completeBranches)
+
+	// --strategy flag: complete with valid strategies
+	cmd.RegisterFlagCompletionFunc("strategy", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"squash", "merge", "ff", "rebase"}, cobra.ShellCompDirectiveNoFileComp
+	})
+}

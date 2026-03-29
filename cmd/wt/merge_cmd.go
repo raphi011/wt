@@ -258,6 +258,8 @@ All arguments after -- are passed through to git merge.`,
 	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "set hook variable KEY=VALUE")
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 
+	registerMergeCompletions(cmd)
+
 	return cmd
 }
 
