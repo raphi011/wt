@@ -14,7 +14,6 @@ import (
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
-	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
@@ -557,14 +556,7 @@ If destination is not specified, clones into the current directory.`,
 						l.Printf("Warning: failed to create initial worktree: %v\n", err)
 					} else {
 						fmt.Printf("Created worktree: %s (%s)\n", wtPath, worktreeBranch)
-
-						// Record to history for wt cd
-						histPath, err := cfg.GetHistoryPath()
-						if err != nil {
-							l.Printf("Warning: failed to determine history path: %v\n", err)
-						} else if err := history.RecordAccess(wtPath, repoName, worktreeBranch, histPath); err != nil {
-							l.Printf("Warning: failed to record history: %v\n", err)
-						}
+						recordHistory(ctx, cfg, wtPath, repoName, worktreeBranch)
 					}
 				}
 			}

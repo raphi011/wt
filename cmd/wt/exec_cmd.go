@@ -62,11 +62,7 @@ With no targets, runs in the current worktree.`,
 			}
 
 			// Resolve target worktrees
-			type worktreeTarget struct {
-				repoName string
-				path     string
-			}
-			var worktrees []worktreeTarget
+			var resolved []WorktreeTarget
 
 			if len(targets) == 0 {
 				// No targets - use current directory
@@ -79,101 +75,26 @@ With no targets, runs in the current worktree.`,
 				if err == nil {
 					repoName = repo.Name
 				}
-				worktrees = append(worktrees, worktreeTarget{repoName: repoName, path: workDir})
+				resolved = append(resolved, WorktreeTarget{RepoName: repoName, Path: workDir})
 			} else {
-				// Parse each target
-				for _, target := range targets {
-					repoName, branchName := parseBranchTarget(target)
-
-					if repoName != "" {
-						// Explicit repo - find exact worktree
-						repo, err := reg.FindByName(repoName)
-						if err != nil {
-							return err
-						}
-						exists, pathErr := repo.PathExists()
-						if pathErr != nil {
-							return fmt.Errorf("%s: cannot access path (%s): %w", repo.Name, repo.Path, pathErr)
-						}
-						if !exists {
-							return fmt.Errorf("%s: path no longer exists (%s)\n  Update with: wt repo add <new-path> --name %s", repo.Name, repo.Path, repo.Name)
-						}
-
-						wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-						if err != nil {
-							return fmt.Errorf("list worktrees for %s: %w", repoName, err)
-						}
-
-						found := false
-						for _, wt := range wts {
-							if wt.Branch == branchName {
-								worktrees = append(worktrees, worktreeTarget{
-									repoName: repoName,
-									path:     wt.Path,
-								})
-								found = true
-								break
-							}
-						}
-
-						if !found {
-							return fmt.Errorf("worktree not found: %s:%s", repoName, branchName)
-						}
-					} else {
-						// No repo specified - search all repos
-						var matches []worktreeTarget
-
-						searchRepos := filterOrphanedRepos(l, reg.Repos)
-
-						for _, repo := range searchRepos {
-							wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-							if err != nil {
-								continue
-							}
-
-							for _, wt := range wts {
-								if wt.Branch == branchName {
-									matches = append(matches, worktreeTarget{
-										repoName: repo.Name,
-										path:     wt.Path,
-									})
-								}
-							}
-						}
-
-						if len(matches) == 0 {
-							return fmt.Errorf("worktree not found: %s", branchName)
-						}
-
-						// Add all matches (run in all repos with this branch)
-						worktrees = append(worktrees, matches...)
-					}
+				resolved, err = resolveWorktreeTargets(ctx, reg, targets)
+				if err != nil {
+					return err
 				}
 			}
 
-			// Deduplicate by path
-			seen := make(map[string]bool)
-			var unique []worktreeTarget
-			for _, wt := range worktrees {
-				if !seen[wt.path] {
-					seen[wt.path] = true
-					unique = append(unique, wt)
-				}
-			}
-			worktrees = unique
-
-			l.Debug("exec", "command", cmdArgs[0], "worktrees", len(worktrees))
+			l.Debug("exec", "command", cmdArgs[0], "worktrees", len(resolved))
 
 			// Execute command in each worktree
-			for _, wt := range worktrees {
-				label := wt.repoName
+			for _, wt := range resolved {
+				label := wt.RepoName
 				if label == "" {
-					label = wt.path
+					label = wt.Path
 				}
 				fmt.Printf("=== %s ===\n", label)
 
 				execCmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
-				execCmd.Dir = wt.path
+				execCmd.Dir = wt.Path
 				execCmd.Stdout = os.Stdout
 				execCmd.Stderr = os.Stderr
 				execCmd.Stdin = os.Stdin

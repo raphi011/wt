@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"os"
 	"sort"
-	"strings"
 
 	"github.com/atotto/clipboard"
 	"github.com/spf13/cobra"
@@ -179,98 +178,18 @@ repo's worktrees. Use -g to show all repos.`,
 				repoName = entry.RepoName
 				branchName = entry.Branch
 			} else {
-				// Parse positional argument
-				arg := args[0]
-
-				if before, after, ok := strings.Cut(arg, ":"); ok {
-					// repo:branch format
-					repoName = before
-					branchName = after
-				} else {
-					// Just branch name
-					branchName = arg
+				// Resolve [repo:]branch argument
+				match, err := resolveOneWorktreeTarget(ctx, reg, args[0])
+				if err != nil {
+					return err
 				}
-
-				if repoName != "" {
-					// Explicit repo specified - find exact worktree
-					repo, err := reg.FindByName(repoName)
-					if err != nil {
-						return err
-					}
-					exists, pathErr := repo.PathExists()
-					if pathErr != nil {
-						return fmt.Errorf("%s: cannot access path (%s): %w", repo.Name, repo.Path, pathErr)
-					}
-					if !exists {
-						return fmt.Errorf("%s: path no longer exists (%s)\n  Update with: wt repo add <new-path> --name %s", repo.Name, repo.Path, repo.Name)
-					}
-
-					worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-					if err != nil {
-						return fmt.Errorf("list worktrees: %w", err)
-					}
-
-					for _, wt := range worktrees {
-						if wt.Branch == branchName {
-							targetPath = wt.Path
-							break
-						}
-					}
-
-					if targetPath == "" {
-						return fmt.Errorf("worktree not found: %s:%s", repoName, branchName)
-					}
-				} else {
-					// Search all repos for matching branch
-					l := log.FromContext(ctx)
-					type match struct {
-						repoName string
-						path     string
-					}
-					var matches []match
-
-					searchRepos := filterOrphanedRepos(l, reg.Repos)
-
-					for _, repo := range searchRepos {
-						worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-						if err != nil {
-							l.Debug("skipping repo", "repo", repo.Name, "error", err)
-							continue
-						}
-
-						for _, wt := range worktrees {
-							if wt.Branch == branchName {
-								matches = append(matches, match{
-									repoName: repo.Name,
-									path:     wt.Path,
-								})
-							}
-						}
-					}
-
-					if len(matches) == 0 {
-						return fmt.Errorf("worktree not found: %s", branchName)
-					}
-
-					if len(matches) > 1 {
-						// Ambiguous - list matches
-						var names []string
-						for _, m := range matches {
-							names = append(names, m.repoName+":"+branchName)
-						}
-						return fmt.Errorf("branch %q exists in multiple repos: %s", branchName, strings.Join(names, ", "))
-					}
-
-					targetPath = matches[0].path
-					repoName = matches[0].repoName
-				}
+				targetPath = match.Path
+				repoName = match.RepoName
+				branchName = match.Branch
 			}
 
 			// Record access to history for wt cd
-			if err := history.RecordAccess(targetPath, repoName, branchName, histPath); err != nil {
-				l := log.FromContext(ctx)
-				l.Printf("Warning: failed to record history: %v\n", err)
-			}
+			recordHistory(ctx, cfg, targetPath, repoName, branchName)
 
 			// Copy to clipboard if requested
 			if copyToClipboard {

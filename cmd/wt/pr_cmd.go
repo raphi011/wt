@@ -14,7 +14,6 @@ import (
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
-	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
@@ -305,20 +304,6 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 				}
 			}
 
-			if justClonedRegular {
-				fmt.Printf("Checked out PR branch: %s (%s)\n", repoPath, branch)
-			} else {
-				fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
-			}
-
-			// Record to history for wt cd
-			histPath, err := effCfg.GetHistoryPath()
-			if err != nil {
-				l.Printf("Warning: failed to determine history path: %v\n", err)
-			} else if err := history.RecordAccess(wtPath, repo.Name, branch, histPath); err != nil {
-				l.Printf("Warning: failed to record history: %v\n", err)
-			}
-
 			// Set note if provided
 			if note != "" {
 				if err := git.SetBranchNote(ctx, gitDir, branch, note); err != nil {
@@ -326,59 +311,28 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 				}
 			}
 
-			// Run hooks
-			hookEnv, err := hooks.ParseEnvWithStdin(env)
+			// Run hooks around output and history recording
+			hp, err := buildHookParams(cfg, wtPath, repoPath, repo.Name, branch, hooks.CommandCheckout, hooks.ActionPR, hookNames, noHook, env)
 			if err != nil {
 				return err
 			}
 
-			configDir, err := cfg.GetWtDir()
-			if err != nil {
-				return fmt.Errorf("config dir: %w", err)
-			}
-
-			hookCtx := hooks.Context{
-				WorktreeDir: wtPath,
-				RepoDir:     repoPath,
-				Branch:      branch,
-				Repo:        repo.Name,
-				Trigger:     string(hooks.CommandCheckout),
-				Action:      hooks.ActionPR,
-				ConfigDir:   configDir,
-				Env:         hookEnv,
-			}
-
-			// Run before hooks
-			beforeMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandCheckout, hooks.ActionPR, hooks.PhaseBefore)
-			if err != nil {
-				return err
-			}
-			hookCtx.Phase = hooks.PhaseBefore
-			if err := hooks.RunBeforeHooks(ctx, beforeMatches, hookCtx, repoPath); err != nil {
-				return fmt.Errorf("before-hook aborted pr checkout: %w", err)
-			}
-
-			// Run after hooks
-			afterMatches, err := hooks.SelectHooks(effCfg.Hooks, hookNames, noHook, hooks.CommandCheckout, hooks.ActionPR, hooks.PhaseAfter)
-			if err != nil {
-				return err
-			}
-			hookCtx.Phase = hooks.PhaseAfter
-			hooks.RunForEach(ctx, afterMatches, hookCtx, repoPath)
-
-			return nil
+			return withHooks(ctx, hp, func() error {
+				if justClonedRegular {
+					fmt.Printf("Checked out PR branch: %s (%s)\n", repoPath, branch)
+				} else {
+					fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
+				}
+				recordHistory(ctx, effCfg, wtPath, repo.Name, branch)
+				return nil
+			})
 		},
 	}
 
 	cmd.Flags().StringVar(&forgeName, "forge", "", "Forge type: github or gitlab")
 	cmd.Flags().StringVar(&cloneMode, "clone-mode", "", "Clone mode: bare or regular (default: config)")
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
-	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
-	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-checkout hook")
-	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
-
-	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
-	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
+	registerHookFlags(cmd, &hookNames, &noHook, &env)
 	cmd.RegisterFlagCompletionFunc("clone-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"bare", "regular"}, cobra.ShellCompDirectiveNoFileComp
 	})
@@ -386,7 +340,6 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 		return []string{"github", "gitlab"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	cmd.RegisterFlagCompletionFunc("note", cobra.NoFileCompletions)
-	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
 
 	return cmd
 }
@@ -539,94 +492,60 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 			cache := prcache.Load()
 			cacheKey := prcache.CacheKey(res.repo.Path, res.branch)
 
-			// Run before-merge hooks (can abort)
-			hookEnv, err := hooks.ParseEnvWithStdin(env)
-			if err != nil {
-				return err
-			}
 			cwd := config.WorkDirFromContext(ctx)
-			mergeConfigDir, err := res.effCfg.GetWtDir()
-			if err != nil {
-				return fmt.Errorf("config dir: %w", err)
-			}
-			hookCtx := hooks.Context{
-				WorktreeDir: cwd,
-				RepoDir:     res.repo.Path,
-				Branch:      res.branch,
-				Repo:        res.repo.Name,
-				Trigger:     string(hooks.CommandMerge),
-				ConfigDir:   mergeConfigDir,
-				Env:         hookEnv,
-			}
-
-			beforeMatches, err := hooks.SelectHooks(res.effCfg.Hooks, hookNames, noHook, hooks.CommandMerge, "", hooks.PhaseBefore)
+			hp, err := buildHookParams(res.effCfg, cwd, res.repo.Path, res.repo.Name, res.branch, hooks.CommandMerge, "", hookNames, noHook, env)
 			if err != nil {
 				return err
 			}
-			hookCtx.Phase = hooks.PhaseBefore
-			if err := hooks.RunBeforeHooks(ctx, beforeMatches, hookCtx, res.repo.Path); err != nil {
-				return fmt.Errorf("before-hook aborted merge: %w", err)
-			}
 
-			if pr.State == forge.PRStateMerged {
-				out.Printf("PR #%d is already merged\n", pr.Number)
-			} else if pr.State == forge.PRStateClosed {
-				return fmt.Errorf("PR #%d is closed", pr.Number)
-			} else {
-				// Merge the PR
-				l.Printf("Merging PR #%d...\n", pr.Number)
-				if err := res.forge.MergePR(ctx, res.originURL, pr.Number, strategy); err != nil {
-					return fmt.Errorf("merge failed: %w", err)
-				}
-				out.Printf("Merged PR #%d\n", pr.Number)
-
-				// Update cache with merged state
-				pr.State = forge.PRStateMerged
-				cache.Set(cacheKey, pr)
-				if err := cache.Save(); err != nil {
-					l.Printf("Warning: failed to save PR cache: %v\n", err)
-				}
-			}
-
-			afterMatches, err := hooks.SelectHooks(res.effCfg.Hooks, hookNames, noHook, hooks.CommandMerge, "", hooks.PhaseAfter)
-			if err != nil {
-				return err
-			}
-			hookCtx.Phase = hooks.PhaseAfter
-			hooks.RunForEach(ctx, afterMatches, hookCtx, res.repo.Path)
-
-			// Remove worktree unless --keep
-			if !keep {
-				wt := git.Worktree{Path: cwd, RepoPath: res.repo.Path}
-				l.Printf("Removing worktree...\n")
-				if err := git.RemoveWorktree(ctx, wt, false); err != nil {
-					l.Printf("Warning: failed to remove worktree: %v\n", err)
+			return withHooks(ctx, hp, func() error {
+				if pr.State == forge.PRStateMerged {
+					out.Printf("PR #%d is already merged\n", pr.Number)
+				} else if pr.State == forge.PRStateClosed {
+					return fmt.Errorf("PR #%d is closed", pr.Number)
 				} else {
-					out.Printf("Removed worktree: %s\n", cwd)
-					// Remove from cache since worktree no longer exists
-					cache.Delete(cacheKey)
-					if err := cache.SaveIfDirty(); err != nil {
-						l.Printf("Warning: failed to save cache: %v\n", err)
+					// Merge the PR
+					l.Printf("Merging PR #%d...\n", pr.Number)
+					if err := res.forge.MergePR(ctx, res.originURL, pr.Number, strategy); err != nil {
+						return fmt.Errorf("merge failed: %w", err)
+					}
+					out.Printf("Merged PR #%d\n", pr.Number)
+
+					// Update cache with merged state
+					pr.State = forge.PRStateMerged
+					cache.Set(cacheKey, pr)
+					if err := cache.Save(); err != nil {
+						l.Printf("Warning: failed to save PR cache: %v\n", err)
 					}
 				}
-			}
 
-			return nil
+				// Remove worktree unless --keep
+				if !keep {
+					wt := git.Worktree{Path: cwd, RepoPath: res.repo.Path}
+					l.Printf("Removing worktree...\n")
+					if err := git.RemoveWorktree(ctx, wt, false); err != nil {
+						l.Printf("Warning: failed to remove worktree: %v\n", err)
+					} else {
+						out.Printf("Removed worktree: %s\n", cwd)
+						// Remove from cache since worktree no longer exists
+						cache.Delete(cacheKey)
+						if err := cache.SaveIfDirty(); err != nil {
+							l.Printf("Warning: failed to save cache: %v\n", err)
+						}
+					}
+				}
+
+				return nil
+			})
 		},
 	}
 
 	cmd.Flags().StringVarP(&strategy, "strategy", "s", "", "Merge strategy: squash, rebase, merge")
 	cmd.Flags().BoolVarP(&keep, "keep", "k", false, "Keep worktree after merge")
-	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
-	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-merge hook")
-	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
-
-	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
-	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
+	registerHookFlags(cmd, &hookNames, &noHook, &env)
 	cmd.RegisterFlagCompletionFunc("strategy", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"squash", "rebase", "merge"}, cobra.ShellCompDirectiveNoFileComp
 	})
-	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
 
 	return cmd
 }

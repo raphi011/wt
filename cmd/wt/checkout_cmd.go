@@ -11,7 +11,6 @@ import (
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
-	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/preserve"
@@ -134,18 +133,12 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 	cmd.Flags().BoolVarP(&fetch, "fetch", "f", false, "Fetch from origin before checkout")
 	cmd.Flags().BoolVarP(&autoStash, "autostash", "s", false, "Stash changes and apply to new worktree")
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
-	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
-	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-checkout hook")
+	registerHookFlags(cmd, &hookNames, &noHook, &env)
 	cmd.Flags().BoolVar(&noPreserve, "no-preserve", false, "Skip file preservation")
-	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode")
 
-	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
-
 	// Completions
-	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
 	cmd.RegisterFlagCompletionFunc("note", cobra.NoFileCompletions)
-	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
 	registerCheckoutCompletions(cmd)
 
 	return cmd
@@ -293,15 +286,6 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 
 	fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
 
-	// Record to history for wt cd
-	histPath, err := cfg.GetHistoryPath()
-	if err != nil {
-		return fmt.Errorf("history path: %w", err)
-	}
-	if err := history.RecordAccess(wtPath, repo.Name, branch, histPath); err != nil {
-		l.Printf("Warning: failed to record history: %v\n", err)
-	}
-
 	// Apply stashed changes to new worktree
 	if stashed {
 		if err := git.StashPop(ctx, wtPath); err != nil {
@@ -338,117 +322,39 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 		}
 	}
 
-	// Run hooks
-	hookEnv, err := hooks.ParseEnvWithStdin(env)
-	if err != nil {
-		return err
-	}
-
+	// Run hooks around history recording
 	action := hooks.ActionOpen
 	if newBranch {
 		action = hooks.ActionCreate
 	}
 
-	configDir, err := cfg.GetWtDir()
-	if err != nil {
-		return fmt.Errorf("config dir: %w", err)
-	}
-
-	hookCtx := hooks.Context{
-		WorktreeDir: wtPath,
-		RepoDir:     repo.Path,
-		Branch:      branch,
-		Repo:        repo.Name,
-		Trigger:     string(hooks.CommandCheckout),
-		Action:      action,
-		ConfigDir:   configDir,
-		Env:         hookEnv,
-	}
-
-	// Run before hooks (can abort)
-	beforeMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, action, hooks.PhaseBefore)
+	hp, err := buildHookParams(cfg, wtPath, repo.Path, repo.Name, branch, hooks.CommandCheckout, action, hookNames, noHook, env)
 	if err != nil {
 		return err
 	}
-	hookCtx.Phase = hooks.PhaseBefore
-	if err := hooks.RunBeforeHooks(ctx, beforeMatches, hookCtx, wtPath); err != nil {
-		return fmt.Errorf("before-hook aborted checkout: %w", err)
-	}
 
-	// Run after hooks
-	afterMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, action, hooks.PhaseAfter)
-	if err != nil {
-		return err
-	}
-	if len(afterMatches) > 0 {
-		hookCtx.Phase = hooks.PhaseAfter
-		hooks.RunAllNonFatal(ctx, afterMatches, hookCtx, wtPath)
-	}
-
-	return nil
+	return withHooks(ctx, hp, func() error {
+		recordHistory(ctx, cfg, wtPath, repo.Name, branch)
+		return nil
+	})
 }
 
 // openExistingWorktree handles the case where a worktree for the branch already exists.
 // It prints the worktree path to stdout, records history, and runs hooks with action="open",
 // skipping worktree creation.
 func openExistingWorktree(ctx context.Context, repo registry.Repo, branch, wtPath string, hookNames []string, noHook bool, env []string) error {
-	l := log.FromContext(ctx)
 	cfg := resolveEffectiveConfig(ctx, repo.Path)
 
-	// Record to history for wt cd
-	histPath, err := cfg.GetHistoryPath()
-	if err != nil {
-		return fmt.Errorf("history path: %w", err)
-	}
-	if err := history.RecordAccess(wtPath, repo.Name, branch, histPath); err != nil {
-		l.Printf("Warning: failed to record history: %v\n", err)
-	}
-
-	// Run hooks
-	hookEnv, err := hooks.ParseEnvWithStdin(env)
+	hp, err := buildHookParams(cfg, wtPath, repo.Path, repo.Name, branch, hooks.CommandCheckout, hooks.ActionOpen, hookNames, noHook, env)
 	if err != nil {
 		return err
 	}
 
-	configDir, err := cfg.GetWtDir()
-	if err != nil {
-		return fmt.Errorf("config dir: %w", err)
-	}
-
-	hookCtx := hooks.Context{
-		WorktreeDir: wtPath,
-		RepoDir:     repo.Path,
-		Branch:      branch,
-		Repo:        repo.Name,
-		Trigger:     string(hooks.CommandCheckout),
-		Action:      hooks.ActionOpen,
-		ConfigDir:   configDir,
-		Env:         hookEnv,
-	}
-
-	// Run before hooks (can abort)
-	beforeMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, hooks.ActionOpen, hooks.PhaseBefore)
-	if err != nil {
-		return err
-	}
-	hookCtx.Phase = hooks.PhaseBefore
-	if err := hooks.RunBeforeHooks(ctx, beforeMatches, hookCtx, wtPath); err != nil {
-		return fmt.Errorf("before-hook aborted checkout: %w", err)
-	}
-
-	fmt.Printf("Opened worktree: %s (%s)\n", wtPath, branch)
-
-	// Run after hooks
-	afterMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, hooks.ActionOpen, hooks.PhaseAfter)
-	if err != nil {
-		return err
-	}
-	if len(afterMatches) > 0 {
-		hookCtx.Phase = hooks.PhaseAfter
-		hooks.RunAllNonFatal(ctx, afterMatches, hookCtx, wtPath)
-	}
-
-	return nil
+	return withHooks(ctx, hp, func() error {
+		fmt.Printf("Opened worktree: %s (%s)\n", wtPath, branch)
+		recordHistory(ctx, cfg, wtPath, repo.Name, branch)
+		return nil
+	})
 }
 
 // findWorktreeForBranch checks if the given branch already has a worktree in the repo.
