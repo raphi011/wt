@@ -4,31 +4,34 @@ import (
 	"testing"
 )
 
-func TestBuildBranchOptions_FiltersCheckedOutBranches(t *testing.T) {
+func TestBuildBranchOptions_MarksCheckedOutBranches(t *testing.T) {
 	branches := []BranchInfo{
-		{Name: "main", InWorktree: true},       // Should be filtered
-		{Name: "feature-a", InWorktree: false}, // Should be included
-		{Name: "feature-b", InWorktree: true},  // Should be filtered
-		{Name: "develop", InWorktree: false},   // Should be included
+		{Name: "main", InWorktree: true},       // Should be marked
+		{Name: "feature-a", InWorktree: false}, // Normal
+		{Name: "feature-b", InWorktree: true},  // Should be marked
+		{Name: "develop", InWorktree: false},   // Normal
 	}
 
 	opts := buildBranchOptions(branches)
 
-	if len(opts) != 2 {
-		t.Fatalf("expected 2 options, got %d", len(opts))
+	if len(opts) != 4 {
+		t.Fatalf("expected 4 options, got %d", len(opts))
 	}
 
-	// Verify correct branches are included
-	labels := make([]string, len(opts))
-	for i, opt := range opts {
-		labels[i] = opt.Label
+	// Verify labels
+	want := []struct{ label, value string }{
+		{"main (worktree)", "main"},
+		{"feature-a", "feature-a"},
+		{"feature-b (worktree)", "feature-b"},
+		{"develop", "develop"},
 	}
-
-	if labels[0] != "feature-a" {
-		t.Errorf("first option = %q, want feature-a", labels[0])
-	}
-	if labels[1] != "develop" {
-		t.Errorf("second option = %q, want develop", labels[1])
+	for i, w := range want {
+		if opts[i].Label != w.label {
+			t.Errorf("opts[%d].Label = %q, want %q", i, opts[i].Label, w.label)
+		}
+		if opts[i].Value != w.value {
+			t.Errorf("opts[%d].Value = %v, want %q", i, opts[i].Value, w.value)
+		}
 	}
 }
 
@@ -40,8 +43,11 @@ func TestBuildBranchOptions_AllCheckedOut(t *testing.T) {
 
 	opts := buildBranchOptions(branches)
 
-	if len(opts) != 0 {
-		t.Errorf("expected 0 options when all checked out, got %d", len(opts))
+	if len(opts) != 2 {
+		t.Errorf("expected 2 options when all checked out, got %d", len(opts))
+	}
+	if len(opts) > 0 && opts[0].Label != "main (worktree)" {
+		t.Errorf("opts[0].Label = %q, want %q", opts[0].Label, "main (worktree)")
 	}
 }
 
@@ -53,7 +59,7 @@ func TestBuildBranchOptions_Empty(t *testing.T) {
 	}
 }
 
-func TestBuildBranchOptions_ValueEqualsLabel(t *testing.T) {
+func TestBuildBranchOptions_ValueEqualsLabelForNonWorktree(t *testing.T) {
 	branches := []BranchInfo{
 		{Name: "feature-branch", InWorktree: false},
 	}
@@ -64,9 +70,29 @@ func TestBuildBranchOptions_ValueEqualsLabel(t *testing.T) {
 		t.Fatalf("expected 1 option, got %d", len(opts))
 	}
 
-	// Value should equal Label (both are branch name)
+	// Value should equal Label for non-worktree branches
 	if opts[0].Label != opts[0].Value {
-		t.Errorf("Label = %q, Value = %v, should be equal", opts[0].Label, opts[0].Value)
+		t.Errorf("Label = %q, Value = %v, should be equal for non-worktree branch", opts[0].Label, opts[0].Value)
+	}
+}
+
+func TestBuildBranchOptions_WorktreeLabelDiffersFromValue(t *testing.T) {
+	branches := []BranchInfo{
+		{Name: "feature-branch", InWorktree: true},
+	}
+
+	opts := buildBranchOptions(branches)
+
+	if len(opts) != 1 {
+		t.Fatalf("expected 1 option, got %d", len(opts))
+	}
+
+	// Label should have " (worktree)" suffix, Value should be plain branch name
+	if opts[0].Label != "feature-branch (worktree)" {
+		t.Errorf("Label = %q, want %q", opts[0].Label, "feature-branch (worktree)")
+	}
+	if opts[0].Value != "feature-branch" {
+		t.Errorf("Value = %v, want %q", opts[0].Value, "feature-branch")
 	}
 }
 

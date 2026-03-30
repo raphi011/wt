@@ -582,10 +582,11 @@ func TestCheckout_NoOriginNoUpstream(t *testing.T) {
 	}
 }
 
-// TestCheckout_AlreadyCheckedOut_ScopedTarget tests checkout blocking with repo:branch syntax.
+// TestCheckout_AlreadyCheckedOut_ScopedTarget tests that checkout succeeds with repo:branch syntax
+// when worktree already exists (opens existing worktree).
 //
 // Scenario: User runs `wt checkout myrepo:feature` when feature already has a worktree
-// Expected: Command fails with error from git indicating branch is already checked out
+// Expected: Command succeeds, opens existing worktree
 func TestCheckout_AlreadyCheckedOut_ScopedTarget(t *testing.T) {
 	t.Parallel()
 
@@ -633,27 +634,26 @@ func TestCheckout_AlreadyCheckedOut_ScopedTarget(t *testing.T) {
 		t.Fatalf("worktree should exist at %s", wtPath)
 	}
 
-	// Second checkout with scoped target should fail
+	// Second checkout with scoped target should succeed (open existing)
 	cmd2 := newCheckoutCmd()
 	cmd2.SetContext(ctx)
 	cmd2.SetArgs([]string{"myrepo:feature"})
 
-	err := cmd2.Execute()
-	if err == nil {
-		t.Fatal("expected error when checking out already checked-out branch with scoped target")
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("second checkout should succeed for existing worktree, got: %v", err)
 	}
 
-	// Verify error mentions the branch (git error for existing worktree)
-	errStr := err.Error()
-	if !strings.Contains(errStr, "feature") {
-		t.Errorf("error should mention branch name 'feature', got: %s", errStr)
+	// Worktree should still exist
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should still exist at %s", wtPath)
 	}
 }
 
-// TestCheckout_AlreadyCheckedOut tests that checkout fails for already checked-out branches.
+// TestCheckout_AlreadyCheckedOut tests that checkout succeeds for already checked-out branches
+// by opening the existing worktree.
 //
 // Scenario: User runs `wt checkout feature` when feature already has a worktree
-// Expected: Command fails with error indicating branch is already checked out
+// Expected: Command succeeds, opens existing worktree
 func TestCheckout_AlreadyCheckedOut(t *testing.T) {
 	t.Parallel()
 
@@ -697,23 +697,237 @@ func TestCheckout_AlreadyCheckedOut(t *testing.T) {
 		t.Fatalf("worktree should exist at %s", wtPath)
 	}
 
-	// Second checkout of same branch should fail
+	// Second checkout of same branch should succeed (open existing)
 	cmd2 := newCheckoutCmd()
 	cmd2.SetContext(ctx)
 	cmd2.SetArgs([]string{"feature"})
 
-	err := cmd2.Execute()
-	if err == nil {
-		t.Fatal("expected error when checking out already checked-out branch")
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("second checkout should succeed for existing worktree, got: %v", err)
 	}
 
-	// Verify error message mentions the branch and path
-	errStr := err.Error()
-	if !strings.Contains(errStr, "feature") {
-		t.Errorf("error should mention branch name 'feature', got: %s", errStr)
+	// Worktree should still exist
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should still exist at %s", wtPath)
 	}
-	if !strings.Contains(errStr, "already checked out") {
-		t.Errorf("error should mention 'already checked out', got: %s", errStr)
+}
+
+// TestCheckout_AlreadyCheckedOut_RunsHooks tests that opening an existing worktree runs hooks
+// with action="open".
+//
+// Scenario: User runs `wt checkout feature` twice, with a hook configured
+// Expected: Hook runs on both first and second (both action=open) checkout
+func TestCheckout_AlreadyCheckedOut_RunsHooks(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	markerPath := filepath.Join(tmpDir, "hook-ran")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"test-hook": {
+					Command:     "touch " + markerPath,
+					Description: "Test hook",
+					On:          []string{"checkout"},
+				},
+			},
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	// First checkout creates the worktree
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("first checkout failed: %v", err)
+	}
+
+	// Remove marker from first checkout
+	if err := os.Remove(markerPath); err != nil {
+		t.Fatalf("failed to remove marker file: %v", err)
+	}
+
+	// Second checkout should succeed and run hooks
+	cmd2 := newCheckoutCmd()
+	cmd2.SetContext(ctx)
+	cmd2.SetArgs([]string{"feature"})
+
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("second checkout should succeed: %v", err)
+	}
+
+	// Verify hook ran on second checkout
+	if _, err := os.Stat(markerPath); os.IsNotExist(err) {
+		t.Error("hook should have run when opening existing worktree")
+	}
+}
+
+// TestCheckout_AlreadyCheckedOut_NoHook tests that --no-hook is respected when opening
+// an existing worktree.
+//
+// Scenario: User runs `wt checkout --no-hook feature` when worktree already exists
+// Expected: Command succeeds, no hooks run
+func TestCheckout_AlreadyCheckedOut_NoHook(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	markerPath := filepath.Join(tmpDir, "hook-ran")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"test-hook": {
+					Command:     "touch " + markerPath,
+					Description: "Test hook",
+					On:          []string{"checkout"},
+				},
+			},
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	// First checkout creates the worktree
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("first checkout failed: %v", err)
+	}
+
+	// Remove marker from first checkout
+	if err := os.Remove(markerPath); err != nil {
+		t.Fatalf("failed to remove marker file: %v", err)
+	}
+
+	// Second checkout with --no-hook
+	cmd2 := newCheckoutCmd()
+	cmd2.SetContext(ctx)
+	cmd2.SetArgs([]string{"--no-hook", "feature"})
+
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("second checkout should succeed: %v", err)
+	}
+
+	// Verify hook did NOT run
+	if _, err := os.Stat(markerPath); err == nil {
+		t.Error("hook should not have run with --no-hook")
+	}
+}
+
+// TestCheckout_AlreadyCheckedOut_RecordsHistory tests that opening an existing worktree
+// records history for wt cd.
+//
+// Scenario: User runs `wt checkout feature` twice
+// Expected: History is recorded on both checkouts
+func TestCheckout_AlreadyCheckedOut_RecordsHistory(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	histPath := filepath.Join(tmpDir, "history.json")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		HistoryPath:  histPath,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	// First checkout creates the worktree
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("first checkout failed: %v", err)
+	}
+
+	// Second checkout opens existing worktree
+	cmd2 := newCheckoutCmd()
+	cmd2.SetContext(ctx)
+	cmd2.SetArgs([]string{"feature"})
+
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("second checkout should succeed: %v", err)
+	}
+
+	// Verify history was recorded
+	hist, err := history.Load(histPath)
+	if err != nil {
+		t.Fatalf("failed to load history: %v", err)
+	}
+
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	found := false
+	for _, entry := range hist.Entries {
+		if entry.Path == wtPath {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("history should contain entry for the opened worktree")
 	}
 }
 
