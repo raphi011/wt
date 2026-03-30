@@ -19,6 +19,7 @@ import (
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/prompt"
 	"github.com/raphi011/wt/internal/ui/static"
+	"github.com/raphi011/wt/internal/worktree"
 )
 
 func newRepoCmd() *cobra.Command {
@@ -548,7 +549,7 @@ If destination is not specified, clones into the current directory.`,
 					if format == "" {
 						format = cfg.Checkout.WorktreeFormat
 					}
-					wtPath := resolveWorktreePathWithConfig(absPath, repoName, worktreeBranch, format)
+					wtPath := worktree.ResolvePath(absPath, repoName, worktreeBranch, format)
 
 					l.Debug("creating initial worktree", "path", wtPath, "branch", worktreeBranch)
 

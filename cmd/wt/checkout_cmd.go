@@ -16,6 +16,7 @@ import (
 	"github.com/raphi011/wt/internal/preserve"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
+	"github.com/raphi011/wt/internal/worktree"
 )
 
 func newCheckoutCmd() *cobra.Command {
@@ -159,7 +160,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 	format := repo.GetEffectiveWorktreeFormat(cfg.Checkout.WorktreeFormat)
 
 	// Resolve worktree path
-	wtPath := resolveWorktreePath(repo, branch, format)
+	wtPath := worktree.ResolvePath(repo.Path, repo.Name, branch, format)
 
 	l.Debug("creating worktree", "path", wtPath, "branch", branch)
 
@@ -362,6 +363,8 @@ func openExistingWorktree(ctx context.Context, repo registry.Repo, branch, wtPat
 func findWorktreeForBranch(ctx context.Context, repoPath, branch string) (string, bool) {
 	wts, err := git.ListWorktreesFromRepo(ctx, repoPath)
 	if err != nil {
+		l := log.FromContext(ctx)
+		l.Debug("failed to list worktrees", "repo", repoPath, "error", err)
 		return "", false
 	}
 	for _, wt := range wts {
@@ -440,7 +443,10 @@ func resolveUnscopedInRepo(
 	}
 
 	branches, err := git.ListLocalBranches(ctx, repo.Path)
-	if err == nil && slices.Contains(branches, branch) {
+	if err != nil {
+		l := log.FromContext(ctx)
+		l.Debug("failed to list branches", "repo", repo.Name, "error", err)
+	} else if slices.Contains(branches, branch) {
 		return []registry.Repo{repo}, nil
 	}
 
@@ -459,11 +465,13 @@ func resolveUnscopedAcrossRepos(
 	hookNames []string, noHook bool, env []string,
 ) ([]registry.Repo, error) {
 	var repos []registry.Repo
+	var opened bool
 	for _, repo := range filterOrphanedRepos(l, reg.Repos) {
 		if wtPath, found := findWorktreeForBranch(ctx, repo.Path, branch); found {
 			if err := openExistingWorktree(ctx, repo, branch, wtPath, hookNames, noHook, env); err != nil {
 				return nil, err
 			}
+			opened = true
 			continue
 		}
 		branches, err := git.ListLocalBranches(ctx, repo.Path)
@@ -477,6 +485,9 @@ func resolveUnscopedAcrossRepos(
 	}
 
 	if len(repos) == 0 {
+		if opened {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("branch %q not found in any repo", branch)
 	}
 	if len(repos) > 1 {
@@ -487,11 +498,6 @@ func resolveUnscopedAcrossRepos(
 		return nil, fmt.Errorf("branch %q exists in multiple repos: %v\nUse scope:branch to specify", branch, names)
 	}
 	return repos, nil
-}
-
-// resolveWorktreePath computes the worktree path based on format
-func resolveWorktreePath(repo registry.Repo, branch, format string) string {
-	return resolveWorktreePathWithConfig(repo.Path, repo.Name, branch, format)
 }
 
 // completeHooks provides completion for hook flags

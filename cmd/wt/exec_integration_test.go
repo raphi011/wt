@@ -432,8 +432,8 @@ func TestExec_RepoNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nonexistent repo, got nil")
 	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("expected 'not found' error, got %q", err.Error())
+	if !strings.Contains(err.Error(), "no repo or label found") {
+		t.Errorf("expected 'no repo or label found' error, got %q", err.Error())
 	}
 }
 

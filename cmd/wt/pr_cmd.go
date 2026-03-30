@@ -19,6 +19,7 @@ import (
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
+	"github.com/raphi011/wt/internal/worktree"
 )
 
 func newPrCmd() *cobra.Command {
@@ -258,7 +259,7 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 
 			// Get worktree format
 			format := repo.GetEffectiveWorktreeFormat(effCfg.Checkout.WorktreeFormat)
-			wtPath := resolveWorktreePathWithConfig(repoPath, repo.Name, branch, format)
+			wtPath := worktree.ResolvePath(repoPath, repo.Name, branch, format)
 
 			// Detect repo type
 			repoType, err := git.DetectRepoType(repoPath)
@@ -312,7 +313,7 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 			}
 
 			// Run hooks around output and history recording
-			hp, err := buildHookParams(cfg, wtPath, repoPath, repo.Name, branch, hooks.CommandCheckout, hooks.ActionPR, hookNames, noHook, env)
+			hp, err := buildHookParams(effCfg, wtPath, repoPath, repo.Name, branch, hooks.CommandCheckout, hooks.ActionPR, hookNames, noHook, env)
 			if err != nil {
 				return err
 			}
