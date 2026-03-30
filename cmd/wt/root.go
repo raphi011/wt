@@ -145,6 +145,7 @@ func init() {
 	rootCmd.AddCommand(newPrCmd())
 
 	// Utility commands
+	rootCmd.AddCommand(newDiffCmd())
 	rootCmd.AddCommand(newExecCmd())
 	rootCmd.AddCommand(newCdCmd())
 	rootCmd.AddCommand(newNoteCmd())
