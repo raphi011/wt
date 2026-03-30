@@ -287,20 +287,13 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "Prune all repos")
 	cmd.Flags().BoolVarP(&refresh, "refresh-pr", "R", false, "Refresh PR status first")
 	cmd.Flags().BoolVar(&resetCache, "reset-cache", false, "Clear all cached data")
-	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
-	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-removal hooks")
-	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
+	registerHookFlags(cmd, &hookNames, &noHook, &env)
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode")
 	cmd.Flags().BoolVar(&stale, "stale", false, "Also prune stale worktrees (older than stale_days)")
 	cmd.Flags().BoolVarP(&deleteBranches, "delete-branches", "b", false, "Delete local branches after removal")
 	cmd.Flags().BoolVar(&noDeleteBranches, "no-delete-branches", false, "Keep local branches (overrides config)")
 
-	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 	cmd.MarkFlagsMutuallyExclusive("delete-branches", "no-delete-branches")
-
-	// Completions
-	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
-	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
 
 	return cmd
 }
@@ -427,6 +420,20 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		l.Printf("Warning: failed to determine config dir: %v\n", err)
 	}
 
+	// pruneHookCtx builds a hooks.Context for a worktree in the prune loop.
+	pruneHookCtx := func(wt git.Worktree, phase string) hooks.Context {
+		return hooks.Context{
+			WorktreeDir: wt.Path,
+			RepoDir:     wt.RepoPath,
+			Branch:      wt.Branch,
+			Repo:        filepath.Base(wt.RepoPath),
+			Trigger:     string(hooks.CommandPrune),
+			Phase:       phase,
+			ConfigDir:   configDir,
+			Env:         hookEnv,
+		}
+	}
+
 	for _, wt := range toRemove {
 		// Resolve per-repo config for hooks and delete_local_branches
 		effCfg := resolveEffectiveConfig(ctx, wt.RepoPath)
@@ -438,17 +445,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 			continue
 		}
 		if len(beforeMatches) > 0 {
-			beforeHookCtx := hooks.Context{
-				WorktreeDir: wt.Path,
-				RepoDir:     wt.RepoPath,
-				Branch:      wt.Branch,
-				Repo:        filepath.Base(wt.RepoPath),
-				Trigger:     string(hooks.CommandPrune),
-				Phase:       hooks.PhaseBefore,
-				ConfigDir:   configDir,
-				Env:         hookEnv,
-			}
-			if err := hooks.RunBeforeHooks(ctx, beforeMatches, beforeHookCtx, wt.Path); err != nil {
+			if err := hooks.RunBeforeHooks(ctx, beforeMatches, pruneHookCtx(wt, hooks.PhaseBefore), wt.Path); err != nil {
 				l.Printf("Skipping %s: before-hook aborted: %v\n", wt.Branch, err)
 				continue
 			}
@@ -491,23 +488,13 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 			}
 		}
 
-		// Select and run after hooks per-repo
+		// Run after hooks per-repo
 		afterMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.HookNames, opts.NoHook, hooks.CommandPrune, "", hooks.PhaseAfter)
 		if err != nil {
 			l.Printf("Warning: failed to select hooks for %s: %v\n", wt.RepoName, err)
 		}
-		if afterMatches != nil {
-			hookCtx := hooks.Context{
-				WorktreeDir: wt.Path,
-				RepoDir:     wt.RepoPath,
-				Branch:      wt.Branch,
-				Repo:        filepath.Base(wt.RepoPath),
-				Trigger:     string(hooks.CommandPrune),
-				Phase:       hooks.PhaseAfter,
-				ConfigDir:   configDir,
-				Env:         hookEnv,
-			}
-			hooks.RunForEach(ctx, afterMatches, hookCtx, wt.RepoPath)
+		if len(afterMatches) > 0 {
+			hooks.RunForEach(ctx, afterMatches, pruneHookCtx(wt, hooks.PhaseAfter), wt.RepoPath)
 		}
 	}
 

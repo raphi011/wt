@@ -202,15 +202,16 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	return opts, nil
 }
 
-// buildBranchOptions creates Option slice from branches, filtering out checked-out branches.
+// buildBranchOptions creates Option slice from branches, appending " (worktree)" to branches that already have a worktree.
 func buildBranchOptions(branches []BranchInfo) []framework.Option {
 	var opts []framework.Option
 	for _, branch := range branches {
+		label := branch.Name
 		if branch.InWorktree {
-			continue
+			label = branch.Name + " (worktree)"
 		}
 		opts = append(opts, framework.Option{
-			Label: branch.Name,
+			Label: label,
 			Value: branch.Name,
 		})
 	}

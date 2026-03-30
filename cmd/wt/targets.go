@@ -217,6 +217,27 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 	return unique, nil
 }
 
+// resolveOneWorktreeTarget resolves a single [scope:]branch target and returns exactly
+// one match. Returns error if no match is found or if the target is ambiguous
+// (branch exists in multiple repos without explicit scope).
+func resolveOneWorktreeTarget(ctx context.Context, reg *registry.Registry, target string) (WorktreeTarget, error) {
+	matches, err := resolveWorktreeTargets(ctx, reg, []string{target})
+	if err != nil {
+		return WorktreeTarget{}, err
+	}
+
+	if len(matches) > 1 {
+		_, branch := parseBranchTarget(target)
+		var names []string
+		for _, m := range matches {
+			names = append(names, m.RepoName+":"+branch)
+		}
+		return WorktreeTarget{}, fmt.Errorf("branch %q exists in multiple repos: %s", branch, strings.Join(names, ", "))
+	}
+
+	return matches[0], nil
+}
+
 // resolveScopedRepos resolves scope (repo name or label) to repos.
 // If scope is empty, returns error asking for explicit scope.
 // Used when targeting repos (not worktrees) like for checkout -b.

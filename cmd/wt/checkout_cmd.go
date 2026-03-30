@@ -11,12 +11,12 @@ import (
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
-	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/preserve"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
+	"github.com/raphi011/wt/internal/worktree"
 )
 
 func newCheckoutCmd() *cobra.Command {
@@ -35,10 +35,10 @@ func newCheckoutCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "checkout [[scope:]branch]",
-		Short:   "Create worktree for branch",
+		Short:   "Create or open worktree for branch",
 		Aliases: []string{"co"},
 		GroupID: GroupCore,
-		Long: `Create a worktree for an existing or new branch.
+		Long: `Create a worktree for a branch, or open it if one already exists.
 
 Use -b to create a new branch, or omit for an existing branch.
 Use -i for interactive mode to be prompted for options.
@@ -108,80 +108,9 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			}
 
 			// Determine repos to operate on
-			var repos []registry.Repo
-
-			if len(parsed.Repos) > 0 {
-				// Scoped target
-				repos = parsed.Repos
-			} else if newBranch {
-				// New branch without scope - use current repo
-				repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
-				if err != nil {
-					return fmt.Errorf("not in a repo, use scope:branch to specify target: %w", err)
-				}
-				repos = []registry.Repo{repo}
-			} else {
-				// Existing branch without scope — prefer current repo
-				repo, currentRepoErr := findOrRegisterCurrentRepoFromContext(ctx, reg)
-				if currentRepoErr == nil {
-					// In a registered repo — check only this one
-					wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-					if err == nil {
-						for _, wt := range wts {
-							if wt.Branch == parsed.Branch {
-								return fmt.Errorf("branch %q already checked out at %s", parsed.Branch, wt.Path)
-							}
-						}
-					}
-					branches, err := git.ListLocalBranches(ctx, repo.Path)
-					if err == nil {
-						if slices.Contains(branches, parsed.Branch) {
-							repos = append(repos, repo)
-						}
-					}
-					if len(repos) == 0 {
-						if fetch {
-							// Branch not found locally but --fetch may pull it from remote
-							repos = append(repos, repo)
-						} else {
-							return fmt.Errorf("branch %q not found in repo %s", parsed.Branch, repo.Name)
-						}
-					}
-				} else {
-					// Not in a repo — search all repos
-					for _, repo := range filterOrphanedRepos(l, reg.Repos) {
-						wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-						if err != nil {
-							l.Debug("skipping repo", "repo", repo.Name, "error", err)
-							continue
-						}
-						for _, wt := range wts {
-							if wt.Branch == parsed.Branch {
-								return fmt.Errorf("branch %q already checked out at %s", parsed.Branch, wt.Path)
-							}
-						}
-						branches, err := git.ListLocalBranches(ctx, repo.Path)
-						if err != nil {
-							l.Debug("failed to list branches", "repo", repo.Name, "error", err)
-							continue
-						}
-						if slices.Contains(branches, parsed.Branch) {
-							repos = append(repos, repo)
-						}
-					}
-
-					if len(repos) == 0 {
-						return fmt.Errorf("branch %q not found in any repo", parsed.Branch)
-					}
-
-					if len(repos) > 1 {
-						var names []string
-						for _, r := range repos {
-							names = append(names, r.Name+":"+parsed.Branch)
-						}
-						return fmt.Errorf("branch %q exists in multiple repos: %v\nUse scope:branch to specify", parsed.Branch, names)
-					}
-				}
+			repos, err := resolveCheckoutRepos(ctx, l, reg, parsed, newBranch, fetch, hookNames, noHook, env)
+			if err != nil {
+				return err
 			}
 
 			l.Debug("checkout", "branch", parsed.Branch, "repos", len(repos), "new", newBranch)
@@ -205,18 +134,12 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 	cmd.Flags().BoolVarP(&fetch, "fetch", "f", false, "Fetch from origin before checkout")
 	cmd.Flags().BoolVarP(&autoStash, "autostash", "s", false, "Stash changes and apply to new worktree")
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
-	cmd.Flags().StringSliceVar(&hookNames, "hook", nil, "Run named hook(s)")
-	cmd.Flags().BoolVar(&noHook, "no-hook", false, "Skip post-checkout hook")
+	registerHookFlags(cmd, &hookNames, &noHook, &env)
 	cmd.Flags().BoolVar(&noPreserve, "no-preserve", false, "Skip file preservation")
-	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode")
 
-	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
-
 	// Completions
-	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
 	cmd.RegisterFlagCompletionFunc("note", cobra.NoFileCompletions)
-	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
 	registerCheckoutCompletions(cmd)
 
 	return cmd
@@ -237,7 +160,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 	format := repo.GetEffectiveWorktreeFormat(cfg.Checkout.WorktreeFormat)
 
 	// Resolve worktree path
-	wtPath := resolveWorktreePath(repo, branch, format)
+	wtPath := worktree.ResolvePath(repo.Path, repo.Name, branch, format)
 
 	l.Debug("creating worktree", "path", wtPath, "branch", branch)
 
@@ -364,15 +287,6 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 
 	fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
 
-	// Record to history for wt cd
-	histPath, err := cfg.GetHistoryPath()
-	if err != nil {
-		return fmt.Errorf("history path: %w", err)
-	}
-	if err := history.RecordAccess(wtPath, repo.Name, branch, histPath); err != nil {
-		l.Printf("Warning: failed to record history: %v\n", err)
-	}
-
 	// Apply stashed changes to new worktree
 	if stashed {
 		if err := git.StashPop(ctx, wtPath); err != nil {
@@ -409,59 +323,181 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, newB
 		}
 	}
 
-	// Run hooks
-	hookEnv, err := hooks.ParseEnvWithStdin(env)
-	if err != nil {
-		return err
-	}
-
+	// Run hooks around history recording
 	action := hooks.ActionOpen
 	if newBranch {
 		action = hooks.ActionCreate
 	}
 
-	configDir, err := cfg.GetWtDir()
-	if err != nil {
-		return fmt.Errorf("config dir: %w", err)
-	}
-
-	hookCtx := hooks.Context{
-		WorktreeDir: wtPath,
-		RepoDir:     repo.Path,
-		Branch:      branch,
-		Repo:        repo.Name,
-		Trigger:     string(hooks.CommandCheckout),
-		Action:      action,
-		ConfigDir:   configDir,
-		Env:         hookEnv,
-	}
-
-	// Run before hooks (can abort)
-	beforeMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, action, hooks.PhaseBefore)
+	hp, err := buildHookParams(cfg, wtPath, repo.Path, repo.Name, branch, hooks.CommandCheckout, action, hookNames, noHook, env)
 	if err != nil {
 		return err
 	}
-	hookCtx.Phase = hooks.PhaseBefore
-	if err := hooks.RunBeforeHooks(ctx, beforeMatches, hookCtx, wtPath); err != nil {
-		return fmt.Errorf("before-hook aborted checkout: %w", err)
-	}
 
-	// Run after hooks
-	afterMatches, err := hooks.SelectHooks(cfg.Hooks, hookNames, noHook, hooks.CommandCheckout, action, hooks.PhaseAfter)
-	if err != nil {
-		return err
-	}
-	if len(afterMatches) > 0 {
-		hookCtx.Phase = hooks.PhaseAfter
-		hooks.RunAllNonFatal(ctx, afterMatches, hookCtx, wtPath)
-	}
-
-	return nil
+	return withHooks(ctx, hp, func() error {
+		recordHistory(ctx, cfg, wtPath, repo.Name, branch)
+		return nil
+	})
 }
 
-// resolveWorktreePath computes the worktree path based on format
-func resolveWorktreePath(repo registry.Repo, branch, format string) string {
-	return resolveWorktreePathWithConfig(repo.Path, repo.Name, branch, format)
+// openExistingWorktree handles the case where a worktree for the branch already exists.
+// It prints the worktree path to stdout, records history, and runs hooks with action="open",
+// skipping worktree creation.
+func openExistingWorktree(ctx context.Context, repo registry.Repo, branch, wtPath string, hookNames []string, noHook bool, env []string) error {
+	cfg := resolveEffectiveConfig(ctx, repo.Path)
+
+	hp, err := buildHookParams(cfg, wtPath, repo.Path, repo.Name, branch, hooks.CommandCheckout, hooks.ActionOpen, hookNames, noHook, env)
+	if err != nil {
+		return err
+	}
+
+	return withHooks(ctx, hp, func() error {
+		fmt.Printf("Opened worktree: %s (%s)\n", wtPath, branch)
+		recordHistory(ctx, cfg, wtPath, repo.Name, branch)
+		return nil
+	})
+}
+
+// findWorktreeForBranch checks if the given branch already has a worktree in the repo.
+// Returns the worktree path and true if found, or ("", false) otherwise.
+func findWorktreeForBranch(ctx context.Context, repoPath, branch string) (string, bool) {
+	wts, err := git.ListWorktreesFromRepo(ctx, repoPath)
+	if err != nil {
+		l := log.FromContext(ctx)
+		l.Debug("failed to list worktrees", "repo", repoPath, "error", err)
+		return "", false
+	}
+	for _, wt := range wts {
+		if wt.Branch == branch {
+			return wt.Path, true
+		}
+	}
+	return "", false
+}
+
+// resolveCheckoutRepos determines which repos need a new worktree created.
+// For repos that already have a worktree for the branch, it opens them directly.
+func resolveCheckoutRepos(
+	ctx context.Context,
+	l *log.Logger,
+	reg *registry.Registry,
+	parsed ScopedTargetResult,
+	newBranch, fetch bool,
+	hookNames []string, noHook bool, env []string,
+) ([]registry.Repo, error) {
+	if len(parsed.Repos) > 0 {
+		if newBranch {
+			return parsed.Repos, nil
+		}
+		return resolveScopedExisting(ctx, parsed.Repos, parsed.Branch, hookNames, noHook, env)
+	}
+
+	if newBranch {
+		repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
+		if err != nil {
+			return nil, fmt.Errorf("not in a repo, use scope:branch to specify target: %w", err)
+		}
+		return []registry.Repo{repo}, nil
+	}
+
+	// Existing branch without scope
+	repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
+	if err == nil {
+		return resolveUnscopedInRepo(ctx, repo, parsed.Branch, fetch, hookNames, noHook, env)
+	}
+	return resolveUnscopedAcrossRepos(ctx, l, reg, parsed.Branch, hookNames, noHook, env)
+}
+
+// resolveScopedExisting handles scoped targets for existing branches.
+// Opens worktrees that already exist and returns repos that still need creation.
+func resolveScopedExisting(
+	ctx context.Context,
+	repos []registry.Repo,
+	branch string,
+	hookNames []string, noHook bool, env []string,
+) ([]registry.Repo, error) {
+	var remaining []registry.Repo
+	for _, repo := range repos {
+		wtPath, found := findWorktreeForBranch(ctx, repo.Path, branch)
+		if !found {
+			remaining = append(remaining, repo)
+			continue
+		}
+		if err := openExistingWorktree(ctx, repo, branch, wtPath, hookNames, noHook, env); err != nil {
+			return nil, err
+		}
+	}
+	return remaining, nil
+}
+
+// resolveUnscopedInRepo resolves an existing branch checkout within the current repo.
+func resolveUnscopedInRepo(
+	ctx context.Context,
+	repo registry.Repo,
+	branch string,
+	fetch bool,
+	hookNames []string, noHook bool, env []string,
+) ([]registry.Repo, error) {
+	if wtPath, found := findWorktreeForBranch(ctx, repo.Path, branch); found {
+		return nil, openExistingWorktree(ctx, repo, branch, wtPath, hookNames, noHook, env)
+	}
+
+	branches, err := git.ListLocalBranches(ctx, repo.Path)
+	if err != nil {
+		l := log.FromContext(ctx)
+		l.Debug("failed to list branches", "repo", repo.Name, "error", err)
+	} else if slices.Contains(branches, branch) {
+		return []registry.Repo{repo}, nil
+	}
+
+	if fetch {
+		return []registry.Repo{repo}, nil
+	}
+	return nil, fmt.Errorf("branch %q not found in repo %s", branch, repo.Name)
+}
+
+// resolveUnscopedAcrossRepos searches all registered repos for an existing branch.
+func resolveUnscopedAcrossRepos(
+	ctx context.Context,
+	l *log.Logger,
+	reg *registry.Registry,
+	branch string,
+	hookNames []string, noHook bool, env []string,
+) ([]registry.Repo, error) {
+	var repos []registry.Repo
+	var opened bool
+	for _, repo := range filterOrphanedRepos(l, reg.Repos) {
+		if wtPath, found := findWorktreeForBranch(ctx, repo.Path, branch); found {
+			if err := openExistingWorktree(ctx, repo, branch, wtPath, hookNames, noHook, env); err != nil {
+				return nil, err
+			}
+			opened = true
+			continue
+		}
+		branches, err := git.ListLocalBranches(ctx, repo.Path)
+		if err != nil {
+			l.Debug("failed to list branches", "repo", repo.Name, "error", err)
+			continue
+		}
+		if slices.Contains(branches, branch) {
+			repos = append(repos, repo)
+		}
+	}
+
+	if len(repos) == 0 {
+		if opened {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("branch %q not found in any repo", branch)
+	}
+	if len(repos) > 1 {
+		var names []string
+		for _, r := range repos {
+			names = append(names, r.Name+":"+branch)
+		}
+		return nil, fmt.Errorf("branch %q exists in multiple repos: %v\nUse scope:branch to specify", branch, names)
+	}
+	return repos, nil
 }
 
 // completeHooks provides completion for hook flags
