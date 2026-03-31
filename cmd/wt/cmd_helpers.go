@@ -10,7 +10,17 @@ import (
 	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
+	"github.com/raphi011/wt/internal/registry"
 )
+
+// hookFlags holds the raw CLI-level hook configuration flags.
+// This triplet is passed through many functions unchanged before being
+// hydrated into hookParams by buildHookParams.
+type hookFlags struct {
+	HookNames []string // --hook flag values
+	NoHook    bool     // --no-hook flag
+	RawArgs   []string // --arg flag values (raw KEY=VALUE strings, not yet parsed)
+}
 
 // hookParams holds everything needed to run hooks around a command.
 type hookParams struct {
@@ -43,7 +53,7 @@ func withHooks(ctx context.Context, p hookParams, fn func() error) error {
 	}
 
 	// Before hooks (can abort)
-	beforeMatches, err := hooks.SelectHooks(p.HooksCfg, p.HookNames, p.NoHook, p.Trigger, p.Action, hooks.PhaseBefore)
+	beforeMatches, err := hooks.SelectHooks(p.HooksCfg, p.HookNames, p.NoHook, hooks.HookSelector{Command: p.Trigger, Action: p.Action, Phase: hooks.PhaseBefore})
 	if err != nil {
 		return err
 	}
@@ -58,7 +68,7 @@ func withHooks(ctx context.Context, p hookParams, fn func() error) error {
 	}
 
 	// After hooks (non-fatal)
-	afterMatches, err := hooks.SelectHooks(p.HooksCfg, p.HookNames, p.NoHook, p.Trigger, p.Action, hooks.PhaseAfter)
+	afterMatches, err := hooks.SelectHooks(p.HooksCfg, p.HookNames, p.NoHook, hooks.HookSelector{Command: p.Trigger, Action: p.Action, Phase: hooks.PhaseAfter})
 	if err != nil {
 		return err
 	}
@@ -70,10 +80,10 @@ func withHooks(ctx context.Context, p hookParams, fn func() error) error {
 	return nil
 }
 
-// buildHookParams creates a hookParams from config and raw env strings.
+// buildHookParams creates a hookParams from config and raw hook flags.
 // Returns error if env parsing or config dir resolution fails.
-func buildHookParams(cfg *config.Config, wtPath, repoPath, repoName, branch string, trigger hooks.CommandType, action string, hookNames []string, noHook bool, env []string) (hookParams, error) {
-	hookEnv, err := hooks.ParseEnvWithStdin(env)
+func buildHookParams(cfg *config.Config, repo registry.Repo, wtPath, branch string, trigger hooks.CommandType, action string, hf hookFlags) (hookParams, error) {
+	hookEnv, err := hooks.ParseEnvWithStdin(hf.RawArgs)
 	if err != nil {
 		return hookParams{}, err
 	}
@@ -87,13 +97,13 @@ func buildHookParams(cfg *config.Config, wtPath, repoPath, repoName, branch stri
 		HooksCfg:  cfg.Hooks,
 		ConfigDir: configDir,
 		WtPath:    wtPath,
-		RepoPath:  repoPath,
-		RepoName:  repoName,
+		RepoPath:  repo.Path,
+		RepoName:  repo.Name,
 		Branch:    branch,
 		Trigger:   trigger,
 		Action:    action,
-		HookNames: hookNames,
-		NoHook:    noHook,
+		HookNames: hf.HookNames,
+		NoHook:    hf.NoHook,
 		Env:       hookEnv,
 	}, nil
 }
@@ -113,10 +123,10 @@ func recordHistory(ctx context.Context, cfg *config.Config, wtPath, repoName, br
 }
 
 // registerHookFlags adds the standard --hook, --no-hook, and --arg flags to a command.
-func registerHookFlags(cmd *cobra.Command, hookNames *[]string, noHook *bool, env *[]string) {
-	cmd.Flags().StringSliceVar(hookNames, "hook", nil, "Run named hook(s)")
-	cmd.Flags().BoolVar(noHook, "no-hook", false, "Skip hooks")
-	cmd.Flags().StringSliceVarP(env, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
+func registerHookFlags(cmd *cobra.Command, hf *hookFlags) {
+	cmd.Flags().StringSliceVar(&hf.HookNames, "hook", nil, "Run named hook(s)")
+	cmd.Flags().BoolVar(&hf.NoHook, "no-hook", false, "Skip hooks")
+	cmd.Flags().StringSliceVarP(&hf.RawArgs, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
 	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)

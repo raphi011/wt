@@ -102,9 +102,7 @@ func newPrCheckoutCmd() *cobra.Command {
 		forgeName string
 		cloneMode string
 		note      string
-		hookNames []string
-		noHook    bool
-		env       []string
+		hf        hookFlags
 	)
 
 	cmd := &cobra.Command{
@@ -313,7 +311,7 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 			}
 
 			// Run hooks around output and history recording
-			hp, err := buildHookParams(effCfg, wtPath, repoPath, repo.Name, branch, hooks.CommandCheckout, hooks.ActionPR, hookNames, noHook, env)
+			hp, err := buildHookParams(effCfg, repo, wtPath, branch, hooks.CommandCheckout, hooks.ActionPR, hf)
 			if err != nil {
 				return err
 			}
@@ -333,7 +331,7 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 	cmd.Flags().StringVar(&forgeName, "forge", "", "Forge type: github or gitlab")
 	cmd.Flags().StringVar(&cloneMode, "clone-mode", "", "Clone mode: bare or regular (default: config)")
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
-	registerHookFlags(cmd, &hookNames, &noHook, &env)
+	registerHookFlags(cmd, &hf)
 	cmd.RegisterFlagCompletionFunc("clone-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"bare", "regular"}, cobra.ShellCompDirectiveNoFileComp
 	})
@@ -442,11 +440,9 @@ func newPrCreateCmd() *cobra.Command {
 
 func newPrMergeCmd() *cobra.Command {
 	var (
-		strategy  string
-		keep      bool
-		hookNames []string
-		noHook    bool
-		env       []string
+		strategy string
+		keep     bool
+		hf       hookFlags
 	)
 
 	cmd := &cobra.Command{
@@ -494,7 +490,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 			cacheKey := prcache.CacheKey(res.repo.Path, res.branch)
 
 			cwd := config.WorkDirFromContext(ctx)
-			hp, err := buildHookParams(res.effCfg, cwd, res.repo.Path, res.repo.Name, res.branch, hooks.CommandMerge, "", hookNames, noHook, env)
+			hp, err := buildHookParams(res.effCfg, res.repo, cwd, res.branch, hooks.CommandMerge, "", hf)
 			if err != nil {
 				return err
 			}
@@ -543,7 +539,7 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 
 	cmd.Flags().StringVarP(&strategy, "strategy", "s", "", "Merge strategy: squash, rebase, merge")
 	cmd.Flags().BoolVarP(&keep, "keep", "k", false, "Keep worktree after merge")
-	registerHookFlags(cmd, &hookNames, &noHook, &env)
+	registerHookFlags(cmd, &hf)
 	cmd.RegisterFlagCompletionFunc("strategy", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"squash", "rebase", "merge"}, cobra.ShellCompDirectiveNoFileComp
 	})

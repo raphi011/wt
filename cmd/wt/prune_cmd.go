@@ -31,9 +31,7 @@ func newPruneCmd() *cobra.Command {
 		global           bool
 		refresh          bool
 		resetCache       bool
-		hookNames        []string
-		noHook           bool
-		env              []string
+		hf               hookFlags
 		interactive      bool
 		deleteBranches   bool
 		noDeleteBranches bool
@@ -92,9 +90,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				return runPruneTargets(ctx, reg, args, global, dryRun, pruneOpts{
 					DeleteBranches:         shouldDeleteBranches,
 					DeleteBranchesExplicit: deleteBranchesExplicit,
-					HookNames:              hookNames,
-					NoHook:                 noHook,
-					Env:                    env,
+					Hooks:                  hf,
 				})
 			}
 
@@ -250,9 +246,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				DryRun:                 dryRun,
 				DeleteBranches:         shouldDeleteBranches,
 				DeleteBranchesExplicit: deleteBranchesExplicit,
-				HookNames:              hookNames,
-				NoHook:                 noHook,
-				Env:                    env,
+				Hooks:                  hf,
 				PRCache:                prCache,
 			})
 
@@ -287,7 +281,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "Prune all repos")
 	cmd.Flags().BoolVarP(&refresh, "refresh-pr", "R", false, "Refresh PR status first")
 	cmd.Flags().BoolVar(&resetCache, "reset-cache", false, "Clear all cached data")
-	registerHookFlags(cmd, &hookNames, &noHook, &env)
+	registerHookFlags(cmd, &hf)
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode")
 	cmd.Flags().BoolVar(&stale, "stale", false, "Also prune stale worktrees (older than stale_days)")
 	cmd.Flags().BoolVarP(&deleteBranches, "delete-branches", "b", false, "Delete local branches after removal")
@@ -304,9 +298,7 @@ type pruneOpts struct {
 	DryRun                 bool
 	DeleteBranches         bool
 	DeleteBranchesExplicit bool // true when --delete-branches or --no-delete-branches was passed
-	HookNames              []string
-	NoHook                 bool
-	Env                    []string
+	Hooks                  hookFlags
 	PRCache                *prcache.Cache
 }
 
@@ -409,10 +401,10 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 	}
 	historyChanged := false
 
-	hookEnv, err := hooks.ParseEnvWithStdin(opts.Env)
+	hookEnv, err := hooks.ParseEnvWithStdin(opts.Hooks.RawArgs)
 	if err != nil {
 		l.Printf("Warning: failed to parse hook env, skipping hooks: %v\n", err)
-		opts.NoHook = true
+		opts.Hooks.NoHook = true
 	}
 
 	configDir, err := cfg.GetWtDir()
@@ -421,7 +413,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 	}
 
 	// pruneHookCtx builds a hooks.Context for a worktree in the prune loop.
-	pruneHookCtx := func(wt git.Worktree, phase string) hooks.Context {
+	pruneHookCtx := func(wt git.Worktree, phase hooks.PhaseType) hooks.Context {
 		return hooks.Context{
 			WorktreeDir: wt.Path,
 			RepoDir:     wt.RepoPath,
@@ -439,7 +431,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		effCfg := resolveEffectiveConfig(ctx, wt.RepoPath)
 
 		// Run before-prune hooks (can skip this worktree)
-		beforeMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.HookNames, opts.NoHook, hooks.CommandPrune, "", hooks.PhaseBefore)
+		beforeMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.Hooks.HookNames, opts.Hooks.NoHook, hooks.HookSelector{Command: hooks.CommandPrune, Phase: hooks.PhaseBefore})
 		if err != nil {
 			l.Printf("Warning: failed to select before hooks for %s: %v\n", wt.RepoName, err)
 			continue
@@ -489,7 +481,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		}
 
 		// Run after hooks per-repo
-		afterMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.HookNames, opts.NoHook, hooks.CommandPrune, "", hooks.PhaseAfter)
+		afterMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.Hooks.HookNames, opts.Hooks.NoHook, hooks.HookSelector{Command: hooks.CommandPrune, Phase: hooks.PhaseAfter})
 		if err != nil {
 			l.Printf("Warning: failed to select hooks for %s: %v\n", wt.RepoName, err)
 		}

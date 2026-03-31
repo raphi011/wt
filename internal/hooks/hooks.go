@@ -27,10 +27,13 @@ const (
 	CommandRun      CommandType = "run"
 )
 
+// PhaseType identifies when a hook runs relative to the command.
+type PhaseType string
+
 // Phase constants for hook execution timing.
 const (
-	PhaseBefore = "before"
-	PhaseAfter  = "after"
+	PhaseBefore PhaseType = "before"
+	PhaseAfter  PhaseType = "after"
 )
 
 // Action constants for checkout subtypes and manual invocation.
@@ -49,7 +52,7 @@ type Context struct {
 	Repo        string            // registered repo name (as shown in wt repo list)
 	Trigger     string            // command that triggered the hook (checkout, prune, merge, run)
 	Action      string            // checkout subtype: create, open, pr, manual (for wt hook)
-	Phase       string            // "before" or "after"
+	Phase       PhaseType         // PhaseBefore or PhaseAfter
 	ConfigDir   string            // absolute path to ~/.wt/ config directory
 	Env         map[string]string // custom variables from --arg key=value flags
 	DryRun      bool              // if true, print command instead of executing
@@ -61,11 +64,20 @@ type HookMatch struct {
 	Name string
 }
 
+// HookSelector identifies which command and phase is requesting hooks.
+// Mirrors hooktrigger.ParsedTrigger (Command↔Trigger, Action↔Subtype, Phase↔Phase),
+// kept as a separate type to avoid an import cycle between config and hooks.
+type HookSelector struct {
+	Command CommandType
+	Action  string    // checkout subtype: "create", "open", "pr"; empty for prune/merge
+	Phase   PhaseType // PhaseBefore or PhaseAfter
+}
+
 // SelectHooks determines which hooks to run based on config and CLI flags.
 // Returns all matching hooks. If hookNames are specified, those hooks run.
 // Otherwise, all hooks with matching "on" conditions run.
 // Returns nil slice if no hooks should run, error if any specified hook doesn't exist.
-func SelectHooks(cfg config.HooksConfig, hookNames []string, noHook bool, cmdType CommandType, subtype, phase string) ([]HookMatch, error) {
+func SelectHooks(cfg config.HooksConfig, hookNames []string, noHook bool, sel HookSelector) ([]HookMatch, error) {
 	if noHook {
 		return nil, nil
 	}
@@ -74,7 +86,7 @@ func SelectHooks(cfg config.HooksConfig, hookNames []string, noHook bool, cmdTyp
 	// Only return explicit hooks in the "after" phase to avoid running them twice
 	// (once in before-hooks and once in after-hooks).
 	if len(hookNames) > 0 {
-		if phase == PhaseBefore {
+		if sel.Phase == PhaseBefore {
 			return nil, nil
 		}
 		var matches []HookMatch
@@ -89,7 +101,7 @@ func SelectHooks(cfg config.HooksConfig, hookNames []string, noHook bool, cmdTyp
 	}
 
 	// Find all hooks with matching "on" conditions
-	return findMatchingHooks(cfg, cmdType, subtype, phase), nil
+	return findMatchingHooks(cfg, sel.Command, sel.Action, string(sel.Phase)), nil
 }
 
 // findMatchingHooks returns all hooks that have the command type in their "on" list.
@@ -312,7 +324,7 @@ func SubstitutePlaceholders(command string, ctx Context) string {
 		"{repo}":         ctx.Repo,
 		"{trigger}":      ctx.Trigger,
 		"{action}":       ctx.Action,
-		"{phase}":        ctx.Phase,
+		"{phase}":        string(ctx.Phase),
 		"{config-dir}":   ctx.ConfigDir,
 	}
 

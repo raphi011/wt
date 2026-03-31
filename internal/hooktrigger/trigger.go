@@ -7,6 +7,7 @@ import (
 )
 
 // ParsedTrigger represents a parsed hook "on" value with the structure [phase:]trigger[:subtype].
+// See also hooks.HookSelector which mirrors this for runtime hook selection.
 type ParsedTrigger struct {
 	Phase   string // "before" or "after"
 	Trigger string // "checkout", "prune", "merge", or "all"
