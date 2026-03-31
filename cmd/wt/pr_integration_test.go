@@ -4,6 +4,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -523,5 +524,75 @@ func TestPrCheckout_OrgRepoAlreadyInRegistry(t *testing.T) {
 	// Should suggest using the local name
 	if !strings.Contains(err.Error(), "wt pr checkout myrepo") {
 		t.Errorf("expected suggestion to use local name, got %q", err.Error())
+	}
+}
+
+// TestPrCheckout_AlreadyCheckedOut tests that pr checkout opens an existing worktree
+// instead of failing when the branch already has a worktree.
+//
+// Scenario: Branch "feature" already has a worktree, user runs `wt pr checkout 1`
+// Expected: Command succeeds, opens existing worktree instead of erroring
+func TestPrCheckout_AlreadyCheckedOut(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
+
+	// Create a worktree for the branch first
+	wtPath := filepath.Join(repoPath, ".worktrees", "feature")
+	gitWorktreeAdd := exec.Command("git", "worktree", "add", wtPath, "feature")
+	gitWorktreeAdd.Dir = repoPath
+	if out, err := gitWorktreeAdd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to create worktree: %v\n%s", err, out)
+	}
+
+	// Verify worktree exists
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	// The pr checkout command needs a forge that returns the branch name.
+	// Since we can't mock the forge in integration tests and GetPRBranch
+	// requires a real remote, we test the detection logic directly instead.
+	// Verify findWorktreeForBranch finds the existing worktree.
+	ctx := testContextWithConfig(t, &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: ".worktrees/{branch}",
+		},
+	}, repoPath)
+
+	foundPath, found := findWorktreeForBranch(ctx, repoPath, "feature")
+	if !found {
+		t.Fatal("expected to find existing worktree for branch 'feature'")
+	}
+	if foundPath != wtPath {
+		t.Errorf("expected worktree path %s, got %s", wtPath, foundPath)
+	}
+
+	// Verify openExistingWorktree succeeds
+	repo := registry.Repo{Name: "myrepo", Path: repoPath}
+	err := openExistingWorktree(ctx, repo, "feature", wtPath, hookFlags{NoHook: true})
+	if err != nil {
+		t.Fatalf("openExistingWorktree should succeed, got: %v", err)
+	}
+
+	// Worktree should still exist
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should still exist at %s", wtPath)
 	}
 }

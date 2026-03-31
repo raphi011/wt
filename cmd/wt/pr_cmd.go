@@ -266,6 +266,9 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 			}
 			gitDir := git.GetGitDir(repoPath, repoType)
 
+			var found bool
+			var existingPath string
+
 			// Fetch the branch
 			if err := git.FetchBranch(ctx, gitDir, branch); err != nil {
 				l.Printf("Warning: fetch failed: %v\n", err)
@@ -277,6 +280,9 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 					return fmt.Errorf("checkout branch: %w", err)
 				}
 				wtPath = repoPath
+			} else if existingPath, found = findWorktreeForBranch(ctx, repoPath, branch); found {
+				// Worktree already exists for this branch — open it instead of creating
+				wtPath = existingPath
 			} else {
 				// Bare clone or existing repo: create worktree
 				if err := git.CreateWorktree(ctx, gitDir, wtPath, branch); err != nil {
@@ -310,8 +316,20 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 				}
 			}
 
+			// Determine hook action and output message
+			action := hooks.ActionPR
+			var outputMsg string
+			if justClonedRegular {
+				outputMsg = fmt.Sprintf("Checked out PR branch: %s (%s)\n", repoPath, branch)
+			} else if found {
+				action = hooks.ActionOpen
+				outputMsg = fmt.Sprintf("Opened worktree: %s (%s)\n", wtPath, branch)
+			} else {
+				outputMsg = fmt.Sprintf("Created worktree: %s (%s)\n", wtPath, branch)
+			}
+
 			// Run hooks around output and history recording
-			hp, err := buildHookParams(effCfg, repo, wtPath, branch, hooks.CommandCheckout, hooks.ActionPR, hf)
+			hp, err := buildHookParams(effCfg, repo, wtPath, branch, hooks.CommandCheckout, action, hf)
 			if err != nil {
 				return err
 			}
@@ -321,11 +339,7 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 			}
 
 			return withHooks(ctx, hp, func() error {
-				if justClonedRegular {
-					fmt.Printf("Checked out PR branch: %s (%s)\n", repoPath, branch)
-				} else {
-					fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
-				}
+				fmt.Print(outputMsg)
 				recordHistory(ctx, effCfg, wtPath, repo.Name, branch)
 				return nil
 			})
