@@ -315,6 +315,10 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 			if err != nil {
 				return err
 			}
+			hp.PRNumber = new(prNumber)
+			if repoPath := forge.ExtractRepoPath(originURL); strings.Contains(repoPath, "/") {
+				hp.PRRepo = repoPath
+			}
 
 			return withHooks(ctx, hp, func() error {
 				if justClonedRegular {

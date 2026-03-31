@@ -65,7 +65,7 @@ func (g *GitLab) outputGlab(ctx context.Context, args ...string) ([]byte, error)
 
 // GetPRForBranch fetches PR info for a branch using glab CLI
 func (g *GitLab) GetPRForBranch(ctx context.Context, repoURL, branch string) (*PRInfo, error) {
-	projectPath := extractRepoPath(repoURL)
+	projectPath := ExtractRepoPath(repoURL)
 
 	output, err := g.outputGlab(ctx, "mr", "list",
 		"-R", projectPath,
@@ -118,7 +118,7 @@ func (g *GitLab) GetPRForBranch(ctx context.Context, repoURL, branch string) (*P
 
 // GetPRBranch fetches the source branch name for a PR number using glab CLI
 func (g *GitLab) GetPRBranch(ctx context.Context, repoURL string, number int) (string, error) {
-	projectPath := extractRepoPath(repoURL)
+	projectPath := ExtractRepoPath(repoURL)
 
 	output, err := g.outputGlab(ctx, "mr", "view",
 		fmt.Sprintf("%d", number),
@@ -228,7 +228,7 @@ func (g *GitLab) CloneBareRepo(ctx context.Context, repoSpec, destPath string) (
 
 // CreatePR creates a new MR using glab CLI
 func (g *GitLab) CreatePR(ctx context.Context, repoURL string, params CreatePRParams) (*CreatePRResult, error) {
-	projectPath := extractRepoPath(repoURL)
+	projectPath := ExtractRepoPath(repoURL)
 
 	args := []string{"mr", "create",
 		"-R", projectPath,
@@ -292,7 +292,7 @@ func (g *GitLab) MergePR(ctx context.Context, repoURL string, number int, strate
 		return fmt.Errorf("rebase merge strategy is not supported on GitLab (use squash or merge)")
 	}
 
-	projectPath := extractRepoPath(repoURL)
+	projectPath := ExtractRepoPath(repoURL)
 
 	args := []string{"mr", "merge", fmt.Sprintf("%d", number),
 		"-R", projectPath,
@@ -311,7 +311,7 @@ func (g *GitLab) MergePR(ctx context.Context, repoURL string, number int, strate
 
 // ViewPR shows MR details or opens in browser
 func (g *GitLab) ViewPR(ctx context.Context, repoURL string, number int, web bool) error {
-	projectPath := extractRepoPath(repoURL)
+	projectPath := ExtractRepoPath(repoURL)
 	args := []string{"mr", "view", fmt.Sprintf("%d", number), "-R", projectPath}
 	if web {
 		args = append(args, "--web")
@@ -324,7 +324,7 @@ func (g *GitLab) ViewPR(ctx context.Context, repoURL string, number int, web boo
 
 // ListOpenPRs lists all open MRs for a repository
 func (g *GitLab) ListOpenPRs(ctx context.Context, repoURL string) ([]OpenPR, error) {
-	projectPath := extractRepoPath(repoURL)
+	projectPath := ExtractRepoPath(repoURL)
 	// glab mr list shows open MRs by default (no --state flag)
 	output, err := g.outputGlab(ctx, "mr", "list",
 		"-R", projectPath,

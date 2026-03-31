@@ -54,6 +54,8 @@ type Context struct {
 	Action      string            // checkout subtype: create, open, pr, manual (for wt hook)
 	Phase       PhaseType         // PhaseBefore or PhaseAfter
 	ConfigDir   string            // absolute path to ~/.wt/ config directory
+	PRNumber    *int              // PR/MR number (nil for non-PR checkouts)
+	PRRepo      string            // forge repo path, e.g. owner/repo (empty for non-PR checkouts)
 	Env         map[string]string // custom variables from --arg key=value flags
 	DryRun      bool              // if true, print command instead of executing
 }
@@ -310,11 +312,19 @@ var envPlaceholderRegex = regexp.MustCompile(`\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([-+
 
 // SubstitutePlaceholders replaces {placeholder} with values from Context.
 //
-// Static placeholders: {worktree-dir}, {repo-dir}, {branch}, {repo}, {trigger}, {config-dir}
+// Static placeholders: {worktree-dir}, {repo-dir}, {branch}, {repo}, {trigger}, {action},
+// {phase}, {config-dir}, {pr-number}, {pr-repo}
 // Env placeholders (from Context.Env via --arg key=value or --arg key):
 //   - {key}           - value from --arg key=value
 //   - {key:-default}  - value with default if key not set
 //   - {key:+text}     - expands to text if key is set and non-empty, otherwise empty
+func formatPRNumber(n *int) string {
+	if n == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d", *n)
+}
+
 func SubstitutePlaceholders(command string, ctx Context) string {
 	// First, handle static replacements
 	replacements := map[string]string{
@@ -326,6 +336,8 @@ func SubstitutePlaceholders(command string, ctx Context) string {
 		"{action}":       ctx.Action,
 		"{phase}":        string(ctx.Phase),
 		"{config-dir}":   ctx.ConfigDir,
+		"{pr-number}":    formatPRNumber(ctx.PRNumber),
+		"{pr-repo}":      ctx.PRRepo,
 	}
 
 	result := command

@@ -450,6 +450,8 @@ Hooks without `on` only run when invoked explicitly via `wt hook <name>` or `--h
 | `{action}` | Checkout subtype: `create`, `open`, `pr`, or `manual` (for `wt hook`) |
 | `{phase}` | Hook timing: `before` or `after` |
 | `{config-dir}` | Absolute path to the wt config directory (`~/.wt/`) |
+| `{pr-number}` | PR/MR number (empty for non-PR checkouts) |
+| `{pr-repo}` | Forge repo path, e.g. `owner/repo` (empty for non-PR checkouts) |
 | `{key}` | Custom variable from `--arg key=value` (empty if unset) |
 | `{key:-default}` | Custom variable with fallback value if unset |
 | `{key:+text}` | Expands to `text` if key is set and non-empty, otherwise empty |

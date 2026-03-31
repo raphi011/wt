@@ -20,6 +20,8 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		Action:      "pr",
 		Phase:       PhaseAfter,
 		ConfigDir:   "/home/user/.wt",
+		PRNumber:    new(42),
+		PRRepo:      "org/repo",
 	}
 
 	tests := []struct {
@@ -39,8 +41,13 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		},
 		{
 			name:     "all placeholders",
-			command:  "{worktree-dir} {branch} {repo} {repo-dir} {trigger} {action} {phase} {config-dir}",
-			expected: "/home/user/worktrees/repo-branch feature-branch repo /home/user/repo checkout pr after /home/user/.wt",
+			command:  "{worktree-dir} {branch} {repo} {repo-dir} {trigger} {action} {phase} {config-dir} {pr-number} {pr-repo}",
+			expected: "/home/user/worktrees/repo-branch feature-branch repo /home/user/repo checkout pr after /home/user/.wt 42 org/repo",
+		},
+		{
+			name:     "pr-number placeholder",
+			command:  "or --pr {pr-number} --repo {pr-repo}",
+			expected: "or --pr 42 --repo org/repo",
 		},
 		{
 			name:     "config-dir placeholder",
@@ -81,6 +88,19 @@ func TestSubstitutePlaceholders(t *testing.T) {
 				t.Errorf("SubstitutePlaceholders(%q) = %q, want %q", tt.command, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestSubstitutePlaceholders_PRZeroValues(t *testing.T) {
+	ctx := Context{
+		Branch:  "main",
+		Trigger: "checkout",
+		Action:  "create",
+	}
+	result := SubstitutePlaceholders("echo {pr-number} '{pr-repo}'", ctx)
+	expected := "echo  ''"
+	if result != expected {
+		t.Errorf("SubstitutePlaceholders() = %q, want %q", result, expected)
 	}
 }
 

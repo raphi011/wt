@@ -44,7 +44,7 @@ func (g *GitHub) Check(ctx context.Context) error {
 
 // GetPRForBranch fetches PR info for a branch using gh CLI
 func (g *GitHub) GetPRForBranch(ctx context.Context, repoURL, branch string) (*PRInfo, error) {
-	repoPath := extractRepoPath(repoURL)
+	repoPath := ExtractRepoPath(repoURL)
 	output, err := g.outputWithUser(ctx, repoPath, "pr", "list",
 		"-R", repoPath,
 		"--head", branch,
@@ -95,7 +95,7 @@ func (g *GitHub) GetPRForBranch(ctx context.Context, repoURL, branch string) (*P
 
 // GetPRBranch fetches the head branch name for a PR number using gh CLI
 func (g *GitHub) GetPRBranch(ctx context.Context, repoURL string, number int) (string, error) {
-	repoPath := extractRepoPath(repoURL)
+	repoPath := ExtractRepoPath(repoURL)
 	output, err := g.outputWithUser(ctx, repoPath, "pr", "view",
 		fmt.Sprintf("%d", number),
 		"-R", repoPath,
@@ -179,7 +179,7 @@ func (g *GitHub) CloneBareRepo(ctx context.Context, repoSpec, destPath string) (
 
 // CreatePR creates a new PR using gh CLI
 func (g *GitHub) CreatePR(ctx context.Context, repoURL string, params CreatePRParams) (*CreatePRResult, error) {
-	repoPath := extractRepoPath(repoURL)
+	repoPath := ExtractRepoPath(repoURL)
 	args := []string{"pr", "create",
 		"-R", repoPath,
 		"--title", params.Title,
@@ -222,7 +222,7 @@ func (g *GitHub) CreatePR(ctx context.Context, repoURL string, params CreatePRPa
 
 // MergePR merges a PR by number with the given strategy
 func (g *GitHub) MergePR(ctx context.Context, repoURL string, number int, strategy string) error {
-	repoPath := extractRepoPath(repoURL)
+	repoPath := ExtractRepoPath(repoURL)
 
 	// Map strategy to gh flag
 	strategyFlag := "--squash" // default
@@ -244,7 +244,7 @@ func (g *GitHub) MergePR(ctx context.Context, repoURL string, number int, strate
 
 // ViewPR shows PR details or opens in browser
 func (g *GitHub) ViewPR(ctx context.Context, repoURL string, number int, web bool) error {
-	repoPath := extractRepoPath(repoURL)
+	repoPath := ExtractRepoPath(repoURL)
 	args := []string{"pr", "view", fmt.Sprintf("%d", number), "-R", repoPath}
 	if web {
 		args = append(args, "--web")
@@ -267,7 +267,7 @@ func (g *GitHub) ViewPR(ctx context.Context, repoURL string, number int, web boo
 
 // ListOpenPRs lists all open PRs for a repository
 func (g *GitHub) ListOpenPRs(ctx context.Context, repoURL string) ([]OpenPR, error) {
-	repoPath := extractRepoPath(repoURL)
+	repoPath := ExtractRepoPath(repoURL)
 	output, err := g.outputWithUser(ctx, repoPath, "pr", "list",
 		"-R", repoPath,
 		"--state", "open",
