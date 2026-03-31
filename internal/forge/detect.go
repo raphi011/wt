@@ -91,13 +91,13 @@ func isGitLab(url string) bool {
 	return false
 }
 
-// extractRepoPath extracts owner/repo from a git URL.
+// ExtractRepoPath extracts the repository path from a git URL.
 // Handles SSH aliases: git@github.com-personal:user/repo.git -> user/repo
 // Handles SSH: git@github.com:user/repo.git -> user/repo
 // Handles HTTPS: https://github.com/user/repo.git -> user/repo
 // Handles SSH protocol: ssh://git@github.com/user/repo.git -> user/repo
 // Handles GitLab subgroups: git@gitlab.com:group/sub/repo.git -> group/sub/repo
-func extractRepoPath(url string) string {
+func ExtractRepoPath(url string) string {
 	url = strings.TrimSuffix(url, ".git")
 
 	// SSH format: git@host:path or git@host-alias:path

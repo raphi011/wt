@@ -238,9 +238,9 @@ func TestExtractRepoPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := extractRepoPath(tt.url)
+			got := ExtractRepoPath(tt.url)
 			if got != tt.want {
-				t.Errorf("extractRepoPath(%q) = %q, want %q", tt.url, got, tt.want)
+				t.Errorf("ExtractRepoPath(%q) = %q, want %q", tt.url, got, tt.want)
 			}
 		})
 	}

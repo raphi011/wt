@@ -32,6 +32,8 @@ type hookParams struct {
 	Branch    string
 	Trigger   hooks.CommandType
 	Action    string
+	PRNumber  *int
+	PRRepo    string
 	HookNames []string
 	NoHook    bool
 	Env       map[string]string
@@ -49,6 +51,8 @@ func withHooks(ctx context.Context, p hookParams, fn func() error) error {
 		Trigger:     string(p.Trigger),
 		Action:      p.Action,
 		ConfigDir:   p.ConfigDir,
+		PRNumber:    p.PRNumber,
+		PRRepo:      p.PRRepo,
 		Env:         p.Env,
 	}
 
