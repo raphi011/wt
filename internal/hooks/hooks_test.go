@@ -18,7 +18,7 @@ func TestSubstitutePlaceholders(t *testing.T) {
 		Repo:        "repo",
 		Trigger:     "checkout",
 		Action:      "pr",
-		Phase:       "after",
+		Phase:       PhaseAfter,
 		ConfigDir:   "/home/user/.wt",
 	}
 
@@ -205,7 +205,7 @@ func TestSelectHooks(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			matches, err := SelectHooks(hooksConfig, tt.hookFlags, tt.noHook, tt.cmdType, tt.subtype, "after")
+			matches, err := SelectHooks(hooksConfig, tt.hookFlags, tt.noHook, HookSelector{Command: tt.cmdType, Action: tt.subtype, Phase: PhaseAfter})
 
 			if tt.expectError {
 				if err == nil {
@@ -244,7 +244,7 @@ func TestSelectHooks_NoOnCondition(t *testing.T) {
 	}
 
 	// Without explicit --hook, hooks without "on" don't run
-	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout, "", "after")
+	matches, err := SelectHooks(hooksConfig, nil, false, HookSelector{Command: CommandCheckout, Phase: PhaseAfter})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestSelectHooks_NoOnCondition(t *testing.T) {
 	}
 
 	// With explicit --hook, it runs
-	matches, err = SelectHooks(hooksConfig, []string{"vscode"}, false, CommandCheckout, "", "after")
+	matches, err = SelectHooks(hooksConfig, []string{"vscode"}, false, HookSelector{Command: CommandCheckout, Phase: PhaseAfter})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestSelectHooks_ExplicitHooksSkipBeforePhase(t *testing.T) {
 	}
 
 	// Explicit hooks should NOT run in before phase (to avoid double execution)
-	matches, err := SelectHooks(hooksConfig, []string{"guard"}, false, CommandCheckout, "", PhaseBefore)
+	matches, err := SelectHooks(hooksConfig, []string{"guard"}, false, HookSelector{Command: CommandCheckout, Phase: PhaseBefore})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestSelectHooks_ExplicitHooksSkipBeforePhase(t *testing.T) {
 	}
 
 	// Explicit hooks should run in after phase
-	matches, err = SelectHooks(hooksConfig, []string{"guard"}, false, CommandCheckout, "", PhaseAfter)
+	matches, err = SelectHooks(hooksConfig, []string{"guard"}, false, HookSelector{Command: CommandCheckout, Phase: PhaseAfter})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestSelectHooks_EmptyConfig(t *testing.T) {
 		Hooks: map[string]config.Hook{},
 	}
 
-	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout, "", "after")
+	matches, err := SelectHooks(hooksConfig, nil, false, HookSelector{Command: CommandCheckout, Phase: PhaseAfter})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestSelectHooks_OnCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			matches, err := SelectHooks(hooksConfig, nil, false, tt.cmdType, tt.subtype, "after")
+			matches, err := SelectHooks(hooksConfig, nil, false, HookSelector{Command: tt.cmdType, Action: tt.subtype, Phase: PhaseAfter})
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
@@ -376,7 +376,7 @@ func TestSelectHooks_OnConditionNoMatch(t *testing.T) {
 	}
 
 	// Hook with on=checkout:pr doesn't match checkout with no subtype
-	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout, "", "after")
+	matches, err := SelectHooks(hooksConfig, nil, false, HookSelector{Command: CommandCheckout, Phase: PhaseAfter})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -400,7 +400,7 @@ func TestSelectHooks_MultipleMatches(t *testing.T) {
 	}
 
 	// Both hooks match "checkout", should return both
-	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout, "", "after")
+	matches, err := SelectHooks(hooksConfig, nil, false, HookSelector{Command: CommandCheckout, Phase: PhaseAfter})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -421,7 +421,7 @@ func TestSelectHooks_OnAll(t *testing.T) {
 
 	// "all" should match all command types
 	for _, cmdType := range []CommandType{CommandCheckout, CommandPrune, CommandMerge} {
-		matches, err := SelectHooks(hooksConfig, nil, false, cmdType, "", "after")
+		matches, err := SelectHooks(hooksConfig, nil, false, HookSelector{Command: cmdType, Phase: PhaseAfter})
 		if err != nil {
 			t.Errorf("unexpected error for %s: %v", cmdType, err)
 		}
@@ -447,7 +447,7 @@ func TestSelectHooks_PruneCommand(t *testing.T) {
 	}
 
 	// Prune hook runs for prune command
-	matches, err := SelectHooks(hooksConfig, nil, false, CommandPrune, "", "after")
+	matches, err := SelectHooks(hooksConfig, nil, false, HookSelector{Command: CommandPrune, Phase: PhaseAfter})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -459,7 +459,7 @@ func TestSelectHooks_PruneCommand(t *testing.T) {
 	}
 
 	// Prune hook does NOT run for checkout command
-	matches, err = SelectHooks(hooksConfig, nil, false, CommandCheckout, "", "after")
+	matches, err = SelectHooks(hooksConfig, nil, false, HookSelector{Command: CommandCheckout, Phase: PhaseAfter})
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -1076,7 +1076,7 @@ func TestSelectHooks_BeforeAfter(t *testing.T) {
 	}
 
 	// Before hooks: only "guard" matches
-	matches, err := SelectHooks(hooksConfig, nil, false, CommandPrune, "", "before")
+	matches, err := SelectHooks(hooksConfig, nil, false, HookSelector{Command: CommandPrune, Phase: PhaseBefore})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1088,7 +1088,7 @@ func TestSelectHooks_BeforeAfter(t *testing.T) {
 	}
 
 	// After hooks: only "cleanup" matches (no phase = "after")
-	matches, err = SelectHooks(hooksConfig, nil, false, CommandPrune, "", "after")
+	matches, err = SelectHooks(hooksConfig, nil, false, HookSelector{Command: CommandPrune, Phase: PhaseAfter})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1109,7 +1109,7 @@ func TestSelectHooks_CheckoutSubtypes(t *testing.T) {
 	}
 
 	// checkout:create — only editor matches (generic checkout matches all subtypes)
-	matches, err := SelectHooks(hooksConfig, nil, false, CommandCheckout, "create", "after")
+	matches, err := SelectHooks(hooksConfig, nil, false, HookSelector{Command: CommandCheckout, Action: "create", Phase: PhaseAfter})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1121,7 +1121,7 @@ func TestSelectHooks_CheckoutSubtypes(t *testing.T) {
 	}
 
 	// checkout:pr — both match
-	matches, err = SelectHooks(hooksConfig, nil, false, CommandCheckout, "pr", "after")
+	matches, err = SelectHooks(hooksConfig, nil, false, HookSelector{Command: CommandCheckout, Action: "pr", Phase: PhaseAfter})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
