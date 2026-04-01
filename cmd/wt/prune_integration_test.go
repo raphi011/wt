@@ -11,6 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -1756,5 +1757,239 @@ func TestPrune_ExplicitHookFlag(t *testing.T) {
 
 	if _, err := os.Stat(defaultMarker); err == nil {
 		t.Error("default hook should NOT have run when --hook is used")
+	}
+}
+
+// TestPrune_LabelScopedTarget tests pruning worktrees via label:branch format.
+//
+// Scenario: Two repos exist; only one has the label "team-a". User runs
+// `wt prune team-a:feature -f` from an unrelated directory.
+// Expected: Only the repo with label "team-a" has its worktree removed.
+func TestPrune_LabelScopedTarget(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repo1Path := setupTestRepoWithBranches(t, tmpDir, "repo1", []string{"feature"})
+	repo2Path := setupTestRepoWithBranches(t, tmpDir, "repo2", []string{"feature"})
+
+	wt1Path := createTestWorktree(t, repo1Path, "feature")
+	wt2Path := createTestWorktree(t, repo2Path, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: repo1Path, Labels: []string{"team-a"}},
+			{Name: "repo2", Path: repo2Path},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	// Run from a non-repo directory so scope resolution must rely on the label
+	otherDir := filepath.Join(tmpDir, "not-a-repo")
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create non-repo dir: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, cfg, otherDir)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"team-a:feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// repo1 (labelled "team-a") should have its worktree removed
+	if _, err := os.Stat(wt1Path); err == nil {
+		t.Error("repo1 worktree (team-a) should be removed after label-scoped prune")
+	}
+
+	// repo2 (no label) should be untouched
+	if _, err := os.Stat(wt2Path); os.IsNotExist(err) {
+		t.Error("repo2 worktree should NOT be removed (label 'team-a' does not match)")
+	}
+}
+
+// TestPrune_MultipleWorktrees_PruneOne tests that pruning one worktree in a repo
+// with multiple worktrees leaves the other worktrees intact.
+//
+// Scenario: Repo has three worktrees (feat-a, feat-b, feat-c). User prunes feat-b.
+// Expected: feat-b is removed; feat-a and feat-c still exist.
+func TestPrune_MultipleWorktrees_PruneOne(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feat-a", "feat-b", "feat-c"})
+	wtAPath := createTestWorktree(t, repoPath, "feat-a")
+	wtBPath := createTestWorktree(t, repoPath, "feat-b")
+	wtCPath := createTestWorktree(t, repoPath, "feat-c")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feat-b", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// feat-b should be removed
+	if _, err := os.Stat(wtBPath); err == nil {
+		t.Error("feat-b worktree should be removed after prune")
+	}
+
+	// feat-a and feat-c should still exist
+	if _, err := os.Stat(wtAPath); os.IsNotExist(err) {
+		t.Error("feat-a worktree should NOT be removed")
+	}
+	if _, err := os.Stat(wtCPath); os.IsNotExist(err) {
+		t.Error("feat-c worktree should NOT be removed")
+	}
+}
+
+// TestPrune_HistoryCleanup tests that pruning a worktree removes its history entry.
+//
+// Scenario: A worktree is created and recorded in history. After pruning,
+// the history file should no longer contain the entry.
+func TestPrune_HistoryCleanup(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	histPath := filepath.Join(tmpDir, ".wt", "history.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	// Record an access to the worktree so it appears in history
+	if err := history.RecordAccess(wtPath, "test-repo", "feature", histPath); err != nil {
+		t.Fatalf("failed to record history: %v", err)
+	}
+
+	// Verify history entry exists before prune
+	hist, err := history.Load(histPath)
+	if err != nil {
+		t.Fatalf("failed to load history: %v", err)
+	}
+	if hist.FindByPath(wtPath) == nil {
+		t.Fatal("history entry should exist before prune")
+	}
+
+	cfg := &config.Config{RegistryPath: regFile, HistoryPath: histPath}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// Verify worktree was removed
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("worktree should be removed after prune")
+	}
+
+	// Verify history entry was cleaned up
+	hist, err = history.Load(histPath)
+	if err != nil {
+		t.Fatalf("failed to load history after prune: %v", err)
+	}
+	if hist.FindByPath(wtPath) != nil {
+		t.Error("history entry should be removed after prune")
+	}
+}
+
+// TestPrune_LocallyMerged_AutoPrune tests that a locally-merged branch is automatically
+// pruned without the -f flag (no targeted prune, auto-prune mode).
+//
+// Scenario: A feature branch is merged into main locally. Running `wt prune`
+// (without targeting a specific branch) should detect and remove it.
+// Expected: The worktree for the merged branch is removed.
+func TestPrune_LocallyMerged_AutoPrune(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	// Add a commit on feature
+	addCommit(t, wtPath, "feature.txt", "feature work")
+
+	// Merge feature into main (fast-forward or real merge)
+	if _, err := runGitCommand(repoPath, "merge", "feature"); err != nil {
+		t.Fatalf("failed to merge feature into main: %v", err)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{}) // No target — auto-prune mode
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// The locally-merged worktree should be removed
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("locally-merged worktree should be auto-pruned")
 	}
 }
