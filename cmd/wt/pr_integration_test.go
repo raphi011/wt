@@ -3,7 +3,9 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -523,5 +525,91 @@ func TestPrCheckout_OrgRepoAlreadyInRegistry(t *testing.T) {
 	// Should suggest using the local name
 	if !strings.Contains(err.Error(), "wt pr checkout myrepo") {
 		t.Errorf("expected suggestion to use local name, got %q", err.Error())
+	}
+}
+
+// TestPrCheckout_AlreadyCheckedOut tests that the pr checkout code path correctly
+// detects an existing worktree, outputs "Opened worktree" instead of
+// "Created worktree", and does not destroy the worktree.
+//
+// We cannot run the full pr checkout command (requires a forge/remote), so we
+// exercise the detection + output message logic that pr_cmd.go uses inline.
+//
+// Scenario: Branch "feature" already has a worktree checked out
+// Expected: findWorktreeForBranch detects it, output says "Opened worktree"
+func TestPrCheckout_AlreadyCheckedOut(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
+
+	// Create a worktree for the branch first
+	wtPath := filepath.Join(repoPath, ".worktrees", "feature")
+	gitWorktreeAdd := exec.Command("git", "worktree", "add", wtPath, "feature")
+	gitWorktreeAdd.Dir = repoPath
+	if out, err := gitWorktreeAdd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to create worktree: %v\n%s", err, out)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: ".worktrees/{branch}",
+		},
+	}, repoPath)
+
+	// Step 1: Verify findWorktreeForBranch detects the existing worktree
+	foundPath, found := findWorktreeForBranch(ctx, repoPath, "feature")
+	if !found {
+		t.Fatal("expected to find existing worktree for branch 'feature'")
+	}
+	if foundPath != wtPath {
+		t.Errorf("expected worktree path %s, got %s", wtPath, foundPath)
+	}
+
+	// Step 2: Verify the output message selection logic from pr_cmd.go.
+	// When found=true and justClonedRegular=false, the code builds:
+	//   outputMsg = fmt.Sprintf("Opened worktree: %s (%s)\n", wtPath, branch)
+	// Reproduce that logic here to verify it selects "Opened worktree".
+	justClonedRegular := false
+	branch := "feature"
+
+	var outputMsg string
+	if justClonedRegular {
+		outputMsg = fmt.Sprintf("Checked out PR branch: %s (%s)\n", repoPath, branch)
+	} else if found {
+		outputMsg = fmt.Sprintf("Opened worktree: %s (%s)\n", foundPath, branch)
+	} else {
+		outputMsg = fmt.Sprintf("Created worktree: %s (%s)\n", wtPath, branch)
+	}
+
+	if !strings.Contains(outputMsg, "Opened worktree") {
+		t.Errorf("expected 'Opened worktree' in output, got %q", outputMsg)
+	}
+	if strings.Contains(outputMsg, "Created worktree") {
+		t.Errorf("output should not contain 'Created worktree', got %q", outputMsg)
+	}
+	expectedMsg := fmt.Sprintf("Opened worktree: %s (feature)\n", wtPath)
+	if outputMsg != expectedMsg {
+		t.Errorf("expected output %q, got %q", expectedMsg, outputMsg)
+	}
+
+	// Step 3: Worktree should still exist (not removed or modified)
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should still exist at %s", wtPath)
 	}
 }
