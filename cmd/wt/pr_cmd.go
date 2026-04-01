@@ -316,20 +316,18 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 				}
 			}
 
-			// Determine hook action and output message
-			action := hooks.ActionPR
+			// Determine output message
 			var outputMsg string
 			if justClonedRegular {
 				outputMsg = fmt.Sprintf("Checked out PR branch: %s (%s)\n", repoPath, branch)
 			} else if found {
-				action = hooks.ActionOpen
 				outputMsg = fmt.Sprintf("Opened worktree: %s (%s)\n", wtPath, branch)
 			} else {
 				outputMsg = fmt.Sprintf("Created worktree: %s (%s)\n", wtPath, branch)
 			}
 
 			// Run hooks around output and history recording
-			hp, err := buildHookParams(effCfg, repo, wtPath, branch, hooks.CommandCheckout, action, hf)
+			hp, err := buildHookParams(effCfg, repo, wtPath, branch, hooks.CommandCheckout, hooks.ActionPR, hf)
 			if err != nil {
 				return err
 			}
