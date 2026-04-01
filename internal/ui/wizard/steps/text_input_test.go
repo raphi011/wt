@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
 )
 
@@ -281,5 +283,68 @@ func TestTextInputStep_Configuration(t *testing.T) {
 	// These should not panic - we just verify they work
 	if step.ID() != "test" {
 		t.Error("Configuration methods should not break step")
+	}
+}
+
+func TestTextInputStep_View(t *testing.T) {
+	t.Run("View returns non-empty string", func(t *testing.T) {
+		step := NewTextInput("test", "Test", "Enter something:", "")
+		view := step.View()
+		if view == "" {
+			t.Error("View() should return non-empty string")
+		}
+	})
+
+	t.Run("View shows prompt", func(t *testing.T) {
+		step := NewTextInput("test", "Test", "My Prompt:", "")
+		view := step.View()
+		if !containsStr(view, "My Prompt:") {
+			t.Errorf("View() should contain prompt, got %q", view)
+		}
+	})
+
+	t.Run("View shows validation error", func(t *testing.T) {
+		step := NewTextInput("test", "Test", "Enter:", "")
+		// Trigger validation error by submitting empty value
+		updateStep(t, step, keyMsg("enter"))
+
+		view := step.View()
+		if !containsStr(view, "cannot be empty") {
+			t.Errorf("View() should contain validation error, got %q", view)
+		}
+	})
+
+	t.Run("View clears error when typing after error", func(t *testing.T) {
+		step := NewTextInput("test", "Test", "Enter:", "")
+		step.Init()
+		// Trigger validation error
+		updateStep(t, step, keyMsg("enter"))
+
+		// Now type something to clear the error
+		updateStep(t, step, keyMsg("a"))
+
+		view := step.View()
+		if containsStr(view, "cannot be empty") {
+			t.Errorf("View() should not show error after typing, got %q", view)
+		}
+	})
+}
+
+func TestTextInputStep_WithCursor(t *testing.T) {
+	step := NewTextInput("test", "Test", "Enter:", "")
+
+	// WithCursor should configure cursor without panicking
+	step = step.WithCursor(tea.CursorBlock, false)
+
+	if step.ID() != "test" {
+		t.Error("WithCursor should not break step")
+	}
+}
+
+func TestTextInputStep_String(t *testing.T) {
+	step := NewTextInput("myid", "Test", "Enter:", "")
+	s := step.String()
+	if !containsStr(s, "myid") {
+		t.Errorf("String() = %q, should contain id", s)
 	}
 }

@@ -431,3 +431,216 @@ func TestSingleSelectStep_FormatValue(t *testing.T) {
 		t.Errorf("FormatValue() with custom labels = %s, want Custom Label", formatted)
 	}
 }
+
+func TestSingleSelectStep_View(t *testing.T) {
+	options := []framework.Option{
+		{Label: "Option 1", Value: "opt1"},
+		{Label: "Option 2", Value: "opt2", Description: "A description"},
+		{Label: "Disabled", Value: "dis", Disabled: true, Description: "Not available"},
+	}
+
+	t.Run("View returns non-empty string", func(t *testing.T) {
+		step := NewSingleSelect("test", "Test", "Pick one:", options)
+		view := step.View()
+		if view == "" {
+			t.Error("View() should return non-empty string")
+		}
+	})
+
+	t.Run("View shows prompt", func(t *testing.T) {
+		step := NewSingleSelect("test", "Test", "My Prompt:", options)
+		view := step.View()
+		if !containsStr(view, "My Prompt:") {
+			t.Errorf("View() should contain prompt, got %q", view)
+		}
+	})
+
+	t.Run("View shows cursor on selected option", func(t *testing.T) {
+		step := NewSingleSelect("test", "Test", "Select:", options)
+		view := step.View()
+		if !containsStr(view, "> ") {
+			t.Errorf("View() should show cursor, got %q", view)
+		}
+	})
+
+	t.Run("View shows descriptions", func(t *testing.T) {
+		step := NewSingleSelect("test", "Test", "Select:", options)
+		view := step.View()
+		if !containsStr(view, "A description") {
+			t.Errorf("View() should show option description, got %q", view)
+		}
+	})
+
+	t.Run("View shows disabled option with reason", func(t *testing.T) {
+		step := NewSingleSelect("test", "Test", "Select:", options)
+		view := step.View()
+		if !containsStr(view, "Not available") {
+			t.Errorf("View() should show disabled reason, got %q", view)
+		}
+	})
+}
+
+func TestSingleSelectStep_RenderWithScroll(t *testing.T) {
+	// Create many options to trigger scroll
+	var manyOptions []framework.Option
+	for i := 0; i < 15; i++ {
+		manyOptions = append(manyOptions, framework.Option{
+			Label: string(rune('a'+i)) + "-option",
+			Value: string(rune('a' + i)),
+		})
+	}
+
+	t.Run("RenderWithScroll returns non-empty", func(t *testing.T) {
+		step := NewSingleSelect("test", "Test", "Select:", manyOptions)
+		view := step.RenderWithScroll(5)
+		if view == "" {
+			t.Error("RenderWithScroll() should return non-empty string")
+		}
+	})
+
+	t.Run("RenderWithScroll shows more below indicator", func(t *testing.T) {
+		step := NewSingleSelect("test", "Test", "Select:", manyOptions)
+		view := step.RenderWithScroll(5)
+		if !containsStr(view, "↓ more below") {
+			t.Errorf("RenderWithScroll() should show more below, got %q", view)
+		}
+	})
+
+	t.Run("RenderWithScroll shows more above when scrolled", func(t *testing.T) {
+		step := NewSingleSelect("test", "Test", "Select:", manyOptions)
+		// Navigate to end
+		updateStep(t, step, keyMsg("end"))
+		view := step.RenderWithScroll(5)
+		if !containsStr(view, "↑ more above") {
+			t.Errorf("RenderWithScroll() should show more above when scrolled, got %q", view)
+		}
+	})
+
+	t.Run("RenderWithScroll shows no options message for empty list", func(t *testing.T) {
+		step := NewSingleSelect("test", "Test", "Select:", nil)
+		view := step.RenderWithScroll(5)
+		if !containsStr(view, "No options available") {
+			t.Errorf("RenderWithScroll() should show empty message, got %q", view)
+		}
+	})
+}
+
+func TestSingleSelectStep_EnableAllOptions(t *testing.T) {
+	options := []framework.Option{
+		{Label: "Option 1", Value: "opt1"},
+		{Label: "Option 2", Value: "opt2"},
+	}
+
+	t.Run("EnableAllOptions re-enables disabled options", func(t *testing.T) {
+		step := NewSingleSelect("test", "Test", "Select:", options)
+		step.DisableOption(0, "Disabled for testing")
+		step.DisableOption(1, "Also disabled")
+
+		step.EnableAllOptions()
+
+		// Both should now be enabled and selectable
+		opt0, _ := step.GetOption(0)
+		opt1, _ := step.GetOption(1)
+
+		if opt0.Disabled {
+			t.Error("Option 0 should be enabled after EnableAllOptions")
+		}
+		if opt1.Disabled {
+			t.Error("Option 1 should be enabled after EnableAllOptions")
+		}
+	})
+}
+
+func TestSingleSelectStep_Value_EmptyWhenNotSelected(t *testing.T) {
+	options := []framework.Option{
+		{Label: "Option 1", Value: "opt1"},
+	}
+
+	step := NewSingleSelect("test", "Test", "Select:", options)
+
+	// Before selection
+	value := step.Value()
+	if value.Label != "" {
+		t.Errorf("Value.Label before selection = %q, want empty", value.Label)
+	}
+	if value.Key != "test" {
+		t.Errorf("Value.Key before selection = %q, want 'test'", value.Key)
+	}
+}
+
+func TestSingleSelectStep_SetOptions_ClearsOutOfBoundsSelection(t *testing.T) {
+	options := []framework.Option{
+		{Label: "Option 1", Value: "opt1"},
+		{Label: "Option 2", Value: "opt2"},
+		{Label: "Option 3", Value: "opt3"},
+	}
+
+	step := NewSingleSelect("test", "Test", "Select:", options)
+	step.SetCursor(2)
+	updateStep(t, step, keyMsg("enter"))
+
+	if step.GetSelectedIndex() != 2 {
+		t.Fatalf("Selected index = %d, want 2", step.GetSelectedIndex())
+	}
+
+	// Set fewer options - previous selection index is now out of bounds
+	fewerOptions := []framework.Option{
+		{Label: "New 1", Value: "new1"},
+	}
+	step.SetOptions(fewerOptions)
+
+	// Selection should be cleared
+	if step.GetSelectedIndex() != -1 {
+		t.Errorf("Selected index after SetOptions with fewer options = %d, want -1", step.GetSelectedIndex())
+	}
+}
+
+func TestSingleSelectStep_String(t *testing.T) {
+	options := []framework.Option{
+		{Label: "opt", Value: "opt"},
+	}
+
+	step := NewSingleSelect("myid", "Test", "Select:", options)
+	s := step.String()
+	if !containsStr(s, "myid") {
+		t.Errorf("String() = %q, should contain id", s)
+	}
+}
+
+func TestSingleSelectStep_GetOption_OutOfBounds(t *testing.T) {
+	options := []framework.Option{
+		{Label: "opt1", Value: "v1"},
+	}
+	step := NewSingleSelect("test", "Test", "Select:", options)
+
+	_, ok := step.GetOption(-1)
+	if ok {
+		t.Error("GetOption(-1) should return false")
+	}
+
+	_, ok = step.GetOption(99)
+	if ok {
+		t.Error("GetOption(99) should return false")
+	}
+
+	opt, ok := step.GetOption(0)
+	if !ok {
+		t.Error("GetOption(0) should return true")
+	}
+	if opt.Label != "opt1" {
+		t.Errorf("GetOption(0).Label = %q, want opt1", opt.Label)
+	}
+}
+
+func TestSingleSelectStep_FormatValue_WhenNotSelected(t *testing.T) {
+	options := []framework.Option{
+		{Label: "opt1", Value: "v1"},
+	}
+	step := NewSingleSelect("test", "Test", "Select:", options)
+
+	// Not selected
+	formatted := step.FormatValue(nil)
+	if formatted != "" {
+		t.Errorf("FormatValue() when not selected = %q, want empty", formatted)
+	}
+}
