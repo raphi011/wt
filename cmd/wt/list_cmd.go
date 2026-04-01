@@ -111,24 +111,8 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 				sortBy = "date"
 			}
 
-			switch sortBy {
-			case "date":
-				sort.Slice(allWorktrees, func(i, j int) bool {
-					return allWorktrees[i].CommitDate.After(allWorktrees[j].CommitDate)
-				})
-			case "repo":
-				sort.Slice(allWorktrees, func(i, j int) bool {
-					if allWorktrees[i].RepoName != allWorktrees[j].RepoName {
-						return allWorktrees[i].RepoName < allWorktrees[j].RepoName
-					}
-					return allWorktrees[i].Branch < allWorktrees[j].Branch
-				})
-			case "branch":
-				sort.Slice(allWorktrees, func(i, j int) bool {
-					return allWorktrees[i].Branch < allWorktrees[j].Branch
-				})
-			default:
-				return fmt.Errorf("invalid sort value %q (valid: date, repo, branch)", sortBy)
+			if err := sortWorktreesByMode(allWorktrees, sortBy); err != nil {
+				return err
 			}
 
 			if jsonOutput {
@@ -167,4 +151,28 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 	})
 
 	return cmd
+}
+
+// sortWorktreesByMode sorts worktrees by the given mode: "date", "repo", or "branch".
+func sortWorktreesByMode(worktrees []git.Worktree, mode string) error {
+	switch mode {
+	case "date":
+		sort.Slice(worktrees, func(i, j int) bool {
+			return worktrees[i].CommitDate.After(worktrees[j].CommitDate)
+		})
+	case "repo":
+		sort.Slice(worktrees, func(i, j int) bool {
+			if worktrees[i].RepoName != worktrees[j].RepoName {
+				return worktrees[i].RepoName < worktrees[j].RepoName
+			}
+			return worktrees[i].Branch < worktrees[j].Branch
+		})
+	case "branch":
+		sort.Slice(worktrees, func(i, j int) bool {
+			return worktrees[i].Branch < worktrees[j].Branch
+		})
+	default:
+		return fmt.Errorf("invalid sort value %q (valid: date, repo, branch)", mode)
+	}
+	return nil
 }
