@@ -696,3 +696,127 @@ func TestLabel_Clear_CurrentRepo(t *testing.T) {
 		t.Errorf("expected 0 labels after clear, got %d: %v", len(repo.Labels), repo.Labels)
 	}
 }
+
+// TestLabel_RegistryPersistence tests that labels survive a registry reload from disk.
+//
+// Scenario: User adds a label, then a new process loads the registry from disk
+// Expected: Label is present in the reloaded registry
+func TestLabel_RegistryPersistence(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath, Labels: []string{}},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cmd := newLabelCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"add", "persistent", "myrepo"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("label add command failed: %v", err)
+	}
+
+	// Simulate a new process by reloading the registry from disk
+	reloaded, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to reload registry from disk: %v", err)
+	}
+
+	repo, err := reloaded.FindByName("myrepo")
+	if err != nil {
+		t.Fatalf("failed to find repo in reloaded registry: %v", err)
+	}
+
+	found := false
+	for _, l := range repo.Labels {
+		if l == "persistent" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("label 'persistent' not found after registry reload, labels: %v", repo.Labels)
+	}
+}
+
+// TestLabel_AddDuplicate tests that adding a duplicate label is idempotent.
+//
+// Scenario: User adds the same label twice to the same repo
+// Expected: Label appears exactly once, no error
+func TestLabel_AddDuplicate(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath, Labels: []string{}},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	// Add the label once
+	ctx1 := testContextWithConfig(t, cfg, repoPath)
+	cmd1 := newLabelCmd()
+	cmd1.SetContext(ctx1)
+	cmd1.SetArgs([]string{"add", "team-a", "myrepo"})
+	if err := cmd1.Execute(); err != nil {
+		t.Fatalf("first label add failed: %v", err)
+	}
+
+	// Add the same label again
+	ctx2 := testContextWithConfig(t, cfg, repoPath)
+	cmd2 := newLabelCmd()
+	cmd2.SetContext(ctx2)
+	cmd2.SetArgs([]string{"add", "team-a", "myrepo"})
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("second label add failed: %v", err)
+	}
+
+	// Reload and verify label appears exactly once
+	reloaded, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to reload registry: %v", err)
+	}
+
+	repo, err := reloaded.FindByName("myrepo")
+	if err != nil {
+		t.Fatalf("failed to find repo: %v", err)
+	}
+
+	count := 0
+	for _, l := range repo.Labels {
+		if l == "team-a" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected exactly 1 'team-a' label, got %d in %v", count, repo.Labels)
+	}
+}

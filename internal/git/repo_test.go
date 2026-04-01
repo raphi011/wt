@@ -1169,3 +1169,324 @@ func TestGetMergedBranches(t *testing.T) {
 		}
 	})
 }
+
+func TestRunGitCommand(t *testing.T) {
+	t.Parallel()
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		if err := RunGitCommand(ctx, repoPath, "status"); err != nil {
+			t.Fatalf("RunGitCommand(status) failed: %v", err)
+		}
+	})
+
+	t.Run("error on invalid command", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		if err := RunGitCommand(ctx, repoPath, "nonexistent-subcommand"); err == nil {
+			t.Error("expected error for invalid git subcommand")
+		}
+	})
+}
+
+func TestFetchBranch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("fetch existing branch from origin", func(t *testing.T) {
+		t.Parallel()
+		repoPath, originPath := setupTestRepoWithOrigin(t)
+		ctx := context.Background()
+
+		// Push a new branch to origin from the clone
+		if err := runGit(ctx, repoPath, "checkout", "-b", "fetch-test"); err != nil {
+			t.Fatalf("failed to create branch: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(repoPath, "fetch.txt"), []byte("fetch\n"), 0644); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "add", "fetch.txt"); err != nil {
+			t.Fatalf("failed to add: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "commit", "-m", "Add fetch file"); err != nil {
+			t.Fatalf("failed to commit: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "push", "origin", "fetch-test"); err != nil {
+			t.Fatalf("failed to push to origin: %v", err)
+		}
+
+		// Create a second clone that will fetch the branch
+		tmpDir := resolveTempDir(t)
+		clonePath := filepath.Join(tmpDir, "clone2")
+		if err := runGit(ctx, "", "clone", originPath, clonePath); err != nil {
+			t.Fatalf("failed to create second clone: %v", err)
+		}
+		configureTestRepo(t, clonePath)
+
+		if err := FetchBranch(ctx, clonePath, "fetch-test"); err != nil {
+			t.Fatalf("FetchBranch failed: %v", err)
+		}
+
+		// Verify the remote tracking branch now exists
+		if !RemoteBranchExists(ctx, clonePath, "fetch-test") {
+			t.Error("expected origin/fetch-test to exist after fetch")
+		}
+	})
+
+	t.Run("error on nonexistent remote branch", func(t *testing.T) {
+		t.Parallel()
+		repoPath, _ := setupTestRepoWithOrigin(t)
+		ctx := context.Background()
+
+		if err := FetchBranch(ctx, repoPath, "does-not-exist"); err == nil {
+			t.Error("expected error fetching nonexistent branch")
+		}
+	})
+}
+
+func TestFetchBranchFromRemote(t *testing.T) {
+	t.Parallel()
+
+	t.Run("fetch from named remote", func(t *testing.T) {
+		t.Parallel()
+		repoPath, originPath := setupTestRepoWithOrigin(t)
+		ctx := context.Background()
+
+		// Create a second clone as an upstream remote
+		tmpDir := resolveTempDir(t)
+		upstreamPath := filepath.Join(tmpDir, "upstream")
+		if err := runGit(ctx, "", "clone", "--bare", originPath, upstreamPath); err != nil {
+			t.Fatalf("failed to create upstream: %v", err)
+		}
+
+		// Add upstream as a remote
+		if err := runGit(ctx, repoPath, "remote", "add", "upstream", upstreamPath); err != nil {
+			t.Fatalf("failed to add upstream remote: %v", err)
+		}
+
+		if err := FetchBranchFromRemote(ctx, repoPath, "upstream", "main"); err != nil {
+			t.Fatalf("FetchBranchFromRemote failed: %v", err)
+		}
+
+		// Verify upstream/main tracking ref exists
+		if !RefExists(ctx, repoPath, "refs/remotes/upstream/main") {
+			t.Error("expected refs/remotes/upstream/main to exist after fetch")
+		}
+	})
+
+	t.Run("error on nonexistent remote", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		if err := FetchBranchFromRemote(ctx, repoPath, "no-such-remote", "main"); err == nil {
+			t.Error("expected error fetching from nonexistent remote")
+		}
+	})
+}
+
+func TestPushBranch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("push new branch to origin", func(t *testing.T) {
+		t.Parallel()
+		repoPath, _ := setupTestRepoWithOrigin(t)
+		ctx := context.Background()
+
+		if err := runGit(ctx, repoPath, "checkout", "-b", "push-test"); err != nil {
+			t.Fatalf("failed to create branch: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(repoPath, "push.txt"), []byte("push\n"), 0644); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "add", "push.txt"); err != nil {
+			t.Fatalf("failed to add: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "commit", "-m", "Add push file"); err != nil {
+			t.Fatalf("failed to commit: %v", err)
+		}
+
+		if err := PushBranch(ctx, repoPath, "push-test"); err != nil {
+			t.Fatalf("PushBranch failed: %v", err)
+		}
+
+		// Verify remote tracking branch now exists
+		if !RemoteBranchExists(ctx, repoPath, "push-test") {
+			t.Error("expected origin/push-test to exist after push")
+		}
+	})
+
+	t.Run("error when no remote configured", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		if err := PushBranch(ctx, repoPath, "main"); err == nil {
+			t.Error("expected error pushing without remote")
+		}
+	})
+}
+
+func TestGetWorktreeBranches(t *testing.T) {
+	t.Parallel()
+
+	t.Run("single worktree (main only)", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		branches := GetWorktreeBranches(ctx, repoPath)
+		if !branches["main"] {
+			t.Errorf("expected main in worktree branches, got %v", branches)
+		}
+		if len(branches) != 1 {
+			t.Errorf("expected 1 worktree branch, got %d: %v", len(branches), branches)
+		}
+	})
+
+	t.Run("includes linked worktree branches", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		tmpDir := filepath.Dir(repoPath)
+		ctx := context.Background()
+
+		wt1 := filepath.Join(tmpDir, "wt-branch-a")
+		wt2 := filepath.Join(tmpDir, "wt-branch-b")
+		if err := runGit(ctx, repoPath, "worktree", "add", "-b", "branch-a", wt1); err != nil {
+			t.Fatalf("failed to create worktree branch-a: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "worktree", "add", "-b", "branch-b", wt2); err != nil {
+			t.Fatalf("failed to create worktree branch-b: %v", err)
+		}
+
+		branches := GetWorktreeBranches(ctx, repoPath)
+		for _, want := range []string{"main", "branch-a", "branch-b"} {
+			if !branches[want] {
+				t.Errorf("expected %q in worktree branches, got %v", want, branches)
+			}
+		}
+	})
+
+	t.Run("non-git dir returns empty map", func(t *testing.T) {
+		t.Parallel()
+		nonGitDir := t.TempDir()
+		ctx := context.Background()
+
+		branches := GetWorktreeBranches(ctx, nonGitDir)
+		if len(branches) != 0 {
+			t.Errorf("expected empty map for non-git dir, got %v", branches)
+		}
+	})
+}
+
+func TestDeleteLocalBranch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("delete merged branch without force", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		// Create a branch that is merged into main (fast-forward)
+		if err := runGit(ctx, repoPath, "checkout", "-b", "to-delete"); err != nil {
+			t.Fatalf("failed to create branch: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(repoPath, "delete.txt"), []byte("delete\n"), 0644); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "add", "delete.txt"); err != nil {
+			t.Fatalf("failed to add: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "commit", "-m", "Delete branch commit"); err != nil {
+			t.Fatalf("failed to commit: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "checkout", "main"); err != nil {
+			t.Fatalf("failed to checkout main: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "merge", "--ff-only", "to-delete"); err != nil {
+			t.Fatalf("failed to merge: %v", err)
+		}
+
+		if err := DeleteLocalBranch(ctx, repoPath, "to-delete", false); err != nil {
+			t.Fatalf("DeleteLocalBranch failed: %v", err)
+		}
+
+		if LocalBranchExists(ctx, repoPath, "to-delete") {
+			t.Error("expected branch to-delete to be deleted")
+		}
+	})
+
+	t.Run("delete unmerged branch with force", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		if err := runGit(ctx, repoPath, "checkout", "-b", "force-delete"); err != nil {
+			t.Fatalf("failed to create branch: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(repoPath, "force.txt"), []byte("force\n"), 0644); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "add", "force.txt"); err != nil {
+			t.Fatalf("failed to add: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "commit", "-m", "Unmerged commit"); err != nil {
+			t.Fatalf("failed to commit: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "checkout", "main"); err != nil {
+			t.Fatalf("failed to checkout main: %v", err)
+		}
+
+		if err := DeleteLocalBranch(ctx, repoPath, "force-delete", true); err != nil {
+			t.Fatalf("DeleteLocalBranch with force failed: %v", err)
+		}
+
+		if LocalBranchExists(ctx, repoPath, "force-delete") {
+			t.Error("expected branch force-delete to be deleted")
+		}
+	})
+
+	t.Run("error deleting unmerged branch without force", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		if err := runGit(ctx, repoPath, "checkout", "-b", "unmerged-no-force"); err != nil {
+			t.Fatalf("failed to create branch: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(repoPath, "unmerged.txt"), []byte("unmerged\n"), 0644); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "add", "unmerged.txt"); err != nil {
+			t.Fatalf("failed to add: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "commit", "-m", "Unmerged"); err != nil {
+			t.Fatalf("failed to commit: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "checkout", "main"); err != nil {
+			t.Fatalf("failed to checkout main: %v", err)
+		}
+
+		if err := DeleteLocalBranch(ctx, repoPath, "unmerged-no-force", false); err == nil {
+			t.Error("expected error deleting unmerged branch without force")
+		}
+
+		if !LocalBranchExists(ctx, repoPath, "unmerged-no-force") {
+			t.Error("branch should still exist after failed delete")
+		}
+	})
+
+	t.Run("error deleting nonexistent branch", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		if err := DeleteLocalBranch(ctx, repoPath, "no-such-branch", false); err == nil {
+			t.Error("expected error deleting nonexistent branch")
+		}
+	})
+}

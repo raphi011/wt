@@ -378,3 +378,170 @@ func TestNoteSet_LabelScope(t *testing.T) {
 		}
 	}
 }
+
+// TestNote_SpecialCharacters tests that notes with special characters round-trip correctly.
+//
+// Scenario: User sets a note containing special characters, then retrieves it
+// Expected: Retrieved note matches what was set
+func TestNote_SpecialCharacters(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	specialNote := "fix: handle edge-case with spaces & symbols!"
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, wtPath)
+
+	// Set note with special characters
+	setCmd := newNoteCmd()
+	setCmd.SetContext(ctx)
+	setCmd.SetArgs([]string{"set", specialNote})
+
+	if err := setCmd.Execute(); err != nil {
+		t.Fatalf("note set command failed: %v", err)
+	}
+
+	// Get the note back via context with output
+	ctx2, out := testContextWithConfigAndOutput(t, cfg, wtPath)
+	getCmd := newNoteCmd()
+	getCmd.SetContext(ctx2)
+	getCmd.SetArgs([]string{"get"})
+
+	if err := getCmd.Execute(); err != nil {
+		t.Fatalf("note get command failed: %v", err)
+	}
+
+	got := strings.TrimSpace(out.String())
+	if got != specialNote {
+		t.Errorf("expected note %q, got %q", specialNote, got)
+	}
+}
+
+// TestNote_SetAndGet tests the full set-then-get roundtrip on the current branch.
+//
+// Scenario: User sets a note on the current worktree branch, then retrieves it
+// Expected: Retrieved note matches the set value
+func TestNote_SetAndGet(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	// Set the note
+	setCtx := testContextWithConfig(t, cfg, wtPath)
+	setCmd := newNoteCmd()
+	setCmd.SetContext(setCtx)
+	setCmd.SetArgs([]string{"set", "in progress"})
+
+	if err := setCmd.Execute(); err != nil {
+		t.Fatalf("note set command failed: %v", err)
+	}
+
+	// Get the note back
+	getCtx, out := testContextWithConfigAndOutput(t, cfg, wtPath)
+	getCmd := newNoteCmd()
+	getCmd.SetContext(getCtx)
+	getCmd.SetArgs([]string{"get"})
+
+	if err := getCmd.Execute(); err != nil {
+		t.Fatalf("note get command failed: %v", err)
+	}
+
+	got := strings.TrimSpace(out.String())
+	if got != "in progress" {
+		t.Errorf("expected note 'in progress', got %q", got)
+	}
+}
+
+// TestNote_Clear tests that clearing a note removes it from git config.
+//
+// Scenario: User sets a note then clears it, verifying the note is gone
+// Expected: After clear, get returns empty output
+func TestNote_Clear(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	// Set the note first
+	setCtx := testContextWithConfig(t, cfg, wtPath)
+	setCmd := newNoteCmd()
+	setCmd.SetContext(setCtx)
+	setCmd.SetArgs([]string{"set", "review needed"})
+	if err := setCmd.Execute(); err != nil {
+		t.Fatalf("note set command failed: %v", err)
+	}
+
+	// Clear the note
+	clearCtx := testContextWithConfig(t, cfg, wtPath)
+	clearCmd := newNoteCmd()
+	clearCmd.SetContext(clearCtx)
+	clearCmd.SetArgs([]string{"clear"})
+	if err := clearCmd.Execute(); err != nil {
+		t.Fatalf("note clear command failed: %v", err)
+	}
+
+	// Get the note — should be empty
+	getCtx, out := testContextWithConfigAndOutput(t, cfg, wtPath)
+	getCmd := newNoteCmd()
+	getCmd.SetContext(getCtx)
+	getCmd.SetArgs([]string{"get"})
+	if err := getCmd.Execute(); err != nil {
+		t.Fatalf("note get command failed: %v", err)
+	}
+
+	got := strings.TrimSpace(out.String())
+	if got != "" {
+		t.Errorf("expected empty output after clear, got %q", got)
+	}
+}
