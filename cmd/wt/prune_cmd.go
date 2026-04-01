@@ -51,15 +51,17 @@ Use --global to prune all registered repos.
 Use --interactive to select worktrees to prune.
 
 Target specific worktrees using [scope:]branch arguments where scope can be
-a repo name or label. Use -f when targeting specific worktrees.`,
+a repo name or label. Merged worktrees (locally merged or merged PR) can be
+pruned without -f. Use -f to prune unmerged worktrees.`,
 		Example: `  wt prune                         # Remove worktrees with merged PRs
   wt prune --stale                 # Also prune stale worktrees
   wt prune --global                # Prune all repos
   wt prune -d                      # Dry-run: preview without removing
   wt prune -i                      # Interactive mode
-  wt prune feature -f              # Remove feature worktree (current repo)
+  wt prune feature                 # Remove merged feature worktree
+  wt prune feature -f              # Remove unmerged feature worktree
   wt prune feature -f -g           # Remove feature worktree (all repos)
-  wt prune myrepo:feature -f       # Remove specific worktree
+  wt prune myrepo:feature -f       # Remove specific unmerged worktree
   wt prune backend:main -f         # Remove main in backend-labeled repos`,
 		ValidArgsFunction: completeScopedWorktreeArg,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -76,9 +78,6 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 
 			// If specific targets provided, handle targeted removal
 			if len(args) > 0 {
-				if !force {
-					return fmt.Errorf("targeting specific worktrees requires -f/--force")
-				}
 				deleteBranchesExplicit := cmd.Flags().Changed("delete-branches") || cmd.Flags().Changed("no-delete-branches")
 				// Determine if we should delete local branches
 				shouldDeleteBranches := cfg.Prune.DeleteLocalBranches
@@ -87,7 +86,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 				} else if cmd.Flags().Changed("no-delete-branches") {
 					shouldDeleteBranches = false
 				}
-				return runPruneTargets(ctx, reg, args, global, dryRun, pruneOpts{
+				return runPruneTargets(ctx, reg, args, global, force, dryRun, pruneOpts{
 					DeleteBranches:         shouldDeleteBranches,
 					DeleteBranchesExplicit: deleteBranchesExplicit,
 					Hooks:                  hf,
@@ -277,7 +276,7 @@ a repo name or label. Use -f when targeting specific worktrees.`,
 	}
 
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Preview without removing")
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force remove (required for targeted prune)")
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force remove unmerged worktrees")
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "Prune all repos")
 	cmd.Flags().BoolVarP(&refresh, "refresh-pr", "R", false, "Refresh PR status first")
 	cmd.Flags().BoolVar(&resetCache, "reset-cache", false, "Clear all cached data")
@@ -312,7 +311,8 @@ func isStaleWorktree(wt git.Worktree, staleDays int) bool {
 
 // runPruneTargets handles removal of specific worktrees by [scope:]branch args.
 // When global is false, unscoped targets are scoped to the current repo.
-func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []string, global, dryRun bool, opts pruneOpts) error {
+// Force is only required when at least one target is not prunable (not merged).
+func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []string, global, force, dryRun bool, opts pruneOpts) error {
 	l := log.FromContext(ctx)
 	out := output.FromContext(ctx)
 
@@ -349,16 +349,54 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 		})
 	}
 
+	// Enrich with merge info to determine if force is needed
+	prCache := prcache.Load()
+
+	// Check locally-merged status per unique repo
+	repoIndices := make(map[string][]int)
+	for i, wt := range toRemove {
+		repoIndices[wt.RepoPath] = append(repoIndices[wt.RepoPath], i)
+	}
+	for repoPath, indices := range repoIndices {
+		defaultBranch := git.GetDefaultBranch(ctx, repoPath)
+		mergedBranches, err := git.GetMergedBranches(ctx, repoPath, defaultBranch)
+		if err != nil {
+			l.Printf("Warning: could not check merged branches for %s: %v (will require --force)\n", filepath.Base(repoPath), err)
+			continue
+		}
+		for _, i := range indices {
+			toRemove[i].LocallyMerged = mergedBranches[toRemove[i].Branch]
+		}
+	}
+
+	// Enrich with PR state from cache
+	populatePRFields(toRemove, prCache)
+
+	// Require force only when at least one target is not prunable
+	if !force {
+		var unprunable []string
+		for _, wt := range toRemove {
+			if !isWorktreePrunable(wt) {
+				unprunable = append(unprunable, wt.RepoName+":"+wt.Branch)
+			}
+		}
+		if len(unprunable) > 0 {
+			return fmt.Errorf("cannot prune unmerged worktrees without -f/--force: %s", strings.Join(unprunable, ", "))
+		}
+	}
+
 	if dryRun {
 		out.Println("Would remove:")
 		for _, wt := range toRemove {
-			l.Printf("  %s:%s (%s)\n", wt.RepoName, wt.Branch, wt.Path)
+			out.Printf("  %s:%s (%s)\n", wt.RepoName, wt.Branch, wt.Path)
 		}
 		return nil
 	}
 
-	// Use pruneWorktrees for consistent removal logic
+	// Force=true for git worktree remove: we already validated merge status above,
+	// or the user explicitly passed --force.
 	opts.Force = true
+	opts.PRCache = prCache
 	removed, failed := pruneWorktrees(ctx, toRemove, opts)
 
 	for _, wt := range removed {
@@ -368,11 +406,22 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 		l.Printf("Failed to remove: %s:%s (%s)\n", wt.RepoName, wt.Branch, wt.Path)
 	}
 
+	// Save PR cache (entries may have been deleted during removal)
+	if err := prCache.SaveIfDirty(); err != nil {
+		l.Printf("Warning: failed to save cache: %v\n", err)
+	}
+
 	if len(failed) > 0 {
 		return fmt.Errorf("failed to remove %d worktree(s)", len(failed))
 	}
 
 	return nil
+}
+
+// isWorktreePrunable returns true if the worktree is safe to prune without force
+// (merged via PR or merged locally into the default branch).
+func isWorktreePrunable(wt git.Worktree) bool {
+	return wt.PRState == forge.PRStateMerged || wt.LocallyMerged
 }
 
 // pruneWorktrees removes the given worktrees and runs hooks.
@@ -470,8 +519,6 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 			// Force delete if forge confirmed merge (handles squash merges),
 			// safe delete (-d) otherwise (including locally-merged branches,
 			// where git's own ancestry check in -d provides a safety net).
-			// Note: PRState is empty for targeted prune (no forge lookup),
-			// so forceDelete is always false in that path — this is intentional.
 			forceDelete := wt.PRState == forge.PRStateMerged
 			if err := git.DeleteLocalBranch(ctx, wt.RepoPath, wt.Branch, forceDelete); err != nil {
 				l.Printf("Warning: failed to delete branch %s: %v\n", wt.Branch, err)
