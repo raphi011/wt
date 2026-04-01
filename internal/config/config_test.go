@@ -1162,3 +1162,102 @@ func TestValidateHookTriggers(t *testing.T) {
 		})
 	}
 }
+
+func TestParseHooksConfig_NonTableValues(t *testing.T) {
+	t.Parallel()
+
+	// Non-table values in hooks map should be silently ignored
+	raw := map[string]any{
+		"valid": map[string]any{
+			"command": "echo valid",
+		},
+		"string-value": "not a table",
+		"number-value": 42,
+		"bool-value":   true,
+	}
+
+	result := parseHooksConfig(raw)
+	if len(result.Hooks) != 1 {
+		t.Errorf("len(Hooks) = %d, want 1 (only valid table entry)", len(result.Hooks))
+	}
+	if _, ok := result.Hooks["valid"]; !ok {
+		t.Error("missing 'valid' hook")
+	}
+}
+
+func TestParseHooksConfig_EmptyCommand(t *testing.T) {
+	t.Parallel()
+
+	raw := map[string]any{
+		"empty": map[string]any{
+			"description": "no command field",
+		},
+	}
+
+	result := parseHooksConfig(raw)
+	hook := result.Hooks["empty"]
+	if hook.Command != "" {
+		t.Errorf("Command = %q, want empty", hook.Command)
+	}
+	if hook.Description != "no command field" {
+		t.Errorf("Description = %q, want %q", hook.Description, "no command field")
+	}
+}
+
+func TestMatchPattern_EdgeCases(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		pattern string
+		spec    string
+		want    bool
+	}{
+		{"empty pattern empty spec", "", "", true},
+		{"single char wildcard", "*", "", true},
+		{"single char wildcard nonempty", "*", "a", true},
+		{"prefix only slash", "org/", "org/", true},
+		{"suffix match exact", "*/repo", "repo", false},
+		{"prefix star", "*repo", "myrepo", true},
+		{"prefix star slash", "*/", "org/", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := matchPattern(tt.pattern, tt.spec)
+			if got != tt.want {
+				t.Errorf("matchPattern(%q, %q) = %v, want %v", tt.pattern, tt.spec, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsEnabled_Default(t *testing.T) {
+	t.Parallel()
+
+	h := Hook{Command: "echo test"}
+	if !h.IsEnabled() {
+		t.Error("IsEnabled() = false for nil Enabled, want true")
+	}
+}
+
+func TestGetForgeTypeForRepo_EmptyRules(t *testing.T) {
+	t.Parallel()
+
+	cfg := ForgeConfig{Default: "github"}
+	got := cfg.GetForgeTypeForRepo("any/repo")
+	if got != "github" {
+		t.Errorf("GetForgeTypeForRepo = %q, want %q", got, "github")
+	}
+}
+
+func TestGetUserForRepo_EmptyRules(t *testing.T) {
+	t.Parallel()
+
+	cfg := ForgeConfig{Default: "github"}
+	got := cfg.GetUserForRepo("any/repo")
+	if got != "" {
+		t.Errorf("GetUserForRepo = %q, want empty", got)
+	}
+}
