@@ -613,3 +613,44 @@ func TestPrCheckout_AlreadyCheckedOut(t *testing.T) {
 		t.Fatalf("worktree should still exist at %s", wtPath)
 	}
 }
+
+// TestFindWorktreeForBranch_NotFound tests that findWorktreeForBranch returns
+// false when the branch has no worktree checked out.
+//
+// Scenario: Repo has branch "feature" but no worktree for it
+// Expected: Returns ("", false)
+func TestFindWorktreeForBranch_NotFound(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
+
+	ctx := testContext(t)
+
+	path, found := findWorktreeForBranch(ctx, repoPath, "feature")
+	if found {
+		t.Errorf("expected branch not found in worktrees, got path %q", path)
+	}
+	if path != "" {
+		t.Errorf("expected empty path, got %q", path)
+	}
+}
+
+// TestFindWorktreeForBranch_InvalidRepo tests that findWorktreeForBranch
+// returns false when the repo path is invalid (ListWorktreesFromRepo error path).
+//
+// Scenario: Repo path does not exist
+// Expected: Returns ("", false) without panicking
+func TestFindWorktreeForBranch_InvalidRepo(t *testing.T) {
+	t.Parallel()
+
+	ctx := testContext(t)
+
+	path, found := findWorktreeForBranch(ctx, "/nonexistent/path", "feature")
+	if found {
+		t.Errorf("expected not found for invalid repo, got path %q", path)
+	}
+	if path != "" {
+		t.Errorf("expected empty path, got %q", path)
+	}
+}
