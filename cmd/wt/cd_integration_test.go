@@ -441,3 +441,264 @@ func TestCd_NoArgs_StaleHistory(t *testing.T) {
 		t.Errorf("expected path %q, got %q", wtPath, got)
 	}
 }
+
+// TestCd_HistorySorting tests that wt cd (no args) returns the most recently accessed worktree.
+//
+// Scenario: Two worktrees exist with history entries at different timestamps
+// Expected: The worktree with the more recent LastAccess is returned
+func TestCd_HistorySorting(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+	wtPath1 := createTestWorktree(t, repoPath, "older-branch")
+	wtPath2 := createTestWorktree(t, repoPath, "newer-branch")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	historyPath := filepath.Join(tmpDir, ".wt", "history.json")
+
+	// Record history entries: wtPath1 accessed 2 hours ago, wtPath2 accessed 1 hour ago
+	hist := &history.History{
+		Entries: []history.Entry{
+			{
+				Path:       wtPath1,
+				RepoName:   "myrepo",
+				Branch:     "older-branch",
+				LastAccess: time.Now().Add(-2 * time.Hour),
+			},
+			{
+				Path:       wtPath2,
+				RepoName:   "myrepo",
+				Branch:     "newer-branch",
+				LastAccess: time.Now().Add(-1 * time.Hour),
+			},
+		},
+	}
+	if err := hist.Save(historyPath); err != nil {
+		t.Fatalf("failed to save history: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		HistoryPath:  historyPath,
+	}
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+
+	cmd := newCdCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cd command failed: %v", err)
+	}
+
+	got := strings.TrimSpace(out.String())
+	if got != wtPath2 {
+		t.Errorf("expected most recently accessed path %q, got %q", wtPath2, got)
+	}
+}
+
+// TestCd_NoWorktrees_BranchArg tests error when a registered repo has no worktrees and branch arg is used.
+//
+// Scenario: Repo is registered but has no extra worktrees, user runs `wt cd feature`
+// Expected: Returns "worktree not found" error
+func TestCd_NoWorktrees_BranchArg(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	// Setup a repo but create NO additional worktrees
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cmd := newCdCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when branch has no worktree, got nil")
+	}
+	if !strings.Contains(err.Error(), "worktree not found") {
+		t.Errorf("expected 'worktree not found' error, got %q", err.Error())
+	}
+}
+
+// TestCd_CopyFlag tests that --copy flag does not prevent path output.
+//
+// Scenario: User runs `wt cd --copy feature`
+// Expected: Path is still printed to stdout; clipboard failure is a warning not an error
+func TestCd_CopyFlag(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+
+	cmd := newCdCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--copy", "feature"})
+
+	// Clipboard operations may fail in test environments; the command should
+	// still succeed and print the path to stdout.
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cd --copy command failed: %v", err)
+	}
+
+	got := strings.TrimSpace(out.String())
+	if got != wtPath {
+		t.Errorf("expected path %q, got %q", wtPath, got)
+	}
+}
+
+// TestCd_AllStaleHistory tests error when all history entries are stale.
+//
+// Scenario: History has entries but all paths no longer exist
+// Expected: Returns "no worktree history (all entries stale)" error
+func TestCd_AllStaleHistory(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{Repos: []registry.Repo{}}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	historyPath := filepath.Join(tmpDir, ".wt", "history.json")
+
+	// Record only stale entries (paths that don't exist)
+	hist := &history.History{
+		Entries: []history.Entry{
+			{
+				Path:       filepath.Join(tmpDir, "nonexistent-1"),
+				RepoName:   "gone-repo",
+				Branch:     "gone-branch-1",
+				LastAccess: time.Now().Add(-1 * time.Hour),
+			},
+			{
+				Path:       filepath.Join(tmpDir, "nonexistent-2"),
+				RepoName:   "gone-repo",
+				Branch:     "gone-branch-2",
+				LastAccess: time.Now().Add(-2 * time.Hour),
+			},
+		},
+	}
+	if err := hist.Save(historyPath); err != nil {
+		t.Fatalf("failed to save history: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		HistoryPath:  historyPath,
+	}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newCdCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for all-stale history, got nil")
+	}
+	if !strings.Contains(err.Error(), "all entries stale") {
+		t.Errorf("expected 'all entries stale' error, got %q", err.Error())
+	}
+}
+
+// TestCd_LabelScope tests resolving a worktree via label:branch.
+//
+// Scenario: Two repos both have a "feature" worktree; one repo has label "team-a".
+// User runs `wt cd team-a:feature`.
+// Expected: Returns the path from the repo with label "team-a", not the other repo.
+func TestCd_LabelScope(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repo1Path := setupTestRepo(t, tmpDir, "repo1")
+	repo2Path := setupTestRepo(t, tmpDir, "repo2")
+	wtPath1 := createTestWorktree(t, repo1Path, "feature")
+	createTestWorktree(t, repo2Path, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: repo1Path, Labels: []string{"team-a"}},
+			{Name: "repo2", Path: repo2Path},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repo1Path)
+
+	cmd := newCdCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"team-a:feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cd command failed: %v", err)
+	}
+
+	got := strings.TrimSpace(out.String())
+	if got != wtPath1 {
+		t.Errorf("expected path from repo with label 'team-a' %q, got %q", wtPath1, got)
+	}
+}
