@@ -483,11 +483,14 @@ func TestPrMerge_HookNoHookMutuallyExclusive(t *testing.T) {
 	}
 }
 
-// TestPrCheckout_OrgRepoAlreadyInRegistry tests error when org/repo format is used
-// but the repo name is already registered.
+// TestPrCheckout_OrgRepoAlreadyInRegistry tests that org/repo format finds a
+// registered repo by matching any of its remote URLs.
 //
-// Scenario: User runs `wt pr checkout org/myrepo 123` but "myrepo" already in registry
-// Expected: Returns specific error suggesting to use the local name instead
+// Scenario: User runs `wt pr checkout test/myrepo 123` and "myrepo" is registered
+//
+//	with origin https://github.com/test/myrepo.git
+//
+// Expected: Finds the existing repo (proceeds past lookup, fails at forge/PR fetch)
 func TestPrCheckout_OrgRepoAlreadyInRegistry(t *testing.T) {
 	t.Parallel()
 
@@ -513,18 +516,375 @@ func TestPrCheckout_OrgRepoAlreadyInRegistry(t *testing.T) {
 
 	cmd := newPrCheckoutCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"org/myrepo", "123"})
+	// Use test/myrepo to match the origin set by setupTestRepo
+	cmd.SetArgs([]string{"test/myrepo", "123"})
 
 	err := cmd.Execute()
 	if err == nil {
-		t.Fatal("expected error for already registered repo, got nil")
+		t.Fatal("expected error (forge/PR fetch), got nil")
 	}
-	if !strings.Contains(err.Error(), "already exists") {
-		t.Errorf("expected 'already exists' error, got %q", err.Error())
+	// Should find the repo and fail later at forge detection or PR fetch
+	if strings.Contains(err.Error(), "not found in registry") {
+		t.Errorf("should have found repo via remote URL, got %q", err.Error())
 	}
-	// Should suggest using the local name
-	if !strings.Contains(err.Error(), "wt pr checkout myrepo") {
-		t.Errorf("expected suggestion to use local name, got %q", err.Error())
+	if strings.Contains(err.Error(), "already exists") {
+		t.Errorf("should not return 'already exists' error, got %q", err.Error())
+	}
+	if strings.Contains(err.Error(), "no registered repo") {
+		t.Errorf("should have found repo via remote URL, got %q", err.Error())
+	}
+	// Should reach forge detection (origin URL is a fake URL)
+	if strings.Contains(err.Error(), "no registered repo") || strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected error from forge detection stage, got lookup error: %q", err.Error())
+	}
+}
+
+// TestPrCheckout_OrgRepoMatchesByRemote tests that org/repo format finds a
+// registered repo even when the registry name differs from the repo slug.
+//
+// Scenario: Repo registered as "protectedaccounts" but origin is
+//
+//	https://github.com/n26/de.tech26.protectedaccounts.git
+//
+// Expected: `wt pr checkout n26/de.tech26.protectedaccounts 123` finds it
+func TestPrCheckout_OrgRepoMatchesByRemote(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	// setupTestRepo sets origin to https://github.com/test/<name>.git
+	// We override it to simulate a dotted repo name that differs from the registry name
+	repoPath := setupTestRepo(t, tmpDir, "protectedaccounts")
+
+	// Override origin to use a different org/repo path
+	setRemote := exec.Command("git", "remote", "set-url", "origin", "https://github.com/n26/de.tech26.protectedaccounts.git")
+	setRemote.Dir = repoPath
+	if out, err := setRemote.CombinedOutput(); err != nil {
+		t.Fatalf("failed to set origin: %v\n%s", err, out)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "protectedaccounts", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"n26/de.tech26.protectedaccounts", "123"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error (forge/PR fetch), got nil")
+	}
+	// Should find the repo via remote URL match and fail at forge detection
+	if strings.Contains(err.Error(), "not found in registry") {
+		t.Errorf("should have found repo via remote URL, got %q", err.Error())
+	}
+	if strings.Contains(err.Error(), "no registered repo") {
+		t.Errorf("should have found repo via remote URL, got %q", err.Error())
+	}
+}
+
+// TestPrCheckout_OrgRepoCaseInsensitiveMatch tests that remote URL matching
+// is case-insensitive.
+//
+// Scenario: Origin is https://github.com/N26/MyRepo.git, user types n26/myrepo
+// Expected: Finds the repo despite case difference
+func TestPrCheckout_OrgRepoCaseInsensitiveMatch(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	// Set origin with mixed case
+	setRemote := exec.Command("git", "remote", "set-url", "origin", "https://github.com/N26/MyRepo.git")
+	setRemote.Dir = repoPath
+	if out, err := setRemote.CombinedOutput(); err != nil {
+		t.Fatalf("failed to set origin: %v\n%s", err, out)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	// Use lowercase to test case-insensitive matching
+	cmd.SetArgs([]string{"n26/myrepo", "123"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error (forge/PR fetch), got nil")
+	}
+	// Should find the repo despite case mismatch
+	if strings.Contains(err.Error(), "no registered repo") {
+		t.Errorf("case-insensitive match should have found repo, got %q", err.Error())
+	}
+}
+
+// TestPrCheckout_OrgRepoMultipleMatches tests that an error is returned when
+// multiple registered repos have remotes matching the same org/repo.
+//
+// Scenario: Two repos both have origin pointing to test/shared-repo
+// Expected: Error listing both repo names
+func TestPrCheckout_OrgRepoMultipleMatches(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath1 := setupTestRepo(t, tmpDir, "repo1")
+	repoPath2 := setupTestRepo(t, tmpDir, "repo2")
+
+	// Set both repos to have the same origin
+	for _, rp := range []string{repoPath1, repoPath2} {
+		setRemote := exec.Command("git", "remote", "set-url", "origin", "https://github.com/test/shared-repo.git")
+		setRemote.Dir = rp
+		if out, err := setRemote.CombinedOutput(); err != nil {
+			t.Fatalf("failed to set origin for %s: %v\n%s", rp, err, out)
+		}
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: repoPath1},
+			{Name: "repo2", Path: repoPath2},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"test/shared-repo", "123"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for multiple matches, got nil")
+	}
+	if !strings.Contains(err.Error(), "multiple registered repos match") {
+		t.Errorf("expected 'multiple registered repos match' error, got %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "repo1") || !strings.Contains(err.Error(), "repo2") {
+		t.Errorf("expected error to list both repo names, got %q", err.Error())
+	}
+}
+
+// TestPrCheckout_OrgRepoNoMatchWithoutCloneFlag tests that org/repo format
+// fails with a helpful error when no registered repo matches and --clone is not set.
+//
+// Scenario: User runs `wt pr checkout unknown/repo 123` with no matching remote
+// Expected: Error with suggestion to use --clone
+func TestPrCheckout_OrgRepoNoMatchWithoutCloneFlag(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"unknown/repo", "123"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for unmatched org/repo without --clone, got nil")
+	}
+	if !strings.Contains(err.Error(), "no registered repo has a remote matching") {
+		t.Errorf("expected 'no registered repo' error, got %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "--clone") {
+		t.Errorf("expected suggestion to use --clone, got %q", err.Error())
+	}
+}
+
+// TestPrCheckout_OrgRepoWithCloneFlag tests that --clone allows cloning
+// when no registered repo matches.
+//
+// Scenario: User runs `wt pr checkout --clone unknown/repo 123`
+// Expected: Attempts to clone (fails at forge detection, not at "no registered repo")
+func TestPrCheckout_OrgRepoWithCloneFlag(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--clone", "unknown/repo", "123"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error (forge detection), got nil")
+	}
+	// Should NOT get "no registered repo" — it should proceed to clone
+	if strings.Contains(err.Error(), "no registered repo") {
+		t.Errorf("--clone should bypass 'no registered repo' error, got %q", err.Error())
+	}
+}
+
+// TestPrCheckout_OrgRepoMatchesByUpstreamRemote tests that org/repo format
+// matches against non-origin remotes (e.g. upstream).
+//
+// Scenario: Repo has origin pointing elsewhere, but upstream matches org/repo
+// Expected: Finds the repo via the upstream remote
+func TestPrCheckout_OrgRepoMatchesByUpstreamRemote(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	// Origin points to something else; add an upstream that matches
+	setOrigin := exec.Command("git", "remote", "set-url", "origin", "https://github.com/other/unrelated.git")
+	setOrigin.Dir = repoPath
+	if out, err := setOrigin.CombinedOutput(); err != nil {
+		t.Fatalf("failed to set origin: %v\n%s", err, out)
+	}
+	addUpstream := exec.Command("git", "remote", "add", "upstream", "https://github.com/test/target-repo.git")
+	addUpstream.Dir = repoPath
+	if out, err := addUpstream.CombinedOutput(); err != nil {
+		t.Fatalf("failed to add upstream: %v\n%s", err, out)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"test/target-repo", "123"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error (forge/PR fetch), got nil")
+	}
+	// Should find the repo via upstream remote, not fail at lookup
+	if strings.Contains(err.Error(), "no registered repo") {
+		t.Errorf("should have matched via upstream remote, got %q", err.Error())
+	}
+}
+
+// TestPrCheckout_CloneFlagWithExistingMatch tests that --clone does not trigger
+// cloning when a registered repo already matches the org/repo by remote URL.
+//
+// Scenario: User runs `wt pr checkout --clone test/myrepo 123` and myrepo is registered
+// Expected: Uses existing repo (match takes precedence over --clone)
+func TestPrCheckout_CloneFlagWithExistingMatch(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	// --clone is set, but test/myrepo already matches the registered repo
+	cmd.SetArgs([]string{"--clone", "test/myrepo", "123"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error (forge/PR fetch), got nil")
+	}
+	// Should NOT attempt to clone — the existing match takes precedence
+	if strings.Contains(err.Error(), "clone") {
+		t.Errorf("should use existing repo instead of cloning, got %q", err.Error())
+	}
+	// Should NOT get "no registered repo"
+	if strings.Contains(err.Error(), "no registered repo") {
+		t.Errorf("should have found repo via remote URL, got %q", err.Error())
 	}
 }
 

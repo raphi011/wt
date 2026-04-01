@@ -269,6 +269,33 @@ func GetOriginURL(ctx context.Context, repoPath string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// GetRemoteURLs returns a map of remote name → fetch URL for a repository.
+// Returns an empty (non-nil) map if the repository has no remotes.
+// Uses a single `git remote -v` call for efficiency.
+func GetRemoteURLs(ctx context.Context, repoPath string) (map[string]string, error) {
+	output, err := outputGit(ctx, repoPath, "remote", "-v")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list remotes: %v", err)
+	}
+
+	trimmed := strings.TrimSpace(string(output))
+	if trimmed == "" {
+		return make(map[string]string), nil
+	}
+
+	remotes := make(map[string]string)
+	for line := range strings.SplitSeq(trimmed, "\n") {
+		if !strings.HasSuffix(line, "(fetch)") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) >= 2 {
+			remotes[fields[0]] = fields[1]
+		}
+	}
+	return remotes, nil
+}
+
 // WorktreeInfo contains basic worktree information from git worktree list.
 type WorktreeInfo struct {
 	Path       string

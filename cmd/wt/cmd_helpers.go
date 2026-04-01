@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/forge"
+	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
@@ -134,4 +138,53 @@ func registerHookFlags(cmd *cobra.Command, hf *hookFlags) {
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
 	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
 	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
+}
+
+// errMultipleRepoMatches is returned when multiple registered repos have
+// remotes matching the same org/repo path.
+var errMultipleRepoMatches = errors.New("multiple registered repos match")
+
+// findRepoByRemoteRepoPath searches all registered repos for one whose remote
+// URLs match the given org/repo path (e.g. "n26/de.tech26.protectedaccounts").
+// Checks all remotes (origin, upstream, etc.), not just origin.
+// Comparison is case-insensitive.
+func findRepoByRemoteRepoPath(ctx context.Context, reg *registry.Registry, orgRepo string) (registry.Repo, error) {
+	l := log.FromContext(ctx)
+	var matches []registry.Repo
+	var skipped []string
+
+	for _, repo := range reg.Repos {
+		if ctx.Err() != nil {
+			return registry.Repo{}, ctx.Err()
+		}
+		remoteURLs, err := git.GetRemoteURLs(ctx, repo.Path)
+		if err != nil {
+			l.Debug("skipping repo for remote match", "repo", repo.Name, "path", repo.Path, "error", err)
+			skipped = append(skipped, repo.Name)
+			continue
+		}
+		for _, url := range remoteURLs {
+			if strings.EqualFold(forge.ExtractRepoPath(url), orgRepo) {
+				matches = append(matches, repo)
+				break
+			}
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		msg := fmt.Sprintf("no registered repo found with remote matching %s", orgRepo)
+		if len(skipped) > 0 {
+			msg += fmt.Sprintf(" (could not check %d repo(s): %s)", len(skipped), strings.Join(skipped, ", "))
+		}
+		return registry.Repo{}, errors.New(msg)
+	case 1:
+		return matches[0], nil
+	default:
+		names := make([]string, len(matches))
+		for i, m := range matches {
+			names[i] = m.Name
+		}
+		return registry.Repo{}, fmt.Errorf("%w %s: %s", errMultipleRepoMatches, orgRepo, strings.Join(names, ", "))
+	}
 }
