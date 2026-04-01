@@ -5,10 +5,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,16 +36,14 @@ jobs:
           sudo dpkg -i glab.deb
 
       - name: Configure glab CLI
-        env:
-          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        if: env.GITLAB_TOKEN != ''
         run: |
           glab config set git_protocol https --host gitlab.com
           glab auth status
 
       - name: Integration Test
+        if: env.GH_TOKEN != ''
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           WT_TEST_GITHUB_REPO: raphi011/wt-test
           WT_TEST_GITLAB_REPO: raphi011/wt-test
         run: go test -tags=integration -coverprofile=coverage-integration.out ./...
