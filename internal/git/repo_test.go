@@ -1169,3 +1169,82 @@ func TestGetMergedBranches(t *testing.T) {
 		}
 	})
 }
+
+func TestGetRemoteURLs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("single origin remote", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		if err := runGit(ctx, repoPath, "remote", "add", "origin", "https://github.com/test/repo.git"); err != nil {
+			t.Fatalf("failed to add origin: %v", err)
+		}
+
+		remotes, err := GetRemoteURLs(ctx, repoPath)
+		if err != nil {
+			t.Fatalf("GetRemoteURLs failed: %v", err)
+		}
+		if len(remotes) != 1 {
+			t.Fatalf("expected 1 remote, got %d: %v", len(remotes), remotes)
+		}
+		if remotes["origin"] != "https://github.com/test/repo.git" {
+			t.Errorf("origin = %q, want https://github.com/test/repo.git", remotes["origin"])
+		}
+	})
+
+	t.Run("multiple remotes", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		if err := runGit(ctx, repoPath, "remote", "add", "origin", "https://github.com/test/repo.git"); err != nil {
+			t.Fatalf("failed to add origin: %v", err)
+		}
+		if err := runGit(ctx, repoPath, "remote", "add", "upstream", "git@github.com:upstream/repo.git"); err != nil {
+			t.Fatalf("failed to add upstream: %v", err)
+		}
+
+		remotes, err := GetRemoteURLs(ctx, repoPath)
+		if err != nil {
+			t.Fatalf("GetRemoteURLs failed: %v", err)
+		}
+		if len(remotes) != 2 {
+			t.Fatalf("expected 2 remotes, got %d: %v", len(remotes), remotes)
+		}
+		if remotes["origin"] != "https://github.com/test/repo.git" {
+			t.Errorf("origin = %q, want https://github.com/test/repo.git", remotes["origin"])
+		}
+		if remotes["upstream"] != "git@github.com:upstream/repo.git" {
+			t.Errorf("upstream = %q, want git@github.com:upstream/repo.git", remotes["upstream"])
+		}
+	})
+
+	t.Run("no remotes returns empty map", func(t *testing.T) {
+		t.Parallel()
+		repoPath := setupTestRepo(t)
+		ctx := context.Background()
+
+		remotes, err := GetRemoteURLs(ctx, repoPath)
+		if err != nil {
+			t.Fatalf("GetRemoteURLs failed: %v", err)
+		}
+		if remotes == nil {
+			t.Fatal("expected non-nil empty map, got nil")
+		}
+		if len(remotes) != 0 {
+			t.Errorf("expected empty map, got %v", remotes)
+		}
+	})
+
+	t.Run("invalid repo path", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+
+		_, err := GetRemoteURLs(ctx, "/nonexistent/path")
+		if err == nil {
+			t.Fatal("expected error for invalid path")
+		}
+	})
+}

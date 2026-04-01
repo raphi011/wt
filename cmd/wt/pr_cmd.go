@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -101,24 +102,27 @@ func newPrCheckoutCmd() *cobra.Command {
 	var (
 		forgeName string
 		cloneMode string
+		cloneRepo bool
 		note      string
 		hf        hookFlags
 	)
 
 	cmd := &cobra.Command{
 		Use:     "checkout [repo] <number>",
-		Short:   "Checkout PR (clones if needed)",
+		Short:   "Checkout a PR into a worktree",
 		Aliases: []string{"co"},
 		Args:    cobra.RangeArgs(1, 2),
-		Long: `Checkout a PR, cloning the repo if it doesn't exist locally.
+		Long: `Checkout a PR into a worktree.
 
-If repo contains '/', it's treated as org/repo and cloned from GitHub/GitLab.
-Otherwise, it's looked up in the local registry.
-Use --clone-mode to control whether the repo is cloned as bare or regular.`,
-		Example: `  wt pr checkout 123                            # PR from current repo
-  wt pr checkout myrepo 123                     # PR from local repo in registry
-  wt pr checkout org/repo 123                   # Clone repo and checkout PR
-  wt pr checkout --clone-mode regular org/repo 123  # Regular clone + checkout`,
+If repo contains '/', it's treated as org/repo and matched against remotes of
+registered repos. Use --clone to clone the repo if no local match is found.
+Otherwise, the repo argument is looked up in the local registry by name.
+Use --clone-mode (with --clone) to control whether the repo is cloned as bare or regular.`,
+		Example: `  wt pr checkout 123                                    # PR from current repo
+  wt pr checkout myrepo 123                             # PR from local repo in registry
+  wt pr checkout org/repo 123                           # PR from registered repo matched by remote
+  wt pr checkout --clone org/repo 123                   # Clone repo and checkout PR
+  wt pr checkout --clone --clone-mode regular org/repo 123  # Regular clone + checkout`,
 		ValidArgsFunction: completePrCheckoutArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -159,61 +163,73 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 			var justClonedRegular bool
 
 			if repoArg != "" && strings.Contains(repoArg, "/") {
-				// Remote clone path: org/repo format
+				// Org/repo format: match by remote URL, or clone with --clone
 				orgRepo := repoArg
 
-				// Check if already exists in registry
-				parts := strings.Split(orgRepo, "/")
-				repoName := parts[len(parts)-1]
-				if existing, err := reg.FindByName(repoName); err == nil {
-					return fmt.Errorf("repository %q already exists at %s\nUse 'wt pr checkout %s %d' instead", repoName, existing.Path, repoName, prNumber)
-				}
-
-				// Get forge
-				if forgeName == "" {
-					forgeName = cfg.Forge.GetForgeTypeForRepo(orgRepo)
-				}
-				f = forge.ByNameWithConfig(forgeName, &cfg.Forge)
-				if err := f.Check(ctx); err != nil {
-					return err
-				}
-
-				// Resolve effective clone mode
-				// Uses global config since the repo doesn't exist yet
-				// (local .wt.toml can't be read before cloning)
-				bareMode, err := cfg.Clone.ResolveIsBare(cloneMode)
-				if err != nil {
-					return err
-				}
-
-				// Clone the repo
-				cwd := config.WorkDirFromContext(ctx)
-				if bareMode {
-					l.Printf("Cloning %s (bare)...\n", orgRepo)
-					repoPath, err = f.CloneBareRepo(ctx, orgRepo, cwd)
+				// Check if a registered repo already has a remote matching this org/repo
+				existing, findErr := findRepoByRemoteRepoPath(ctx, reg, orgRepo)
+				if findErr == nil {
+					repo = existing
+					repoPath = existing.Path
+				} else if errors.Is(findErr, errMultipleRepoMatches) {
+					return findErr
+				} else if ctx.Err() != nil {
+					return ctx.Err()
 				} else {
-					justClonedRegular = true
-					l.Printf("Cloning %s...\n", orgRepo)
-					repoPath, err = f.CloneRepo(ctx, orgRepo, cwd)
-				}
-				if err != nil {
-					return fmt.Errorf("failed to clone repo: %w", err)
-				}
+					// No local match
+					if !cloneRepo {
+						return fmt.Errorf("no registered repo has a remote matching %s\n\nTo clone and checkout, re-run with --clone:\n  wt pr checkout --clone %s %d\n\nIf you already have this repo locally, add a matching remote or register it with 'wt repo add'", orgRepo, orgRepo, prNumber)
+					}
 
-				// Register in registry
-				repo = registry.Repo{
-					Path:   repoPath,
-					Name:   repoName,
-					Labels: cfg.DefaultLabels,
-				}
-				if err := reg.Add(repo); err != nil {
-					return fmt.Errorf("register repo: %w", err)
-				}
-				if err := reg.Save(cfg.RegistryPath); err != nil {
-					return fmt.Errorf("save registry: %w", err)
-				}
+					parts := strings.Split(orgRepo, "/")
+					repoName := parts[len(parts)-1]
 
-				l.Printf("✓ Cloned and registered: %s\n", repoPath)
+					// Get forge
+					if forgeName == "" {
+						forgeName = cfg.Forge.GetForgeTypeForRepo(orgRepo)
+					}
+					f = forge.ByNameWithConfig(forgeName, &cfg.Forge)
+					if err := f.Check(ctx); err != nil {
+						return err
+					}
+
+					// Resolve effective clone mode
+					// Uses global config since the repo doesn't exist yet
+					// (local .wt.toml can't be read before cloning)
+					bareMode, err := cfg.Clone.ResolveIsBare(cloneMode)
+					if err != nil {
+						return err
+					}
+
+					// Clone the repo
+					cwd := config.WorkDirFromContext(ctx)
+					if bareMode {
+						l.Printf("Cloning %s (bare)...\n", orgRepo)
+						repoPath, err = f.CloneBareRepo(ctx, orgRepo, cwd)
+					} else {
+						justClonedRegular = true
+						l.Printf("Cloning %s...\n", orgRepo)
+						repoPath, err = f.CloneRepo(ctx, orgRepo, cwd)
+					}
+					if err != nil {
+						return fmt.Errorf("failed to clone repo: %w", err)
+					}
+
+					// Register in registry
+					repo = registry.Repo{
+						Path:   repoPath,
+						Name:   repoName,
+						Labels: cfg.DefaultLabels,
+					}
+					if err := reg.Add(repo); err != nil {
+						return fmt.Errorf("register repo: %w", err)
+					}
+					if err := reg.Save(cfg.RegistryPath); err != nil {
+						return fmt.Errorf("save registry: %w", err)
+					}
+
+					l.Printf("✓ Cloned and registered: %s\n", repoPath)
+				}
 			} else if repoArg != "" {
 				// Local mode: look up in registry
 				repo, err = reg.FindByName(repoArg)
@@ -345,6 +361,7 @@ Use --clone-mode to control whether the repo is cloned as bare or regular.`,
 	}
 
 	cmd.Flags().StringVar(&forgeName, "forge", "", "Forge type: github or gitlab")
+	cmd.Flags().BoolVar(&cloneRepo, "clone", false, "Clone the repo if no local match (for org/repo format)")
 	cmd.Flags().StringVar(&cloneMode, "clone-mode", "", "Clone mode: bare or regular (default: config)")
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
 	registerHookFlags(cmd, &hf)
