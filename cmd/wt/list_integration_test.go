@@ -622,3 +622,107 @@ func TestList_GlobalFromNonRepo(t *testing.T) {
 		t.Errorf("expected output to contain 'feature', got %q", output)
 	}
 }
+
+// TestList_DefaultSortFromConfig tests that default_sort in config is used when --sort is not set.
+//
+// Scenario: User sets default_sort = "branch" in config, runs `wt list` without --sort
+// Expected: Worktrees are sorted alphabetically by branch name (from config)
+func TestList_DefaultSortFromConfig(t *testing.T) {
+	t.Parallel()
+	tmpDir := resolvePath(t, t.TempDir())
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"gamma", "alpha", "beta"})
+	createTestWorktree(t, repoPath, "gamma")
+	createTestWorktree(t, repoPath, "alpha")
+	createTestWorktree(t, repoPath, "beta")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	// Set default_sort = "branch" in config; no --sort flag will be passed
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		DefaultSort:  "branch",
+	}
+	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, repoPath)
+
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{}) // No --sort flag — config's default_sort should apply
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
+	}
+
+	output := out.String()
+	// All branches should appear
+	for _, branch := range []string{"alpha", "beta", "gamma"} {
+		if !strings.Contains(output, branch) {
+			t.Errorf("expected output to contain %q, got %q", branch, output)
+		}
+	}
+
+	// Verify alphabetical order: alpha < beta < gamma
+	alphaIdx := strings.Index(output, "alpha")
+	betaIdx := strings.Index(output, "beta")
+	gammaIdx := strings.Index(output, "gamma")
+	if alphaIdx > betaIdx || betaIdx > gammaIdx {
+		t.Errorf("expected alphabetical order (alpha < beta < gamma), got alpha=%d beta=%d gamma=%d",
+			alphaIdx, betaIdx, gammaIdx)
+	}
+}
+
+// TestList_NonexistentLabelFilter tests filtering by a name that matches no repo and no label.
+//
+// Scenario: Registry has repos with labels, but the requested scope matches nothing
+// Expected: Returns "no repo or label found" error
+func TestList_NonexistentLabelFilter(t *testing.T) {
+	t.Parallel()
+	tmpDir := resolvePath(t, t.TempDir())
+
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath, Labels: []string{"backend"}},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx, _ := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, tmpDir)
+
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"nonexistent-label"}) // Not a repo name, not a label
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for nonexistent scope, got nil")
+	}
+	if !strings.Contains(err.Error(), "no repo or label found") {
+		t.Errorf("expected 'no repo or label found' error, got %q", err.Error())
+	}
+}

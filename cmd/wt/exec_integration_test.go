@@ -483,3 +483,95 @@ func TestExec_ByRepoScope(t *testing.T) {
 		t.Errorf("expected file %q to be created in main worktree", testFile)
 	}
 }
+
+// TestExec_LabelScope tests running a command in worktrees matched by a label scope.
+//
+// Scenario: Two repos are labeled "team-b", user runs `wt exec team-b:feature -- touch file`
+// Expected: Command runs in both repos' feature worktrees
+func TestExec_LabelScope(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repo1Path := setupTestRepo(t, tmpDir, "svc-x")
+	repo2Path := setupTestRepo(t, tmpDir, "svc-y")
+
+	wt1Path := createTestWorktree(t, repo1Path, "feature")
+	wt2Path := createTestWorktree(t, repo2Path, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "svc-x", Path: repo1Path, Labels: []string{"team-b"}},
+			{Name: "svc-y", Path: repo2Path, Labels: []string{"team-b"}},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newExecCmd()
+	cmd.SetContext(ctx)
+	// "team-b" is a label (not a repo name), so label:branch resolution applies
+	cmd.SetArgs([]string{"team-b:feature", "--", "touch", "label-exec-file"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("exec command with label scope failed: %v", err)
+	}
+
+	// Verify file was created in both feature worktrees
+	for _, wtPath := range []string{wt1Path, wt2Path} {
+		testFile := filepath.Join(wtPath, "label-exec-file")
+		if _, err := os.Stat(testFile); os.IsNotExist(err) {
+			t.Errorf("expected file %q to be created in worktree %s", testFile, wtPath)
+		}
+	}
+}
+
+// TestExec_BasicCommand tests running a simple command in the current worktree.
+//
+// Scenario: User runs `wt exec -- sh -c 'echo hello > output.txt'` from a worktree
+// Expected: Command runs in the current directory and creates the output file
+func TestExec_BasicCommand(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	outputFile := filepath.Join(repoPath, "basic-output.txt")
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cmd := newExecCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--", "sh", "-c", "echo hello > " + outputFile})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("exec command failed: %v", err)
+	}
+
+	if _, err := os.Stat(outputFile); os.IsNotExist(err) {
+		t.Errorf("expected output file %q to be created", outputFile)
+	}
+}

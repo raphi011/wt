@@ -400,3 +400,32 @@ func TestDiff_ToolFlag(t *testing.T) {
 		t.Fatalf("diff command with --tool failed: %v", err)
 	}
 }
+
+// TestDiff_NoChanges tests diffing a clean worktree that has no commits ahead of origin.
+//
+// Scenario: User runs `wt diff --name-only` in a worktree that has no commits beyond origin/main
+// Expected: Succeeds with no output (no changed files)
+func TestDiff_NoChanges(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	// setupTestRepoWithOrigin creates a repo with a real origin remote and
+	// pushes main to it, so origin/main is up to date with main.
+	repoPath, _ := setupTestRepoWithOrigin(t, tmpDir, "myrepo")
+
+	regFile := setupDiffRegistry(t, tmpDir, []registry.Repo{
+		{Name: "myrepo", Path: repoPath},
+	})
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cmd := newDiffCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--name-only"})
+
+	// Should succeed — no changes means empty diff output
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("diff command on clean worktree failed: %v", err)
+	}
+}
