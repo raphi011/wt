@@ -306,6 +306,29 @@ func TestCopyFile(t *testing.T) {
 			t.Error("dst should not exist when source is a symlink")
 		}
 	})
+
+	t.Run("returns error when dst parent path is a file", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+
+		src := filepath.Join(tmpDir, "src.txt")
+		if err := os.WriteFile(src, []byte("hello\n"), 0644); err != nil {
+			t.Fatalf("setup: write src failed: %v", err)
+		}
+
+		// Create a regular file where the directory should be — MkdirAll will fail.
+		blocker := filepath.Join(tmpDir, "notadir")
+		if err := os.WriteFile(blocker, []byte("block\n"), 0644); err != nil {
+			t.Fatalf("setup: write blocker failed: %v", err)
+		}
+
+		dst := filepath.Join(blocker, "dst.txt")
+
+		_, err := CopyFile(src, dst)
+		if err == nil {
+			t.Fatal("CopyFile() should return error when dst parent is a file")
+		}
+	})
 }
 
 func resolveTempDir(t *testing.T) string {
@@ -365,6 +388,35 @@ func initBareRepoWithWorktree(t *testing.T, baseDir string) (string, string) {
 	runGit(t, repoDir, "worktree", "add", mainWT, "main")
 
 	return repoDir, mainWT
+}
+
+// TestFindSourceWorktree_InvalidGitDir verifies that FindSourceWorktree returns
+// an error when git.ListWorktreesFromRepo fails (non-existent git directory).
+func TestFindSourceWorktree_InvalidGitDir(t *testing.T) {
+	t.Parallel()
+
+	ctx := testContext()
+	tmpDir := resolveTempDir(t)
+	fakeGitDir := filepath.Join(tmpDir, "does-not-exist.git")
+
+	_, err := FindSourceWorktree(ctx, fakeGitDir, filepath.Join(tmpDir, "some-worktree"))
+	if err == nil {
+		t.Error("FindSourceWorktree() expected error for invalid git dir, got nil")
+	}
+}
+
+// TestFindIgnoredFiles_NonGitDir verifies that FindIgnoredFiles returns an
+// error when the directory is not a git repository.
+func TestFindIgnoredFiles_NonGitDir(t *testing.T) {
+	t.Parallel()
+
+	ctx := testContext()
+	tmpDir := resolveTempDir(t)
+	// tmpDir is not a git repo, so git ls-files should fail.
+	_, err := FindIgnoredFiles(ctx, tmpDir)
+	if err == nil {
+		t.Error("FindIgnoredFiles() expected error for non-git directory, got nil")
+	}
 }
 
 func TestFindSourceWorktree(t *testing.T) {
