@@ -118,24 +118,7 @@ repo's worktrees. Use -g to show all repos.`,
 					}
 				}
 
-				// Sort: worktrees with history first (by LastAccess desc),
-				// then worktrees without history (alphabetical by repo:branch)
-				sort.Slice(allWorktrees, func(i, j int) bool {
-					iHasHistory := !allWorktrees[i].LastAccess.IsZero()
-					jHasHistory := !allWorktrees[j].LastAccess.IsZero()
-
-					if iHasHistory && jHasHistory {
-						return allWorktrees[i].LastAccess.After(allWorktrees[j].LastAccess)
-					}
-					if iHasHistory != jHasHistory {
-						return iHasHistory
-					}
-					// Both without history: alphabetical
-					if allWorktrees[i].RepoName != allWorktrees[j].RepoName {
-						return allWorktrees[i].RepoName < allWorktrees[j].RepoName
-					}
-					return allWorktrees[i].Branch < allWorktrees[j].Branch
-				})
+				sortCdWorktrees(allWorktrees)
 
 				result, err := flows.CdInteractive(flows.CdWizardParams{
 					Worktrees: allWorktrees,
@@ -225,4 +208,24 @@ repo's worktrees. Use -g to show all repos.`,
 	cmd.ValidArgsFunction = completeCdArg
 
 	return cmd
+}
+
+// sortCdWorktrees sorts worktrees for the cd interactive list:
+// history items first (by LastAccess desc), then alphabetical by repo:branch.
+func sortCdWorktrees(worktrees []flows.CdWorktreeInfo) {
+	sort.Slice(worktrees, func(i, j int) bool {
+		iHasHistory := !worktrees[i].LastAccess.IsZero()
+		jHasHistory := !worktrees[j].LastAccess.IsZero()
+
+		if iHasHistory && jHasHistory {
+			return worktrees[i].LastAccess.After(worktrees[j].LastAccess)
+		}
+		if iHasHistory != jHasHistory {
+			return iHasHistory
+		}
+		if worktrees[i].RepoName != worktrees[j].RepoName {
+			return worktrees[i].RepoName < worktrees[j].RepoName
+		}
+		return worktrees[i].Branch < worktrees[j].Branch
+	})
 }

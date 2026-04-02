@@ -130,23 +130,9 @@ Use --clone-mode (with --clone) to control whether the repo is cloned as bare or
 			l := log.FromContext(ctx)
 
 			// Parse arguments: [repo] <number>
-			var prNumber int
-			var repoArg string
-			if len(args) == 1 {
-				// Just PR number
-				num, err := strconv.Atoi(args[0])
-				if err != nil {
-					return fmt.Errorf("invalid PR number: %s", args[0])
-				}
-				prNumber = num
-			} else {
-				// repo + PR number
-				repoArg = args[0]
-				num, err := strconv.Atoi(args[1])
-				if err != nil {
-					return fmt.Errorf("invalid PR number: %s", args[1])
-				}
-				prNumber = num
+			prNumber, repoArg, err := parsePrCheckoutArgs(args)
+			if err != nil {
+				return err
 			}
 
 			// Load registry
@@ -669,4 +655,21 @@ func isMac() bool {
 func runCommand(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	return cmd.Run()
+}
+
+// parsePrCheckoutArgs parses [repo] <number> positional arguments.
+func parsePrCheckoutArgs(args []string) (prNumber int, repoArg string, err error) {
+	if len(args) == 1 {
+		num, err := strconv.Atoi(args[0])
+		if err != nil {
+			return 0, "", fmt.Errorf("invalid PR number: %s", args[0])
+		}
+		return num, "", nil
+	}
+	repoArg = args[0]
+	num, err := strconv.Atoi(args[1])
+	if err != nil {
+		return 0, "", fmt.Errorf("invalid PR number: %s", args[1])
+	}
+	return num, repoArg, nil
 }
