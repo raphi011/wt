@@ -51,8 +51,8 @@ Use --global to prune all registered repos.
 Use --interactive to select worktrees to prune.
 
 Target specific worktrees using [scope:]branch arguments where scope can be
-a repo name or label. Merged worktrees (locally merged or merged PR) can be
-pruned without -f. Use -f to prune unmerged worktrees.`,
+a repo name or label. Worktrees with a merged PR can be pruned without -f.
+Use -f to prune worktrees whose PR is not yet confirmed merged.`,
 		Example: `  wt prune                         # Remove worktrees with merged PRs
   wt prune --stale                 # Also prune stale worktrees
   wt prune --global                # Prune all repos
@@ -161,8 +161,6 @@ pruned without -f. Use -f to prune unmerged worktrees.`,
 			for _, wt := range allWorktrees {
 				if wt.PRState == forge.PRStateMerged {
 					toRemove = append(toRemove, wt)
-				} else if wt.LocallyMerged {
-					toRemove = append(toRemove, wt)
 				} else if stale && isStaleWorktree(wt, cfg.Prune.StaleDays) {
 					toRemove = append(toRemove, wt)
 				} else {
@@ -177,10 +175,6 @@ pruned without -f. Use -f to prune unmerged worktrees.`,
 					isPrunable := wt.PRState == forge.PRStateMerged
 					isStaleWt := false
 					reason := styles.FormatPRState(wt.PRState, wt.PRDraft)
-					if !isPrunable && wt.LocallyMerged {
-						isPrunable = true
-						reason = styles.FormatLocallyMerged()
-					}
 					if !isPrunable && stale && isStaleWorktree(wt, cfg.Prune.StaleDays) {
 						isPrunable = true
 						isStaleWt = true
@@ -302,8 +296,12 @@ type pruneOpts struct {
 }
 
 // isStaleWorktree returns true if the worktree's last commit is older than staleDays.
+// Worktrees with an open PR are never considered stale — active work is always protected.
 func isStaleWorktree(wt git.Worktree, staleDays int) bool {
 	if staleDays <= 0 || wt.CommitDate.IsZero() {
+		return false
+	}
+	if wt.PRState == forge.PRStateOpen {
 		return false
 	}
 	return time.Since(wt.CommitDate) > time.Duration(staleDays)*24*time.Hour
@@ -352,23 +350,6 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 	// Enrich with merge info to determine if force is needed
 	prCache := prcache.Load()
 
-	// Check locally-merged status per unique repo
-	repoIndices := make(map[string][]int)
-	for i, wt := range toRemove {
-		repoIndices[wt.RepoPath] = append(repoIndices[wt.RepoPath], i)
-	}
-	for repoPath, indices := range repoIndices {
-		defaultBranch := git.GetDefaultBranch(ctx, repoPath)
-		mergedBranches, err := git.GetMergedBranches(ctx, repoPath, defaultBranch)
-		if err != nil {
-			l.Printf("Warning: could not check merged branches for %s: %v (will require --force)\n", filepath.Base(repoPath), err)
-			continue
-		}
-		for _, i := range indices {
-			toRemove[i].LocallyMerged = mergedBranches[toRemove[i].Branch]
-		}
-	}
-
 	// Enrich with PR state from cache
 	populatePRFields(toRemove, prCache)
 
@@ -381,7 +362,7 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 			}
 		}
 		if len(unprunable) > 0 {
-			return fmt.Errorf("cannot prune unmerged worktrees without -f/--force: %s", strings.Join(unprunable, ", "))
+			return fmt.Errorf("cannot prune unmerged worktrees without -f/--force: %s\nHint: run with -R/--refresh-pr to fetch latest PR status, or use -f to force removal", strings.Join(unprunable, ", "))
 		}
 	}
 
@@ -419,9 +400,9 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 }
 
 // isWorktreePrunable returns true if the worktree is safe to prune without force
-// (merged via PR or merged locally into the default branch).
+// (merged via forge-confirmed PR).
 func isWorktreePrunable(wt git.Worktree) bool {
-	return wt.PRState == forge.PRStateMerged || wt.LocallyMerged
+	return wt.PRState == forge.PRStateMerged
 }
 
 // pruneWorktrees removes the given worktrees and runs hooks.

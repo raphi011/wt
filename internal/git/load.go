@@ -88,36 +88,21 @@ func loadWorktreesForRepo(ctx context.Context, repo RepoRef) ([]Worktree, *LoadW
 		commitMetas = make(map[string]CommitMeta)
 	}
 
-	// Detect locally-merged branches via ancestry check.
-	// Uses the local default branch as the merge target, since local merges
-	// update the local ref — origin/<default> only updates after fetch/pull
-	// and those merges are typically PR-based (handled by the forge API).
-	defaultBranch := GetDefaultBranch(ctx, repo.Path)
-	mergedBranches, err := GetMergedBranches(ctx, repo.Path, defaultBranch)
-	if err != nil {
-		// Non-fatal: locally-merged worktrees will not be flagged, so they
-		// will only be pruned if the forge API detects them as merged.
-		mergedBranches = make(map[string]bool)
-	}
-	// The default branch is always "merged into itself" — exclude it.
-	delete(mergedBranches, defaultBranch)
-
 	worktrees := make([]Worktree, 0, len(wtInfos))
 	for _, wti := range wtInfos {
 		meta := commitMetas[wti.CommitHash]
 
 		worktrees = append(worktrees, Worktree{
-			Path:          wti.Path,
-			Branch:        wti.Branch,
-			CommitHash:    wti.CommitHash,
-			CommitAge:     meta.Age,
-			CommitDate:    meta.Date,
-			RepoName:      repo.Name,
-			RepoPath:      repo.Path,
-			OriginURL:     originURL,
-			Note:          notes[wti.Branch],
-			HasUpstream:   upstreams[wti.Branch],
-			LocallyMerged: mergedBranches[wti.Branch],
+			Path:        wti.Path,
+			Branch:      wti.Branch,
+			CommitHash:  wti.CommitHash,
+			CommitAge:   meta.Age,
+			CommitDate:  meta.Date,
+			RepoName:    repo.Name,
+			RepoPath:    repo.Path,
+			OriginURL:   originURL,
+			Note:        notes[wti.Branch],
+			HasUpstream: upstreams[wti.Branch],
 		})
 	}
 
