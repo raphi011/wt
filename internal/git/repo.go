@@ -269,12 +269,22 @@ func GetOriginURL(ctx context.Context, repoPath string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-// GetRemoteURLs returns a map of remote name → fetch URL for a repository.
+// GetRemoteURLs returns a map of remote name → configured URL for a repository.
 // Returns an empty (non-nil) map if the repository has no remotes.
-// Uses a single `git remote -v` call for efficiency.
+// Uses `git config --get-regexp` to read stored URLs without applying insteadOf rewrites.
 func GetRemoteURLs(ctx context.Context, repoPath string) (map[string]string, error) {
-	output, err := outputGit(ctx, repoPath, "remote", "-v")
+	output, err := outputGit(ctx, repoPath, "config", "--get-regexp", `remote\..*\.url`)
 	if err != nil {
+		// git config returns exit code 1 when no keys match — treat as no remotes.
+		// Any other error (e.g. invalid repo path) will also land here; we distinguish
+		// by checking whether output is empty.
+		if len(output) == 0 {
+			// Verify the repo path is valid by running a cheap git command.
+			if _, verr := outputGit(ctx, repoPath, "rev-parse", "--git-dir"); verr != nil {
+				return nil, fmt.Errorf("failed to list remotes: %v", verr)
+			}
+			return make(map[string]string), nil
+		}
 		return nil, fmt.Errorf("failed to list remotes: %v", err)
 	}
 
@@ -285,12 +295,15 @@ func GetRemoteURLs(ctx context.Context, repoPath string) (map[string]string, err
 
 	remotes := make(map[string]string)
 	for line := range strings.SplitSeq(trimmed, "\n") {
-		if !strings.HasSuffix(line, "(fetch)") {
+		// Format: remote.<name>.url <url>
+		key, url, ok := strings.Cut(line, " ")
+		if !ok {
 			continue
 		}
-		fields := strings.Fields(line)
-		if len(fields) >= 2 {
-			remotes[fields[0]] = fields[1]
+		key = strings.TrimPrefix(key, "remote.")
+		key = strings.TrimSuffix(key, ".url")
+		if key != "" {
+			remotes[key] = url
 		}
 	}
 	return remotes, nil
