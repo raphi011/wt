@@ -70,28 +70,16 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 
 			// Interactive mode
 			if interactive {
-				wizOpts, err := runCheckoutWizard(ctx, reg, hf.HookNames, hf.NoHook)
+				result, err := runCheckoutInteractive(ctx, reg, hf)
 				if err != nil {
 					return err
 				}
-				if wizOpts.Cancelled {
+				if result.Cancelled {
 					return nil
 				}
-
-				// Apply wizard selections
-				target = wizOpts.Branch
-				newBranch = wizOpts.NewBranch
-				hf.HookNames = wizOpts.SelectedHooks
-				hf.NoHook = wizOpts.NoHook
-
-				// Build scope:branch if repos selected
-				if len(wizOpts.SelectedRepos) > 0 {
-					repo, err := reg.FindByPath(wizOpts.SelectedRepos[0])
-					if err != nil {
-						return fmt.Errorf("selected repo no longer registered: %s", wizOpts.SelectedRepos[0])
-					}
-					target = repo.Name + ":" + wizOpts.Branch
-				}
+				target = result.Target
+				newBranch = result.NewBranch
+				hf = result.HookFlags
 			}
 
 			// Parse target
@@ -570,6 +558,43 @@ func getEffectiveHooksForCompletion(ctx context.Context) map[string]config.Hook 
 	}
 
 	return resolver.Global().Hooks.Hooks
+}
+
+type checkoutInteractiveResult struct {
+	Target    string
+	NewBranch bool
+	HookFlags hookFlags
+	Cancelled bool
+}
+
+// runCheckoutInteractive runs the checkout wizard and applies the selections to
+// produce a resolved target, newBranch flag, and updated hook flags.
+func runCheckoutInteractive(ctx context.Context, reg *registry.Registry, hf hookFlags) (checkoutInteractiveResult, error) {
+	wizOpts, err := runCheckoutWizard(ctx, reg, hf.HookNames, hf.NoHook)
+	if err != nil {
+		return checkoutInteractiveResult{}, err
+	}
+	if wizOpts.Cancelled {
+		return checkoutInteractiveResult{Cancelled: true}, nil
+	}
+
+	target := wizOpts.Branch
+	hf.HookNames = wizOpts.SelectedHooks
+	hf.NoHook = wizOpts.NoHook
+
+	if len(wizOpts.SelectedRepos) > 0 {
+		repo, err := reg.FindByPath(wizOpts.SelectedRepos[0])
+		if err != nil {
+			return checkoutInteractiveResult{}, fmt.Errorf("selected repo no longer registered: %s", wizOpts.SelectedRepos[0])
+		}
+		target = repo.Name + ":" + wizOpts.Branch
+	}
+
+	return checkoutInteractiveResult{
+		Target:    target,
+		NewBranch: wizOpts.NewBranch,
+		HookFlags: hf,
+	}, nil
 }
 
 // runCheckoutWizard runs the interactive checkout wizard
