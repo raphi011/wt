@@ -50,7 +50,7 @@ func keyMsg(key string) tea.KeyPressMsg {
 }
 
 // updateStep is a helper that performs Update and returns the concrete type.
-func updateStep[T framework.Step](t *testing.T, s T, msg tea.KeyPressMsg) (T, framework.StepResult) {
+func updateStep[T framework.Step](t *testing.T, s T, msg tea.Msg) (T, framework.StepResult) {
 	t.Helper()
 	result, _, stepResult := s.Update(msg)
 	concrete, ok := result.(T)
