@@ -663,6 +663,30 @@ func TestWizard_PasteMsg(t *testing.T) {
 		}
 	})
 
+	t.Run("paste is forwarded to correct step in multi-step wizard", func(t *testing.T) {
+		step1 := newMockPasteStep("step1", "Step 1")
+		step2 := newMockPasteStep("step2", "Step 2")
+
+		w := NewWizard("Test").AddStep(step1).AddStep(step2)
+		w.Init()
+
+		// Advance to step2
+		w = updateWizard(t, w, "enter")
+		if w.CurrentStepID() != "step2" {
+			t.Fatalf("Should be on step2, got %s", w.CurrentStepID())
+		}
+
+		m, _ := w.Update(tea.PasteMsg{Content: "for-step2"})
+		w = m.(*Wizard)
+
+		if step1.pasteReceived != "" {
+			t.Errorf("step1 received paste %q, want empty", step1.pasteReceived)
+		}
+		if step2.pasteReceived != "for-step2" {
+			t.Errorf("step2.pasteReceived = %q, want %q", step2.pasteReceived, "for-step2")
+		}
+	})
+
 	t.Run("paste on summary step is ignored", func(t *testing.T) {
 		step1 := newMockPasteStep("step1", "Step 1")
 

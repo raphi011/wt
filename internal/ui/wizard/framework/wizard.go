@@ -205,7 +205,8 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return w, nil
 
 	case tea.PasteMsg:
-		// Forward paste to current step (not summary)
+		// Forward paste to current step (not summary).
+		// Paste never triggers navigation; all steps return StepContinue.
 		if w.currentStep < len(w.steps) {
 			step := w.steps[w.currentStep]
 			newStep, cmd, _ := step.Update(msg)

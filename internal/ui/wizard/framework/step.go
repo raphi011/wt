@@ -34,8 +34,10 @@ type Step interface {
 	// Init returns an initial command when entering this step.
 	Init() tea.Cmd
 
-	// Update handles input messages and returns the updated step,
-	// a command to run, and a result indicating navigation.
+	// Update handles input messages forwarded by the Wizard.
+	// Callers only forward tea.KeyPressMsg and tea.PasteMsg;
+	// implementations must return (self, nil, StepContinue) for
+	// any other message type.
 	Update(msg tea.Msg) (Step, tea.Cmd, StepResult)
 
 	// View renders the step content.

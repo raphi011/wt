@@ -60,6 +60,29 @@ func updateStep[T framework.Step](t *testing.T, s T, msg tea.Msg) (T, framework.
 	return concrete, stepResult
 }
 
+func TestSingleSelectStep_Paste(t *testing.T) {
+	options := []framework.Option{
+		{Label: "Option 1", Value: "opt1"},
+		{Label: "Option 2", Value: "opt2"},
+	}
+
+	t.Run("paste is a no-op", func(t *testing.T) {
+		step := NewSingleSelect("test", "Test", "Select:", options)
+		step.SetCursor(1)
+
+		_, result := updateStep(t, step, tea.PasteMsg{Content: "text"})
+		if result != framework.StepContinue {
+			t.Errorf("Result = %v, want StepContinue", result)
+		}
+		if step.GetCursor() != 1 {
+			t.Errorf("Cursor changed to %d, want 1", step.GetCursor())
+		}
+		if step.IsComplete() {
+			t.Error("Step should not be complete after paste")
+		}
+	})
+}
+
 func TestSingleSelectStep_Navigation(t *testing.T) {
 	options := []framework.Option{
 		{Label: "Option 1", Value: "opt1"},

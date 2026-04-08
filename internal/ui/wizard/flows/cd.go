@@ -47,40 +47,44 @@ func (m *cdListModel) Init() tea.Cmd {
 	return m.step.Init()
 }
 
-// Update handles incoming messages. Only tea.KeyPressMsg is processed;
-// other message types (window size, mouse, etc.) are safely ignored
-// because FilterableListStep only operates on key events.
+// Update handles incoming messages. Processes tea.KeyPressMsg for navigation
+// and tea.PasteMsg for filter input. Other message types are ignored.
 func (m *cdListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	keyMsg, ok := msg.(tea.KeyPressMsg)
-	if !ok {
-		return m, nil
-	}
+	switch msg := msg.(type) {
+	case tea.PasteMsg:
+		// Paste never triggers navigation; discard StepResult.
+		_, cmd, _ := m.step.Update(msg)
+		return m, cmd
 
-	switch keyMsg.String() {
-	case "esc":
-		if m.step.HasClearableInput() {
-			cmd := m.step.ClearInput()
-			return m, cmd
-		}
-		m.cancelled = true
-		return m, tea.Quit
-	case "ctrl+c":
-		m.cancelled = true
-		return m, tea.Quit
-	}
-
-	_, cmd, result := m.step.Update(keyMsg)
-
-	if result == framework.StepSubmitIfReady || result == framework.StepAdvance {
-		val := m.step.GetSelectedValue()
-		if val != nil {
-			m.selectedAt = val.(int)
-			m.done = true
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "esc":
+			if m.step.HasClearableInput() {
+				cmd := m.step.ClearInput()
+				return m, cmd
+			}
+			m.cancelled = true
+			return m, tea.Quit
+		case "ctrl+c":
+			m.cancelled = true
 			return m, tea.Quit
 		}
+
+		_, cmd, result := m.step.Update(msg)
+
+		if result == framework.StepSubmitIfReady || result == framework.StepAdvance {
+			val := m.step.GetSelectedValue()
+			if val != nil {
+				m.selectedAt = val.(int)
+				m.done = true
+				return m, tea.Quit
+			}
+		}
+
+		return m, cmd
 	}
 
-	return m, cmd
+	return m, nil
 }
 
 func (m *cdListModel) View() tea.View {

@@ -396,7 +396,8 @@ func (s *FilterableListStep) handleSelect(result framework.StepResult) (framewor
 	return s, nil, framework.StepContinue
 }
 
-// handlePaste handles pasted text by filtering it and forwarding to the filter input.
+// handlePaste applies the rune filter to pasted content, auto-focuses the
+// filter input if needed, and forwards the sanitized text to the textinput.
 func (s *FilterableListStep) handlePaste(msg tea.PasteMsg) (framework.Step, tea.Cmd, framework.StepResult) {
 	content := msg.Content
 	if content == "" {
