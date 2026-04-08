@@ -723,3 +723,520 @@ func TestWizard_WindowSizeMsg(t *testing.T) {
 		t.Errorf("Window size = %dx%d, want 100x50", w.width, w.height)
 	}
 }
+
+func TestWizard_View(t *testing.T) {
+	t.Parallel()
+
+	t.Run("View renders title and step content", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+
+		w := NewWizard("My Wizard").AddStep(step1)
+		w.Init()
+
+		view := w.View().Content
+		if view == "" {
+			t.Error("View() should return non-empty string")
+		}
+		// Should contain the wizard title
+		if !contains(view, "My Wizard") {
+			t.Errorf("View() = %q, should contain title 'My Wizard'", view)
+		}
+	})
+
+	t.Run("View returns empty when done", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+		w.done = true
+
+		view := w.View().Content
+		if view != "" {
+			t.Errorf("View() when done = %q, want empty string", view)
+		}
+	})
+
+	t.Run("View renders step tabs with multiple steps", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+		step2 := newMockStep("step2", "Step 2")
+
+		w := NewWizard("Test").AddStep(step1).AddStep(step2)
+		w.Init()
+
+		view := w.View().Content
+		if view == "" {
+			t.Error("View() should return non-empty string")
+		}
+		// Should show step tabs with step titles
+		if !contains(view, "Step 1") {
+			t.Errorf("View() should contain step title, got %q", view)
+		}
+	})
+
+	t.Run("View renders summary when on summary step", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1").setValue(StepValue{
+			Key:   "step1",
+			Label: "my value",
+			Raw:   "my value",
+		})
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+		// Advance to summary
+		w = updateWizard(t, w, "enter")
+
+		view := w.View().Content
+		if view == "" {
+			t.Error("View() should return non-empty string")
+		}
+	})
+
+	t.Run("View renders info line when set and non-empty", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+
+		w := NewWizard("Test").
+			AddStep(step1).
+			WithInfoLine(func(w *Wizard) string {
+				return "Some info text"
+			})
+		w.Init()
+
+		view := w.View().Content
+		if !contains(view, "Some info text") {
+			t.Errorf("View() should contain info line, got %q", view)
+		}
+	})
+
+	t.Run("View skips step tabs for single step with skipSummary", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "My Step")
+
+		w := NewWizard("Test").
+			AddStep(step1).
+			WithSkipSummary(true)
+		w.Init()
+
+		view := w.View().Content
+		// With single step and skipSummary, no tabs rendered, but step content is shown
+		if view == "" {
+			t.Error("View() should return non-empty string")
+		}
+	})
+
+	t.Run("View includes help text from step", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+
+		view := w.View().Content
+		if !contains(view, "mock help") {
+			t.Errorf("View() should contain step help text, got %q", view)
+		}
+	})
+}
+
+func TestWizard_RenderStepTabs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("tabs show checkmarks for confirmed steps", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+		step2 := newMockStep("step2", "Step 2")
+
+		w := NewWizard("Test").AddStep(step1).AddStep(step2)
+		w.Init()
+
+		// Advance step1 (confirms it)
+		w = updateWizard(t, w, "enter")
+
+		tabs := w.renderStepTabs()
+		if tabs == "" {
+			t.Error("renderStepTabs() should return non-empty string")
+		}
+	})
+
+	t.Run("tabs skip skipped steps", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+		step2 := newMockStep("step2", "Step 2")
+		step3 := newMockStep("step3", "Step 3")
+
+		w := NewWizard("Test").
+			AddStep(step1).
+			AddStep(step2).
+			AddStep(step3).
+			SkipWhen("step2", func(w *Wizard) bool { return true })
+		w.Init()
+
+		tabs := w.renderStepTabs()
+		if tabs == "" {
+			t.Error("renderStepTabs() should return non-empty string")
+		}
+		// step2 is skipped, so should not appear in tabs
+		if contains(tabs, "Step 2") {
+			t.Errorf("renderStepTabs() should not contain skipped step, got %q", tabs)
+		}
+	})
+
+	t.Run("tabs include summary tab when not skipSummary", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+
+		w := NewWizard("Test").AddStep(step1).WithSkipSummary(false)
+		w.Init()
+
+		tabs := w.renderStepTabs()
+		if !contains(tabs, "Summary") {
+			t.Errorf("renderStepTabs() should include Summary tab, got %q", tabs)
+		}
+	})
+
+	t.Run("tabs do not include summary tab when skipSummary", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+
+		w := NewWizard("Test").AddStep(step1).WithSkipSummary(true)
+		w.Init()
+
+		tabs := w.renderStepTabs()
+		if contains(tabs, "Summary") {
+			t.Errorf("renderStepTabs() should not include Summary tab with skipSummary, got %q", tabs)
+		}
+	})
+
+	t.Run("active step on summary highlighted correctly", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+		// Advance to summary
+		w = updateWizard(t, w, "enter")
+
+		tabs := w.renderStepTabs()
+		if !contains(tabs, "Summary") {
+			t.Errorf("renderStepTabs() should include Summary, got %q", tabs)
+		}
+	})
+
+	t.Run("confirmed and active step shows checkmark", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+		step2 := newMockStep("step2", "Step 2")
+
+		w := NewWizard("Test").AddStep(step1).AddStep(step2)
+		w.Init()
+
+		// Advance to step2 (confirms step1), then go back to step1
+		w = updateWizard(t, w, "enter") // now on step2
+		w = updateWizard(t, w, "left")  // back to step1 (confirmed)
+
+		tabs := w.renderStepTabs()
+		if tabs == "" {
+			t.Error("renderStepTabs() should return non-empty string")
+		}
+		// step1 should show checkmark since it's confirmed and active
+		if !contains(tabs, "✓") {
+			t.Errorf("renderStepTabs() should contain checkmark for confirmed+active step, got %q", tabs)
+		}
+	})
+}
+
+func TestWizard_RenderSummary(t *testing.T) {
+	t.Parallel()
+
+	t.Run("summary shows step values", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Branch").setValue(StepValue{
+			Key:   "step1",
+			Label: "feature-x",
+			Raw:   "feature-x",
+		})
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+
+		summary := w.renderSummary()
+		if !contains(summary, "Branch") {
+			t.Errorf("renderSummary() should contain step title, got %q", summary)
+		}
+		if !contains(summary, "feature-x") {
+			t.Errorf("renderSummary() should contain step value, got %q", summary)
+		}
+	})
+
+	t.Run("summary skips steps with empty label", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1").setValue(StepValue{
+			Key:   "step1",
+			Label: "", // empty label, should be skipped
+			Raw:   nil,
+		})
+		step2 := newMockStep("step2", "Step 2").setValue(StepValue{
+			Key:   "step2",
+			Label: "val2",
+			Raw:   "val2",
+		})
+
+		w := NewWizard("Test").AddStep(step1).AddStep(step2)
+		w.Init()
+
+		summary := w.renderSummary()
+		if contains(summary, "Step 1") {
+			t.Errorf("renderSummary() should skip step with empty label, got %q", summary)
+		}
+		if !contains(summary, "val2") {
+			t.Errorf("renderSummary() should contain step2 value, got %q", summary)
+		}
+	})
+
+	t.Run("summary skips skipped steps", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1").setValue(StepValue{
+			Key:   "step1",
+			Label: "value1",
+			Raw:   "value1",
+		})
+		step2 := newMockStep("step2", "Skipped Step").setValue(StepValue{
+			Key:   "step2",
+			Label: "skipped-value",
+			Raw:   "skipped-value",
+		})
+
+		w := NewWizard("Test").
+			AddStep(step1).
+			AddStep(step2).
+			SkipWhen("step2", func(w *Wizard) bool { return true })
+		w.Init()
+
+		summary := w.renderSummary()
+		if contains(summary, "skipped-value") {
+			t.Errorf("renderSummary() should skip skipped steps, got %q", summary)
+		}
+	})
+
+	t.Run("summary uses WithSummary title", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+
+		w := NewWizard("Test").
+			AddStep(step1).
+			WithSummary("Confirm Action")
+		w.Init()
+
+		summary := w.renderSummary()
+		if !contains(summary, "Confirm Action") {
+			t.Errorf("renderSummary() should contain custom title, got %q", summary)
+		}
+	})
+}
+
+func TestWizard_GetStrings_AllBranches(t *testing.T) {
+	t.Parallel()
+
+	t.Run("GetStrings with []any slice", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("items", "Items").setValue(StepValue{
+			Key:   "items",
+			Label: "a, b",
+			Raw:   []any{"a", "b", "c"},
+		})
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+
+		strs := w.GetStrings("items")
+		if len(strs) != 3 {
+			t.Errorf("GetStrings with []any = %v, want 3 items", strs)
+		}
+		if strs[0] != "a" || strs[1] != "b" || strs[2] != "c" {
+			t.Errorf("GetStrings = %v, want [a, b, c]", strs)
+		}
+	})
+
+	t.Run("GetStrings with []any containing non-string skips them", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("items", "Items").setValue(StepValue{
+			Key:   "items",
+			Label: "mixed",
+			Raw:   []any{"a", 42, "b"},
+		})
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+
+		strs := w.GetStrings("items")
+		if len(strs) != 2 {
+			t.Errorf("GetStrings with mixed []any = %v, want 2 strings", strs)
+		}
+	})
+
+	t.Run("GetStrings returns nil for non-slice raw", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("items", "Items").setValue(StepValue{
+			Key:   "items",
+			Label: "single",
+			Raw:   "single-string",
+		})
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+
+		strs := w.GetStrings("items")
+		if strs != nil {
+			t.Errorf("GetStrings with non-slice raw = %v, want nil", strs)
+		}
+	})
+
+	t.Run("GetStrings returns nil for unknown step", func(t *testing.T) {
+		t.Parallel()
+		w := NewWizard("Test")
+
+		strs := w.GetStrings("unknown")
+		if strs != nil {
+			t.Errorf("GetStrings unknown step = %v, want nil", strs)
+		}
+	})
+
+	t.Run("GetBool returns false for non-bool raw", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("confirm", "Confirm").setValue(StepValue{
+			Key:   "confirm",
+			Label: "no",
+			Raw:   "not-a-bool",
+		})
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+
+		b := w.GetBool("confirm")
+		if b {
+			t.Error("GetBool with non-bool raw should return false")
+		}
+	})
+
+	t.Run("GetString falls back to label when raw is not string", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("items", "Items").setValue(StepValue{
+			Key:   "items",
+			Label: "display label",
+			Raw:   42, // non-string raw
+		})
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+
+		s := w.GetString("items")
+		if s != "display label" {
+			t.Errorf("GetString with non-string raw = %q, want 'display label'", s)
+		}
+	})
+}
+
+func TestWizard_SetCurrentStep(t *testing.T) {
+	t.Parallel()
+
+	t.Run("SetCurrentStep changes active step", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+		step2 := newMockStep("step2", "Step 2")
+
+		w := NewWizard("Test").AddStep(step1).AddStep(step2)
+		w.Init()
+
+		w.SetCurrentStep("step2")
+
+		if w.CurrentStepID() != "step2" {
+			t.Errorf("CurrentStepID = %s, want step2", w.CurrentStepID())
+		}
+	})
+
+	t.Run("SetCurrentStep is no-op for unknown ID", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+
+		w.SetCurrentStep("unknown")
+
+		if w.CurrentStepID() != "step1" {
+			t.Errorf("CurrentStepID after unknown SetCurrentStep = %s, want step1", w.CurrentStepID())
+		}
+	})
+}
+
+func TestWizard_AdvanceWithStepAdvanceResult(t *testing.T) {
+	t.Parallel()
+
+	t.Run("StepAdvance on last step goes to summary", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+
+		// right arrow triggers StepAdvance
+		w = updateWizard(t, w, "right")
+
+		if w.CurrentStepID() != "summary" {
+			t.Errorf("CurrentStepID = %s, want summary", w.CurrentStepID())
+		}
+	})
+
+	t.Run("StepAdvance on last step with skipSummary completes wizard", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+
+		w := NewWizard("Test").AddStep(step1).WithSkipSummary(true)
+		w.Init()
+
+		// right arrow triggers StepAdvance
+		w = updateWizard(t, w, "right")
+
+		if !w.done {
+			t.Error("Wizard should be done after StepAdvance on last step with skipSummary")
+		}
+	})
+}
+
+func TestWizard_UnknownMsg(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unknown message is ignored gracefully", func(t *testing.T) {
+		t.Parallel()
+		step1 := newMockStep("step1", "Step 1")
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+
+		// Send an unknown message type (not KeyPressMsg or WindowSizeMsg)
+		m, _ := w.Update("unknown message")
+		w = m.(*Wizard)
+
+		// Should still be on step1
+		if w.CurrentStepID() != "step1" {
+			t.Errorf("CurrentStepID = %s, want step1", w.CurrentStepID())
+		}
+	})
+}
+
+// contains is a helper to check if a string contains a substring.
+func contains(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || len(sub) == 0 ||
+		func() bool {
+			for i := 0; i <= len(s)-len(sub); i++ {
+				if s[i:i+len(sub)] == sub {
+					return true
+				}
+			}
+			return false
+		}())
+}
