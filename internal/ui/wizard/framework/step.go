@@ -34,9 +34,9 @@ type Step interface {
 	// Init returns an initial command when entering this step.
 	Init() tea.Cmd
 
-	// Update handles key events and returns the updated step,
+	// Update handles input messages and returns the updated step,
 	// a command to run, and a result indicating navigation.
-	Update(msg tea.KeyPressMsg) (Step, tea.Cmd, StepResult)
+	Update(msg tea.Msg) (Step, tea.Cmd, StepResult)
 
 	// View renders the step content.
 	View() string

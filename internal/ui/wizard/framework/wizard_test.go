@@ -29,8 +29,12 @@ func (s *mockStep) ID() string    { return s.id }
 func (s *mockStep) Title() string { return s.title }
 func (s *mockStep) Init() tea.Cmd { return nil }
 
-func (s *mockStep) Update(msg tea.KeyPressMsg) (Step, tea.Cmd, StepResult) {
-	switch msg.String() {
+func (s *mockStep) Update(msg tea.Msg) (Step, tea.Cmd, StepResult) {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return s, nil, StepContinue
+	}
+	switch keyMsg.String() {
 	case "left":
 		return s, nil, StepBack
 	case "right":
