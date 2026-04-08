@@ -204,6 +204,16 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		w.height = msg.Height
 		return w, nil
 
+	case tea.PasteMsg:
+		// Forward paste to current step (not summary)
+		if w.currentStep < len(w.steps) {
+			step := w.steps[w.currentStep]
+			newStep, cmd, _ := step.Update(msg)
+			w.steps[w.currentStep] = newStep
+			return w, cmd
+		}
+		return w, nil
+
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "esc":

@@ -622,6 +622,69 @@ func TestWizard_InfoLine(t *testing.T) {
 	}
 }
 
+// mockPasteStep extends mockStep to track paste messages.
+type mockPasteStep struct {
+	mockStep
+	pasteReceived string
+}
+
+func newMockPasteStep(id, title string) *mockPasteStep {
+	return &mockPasteStep{
+		mockStep: *newMockStep(id, title),
+	}
+}
+
+func (s *mockPasteStep) Update(msg tea.Msg) (Step, tea.Cmd, StepResult) {
+	switch msg := msg.(type) {
+	case tea.PasteMsg:
+		s.pasteReceived = msg.Content
+		return s, nil, StepContinue
+	case tea.KeyPressMsg:
+		return s.mockStep.Update(msg)
+	}
+	return s, nil, StepContinue
+}
+
+func TestWizard_PasteMsg(t *testing.T) {
+	t.Run("paste is forwarded to current step", func(t *testing.T) {
+		step1 := newMockPasteStep("step1", "Step 1")
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+
+		m, _ := w.Update(tea.PasteMsg{Content: "pasted"})
+		w = m.(*Wizard)
+
+		if step1.pasteReceived != "pasted" {
+			t.Errorf("pasteReceived = %q, want %q", step1.pasteReceived, "pasted")
+		}
+		if w.CurrentStepID() != "step1" {
+			t.Errorf("CurrentStepID = %s, want step1", w.CurrentStepID())
+		}
+	})
+
+	t.Run("paste on summary step is ignored", func(t *testing.T) {
+		step1 := newMockPasteStep("step1", "Step 1")
+
+		w := NewWizard("Test").AddStep(step1)
+		w.Init()
+
+		// Advance to summary
+		w = updateWizard(t, w, "enter")
+		if w.CurrentStepID() != "summary" {
+			t.Fatalf("Should be on summary, got %s", w.CurrentStepID())
+		}
+
+		// Paste on summary should not crash or change state
+		m, _ := w.Update(tea.PasteMsg{Content: "pasted"})
+		w = m.(*Wizard)
+
+		if w.CurrentStepID() != "summary" {
+			t.Errorf("CurrentStepID = %s, want summary", w.CurrentStepID())
+		}
+	})
+}
+
 func TestWizard_WindowSizeMsg(t *testing.T) {
 	step1 := newMockStep("step1", "Step 1")
 
