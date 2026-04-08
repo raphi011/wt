@@ -47,8 +47,12 @@ func (s *SingleSelectStep) Init() tea.Cmd {
 	return nil
 }
 
-func (s *SingleSelectStep) Update(msg tea.KeyPressMsg) (framework.Step, tea.Cmd, framework.StepResult) {
-	switch msg.String() {
+func (s *SingleSelectStep) Update(msg tea.Msg) (framework.Step, tea.Cmd, framework.StepResult) {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return s, nil, framework.StepContinue
+	}
+	switch keyMsg.String() {
 	case "up", "k":
 		s.moveCursorUp()
 	case "down", "j":

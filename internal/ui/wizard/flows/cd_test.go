@@ -2,6 +2,11 @@ package flows
 
 import (
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/raphi011/wt/internal/ui/wizard/framework"
+	"github.com/raphi011/wt/internal/ui/wizard/steps"
 )
 
 func TestCdInteractive_EmptyWorktrees(t *testing.T) {
@@ -59,7 +64,39 @@ func TestCdWorktreeInfo_Structure(t *testing.T) {
 	}
 }
 
-// Note: Full interactive testing of CdInteractive requires calling
-// cdListModel.Update() directly with synthetic tea.KeyPressMsg values,
-// bypassing the BubbleTea runtime. The model only processes KeyPressMsg;
-// other message types are safely ignored.
+func TestCdListModel_Paste(t *testing.T) {
+	worktrees := []CdWorktreeInfo{
+		{RepoName: "repo1", Branch: "feature-alpha", Path: "/path/alpha"},
+		{RepoName: "repo2", Branch: "feature-beta", Path: "/path/beta"},
+		{RepoName: "repo1", Branch: "main", Path: "/path/main"},
+	}
+
+	t.Run("paste filters worktree list", func(t *testing.T) {
+		options := make([]framework.Option, len(worktrees))
+		for i, wt := range worktrees {
+			options[i] = framework.Option{
+				Label: wt.RepoName + ":" + wt.Branch,
+				Value: i,
+			}
+		}
+
+		selectStep := steps.NewFilterableList("worktree", "Worktree", "", options)
+		model := &cdListModel{
+			step:       selectStep,
+			worktrees:  worktrees,
+			selectedAt: -1,
+		}
+		model.Init()
+
+		// Paste "beta" to filter the list
+		m, _ := model.Update(tea.PasteMsg{Content: "beta"})
+		model = m.(*cdListModel)
+
+		if model.step.GetFilter() != "beta" {
+			t.Errorf("Filter = %q, want %q", model.step.GetFilter(), "beta")
+		}
+		if model.step.FilteredCount() != 1 {
+			t.Errorf("FilteredCount = %d, want 1", model.step.FilteredCount())
+		}
+	})
+}
