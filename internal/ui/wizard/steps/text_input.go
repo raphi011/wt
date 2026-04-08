@@ -52,51 +52,62 @@ func (s *TextInputStep) Init() tea.Cmd {
 	return textinput.Blink
 }
 
-func (s *TextInputStep) Update(msg tea.KeyPressMsg) (framework.Step, tea.Cmd, framework.StepResult) {
-	switch msg.String() {
-	case "enter":
-		value := strings.TrimSpace(s.input.Value())
-		if value == "" {
-			s.validationError = "Value cannot be empty"
-			return s, nil, framework.StepContinue
-		}
-		if s.validate != nil {
-			if err := s.validate(value); err != nil {
-				s.validationError = err.Error()
+func (s *TextInputStep) Update(msg tea.Msg) (framework.Step, tea.Cmd, framework.StepResult) {
+	switch msg := msg.(type) {
+	case tea.PasteMsg:
+		s.validationError = ""
+		var cmd tea.Cmd
+		s.input, cmd = s.input.Update(msg)
+		return s, cmd, framework.StepContinue
+
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "enter":
+			value := strings.TrimSpace(s.input.Value())
+			if value == "" {
+				s.validationError = "Value cannot be empty"
 				return s, nil, framework.StepContinue
 			}
-		}
-		s.validationError = ""
-		s.submitted = true
-		s.submitValue = value
-		return s, nil, framework.StepSubmitIfReady
-	case "right":
-		value := strings.TrimSpace(s.input.Value())
-		if value == "" {
-			s.validationError = "Value cannot be empty"
-			return s, nil, framework.StepContinue
-		}
-		if s.validate != nil {
-			if err := s.validate(value); err != nil {
-				s.validationError = err.Error()
+			if s.validate != nil {
+				if err := s.validate(value); err != nil {
+					s.validationError = err.Error()
+					return s, nil, framework.StepContinue
+				}
+			}
+			s.validationError = ""
+			s.submitted = true
+			s.submitValue = value
+			return s, nil, framework.StepSubmitIfReady
+		case "right":
+			value := strings.TrimSpace(s.input.Value())
+			if value == "" {
+				s.validationError = "Value cannot be empty"
 				return s, nil, framework.StepContinue
 			}
+			if s.validate != nil {
+				if err := s.validate(value); err != nil {
+					s.validationError = err.Error()
+					return s, nil, framework.StepContinue
+				}
+			}
+			s.validationError = ""
+			s.submitted = true
+			s.submitValue = value
+			return s, nil, framework.StepAdvance
+		case "left":
+			return s, nil, framework.StepBack
 		}
+
+		// Clear error when user types
 		s.validationError = ""
-		s.submitted = true
-		s.submitValue = value
-		return s, nil, framework.StepAdvance
-	case "left":
-		return s, nil, framework.StepBack
+
+		// Let textinput handle other keys
+		var cmd tea.Cmd
+		s.input, cmd = s.input.Update(msg)
+		return s, cmd, framework.StepContinue
 	}
 
-	// Clear error when user types
-	s.validationError = ""
-
-	// Let textinput handle other keys
-	var cmd tea.Cmd
-	s.input, cmd = s.input.Update(msg)
-	return s, cmd, framework.StepContinue
+	return s, nil, framework.StepContinue
 }
 
 func (s *TextInputStep) View() string {

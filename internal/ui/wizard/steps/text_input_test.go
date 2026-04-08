@@ -4,8 +4,40 @@ import (
 	"errors"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
 )
+
+func TestTextInputStep_Paste(t *testing.T) {
+	t.Run("paste inserts text", func(t *testing.T) {
+		step := NewTextInput("test", "Test", "Enter name:", "")
+		step.Init() // Focus the input
+
+		result, _, stepResult := step.Update(tea.PasteMsg{Content: "pasted-text"})
+		if stepResult != framework.StepContinue {
+			t.Errorf("Result = %v, want StepContinue", stepResult)
+		}
+		step = result.(*TextInputStep)
+
+		if step.GetValue() != "pasted-text" {
+			t.Errorf("GetValue() = %q, want %q", step.GetValue(), "pasted-text")
+		}
+	})
+
+	t.Run("paste appends to existing text", func(t *testing.T) {
+		step := NewTextInput("test", "Test", "Enter name:", "")
+		step.Init()
+		step.SetValue("hello-")
+
+		result, _, _ := step.Update(tea.PasteMsg{Content: "world"})
+		step = result.(*TextInputStep)
+
+		if step.GetValue() != "hello-world" {
+			t.Errorf("GetValue() = %q, want %q", step.GetValue(), "hello-world")
+		}
+	})
+}
 
 func TestTextInputStep_BasicInput(t *testing.T) {
 	t.Run("typing updates input value", func(t *testing.T) {
