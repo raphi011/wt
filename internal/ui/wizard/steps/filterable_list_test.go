@@ -8,6 +8,92 @@ import (
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
 )
 
+func TestFilterableListStep_Paste(t *testing.T) {
+	options := []framework.Option{
+		{Label: "apple", Value: "apple"},
+		{Label: "apricot", Value: "apricot"},
+		{Label: "banana", Value: "banana"},
+		{Label: "cherry", Value: "cherry"},
+	}
+
+	t.Run("paste into filter with filter focused", func(t *testing.T) {
+		step := NewFilterableList("test", "Test", "Select", options)
+
+		updateStep(t, step, keyMsg("a"))
+		if step.GetFilter() != "a" {
+			t.Fatalf("Filter = %q, want %q", step.GetFilter(), "a")
+		}
+
+		result, _, stepResult := step.Update(tea.PasteMsg{Content: "ppl"})
+		if stepResult != framework.StepContinue {
+			t.Errorf("Result = %v, want StepContinue", stepResult)
+		}
+		step = result.(*FilterableListStep)
+
+		if step.GetFilter() != "appl" {
+			t.Errorf("Filter after paste = %q, want %q", step.GetFilter(), "appl")
+		}
+		if step.FilteredCount() != 1 {
+			t.Errorf("FilteredCount = %d, want 1", step.FilteredCount())
+		}
+	})
+
+	t.Run("paste with list focused auto-focuses filter", func(t *testing.T) {
+		step := NewFilterableList("test", "Test", "Select", options)
+
+		result, _, stepResult := step.Update(tea.PasteMsg{Content: "ban"})
+		if stepResult != framework.StepContinue {
+			t.Errorf("Result = %v, want StepContinue", stepResult)
+		}
+		step = result.(*FilterableListStep)
+
+		if step.GetFilter() != "ban" {
+			t.Errorf("Filter after paste = %q, want %q", step.GetFilter(), "ban")
+		}
+		if step.FilteredCount() != 1 {
+			t.Errorf("FilteredCount = %d, want 1", step.FilteredCount())
+		}
+	})
+
+	t.Run("paste with RuneFilter strips disallowed chars", func(t *testing.T) {
+		step := NewFilterableList("test", "Test", "Select", options).
+			WithRuneFilter(framework.RuneFilterNoSpaces)
+
+		result, _, _ := step.Update(tea.PasteMsg{Content: "a p p"})
+		step = result.(*FilterableListStep)
+
+		if step.GetFilter() != "app" {
+			t.Errorf("Filter after paste with RuneFilter = %q, want %q", step.GetFilter(), "app")
+		}
+	})
+
+	t.Run("paste empty string is no-op", func(t *testing.T) {
+		step := NewFilterableList("test", "Test", "Select", options)
+
+		result, _, stepResult := step.Update(tea.PasteMsg{Content: ""})
+		if stepResult != framework.StepContinue {
+			t.Errorf("Result = %v, want StepContinue", stepResult)
+		}
+		step = result.(*FilterableListStep)
+
+		if step.GetFilter() != "" {
+			t.Errorf("Filter after empty paste = %q, want empty", step.GetFilter())
+		}
+	})
+
+	t.Run("paste with RuneFilter all chars filtered is no-op", func(t *testing.T) {
+		step := NewFilterableList("test", "Test", "Select", options).
+			WithRuneFilter(framework.RuneFilterNoSpaces)
+
+		result, _, _ := step.Update(tea.PasteMsg{Content: "   "})
+		step = result.(*FilterableListStep)
+
+		if step.GetFilter() != "" {
+			t.Errorf("Filter after all-filtered paste = %q, want empty", step.GetFilter())
+		}
+	})
+}
+
 func TestFilterableListStep_BasicNavigation(t *testing.T) {
 	options := []framework.Option{
 		{Label: "apple", Value: "apple"},
