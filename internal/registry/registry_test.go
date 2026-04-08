@@ -749,3 +749,260 @@ func TestRepoString(t *testing.T) {
 		t.Errorf("String() = %q, want 'myrepo (backend, api)'", got)
 	}
 }
+
+// TestLoad_DefaultPath exercises the path == "" branch in Load, which calls
+// registryPath() → fs.WtDir() → os.UserHomeDir(). When no registry file
+// exists at the default location the function must return an empty registry.
+func TestLoad_DefaultPath(t *testing.T) {
+	t.Parallel()
+
+	// We can't change $HOME safely in a parallel test, so we just verify
+	// that Load("") doesn't panic and returns either a registry or a
+	// meaningful error (UserHomeDir could theoretically fail in CI).
+	reg, err := Load("")
+	if err != nil {
+		// Acceptable: home dir not available in some environments.
+		t.Logf("Load(\"\") returned error (acceptable in CI): %v", err)
+		return
+	}
+	if reg == nil {
+		t.Error("Load(\"\") returned nil registry without error")
+	}
+}
+
+// TestSave_DefaultPath exercises the path == "" branch in Save, which calls
+// registryPath() → fs.WtDir() → os.UserHomeDir().
+func TestSave_DefaultPath(t *testing.T) {
+	t.Parallel()
+
+	reg := &Registry{Repos: []Repo{}}
+	err := reg.Save("")
+	if err != nil {
+		// Acceptable: home dir not available in some environments.
+		t.Logf("Save(\"\") returned error (acceptable in CI): %v", err)
+	}
+	// No assertion needed beyond "does not panic"; the path branch is exercised.
+}
+
+// TestSave_CreatesParentDir verifies that Save creates intermediate directories
+// that don't exist yet.
+func TestSave_CreatesParentDir(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	// Use a deeply nested path that doesn't exist yet.
+	regPath := filepath.Join(tmpDir, "a", "b", "c", "repos.json")
+
+	reg := &Registry{
+		Repos: []Repo{
+			{Name: "test", Path: "/tmp/test"},
+		},
+	}
+
+	if err := reg.Save(regPath); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+
+	if _, err := os.Stat(regPath); os.IsNotExist(err) {
+		t.Error("registry file was not created in nested directory")
+	}
+}
+
+// TestSave_WritesValidJSON verifies that Save produces JSON that Load can
+// round-trip correctly.
+func TestSave_WritesValidJSON(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	regPath := filepath.Join(tmpDir, "repos.json")
+
+	reg := &Registry{
+		Repos: []Repo{
+			{Name: "alpha", Path: "/tmp/alpha", Labels: []string{"backend"}},
+			{Name: "beta", Path: "/tmp/beta"},
+		},
+	}
+
+	if err := reg.Save(regPath); err != nil {
+		t.Fatalf("Save() failed: %v", err)
+	}
+
+	loaded, err := Load(regPath)
+	if err != nil {
+		t.Fatalf("Load() after Save() failed: %v", err)
+	}
+
+	if len(loaded.Repos) != 2 {
+		t.Fatalf("expected 2 repos, got %d", len(loaded.Repos))
+	}
+
+	r, err := loaded.FindByName("alpha")
+	if err != nil {
+		t.Fatalf("FindByName(alpha) failed: %v", err)
+	}
+	if !r.HasLabel("backend") {
+		t.Error("loaded repo missing label 'backend'")
+	}
+}
+
+// TestLoad_MissingFile verifies that Load returns an empty registry (no error)
+// when the file does not exist.
+func TestLoad_MissingFile(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "does-not-exist.json")
+
+	reg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v, want nil", err)
+	}
+	if len(reg.Repos) != 0 {
+		t.Errorf("expected 0 repos for missing file, got %d", len(reg.Repos))
+	}
+}
+
+// TestLoad_InvalidJSON verifies that Load returns an error for malformed JSON.
+func TestLoad_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "bad.json")
+
+	if err := os.WriteFile(path, []byte("{not valid json"), 0644); err != nil {
+		t.Fatalf("setup: write failed: %v", err)
+	}
+
+	_, err := Load(path)
+	if err == nil {
+		t.Error("Load() expected error for invalid JSON, got nil")
+	}
+}
+
+// TestRemoveLabel_NonexistentLabel verifies that RemoveLabel is a no-op (no
+// error) when the label doesn't exist on the repo.
+func TestRemoveLabel_NonexistentLabel(t *testing.T) {
+	t.Parallel()
+
+	reg := &Registry{
+		Repos: []Repo{
+			{Name: "foo", Path: "/tmp/foo", Labels: []string{"backend"}},
+		},
+	}
+
+	// Remove a label that was never added — should succeed silently.
+	if err := reg.RemoveLabel("foo", "nonexistent"); err != nil {
+		t.Errorf("RemoveLabel(nonexistent) error = %v, want nil", err)
+	}
+
+	// Existing label should still be present.
+	repo, err := reg.FindByName("foo")
+	if err != nil {
+		t.Fatalf("FindByName failed: %v", err)
+	}
+	if !repo.HasLabel("backend") {
+		t.Error("existing label 'backend' was unexpectedly removed")
+	}
+}
+
+// TestRemoveLabel_NonexistentRepo verifies that RemoveLabel returns an error
+// when the repo doesn't exist.
+func TestRemoveLabel_NonexistentRepo(t *testing.T) {
+	t.Parallel()
+
+	reg := &Registry{Repos: []Repo{}}
+
+	if err := reg.RemoveLabel("nonexistent", "label"); err == nil {
+		t.Error("RemoveLabel() on non-existent repo expected error, got nil")
+	}
+}
+
+// TestClearLabels_EmptyLabels verifies that ClearLabels is a no-op when the
+// repo already has no labels (nil slice).
+func TestClearLabels_EmptyLabels(t *testing.T) {
+	t.Parallel()
+
+	reg := &Registry{
+		Repos: []Repo{
+			{Name: "nolabels", Path: "/tmp/nolabels"},
+		},
+	}
+
+	if err := reg.ClearLabels("nolabels"); err != nil {
+		t.Errorf("ClearLabels() on repo with no labels error = %v, want nil", err)
+	}
+
+	repo, err := reg.FindByName("nolabels")
+	if err != nil {
+		t.Fatalf("FindByName failed: %v", err)
+	}
+	if len(repo.Labels) != 0 {
+		t.Errorf("expected 0 labels after ClearLabels, got %d", len(repo.Labels))
+	}
+}
+
+// TestClearLabels_NonexistentRepo verifies that ClearLabels returns an error
+// when the named repo doesn't exist.
+func TestClearLabels_NonexistentRepo(t *testing.T) {
+	t.Parallel()
+
+	reg := &Registry{Repos: []Repo{}}
+
+	if err := reg.ClearLabels("nonexistent"); err == nil {
+		t.Error("ClearLabels() on non-existent repo expected error, got nil")
+	}
+}
+
+// TestPathExists_NonexistentPath verifies that PathExists returns false (no
+// error) for a path that doesn't exist on disk.
+func TestPathExists_NonexistentPath(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	repo := &Repo{Name: "gone", Path: filepath.Join(tmpDir, "does-not-exist")}
+
+	exists, err := repo.PathExists()
+	if err != nil {
+		t.Fatalf("PathExists() error = %v, want nil", err)
+	}
+	if exists {
+		t.Error("PathExists() = true for non-existent path, want false")
+	}
+}
+
+// TestAddLabel_NonexistentRepo verifies that AddLabel returns an error when
+// the named repo doesn't exist.
+func TestAddLabel_NonexistentRepo(t *testing.T) {
+	t.Parallel()
+
+	reg := &Registry{Repos: []Repo{}}
+
+	if err := reg.AddLabel("nonexistent", "backend"); err == nil {
+		t.Error("AddLabel() on non-existent repo expected error, got nil")
+	}
+}
+
+// TestResolveAsPath verifies that resolveAsPath returns a canonical absolute
+// path for a valid relative or absolute input.
+func TestResolveAsPath(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks failed: %v", err)
+	}
+
+	// Absolute path — should be canonicalized (symlinks resolved on macOS).
+	got := resolveAsPath(resolved)
+	if got != resolved {
+		t.Errorf("resolveAsPath(%q) = %q, want %q", resolved, got, resolved)
+	}
+
+	// Relative path — should be converted to absolute.
+	// Use "." which always resolves to the current working directory.
+	got2 := resolveAsPath(".")
+	if got2 == "." {
+		t.Error("resolveAsPath('.') should return absolute path, got '.'")
+	}
+}

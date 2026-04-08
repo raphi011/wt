@@ -132,3 +132,68 @@ func TestProgressBar_Total(t *testing.T) {
 		}
 	}
 }
+
+func TestProgressBarModel_Init(t *testing.T) {
+	t.Parallel()
+
+	m := newTestModel(100, "Starting...")
+	cmd := m.Init()
+
+	// Init should return a command (the waitForUpdate listener)
+	if cmd == nil {
+		t.Fatal("Init() returned nil cmd, want non-nil")
+	}
+}
+
+func TestProgressBarModel_Update_UnknownMsg(t *testing.T) {
+	t.Parallel()
+
+	m := newTestModel(100, "Working...")
+	m.current = 50
+
+	// Unknown message type should be forwarded to progress model
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	um := updated.(progressBarModel)
+
+	// Current and message should be unchanged
+	if um.current != 50 {
+		t.Errorf("current = %d, want 50", um.current)
+	}
+	if um.message != "Working..." {
+		t.Errorf("message = %q, want %q", um.message, "Working...")
+	}
+}
+
+func TestProgressBarModel_View_FullProgress(t *testing.T) {
+	t.Parallel()
+
+	m := newTestModel(100, "Done")
+	m.current = 100
+	// Should render 100% without panic
+	view := m.View()
+	if view.Content == "" {
+		t.Error("View() returned empty content for 100% progress")
+	}
+}
+
+func TestProgressBar_SetProgress_UpdatesBeforeStart(t *testing.T) {
+	t.Parallel()
+
+	pb := NewProgressBar(10, "Test")
+	pb.SetProgress(3, "Step 3")
+	pb.SetProgress(7, "Step 7")
+	// Should not panic, values updated internally
+	// Verify total is unchanged
+	if pb.Total() != 10 {
+		t.Errorf("Total() = %d, want 10", pb.Total())
+	}
+}
+
+func TestProgressBar_DoubleStop(t *testing.T) {
+	t.Parallel()
+
+	pb := NewProgressBar(10, "Test")
+	// Double stop without start should not panic
+	pb.Stop()
+	pb.Stop()
+}
