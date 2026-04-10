@@ -486,18 +486,16 @@ strategy = "squash"  # squash, rebase, or merge
 
 ### Preserve Settings
 
-Automatically copy git-ignored files (`.env`, `.envrc`, etc.) from an existing worktree when checking out a new one with `wt checkout`. Useful for keeping local configuration in sync across worktrees.
+Symlink files from the repo root into new worktrees created with `wt checkout`. Useful for keeping local configuration (`.env`, `.envrc`, etc.) in sync across worktrees — edits in any worktree are instantly visible in all others.
 
 ```toml
 [preserve]
-patterns = [".env", ".env.*", ".envrc", "docker-compose.override.yml"]
-exclude = ["node_modules", ".cache", "vendor"]
+paths = [".env", ".envrc"]
 ```
 
-- **patterns** — glob patterns matched against file basenames; only git-ignored files are considered
-- **exclude** — path segments to skip (any component match excludes the file)
+- **paths** — relative paths from the repo root to symlink (e.g., `".env"`, `"config/.env"`)
 
-Files are copied from the worktree on the default branch, e.g. `main` (or the first available worktree). Existing files are never overwritten. Symlinks are skipped. Use `--no-preserve` on `wt checkout` to skip.
+Paths that don't exist in the repo root are silently skipped. Existing files in the target worktree are never overwritten. Use `--no-preserve` on `wt checkout` to skip.
 
 ### Self-Hosted Instances
 
@@ -563,8 +561,7 @@ delete_local_branches = true  # replaces global
 default = "gitlab"            # replaces global
 
 [preserve]
-patterns = [".env.local"]     # appended to global (deduplicated)
-exclude = ["dist"]            # appended to global (deduplicated)
+paths = [".env.local"]        # appended to global (deduplicated)
 
 # Hooks merge by name — add new hooks or override global ones
 [hooks.setup]

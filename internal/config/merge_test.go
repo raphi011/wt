@@ -241,8 +241,7 @@ func TestMergeLocal_PreserveAppendDedup(t *testing.T) {
 
 	global := &Config{
 		Preserve: PreserveConfig{
-			Patterns: []string{".env", ".env.*"},
-			Exclude:  []string{"node_modules", ".cache"},
+			Paths: []string{".env", ".envrc"},
 		},
 		Checkout: CheckoutConfig{WorktreeFormat: DefaultWorktreeFormat},
 		Forge:    ForgeConfig{Default: "github"},
@@ -251,38 +250,26 @@ func TestMergeLocal_PreserveAppendDedup(t *testing.T) {
 
 	local := &LocalConfig{
 		Preserve: PreserveConfig{
-			Patterns: []string{".env.*", ".envrc"}, // .env.* is a dup
-			Exclude:  []string{"vendor", ".cache"}, // .cache is a dup
+			Paths: []string{".envrc", ".env.local"}, // .envrc is a dup
 		},
 	}
 
 	result := MergeLocal(global, local)
 
-	// Patterns: .env, .env.*, .envrc (deduped)
-	expectedPatterns := []string{".env", ".env.*", ".envrc"}
-	if len(result.Preserve.Patterns) != len(expectedPatterns) {
-		t.Fatalf("patterns = %v, want %v", result.Preserve.Patterns, expectedPatterns)
+	// Paths: .env, .envrc, .env.local (deduped)
+	expectedPaths := []string{".env", ".envrc", ".env.local"}
+	if len(result.Preserve.Paths) != len(expectedPaths) {
+		t.Fatalf("paths = %v, want %v", result.Preserve.Paths, expectedPaths)
 	}
-	for i, p := range expectedPatterns {
-		if result.Preserve.Patterns[i] != p {
-			t.Errorf("patterns[%d] = %q, want %q", i, result.Preserve.Patterns[i], p)
-		}
-	}
-
-	// Exclude: node_modules, .cache, vendor (deduped)
-	expectedExclude := []string{"node_modules", ".cache", "vendor"}
-	if len(result.Preserve.Exclude) != len(expectedExclude) {
-		t.Fatalf("exclude = %v, want %v", result.Preserve.Exclude, expectedExclude)
-	}
-	for i, e := range expectedExclude {
-		if result.Preserve.Exclude[i] != e {
-			t.Errorf("exclude[%d] = %q, want %q", i, result.Preserve.Exclude[i], e)
+	for i, p := range expectedPaths {
+		if result.Preserve.Paths[i] != p {
+			t.Errorf("paths[%d] = %q, want %q", i, result.Preserve.Paths[i], p)
 		}
 	}
 
 	// Verify global wasn't mutated
-	if len(global.Preserve.Patterns) != 2 {
-		t.Error("global patterns should be unchanged")
+	if len(global.Preserve.Paths) != 2 {
+		t.Error("global paths should be unchanged")
 	}
 }
 

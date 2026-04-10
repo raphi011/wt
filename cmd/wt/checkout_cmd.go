@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"path/filepath"
 	"slices"
 
 	"github.com/spf13/cobra"
@@ -208,7 +206,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, opts
 		}
 	}
 
-	preserveWorktreeFiles(ctx, gitDir, wtPath, opts.NoPreserve, cfg.Preserve)
+	preserveWorktreeFiles(ctx, repo.Path, wtPath, opts.NoPreserve, cfg.Preserve)
 
 	action := hooks.ActionOpen
 	if opts.NewBranch {
@@ -340,29 +338,19 @@ func setUpstreamTracking(ctx context.Context, gitDir, branch string, newBranch, 
 	}
 }
 
-// preserveWorktreeFiles copies git-ignored files from an existing worktree to the new one.
-func preserveWorktreeFiles(ctx context.Context, gitDir, wtPath string, noPreserve bool, preserveCfg config.PreserveConfig) {
-	if noPreserve || len(preserveCfg.Patterns) == 0 {
+// preserveWorktreeFiles symlinks preserved files from the repo root into the new worktree.
+func preserveWorktreeFiles(ctx context.Context, repoPath, wtPath string, noPreserve bool, preserveCfg config.PreserveConfig) {
+	if noPreserve || len(preserveCfg.Paths) == 0 {
 		return
 	}
 	l := log.FromContext(ctx)
 
-	sourceWT, err := preserve.FindSourceWorktree(ctx, gitDir, wtPath)
-	if err != nil {
-		if errors.Is(err, preserve.ErrNoSourceWorktree) {
-			l.Debug("preserve: no source worktree found")
-		} else {
-			l.Printf("Warning: preserve: %v\n", err)
-		}
-		return
-	}
-
-	copied, err := preserve.PreserveFiles(ctx, preserveCfg, sourceWT, wtPath)
+	linked, err := preserve.PreserveFiles(ctx, preserveCfg, repoPath, wtPath)
 	if err != nil {
 		l.Printf("Warning: preserve files failed: %v\n", err)
-	} else if len(copied) > 0 {
-		l.Printf("Preserved %d file(s) from %s\n", len(copied), filepath.Base(sourceWT))
-		for _, f := range copied {
+	} else if len(linked) > 0 {
+		l.Printf("Preserved %d file(s)\n", len(linked))
+		for _, f := range linked {
 			l.Debug("  preserved", "file", f)
 		}
 	}

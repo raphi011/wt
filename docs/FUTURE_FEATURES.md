@@ -4,31 +4,9 @@ This document outlines potential features to improve `wt` based on common patter
 
 ## High Priority
 
-### File Preservation on Worktree Creation
+### ~~File Preservation on Worktree Creation~~ (Shipped)
 
-**Problem:** When creating a new worktree, users must manually copy configuration files like `.env`, `.envrc`, or `docker-compose.override.yml`. These files are typically gitignored and contain local development settings.
-
-**Solution:** Automatically copy matching files from an existing worktree (or main repo) when creating a new worktree.
-
-**Config:**
-```toml
-[preserve]
-patterns = [".env*", ".envrc", "docker-compose.override.yml"]
-exclude = ["node_modules", "vendor", ".venv", "dist", "build", "__pycache__"]
-```
-
-**Behavior:**
-- On `wt checkout`, find gitignored files matching `patterns`
-- Skip files in directories matching `exclude`
-- Copy to new worktree (never overwrite existing)
-- Use atomic file operations to avoid race conditions
-
-**CLI:**
-```bash
-wt checkout -b feat/auth                    # Auto-preserve from current worktree
-wt checkout -b feat/auth --from main        # Preserve from specific worktree
-wt checkout -b feat/auth --no-preserve      # Skip file preservation
-```
+Implemented via `[preserve]` config with symlink-based approach. Listed paths are symlinked from the repo root into new worktrees on `wt checkout`. Use `--no-preserve` to skip.
 
 ---
 
@@ -171,10 +149,9 @@ None of these features require breaking changes. All can be implemented as addit
 ### Config Schema Additions
 
 ```toml
-# File preservation
-[preserve]
-patterns = [".env*", ".envrc"]
-exclude = ["node_modules", "vendor"]
+# File preservation (shipped)
+# [preserve]
+# paths = [".env", ".envrc"]
 
 # Pruning
 stale_threshold = "30d"

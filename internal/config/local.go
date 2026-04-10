@@ -101,7 +101,7 @@ func LoadLocal(repoPath string) (*LocalConfig, error) {
 	if err := validateEnum(local.Checkout.BaseRef, "checkout.base_ref", ValidBaseRefs); err != nil {
 		return nil, fmt.Errorf("%w in %s", err, configFile)
 	}
-	if err := validatePreservePatterns(local.Preserve.Patterns, configFile); err != nil {
+	if err := validatePreservePaths(local.Preserve.Paths, configFile); err != nil {
 		return nil, err
 	}
 	if err := ValidateHookTriggers(local.Hooks.Hooks); err != nil {
@@ -136,10 +136,9 @@ const defaultLocalConfig = `# wt local config (per-repo overrides)
 # [prune]
 # delete_local_branches = false
 
-# Preserve settings (patterns here are added to global patterns)
+# Preserve settings (paths here are added to global paths)
 # [preserve]
-# patterns = [".env.local"]
-# exclude = ["dist"]
+# paths = [".env.local"]
 
 # Forge settings
 # [forge]
