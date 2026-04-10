@@ -137,7 +137,7 @@ func runCdInteractive(ctx context.Context, reg *registry.Registry, histPath stri
 	}
 	repos = filterOrphanedRepos(l, repos)
 
-	loaded, warnings := git.LoadWorktreesForRepos(ctx, reposToRefs(repos))
+	loaded, warnings := git.ListWorktreesForRepos(ctx, reposToRefs(repos))
 	for _, w := range warnings {
 		l.Debug("skipping repo", "repo", w.RepoName, "error", w.Err)
 	}
