@@ -4,106 +4,34 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"slices"
-	"strings"
 
-	"github.com/raphi011/wt/internal/cmd"
 	"github.com/raphi011/wt/internal/config"
-	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 )
 
-// ErrNoSourceWorktree is returned when no suitable source worktree is found
-// for file preservation. This is a benign condition (e.g., first worktree).
-var ErrNoSourceWorktree = errors.New("no source worktree found")
+// ErrDestExists is returned when the destination file already exists.
+var ErrDestExists = errors.New("destination already exists")
 
-// FindSourceWorktree finds an existing worktree to copy preserved files from.
-// It prefers the worktree on the default branch, falling back to the first
-// worktree that isn't the target.
-func FindSourceWorktree(ctx context.Context, gitDir, targetPath string) (string, error) {
-	worktrees, err := git.ListWorktreesFromRepo(ctx, gitDir)
-	if err != nil {
-		return "", fmt.Errorf("list worktrees: %w", err)
-	}
-
-	defaultBranch := git.GetDefaultBranch(ctx, gitDir)
-
-	// Prefer the worktree on the default branch
-	for _, wt := range worktrees {
-		if wt.Branch == defaultBranch && wt.Path != targetPath {
-			return wt.Path, nil
+// LinkFile creates a relative symlink from src to dst, creating parent
+// directories as needed. Returns true if the link was created.
+// Returns (false, nil) if src doesn't exist (caller should skip silently).
+// Returns (false, ErrDestExists) if dst already exists.
+func LinkFile(src, dst string) (bool, error) {
+	// Check source exists
+	if _, err := os.Lstat(src); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
 		}
-	}
-
-	// Fall back to first worktree that isn't the target
-	for _, wt := range worktrees {
-		if wt.Path != targetPath {
-			return wt.Path, nil
-		}
-	}
-
-	return "", ErrNoSourceWorktree
-}
-
-// FindIgnoredFiles returns paths (relative to worktreeDir) of all git-ignored
-// files present in the worktree.
-func FindIgnoredFiles(ctx context.Context, worktreeDir string) ([]string, error) {
-	output, err := cmd.OutputContext(ctx, worktreeDir, "git",
-		"ls-files", "--others", "--ignored", "--exclude-standard")
-	if err != nil {
-		return nil, fmt.Errorf("git ls-files: %w", err)
-	}
-
-	raw := strings.TrimSpace(string(output))
-	if raw == "" {
-		return nil, nil
-	}
-
-	return strings.Split(raw, "\n"), nil
-}
-
-// matchesPattern returns true if the file at relPath should be preserved
-// based on the given patterns and exclusions.
-// Patterns are matched against the file's basename.
-// If any path segment matches an exclude entry, the file is skipped.
-func matchesPattern(relPath string, patterns, exclude []string) bool {
-	// Check exclusions first — if any path segment matches, skip
-	for seg := range strings.SplitSeq(filepath.ToSlash(relPath), "/") {
-		if slices.Contains(exclude, seg) {
-			return false
-		}
-	}
-
-	base := filepath.Base(relPath)
-	for _, pat := range patterns {
-		matched, err := filepath.Match(pat, base)
-		if err != nil {
-			continue // invalid patterns are caught at config load time
-		}
-		if matched {
-			return true
-		}
-	}
-
-	return false
-}
-
-// CopyFile copies src to dst, creating parent directories as needed.
-// Uses O_CREATE|O_EXCL to skip files that already exist (never overwrite).
-// Preserves the source file's permission bits. Symlinks are skipped.
-// Returns true if the file was copied, false if it was skipped (already exists or symlink).
-func CopyFile(src, dst string) (bool, error) {
-	srcInfo, err := os.Lstat(src)
-	if err != nil {
 		return false, err
 	}
 
-	// Skip symlinks — only copy regular files
-	if srcInfo.Mode()&os.ModeSymlink != 0 {
-		return false, nil
+	// Check destination doesn't exist
+	if _, err := os.Lstat(dst); err == nil {
+		return false, ErrDestExists
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, err
 	}
 
 	// Create parent directories
@@ -111,69 +39,54 @@ func CopyFile(src, dst string) (bool, error) {
 		return false, err
 	}
 
-	// O_EXCL: fail if file exists (never overwrite)
-	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, srcInfo.Mode())
+	// Compute relative path from dst's directory to src
+	relPath, err := filepath.Rel(filepath.Dir(dst), src)
 	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return false, nil // skip existing files
-		}
 		return false, err
 	}
 
-	srcFile, err := os.Open(src)
-	if err != nil {
-		dstFile.Close()
-		os.Remove(dst) // clean up empty dst
-		return false, err
-	}
-	defer srcFile.Close()
-
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		dstFile.Close()
-		os.Remove(dst) // clean up partial dst
-		return false, err
-	}
-
-	if err := dstFile.Close(); err != nil {
-		os.Remove(dst) // clean up on flush failure
+	if err := os.Symlink(relPath, dst); err != nil {
 		return false, err
 	}
 
 	return true, nil
 }
 
-// PreserveFiles copies git-ignored files matching the configured patterns
-// from sourceDir into targetDir. Returns the list of relative paths that
-// were copied. Individual file copy failures are logged and skipped; the
-// returned error only indicates failure to enumerate ignored files.
+// PreserveFiles symlinks files listed in cfg.Paths from sourceDir into
+// targetDir. Returns the list of relative paths that were linked.
 func PreserveFiles(ctx context.Context, cfg config.PreserveConfig, sourceDir, targetDir string) ([]string, error) {
 	l := log.FromContext(ctx)
 
-	ignored, err := FindIgnoredFiles(ctx, sourceDir)
-	if err != nil {
-		return nil, err
-	}
+	var linked []string
+	var lastErr error
+	failCount := 0
 
-	var copied []string
+	for _, path := range cfg.Paths {
+		src := filepath.Join(sourceDir, path)
+		dst := filepath.Join(targetDir, path)
 
-	for _, relPath := range ignored {
-		if !matchesPattern(relPath, cfg.Patterns, cfg.Exclude) {
-			continue
-		}
-
-		src := filepath.Join(sourceDir, relPath)
-		dst := filepath.Join(targetDir, relPath)
-
-		ok, err := CopyFile(src, dst)
+		ok, err := LinkFile(src, dst)
 		if err != nil {
-			l.Printf("Warning: preserve: failed to copy %s: %v\n", relPath, err)
+			if errors.Is(err, ErrDestExists) {
+				l.Printf("Warning: preserve: skipped %s (already exists in worktree)\n", path)
+				continue
+			}
+			l.Printf("Warning: preserve: failed to link %s: %v\n", path, err)
+			lastErr = err
+			failCount++
 			continue
 		}
 
 		if ok {
-			copied = append(copied, relPath)
+			linked = append(linked, path)
+		} else {
+			l.Debug("preserve: source not found, skipping", "path", path)
 		}
 	}
 
-	return copied, nil
+	if failCount > 0 && len(linked) == 0 {
+		return nil, fmt.Errorf("all %d preserve path(s) failed (last error: %w)", failCount, lastErr)
+	}
+
+	return linked, nil
 }

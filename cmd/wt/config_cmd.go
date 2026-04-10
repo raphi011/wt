@@ -381,17 +381,12 @@ func renderConfigText(w io.Writer, cfg *config.Config, local *config.LocalConfig
 	})
 
 	// [preserve]
-	patternAnn := "(global)"
-	if local != nil && len(local.Preserve.Patterns) > 0 {
-		patternAnn = "(local)"
-	}
-	excludeAnn := "(global)"
-	if local != nil && len(local.Preserve.Exclude) > 0 {
-		excludeAnn = "(local)"
+	pathsAnn := "(global)"
+	if local != nil && len(local.Preserve.Paths) > 0 {
+		pathsAnn = "(local)"
 	}
 	printSection("[preserve]", []kv{
-		{"patterns", "[" + strings.Join(cfg.Preserve.Patterns, ", ") + "]", patternAnn},
-		{"exclude", "[" + strings.Join(cfg.Preserve.Exclude, ", ") + "]", excludeAnn},
+		{"paths", "[" + strings.Join(cfg.Preserve.Paths, ", ") + "]", pathsAnn},
 	})
 
 	// [hooks]

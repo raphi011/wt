@@ -54,11 +54,8 @@ func MergeLocal(global *Config, local *LocalConfig) *Config {
 	}
 
 	// Merge preserve (append with dedup)
-	if len(local.Preserve.Patterns) > 0 {
-		merged.Preserve.Patterns = appendUnique(global.Preserve.Patterns, local.Preserve.Patterns)
-	}
-	if len(local.Preserve.Exclude) > 0 {
-		merged.Preserve.Exclude = appendUnique(global.Preserve.Exclude, local.Preserve.Exclude)
+	if len(local.Preserve.Paths) > 0 {
+		merged.Preserve.Paths = appendUnique(global.Preserve.Paths, local.Preserve.Paths)
 	}
 
 	return &merged

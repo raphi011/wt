@@ -48,14 +48,28 @@ func ValidateHookTriggers(hooksMap map[string]Hook) error {
 	return nil
 }
 
-// validatePreservePatterns checks that all patterns are valid filepath.Match syntax.
-func validatePreservePatterns(patterns []string, contextInfo string) error {
-	for i, pat := range patterns {
-		if _, err := filepath.Match(pat, ""); err != nil {
+// validatePreservePaths checks that all paths are relative and don't escape the repo root.
+func validatePreservePaths(paths []string, contextInfo string) error {
+	for i, p := range paths {
+		cleaned := filepath.Clean(p)
+
+		var reason string
+		switch {
+		case p == "":
+			reason = "must not be empty"
+		case cleaned == ".":
+			reason = "must be a file path, not directory root"
+		case filepath.IsAbs(p):
+			reason = "must be a relative path"
+		case strings.HasPrefix(cleaned, ".."):
+			reason = "must not escape repo root"
+		}
+
+		if reason != "" {
 			if contextInfo != "" {
-				return fmt.Errorf("invalid preserve.patterns[%d] %q in %s: %w", i, pat, contextInfo, err)
+				return fmt.Errorf("invalid preserve.paths[%d] %q in %s: %s", i, p, contextInfo, reason)
 			}
-			return fmt.Errorf("invalid preserve.patterns[%d] %q: %w", i, pat, err)
+			return fmt.Errorf("invalid preserve.paths[%d] %q: %s", i, p, reason)
 		}
 	}
 	return nil

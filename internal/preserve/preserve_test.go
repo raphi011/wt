@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -15,108 +14,15 @@ import (
 	"github.com/raphi011/wt/internal/log"
 )
 
-func TestMatchesPattern(t *testing.T) {
+func TestLinkFile(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name     string
-		relPath  string
-		patterns []string
-		exclude  []string
-		want     bool
-	}{
-		{
-			name:     "exact basename match",
-			relPath:  ".env",
-			patterns: []string{".env"},
-			want:     true,
-		},
-		{
-			name:     "glob pattern match",
-			relPath:  ".env.local",
-			patterns: []string{".env.*"},
-			want:     true,
-		},
-		{
-			name:     "nested file matches basename",
-			relPath:  "config/.env",
-			patterns: []string{".env"},
-			want:     true,
-		},
-		{
-			name:     "no match",
-			relPath:  "main.go",
-			patterns: []string{".env", ".envrc"},
-			want:     false,
-		},
-		{
-			name:     "excluded path segment",
-			relPath:  "node_modules/.env",
-			patterns: []string{".env"},
-			exclude:  []string{"node_modules"},
-			want:     false,
-		},
-		{
-			name:     "deeply nested excluded segment",
-			relPath:  "packages/app/node_modules/.cache/.env",
-			patterns: []string{".env"},
-			exclude:  []string{"node_modules"},
-			want:     false,
-		},
-		{
-			name:     "exclude does not match basename",
-			relPath:  ".env",
-			patterns: []string{".env"},
-			exclude:  []string{"vendor"},
-			want:     true,
-		},
-		{
-			name:     "multiple patterns first matches",
-			relPath:  ".envrc",
-			patterns: []string{".env", ".envrc", "docker-compose.override.yml"},
-			want:     true,
-		},
-		{
-			name:     "docker-compose override",
-			relPath:  "docker-compose.override.yml",
-			patterns: []string{"docker-compose.override.yml"},
-			want:     true,
-		},
-		{
-			name:     "empty patterns",
-			relPath:  ".env",
-			patterns: nil,
-			want:     false,
-		},
-		{
-			name:     "invalid glob pattern does not match",
-			relPath:  ".env",
-			patterns: []string{"[invalid"},
-			want:     false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			got := matchesPattern(tt.relPath, tt.patterns, tt.exclude)
-			if got != tt.want {
-				t.Errorf("matchesPattern(%q, %v, %v) = %v, want %v",
-					tt.relPath, tt.patterns, tt.exclude, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestCopyFile(t *testing.T) {
-	t.Parallel()
-
-	t.Run("copies file with contents", func(t *testing.T) {
+	t.Run("creates relative symlink", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := resolveTempDir(t)
 
-		src := filepath.Join(tmpDir, "src", ".env")
-		dst := filepath.Join(tmpDir, "dst", ".env")
+		src := filepath.Join(tmpDir, "repo", ".env")
+		dst := filepath.Join(tmpDir, "worktree", ".env")
 
 		if err := os.MkdirAll(filepath.Dir(src), 0755); err != nil {
 			t.Fatalf("setup: mkdir failed: %v", err)
@@ -125,29 +31,48 @@ func TestCopyFile(t *testing.T) {
 			t.Fatalf("setup: write file failed: %v", err)
 		}
 
-		copied, err := CopyFile(src, dst)
+		linked, err := LinkFile(src, dst)
 		if err != nil {
-			t.Fatalf("CopyFile() error = %v", err)
+			t.Fatalf("LinkFile() error = %v", err)
 		}
-		if !copied {
-			t.Error("CopyFile() should return true for new file")
+		if !linked {
+			t.Error("LinkFile() should return true for new link")
 		}
 
+		// Verify it's a symlink
+		info, err := os.Lstat(dst)
+		if err != nil {
+			t.Fatalf("failed to lstat dst: %v", err)
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			t.Error("dst should be a symlink")
+		}
+
+		// Verify symlink target is relative
+		target, err := os.Readlink(dst)
+		if err != nil {
+			t.Fatalf("failed to readlink dst: %v", err)
+		}
+		if filepath.IsAbs(target) {
+			t.Errorf("symlink target should be relative, got %q", target)
+		}
+
+		// Verify content is accessible through symlink
 		got, err := os.ReadFile(dst)
 		if err != nil {
-			t.Fatalf("failed to read dst: %v", err)
+			t.Fatalf("failed to read through symlink: %v", err)
 		}
 		if string(got) != "SECRET=abc123\n" {
 			t.Errorf("got %q, want %q", got, "SECRET=abc123\n")
 		}
 	})
 
-	t.Run("skips existing file", func(t *testing.T) {
+	t.Run("skips when destination exists", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := resolveTempDir(t)
 
-		src := filepath.Join(tmpDir, "src", ".env")
-		dst := filepath.Join(tmpDir, "dst", ".env")
+		src := filepath.Join(tmpDir, "repo", ".env")
+		dst := filepath.Join(tmpDir, "worktree", ".env")
 
 		if err := os.MkdirAll(filepath.Dir(src), 0755); err != nil {
 			t.Fatalf("setup: mkdir failed: %v", err)
@@ -155,19 +80,19 @@ func TestCopyFile(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 			t.Fatalf("setup: mkdir failed: %v", err)
 		}
-		if err := os.WriteFile(src, []byte("NEW_CONTENT\n"), 0644); err != nil {
-			t.Fatalf("setup: write file failed: %v", err)
+		if err := os.WriteFile(src, []byte("NEW\n"), 0644); err != nil {
+			t.Fatalf("setup: write src failed: %v", err)
 		}
-		if err := os.WriteFile(dst, []byte("EXISTING_CONTENT\n"), 0644); err != nil {
-			t.Fatalf("setup: write file failed: %v", err)
+		if err := os.WriteFile(dst, []byte("EXISTING\n"), 0644); err != nil {
+			t.Fatalf("setup: write dst failed: %v", err)
 		}
 
-		copied, err := CopyFile(src, dst)
-		if err != nil {
-			t.Fatalf("CopyFile() should not error on existing: %v", err)
+		linked, err := LinkFile(src, dst)
+		if !errors.Is(err, ErrDestExists) {
+			t.Fatalf("LinkFile() error = %v, want ErrDestExists", err)
 		}
-		if copied {
-			t.Error("CopyFile() should return false for existing file")
+		if linked {
+			t.Error("LinkFile() should return false when destination exists")
 		}
 
 		// Existing content should be preserved
@@ -175,17 +100,17 @@ func TestCopyFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to read dst: %v", err)
 		}
-		if string(got) != "EXISTING_CONTENT\n" {
-			t.Errorf("existing file was overwritten: got %q, want %q", got, "EXISTING_CONTENT\n")
+		if string(got) != "EXISTING\n" {
+			t.Errorf("existing file was modified: got %q, want %q", got, "EXISTING\n")
 		}
 	})
 
 	t.Run("creates nested directories", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := resolveTempDir(t)
 
-		src := filepath.Join(tmpDir, "src", "deep", "nested", ".env")
-		dst := filepath.Join(tmpDir, "dst", "deep", "nested", ".env")
+		src := filepath.Join(tmpDir, "repo", "config", "deep", ".env")
+		dst := filepath.Join(tmpDir, "worktree", "config", "deep", ".env")
 
 		if err := os.MkdirAll(filepath.Dir(src), 0755); err != nil {
 			t.Fatalf("setup: mkdir failed: %v", err)
@@ -194,116 +119,232 @@ func TestCopyFile(t *testing.T) {
 			t.Fatalf("setup: write file failed: %v", err)
 		}
 
-		copied, err := CopyFile(src, dst)
+		linked, err := LinkFile(src, dst)
 		if err != nil {
-			t.Fatalf("CopyFile() error = %v", err)
+			t.Fatalf("LinkFile() error = %v", err)
 		}
-		if !copied {
-			t.Error("CopyFile() should return true for new file")
+		if !linked {
+			t.Error("LinkFile() should return true for new link")
 		}
 
 		got, err := os.ReadFile(dst)
 		if err != nil {
-			t.Fatalf("failed to read dst: %v", err)
+			t.Fatalf("failed to read through symlink: %v", err)
 		}
 		if string(got) != "NESTED=true\n" {
 			t.Errorf("got %q, want %q", got, "NESTED=true\n")
 		}
 	})
 
-	t.Run("preserves file permissions", func(t *testing.T) {
+	t.Run("returns false when source does not exist", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
-
-		src := filepath.Join(tmpDir, "src", "script.sh")
-		dst := filepath.Join(tmpDir, "dst", "script.sh")
-
-		if err := os.MkdirAll(filepath.Dir(src), 0755); err != nil {
-			t.Fatalf("setup: mkdir failed: %v", err)
-		}
-		if err := os.WriteFile(src, []byte("#!/bin/sh\n"), 0755); err != nil {
-			t.Fatalf("setup: write file failed: %v", err)
-		}
-
-		if _, err := CopyFile(src, dst); err != nil {
-			t.Fatalf("CopyFile() error = %v", err)
-		}
-
-		info, err := os.Stat(dst)
-		if err != nil {
-			t.Fatalf("failed to stat dst: %v", err)
-		}
-		if info.Mode().Perm() != 0755 {
-			t.Errorf("permissions = %o, want %o", info.Mode().Perm(), 0755)
-		}
-	})
-
-	t.Run("returns error for non-existent source", func(t *testing.T) {
-		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := resolveTempDir(t)
 
 		src := filepath.Join(tmpDir, "does-not-exist")
 		dst := filepath.Join(tmpDir, "dst", "file")
 
-		_, err := CopyFile(src, dst)
-		if err == nil {
-			t.Fatal("CopyFile() should return error for non-existent source")
+		linked, err := LinkFile(src, dst)
+		if err != nil {
+			t.Fatalf("LinkFile() should not error for missing source: %v", err)
+		}
+		if linked {
+			t.Error("LinkFile() should return false for missing source")
 		}
 	})
 
-	t.Run("cleans up dst when src cannot be opened", func(t *testing.T) {
+	t.Run("edits propagate through symlink", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := resolveTempDir(t)
 
-		src := filepath.Join(tmpDir, "src", "secret")
-		dst := filepath.Join(tmpDir, "dst", "secret")
+		src := filepath.Join(tmpDir, "repo", ".env")
+		dst := filepath.Join(tmpDir, "worktree", ".env")
 
 		if err := os.MkdirAll(filepath.Dir(src), 0755); err != nil {
 			t.Fatalf("setup: mkdir failed: %v", err)
 		}
-		if err := os.WriteFile(src, []byte("content\n"), 0000); err != nil {
+		if err := os.WriteFile(src, []byte("ORIGINAL\n"), 0644); err != nil {
 			t.Fatalf("setup: write file failed: %v", err)
 		}
 
-		_, err := CopyFile(src, dst)
-		if err == nil {
-			t.Fatal("CopyFile() should return error when src cannot be opened")
+		if _, err := LinkFile(src, dst); err != nil {
+			t.Fatalf("LinkFile() error = %v", err)
 		}
 
-		// dst should have been cleaned up
-		if _, statErr := os.Stat(dst); !os.IsNotExist(statErr) {
-			t.Error("dst should not exist after failed copy")
+		// Edit via symlink
+		if err := os.WriteFile(dst, []byte("MODIFIED\n"), 0644); err != nil {
+			t.Fatalf("failed to write through symlink: %v", err)
+		}
+
+		// Source should reflect the change
+		got, err := os.ReadFile(src)
+		if err != nil {
+			t.Fatalf("failed to read source: %v", err)
+		}
+		if string(got) != "MODIFIED\n" {
+			t.Errorf("source not updated: got %q, want %q", got, "MODIFIED\n")
+		}
+	})
+}
+
+func TestPreserveFiles(t *testing.T) {
+	t.Parallel()
+
+	t.Run("symlinks listed paths", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := resolveTempDir(t)
+		ctx := testContext()
+
+		sourceDir := filepath.Join(tmpDir, "repo")
+		targetDir := filepath.Join(tmpDir, "worktree")
+		if err := os.MkdirAll(sourceDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+
+		// Create source files
+		if err := os.WriteFile(filepath.Join(sourceDir, ".env"), []byte("SECRET=abc\n"), 0644); err != nil {
+			t.Fatalf("setup: write .env failed: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(sourceDir, ".envrc"), []byte("dotenv\n"), 0644); err != nil {
+			t.Fatalf("setup: write .envrc failed: %v", err)
+		}
+
+		cfg := config.PreserveConfig{
+			Paths: []string{".env", ".envrc"},
+		}
+
+		linked, err := PreserveFiles(ctx, cfg, sourceDir, targetDir)
+		if err != nil {
+			t.Fatalf("PreserveFiles() error = %v", err)
+		}
+		if len(linked) != 2 {
+			t.Errorf("PreserveFiles() linked = %v, want 2 files", linked)
+		}
+
+		// Verify symlinks were created
+		for _, path := range []string{".env", ".envrc"} {
+			dst := filepath.Join(targetDir, path)
+			info, err := os.Lstat(dst)
+			if err != nil {
+				t.Errorf("symlink %s should exist: %v", path, err)
+				continue
+			}
+			if info.Mode()&os.ModeSymlink == 0 {
+				t.Errorf("%s should be a symlink", path)
+			}
 		}
 	})
 
-	t.Run("skips symlinks", func(t *testing.T) {
+	t.Run("skips missing source files silently", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
+		tmpDir := resolveTempDir(t)
+		ctx := testContext()
 
-		// Create a real file and a symlink to it
-		realFile := filepath.Join(tmpDir, "real.txt")
-		if err := os.WriteFile(realFile, []byte("content\n"), 0644); err != nil {
-			t.Fatalf("setup: write file failed: %v", err)
+		sourceDir := filepath.Join(tmpDir, "repo")
+		targetDir := filepath.Join(tmpDir, "worktree")
+		if err := os.MkdirAll(sourceDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
 		}
 
-		src := filepath.Join(tmpDir, "link.txt")
-		if err := os.Symlink(realFile, src); err != nil {
-			t.Fatalf("setup: symlink failed: %v", err)
+		cfg := config.PreserveConfig{
+			Paths: []string{".env", ".envrc"}, // neither exists
 		}
 
-		dst := filepath.Join(tmpDir, "dst", "link.txt")
-
-		copied, err := CopyFile(src, dst)
+		linked, err := PreserveFiles(ctx, cfg, sourceDir, targetDir)
 		if err != nil {
-			t.Fatalf("CopyFile() error = %v", err)
+			t.Fatalf("PreserveFiles() error = %v", err)
 		}
-		if copied {
-			t.Error("CopyFile() should return false for symlink")
+		if len(linked) != 0 {
+			t.Errorf("PreserveFiles() linked = %v, want empty", linked)
+		}
+	})
+
+	t.Run("skips existing destination with warning", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := resolveTempDir(t)
+		ctx := testContext()
+
+		sourceDir := filepath.Join(tmpDir, "repo")
+		targetDir := filepath.Join(tmpDir, "worktree")
+		if err := os.MkdirAll(sourceDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
 		}
 
-		// dst should not exist
-		if _, err := os.Stat(dst); !os.IsNotExist(err) {
-			t.Error("dst should not exist when source is a symlink")
+		if err := os.WriteFile(filepath.Join(sourceDir, ".env"), []byte("SOURCE\n"), 0644); err != nil {
+			t.Fatalf("setup: write source failed: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(targetDir, ".env"), []byte("EXISTING\n"), 0644); err != nil {
+			t.Fatalf("setup: write target failed: %v", err)
+		}
+
+		cfg := config.PreserveConfig{
+			Paths: []string{".env"},
+		}
+
+		linked, err := PreserveFiles(ctx, cfg, sourceDir, targetDir)
+		if err != nil {
+			t.Fatalf("PreserveFiles() error = %v", err)
+		}
+		if len(linked) != 0 {
+			t.Errorf("PreserveFiles() linked = %v, want empty", linked)
+		}
+
+		// Existing content should be untouched
+		got, err := os.ReadFile(filepath.Join(targetDir, ".env"))
+		if err != nil {
+			t.Fatalf("failed to read target: %v", err)
+		}
+		if string(got) != "EXISTING\n" {
+			t.Errorf("existing file was modified: got %q, want %q", got, "EXISTING\n")
+		}
+	})
+
+	t.Run("symlinks nested paths", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := resolveTempDir(t)
+		ctx := testContext()
+
+		sourceDir := filepath.Join(tmpDir, "repo")
+		targetDir := filepath.Join(tmpDir, "worktree")
+
+		// Create nested source
+		nestedDir := filepath.Join(sourceDir, "config")
+		if err := os.MkdirAll(nestedDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(nestedDir, ".env"), []byte("NESTED=true\n"), 0644); err != nil {
+			t.Fatalf("setup: write failed: %v", err)
+		}
+
+		cfg := config.PreserveConfig{
+			Paths: []string{"config/.env"},
+		}
+
+		linked, err := PreserveFiles(ctx, cfg, sourceDir, targetDir)
+		if err != nil {
+			t.Fatalf("PreserveFiles() error = %v", err)
+		}
+		if len(linked) != 1 || linked[0] != "config/.env" {
+			t.Errorf("PreserveFiles() linked = %v, want [config/.env]", linked)
+		}
+
+		got, err := os.ReadFile(filepath.Join(targetDir, "config", ".env"))
+		if err != nil {
+			t.Fatalf("failed to read through symlink: %v", err)
+		}
+		if string(got) != "NESTED=true\n" {
+			t.Errorf("got %q, want %q", got, "NESTED=true\n")
 		}
 	})
 }
@@ -318,381 +359,7 @@ func resolveTempDir(t *testing.T) string {
 	return resolved
 }
 
-func runGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	c := exec.Command("git", args...)
-	if dir != "" {
-		c.Dir = dir
-	}
-	out, err := c.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v failed: %v\n%s", args, err, out)
-	}
-}
-
 func testContext() context.Context {
 	l := log.New(io.Discard, false, true)
 	return log.WithLogger(context.Background(), l)
-}
-
-// initBareRepoWithWorktree creates a bare-like repo setup with a main worktree
-// and returns (gitDir, mainWorktreePath).
-func initBareRepoWithWorktree(t *testing.T, baseDir string) (string, string) {
-	t.Helper()
-
-	repoDir := filepath.Join(baseDir, "repo.git")
-	if err := os.MkdirAll(repoDir, 0755); err != nil {
-		t.Fatalf("setup: mkdir failed: %v", err)
-	}
-	runGit(t, repoDir, "init", "--bare", "-b", "main")
-
-	// Create an initial commit via a temporary clone
-	cloneDir := filepath.Join(baseDir, "tmp-clone")
-	runGit(t, baseDir, "clone", repoDir, cloneDir)
-	runGit(t, cloneDir, "config", "user.email", "test@test.com")
-	runGit(t, cloneDir, "config", "user.name", "Test")
-
-	readmePath := filepath.Join(cloneDir, "README.md")
-	if err := os.WriteFile(readmePath, []byte("init\n"), 0644); err != nil {
-		t.Fatalf("setup: write file failed: %v", err)
-	}
-	runGit(t, cloneDir, "add", ".")
-	runGit(t, cloneDir, "commit", "-m", "initial")
-	runGit(t, cloneDir, "push", "-u", "origin", "HEAD")
-
-	// Add a main worktree from the bare repo
-	mainWT := filepath.Join(baseDir, "main-wt")
-	runGit(t, repoDir, "worktree", "add", mainWT, "main")
-
-	return repoDir, mainWT
-}
-
-func TestFindSourceWorktree(t *testing.T) {
-	t.Parallel()
-
-	t.Run("returns default branch worktree", func(t *testing.T) {
-		t.Parallel()
-		baseDir := resolveTempDir(t)
-		ctx := testContext()
-
-		repoDir, mainWT := initBareRepoWithWorktree(t, baseDir)
-
-		// Create a feature branch and worktree
-		featureWT := filepath.Join(baseDir, "feature-wt")
-		runGit(t, mainWT, "checkout", "-b", "feature")
-		runGit(t, mainWT, "checkout", "main")
-		runGit(t, repoDir, "worktree", "add", featureWT, "feature")
-
-		got, err := FindSourceWorktree(ctx, repoDir, featureWT)
-		if err != nil {
-			t.Fatalf("FindSourceWorktree() error = %v", err)
-		}
-		if got != mainWT {
-			t.Errorf("FindSourceWorktree() = %q, want %q", got, mainWT)
-		}
-	})
-
-	t.Run("falls back to first non-target worktree", func(t *testing.T) {
-		t.Parallel()
-		baseDir := resolveTempDir(t)
-		ctx := testContext()
-
-		repoDir, mainWT := initBareRepoWithWorktree(t, baseDir)
-
-		// Create two feature worktrees
-		runGit(t, mainWT, "checkout", "-b", "feat-a")
-		runGit(t, mainWT, "checkout", "main")
-		runGit(t, mainWT, "checkout", "-b", "feat-b")
-		runGit(t, mainWT, "checkout", "main")
-
-		featAWT := filepath.Join(baseDir, "feat-a-wt")
-		runGit(t, repoDir, "worktree", "add", featAWT, "feat-a")
-
-		featBWT := filepath.Join(baseDir, "feat-b-wt")
-		runGit(t, repoDir, "worktree", "add", featBWT, "feat-b")
-
-		// Target is mainWT — default branch worktree is excluded, so it should
-		// fall back. But mainWT IS the default branch. Let's target feat-b
-		// and check we get something other than feat-b.
-		// Actually, let's test the fallback by targeting mainWT so default branch
-		// match is excluded, then it falls back to first non-target.
-		got, err := FindSourceWorktree(ctx, repoDir, mainWT)
-		if err != nil {
-			t.Fatalf("FindSourceWorktree() error = %v", err)
-		}
-		// Should return one of the feature worktrees (first non-target after
-		// default branch worktree is excluded because it IS the target)
-		if got == mainWT {
-			t.Errorf("FindSourceWorktree() returned target path %q", mainWT)
-		}
-		if got != featAWT && got != featBWT {
-			t.Errorf("FindSourceWorktree() = %q, want one of %q or %q", got, featAWT, featBWT)
-		}
-	})
-
-	t.Run("returns error when only target exists", func(t *testing.T) {
-		t.Parallel()
-		baseDir := resolveTempDir(t)
-		ctx := testContext()
-
-		repoDir, mainWT := initBareRepoWithWorktree(t, baseDir)
-
-		_, err := FindSourceWorktree(ctx, repoDir, mainWT)
-		if !errors.Is(err, ErrNoSourceWorktree) {
-			t.Errorf("FindSourceWorktree() error = %v, want %v", err, ErrNoSourceWorktree)
-		}
-	})
-}
-
-func TestFindIgnoredFiles(t *testing.T) {
-	t.Parallel()
-
-	t.Run("returns ignored files", func(t *testing.T) {
-		t.Parallel()
-		baseDir := resolveTempDir(t)
-		ctx := testContext()
-
-		// Create a git repo
-		runGit(t, baseDir, "init")
-		runGit(t, baseDir, "config", "user.email", "test@test.com")
-		runGit(t, baseDir, "config", "user.name", "Test")
-
-		// Create .gitignore
-		if err := os.WriteFile(filepath.Join(baseDir, ".gitignore"), []byte(".env\n"), 0644); err != nil {
-			t.Fatalf("setup: write .gitignore failed: %v", err)
-		}
-		runGit(t, baseDir, "add", ".gitignore")
-		runGit(t, baseDir, "commit", "-m", "add gitignore")
-
-		// Create an ignored file
-		if err := os.WriteFile(filepath.Join(baseDir, ".env"), []byte("SECRET=123\n"), 0644); err != nil {
-			t.Fatalf("setup: write .env failed: %v", err)
-		}
-
-		got, err := FindIgnoredFiles(ctx, baseDir)
-		if err != nil {
-			t.Fatalf("FindIgnoredFiles() error = %v", err)
-		}
-		if len(got) != 1 || got[0] != ".env" {
-			t.Errorf("FindIgnoredFiles() = %v, want [.env]", got)
-		}
-	})
-
-	t.Run("returns nil for no ignored files", func(t *testing.T) {
-		t.Parallel()
-		baseDir := resolveTempDir(t)
-		ctx := testContext()
-
-		runGit(t, baseDir, "init")
-		runGit(t, baseDir, "config", "user.email", "test@test.com")
-		runGit(t, baseDir, "config", "user.name", "Test")
-
-		// Create a tracked file so we have at least one commit
-		if err := os.WriteFile(filepath.Join(baseDir, "README.md"), []byte("hi\n"), 0644); err != nil {
-			t.Fatalf("setup: write file failed: %v", err)
-		}
-		runGit(t, baseDir, "add", ".")
-		runGit(t, baseDir, "commit", "-m", "init")
-
-		got, err := FindIgnoredFiles(ctx, baseDir)
-		if err != nil {
-			t.Fatalf("FindIgnoredFiles() error = %v", err)
-		}
-		if got != nil {
-			t.Errorf("FindIgnoredFiles() = %v, want nil", got)
-		}
-	})
-}
-
-func TestPreserveFiles(t *testing.T) {
-	t.Parallel()
-
-	t.Run("copies matching files", func(t *testing.T) {
-		t.Parallel()
-		baseDir := resolveTempDir(t)
-		ctx := testContext()
-
-		sourceDir := filepath.Join(baseDir, "source")
-		targetDir := filepath.Join(baseDir, "target")
-		if err := os.MkdirAll(sourceDir, 0755); err != nil {
-			t.Fatalf("setup: mkdir failed: %v", err)
-		}
-		if err := os.MkdirAll(targetDir, 0755); err != nil {
-			t.Fatalf("setup: mkdir failed: %v", err)
-		}
-
-		// Init git repo in source
-		runGit(t, sourceDir, "init")
-		runGit(t, sourceDir, "config", "user.email", "test@test.com")
-		runGit(t, sourceDir, "config", "user.name", "Test")
-
-		// Add .gitignore
-		if err := os.WriteFile(filepath.Join(sourceDir, ".gitignore"), []byte(".env\n"), 0644); err != nil {
-			t.Fatalf("setup: write .gitignore failed: %v", err)
-		}
-		runGit(t, sourceDir, "add", ".gitignore")
-		runGit(t, sourceDir, "commit", "-m", "init")
-
-		// Create ignored file
-		if err := os.WriteFile(filepath.Join(sourceDir, ".env"), []byte("SECRET=abc\n"), 0644); err != nil {
-			t.Fatalf("setup: write .env failed: %v", err)
-		}
-
-		cfg := config.PreserveConfig{
-			Patterns: []string{".env"},
-		}
-
-		copied, err := PreserveFiles(ctx, cfg, sourceDir, targetDir)
-		if err != nil {
-			t.Fatalf("PreserveFiles() error = %v", err)
-		}
-		if len(copied) != 1 || copied[0] != ".env" {
-			t.Errorf("PreserveFiles() copied = %v, want [.env]", copied)
-		}
-
-		// Verify file was actually copied
-		got, err := os.ReadFile(filepath.Join(targetDir, ".env"))
-		if err != nil {
-			t.Fatalf("failed to read copied file: %v", err)
-		}
-		if string(got) != "SECRET=abc\n" {
-			t.Errorf("copied file content = %q, want %q", got, "SECRET=abc\n")
-		}
-	})
-
-	t.Run("skips non-matching files", func(t *testing.T) {
-		t.Parallel()
-		baseDir := resolveTempDir(t)
-		ctx := testContext()
-
-		sourceDir := filepath.Join(baseDir, "source")
-		targetDir := filepath.Join(baseDir, "target")
-		if err := os.MkdirAll(sourceDir, 0755); err != nil {
-			t.Fatalf("setup: mkdir failed: %v", err)
-		}
-		if err := os.MkdirAll(targetDir, 0755); err != nil {
-			t.Fatalf("setup: mkdir failed: %v", err)
-		}
-
-		runGit(t, sourceDir, "init")
-		runGit(t, sourceDir, "config", "user.email", "test@test.com")
-		runGit(t, sourceDir, "config", "user.name", "Test")
-
-		if err := os.WriteFile(filepath.Join(sourceDir, ".gitignore"), []byte("*.log\n"), 0644); err != nil {
-			t.Fatalf("setup: write .gitignore failed: %v", err)
-		}
-		runGit(t, sourceDir, "add", ".gitignore")
-		runGit(t, sourceDir, "commit", "-m", "init")
-
-		// Create ignored file that does NOT match preserve patterns
-		if err := os.WriteFile(filepath.Join(sourceDir, "random.log"), []byte("log data\n"), 0644); err != nil {
-			t.Fatalf("setup: write random.log failed: %v", err)
-		}
-
-		cfg := config.PreserveConfig{
-			Patterns: []string{".env"},
-		}
-
-		copied, err := PreserveFiles(ctx, cfg, sourceDir, targetDir)
-		if err != nil {
-			t.Fatalf("PreserveFiles() error = %v", err)
-		}
-		if len(copied) != 0 {
-			t.Errorf("PreserveFiles() copied = %v, want empty", copied)
-		}
-
-		// Verify file was NOT copied
-		if _, err := os.Stat(filepath.Join(targetDir, "random.log")); !os.IsNotExist(err) {
-			t.Error("non-matching file should not be copied to target")
-		}
-	})
-
-	t.Run("skips excluded directories", func(t *testing.T) {
-		t.Parallel()
-		baseDir := resolveTempDir(t)
-		ctx := testContext()
-
-		sourceDir := filepath.Join(baseDir, "source")
-		targetDir := filepath.Join(baseDir, "target")
-		if err := os.MkdirAll(sourceDir, 0755); err != nil {
-			t.Fatalf("setup: mkdir failed: %v", err)
-		}
-		if err := os.MkdirAll(targetDir, 0755); err != nil {
-			t.Fatalf("setup: mkdir failed: %v", err)
-		}
-
-		runGit(t, sourceDir, "init")
-		runGit(t, sourceDir, "config", "user.email", "test@test.com")
-		runGit(t, sourceDir, "config", "user.name", "Test")
-
-		if err := os.WriteFile(filepath.Join(sourceDir, ".gitignore"), []byte("node_modules/\n.env\n"), 0644); err != nil {
-			t.Fatalf("setup: write .gitignore failed: %v", err)
-		}
-		runGit(t, sourceDir, "add", ".gitignore")
-		runGit(t, sourceDir, "commit", "-m", "init")
-
-		// Create ignored file inside excluded directory
-		nmDir := filepath.Join(sourceDir, "node_modules")
-		if err := os.MkdirAll(nmDir, 0755); err != nil {
-			t.Fatalf("setup: mkdir failed: %v", err)
-		}
-		if err := os.WriteFile(filepath.Join(nmDir, ".env"), []byte("NM_SECRET=x\n"), 0644); err != nil {
-			t.Fatalf("setup: write .env failed: %v", err)
-		}
-
-		cfg := config.PreserveConfig{
-			Patterns: []string{".env"},
-			Exclude:  []string{"node_modules"},
-		}
-
-		copied, err := PreserveFiles(ctx, cfg, sourceDir, targetDir)
-		if err != nil {
-			t.Fatalf("PreserveFiles() error = %v", err)
-		}
-		if len(copied) != 0 {
-			t.Errorf("PreserveFiles() copied = %v, want empty (excluded dir)", copied)
-		}
-
-		// Verify file was NOT copied
-		if _, err := os.Stat(filepath.Join(targetDir, "node_modules", ".env")); !os.IsNotExist(err) {
-			t.Error("excluded directory file should not be copied to target")
-		}
-	})
-
-	t.Run("handles empty ignored files", func(t *testing.T) {
-		t.Parallel()
-		baseDir := resolveTempDir(t)
-		ctx := testContext()
-
-		sourceDir := filepath.Join(baseDir, "source")
-		targetDir := filepath.Join(baseDir, "target")
-		if err := os.MkdirAll(sourceDir, 0755); err != nil {
-			t.Fatalf("setup: mkdir failed: %v", err)
-		}
-		if err := os.MkdirAll(targetDir, 0755); err != nil {
-			t.Fatalf("setup: mkdir failed: %v", err)
-		}
-
-		runGit(t, sourceDir, "init")
-		runGit(t, sourceDir, "config", "user.email", "test@test.com")
-		runGit(t, sourceDir, "config", "user.name", "Test")
-
-		if err := os.WriteFile(filepath.Join(sourceDir, "README.md"), []byte("hi\n"), 0644); err != nil {
-			t.Fatalf("setup: write file failed: %v", err)
-		}
-		runGit(t, sourceDir, "add", ".")
-		runGit(t, sourceDir, "commit", "-m", "init")
-
-		cfg := config.PreserveConfig{
-			Patterns: []string{".env"},
-		}
-
-		copied, err := PreserveFiles(ctx, cfg, sourceDir, targetDir)
-		if err != nil {
-			t.Fatalf("PreserveFiles() error = %v", err)
-		}
-		if len(copied) != 0 {
-			t.Errorf("PreserveFiles() copied = %v, want empty", copied)
-		}
-	})
 }
