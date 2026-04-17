@@ -26,7 +26,8 @@ type BranchInfo struct {
 
 // BranchFetchResult contains branches with their worktree status.
 type BranchFetchResult struct {
-	Branches []BranchInfo
+	Branches      []BranchInfo
+	DefaultBranch string // Default branch name (e.g. "main", "master")
 }
 
 // BranchFetcher is a function that fetches branches for a repo path.
@@ -107,19 +108,6 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 		}
 
 		w.AddStep(repoStep)
-
-		// Track previous repo selection to detect changes
-		var prevRepoSelection string
-		w.OnComplete("repos", func(wiz *framework.Wizard) {
-			currentSelection := wiz.GetStep("repos").Value().Label
-			if prevRepoSelection != "" && currentSelection != prevRepoSelection {
-				// Repo selection changed, reset branch step
-				if branchStep := wiz.GetStep("branch"); branchStep != nil {
-					branchStep.Reset()
-				}
-			}
-			prevRepoSelection = currentSelection
-		})
 	}
 
 	// Step 2: Branch (combined mode + branch selection)
@@ -175,36 +163,60 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	}
 
 	// Callbacks
-	// When repos selection completes, fetch branches from first selected repo
-	if hasRepos && params.FetchBranches != nil {
+	// When repos selection completes, reset branch/base steps and fetch new branches
+	if hasRepos {
+		var prevRepoSelection string
 		w.OnComplete("repos", func(wiz *framework.Wizard) {
+			// Reset branch step when repo selection changes
+			currentSelection := wiz.GetStep("repos").Value().Label
+			if prevRepoSelection != "" && currentSelection != prevRepoSelection {
+				if branchStep := wiz.GetStep("branch"); branchStep != nil {
+					branchStep.Reset()
+				}
+				if baseStep := wiz.GetStep("base"); baseStep != nil {
+					baseStep.Reset()
+				}
+			}
+			prevRepoSelection = currentSelection
+
+			// Fetch branches from first selected repo
+			if params.FetchBranches == nil {
+				return
+			}
 			repoStep, ok := wiz.GetStep("repos").(*steps.FilterableListStep)
 			if !ok {
-				return // Skip if step not found or wrong type
+				return
 			}
 			indices := repoStep.GetSelectedIndices()
 			if len(indices) == 0 {
 				return
 			}
 
-			// Fetch branches from first selected repo
 			firstRepoPath := repoPaths[indices[0]]
 			result := params.FetchBranches(firstRepoPath)
 
 			// Update branch step with fetched branches
 			branchStepUpdate, ok := wiz.GetStep("branch").(*steps.FilterableListStep)
 			if !ok {
-				return // Skip if step not found or wrong type
+				return
 			}
 			branchOpts := buildBranchOptions(result.Branches)
 			branchStepUpdate.SetOptions(branchOpts)
 
-			// Update base step with same branches
+			// Update base step with same branches and re-select default branch
 			baseStepUpdate, ok := wiz.GetStep("base").(*steps.FilterableListStep)
 			if !ok {
 				return
 			}
 			baseStepUpdate.SetOptions(branchOpts)
+			if result.DefaultBranch != "" {
+				for i, opt := range branchOpts {
+					if opt.Value == result.DefaultBranch {
+						baseStepUpdate.SetCursor(i)
+						break
+					}
+				}
+			}
 		})
 	}
 

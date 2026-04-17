@@ -617,7 +617,10 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 				InWorktree: wtBranches[b],
 			})
 		}
-		return flows.BranchFetchResult{Branches: result}
+		return flows.BranchFetchResult{
+			Branches:      result,
+			DefaultBranch: git.GetDefaultBranch(ctx, repoPath),
+		}
 	}
 
 	// Build initial branches from first repo (or current repo)
