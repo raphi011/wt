@@ -158,6 +158,32 @@ func TestHookInfo_Structure(t *testing.T) {
 	}
 }
 
+func TestCheckoutOptions_IncludesBase(t *testing.T) {
+	opts := CheckoutOptions{
+		Branch:    "feature-x",
+		NewBranch: true,
+		Base:      "main",
+	}
+
+	if opts.Base != "main" {
+		t.Errorf("Base = %q, want %q", opts.Base, "main")
+	}
+}
+
+func TestCheckoutWizardParams_IncludesDefaultBranch(t *testing.T) {
+	params := CheckoutWizardParams{
+		DefaultBranch: "main",
+		BaseFromCLI:   false,
+	}
+
+	if params.DefaultBranch != "main" {
+		t.Errorf("DefaultBranch = %q, want %q", params.DefaultBranch, "main")
+	}
+	if params.BaseFromCLI {
+		t.Error("BaseFromCLI should be false")
+	}
+}
+
 // Note: Full interactive testing of CheckoutInteractive would require:
 // 1. Refactoring to separate wizard building from wizard.Run()
 // 2. Or using teatest with golden files for full TUI testing

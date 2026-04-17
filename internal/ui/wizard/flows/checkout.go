@@ -11,6 +11,7 @@ import (
 type CheckoutOptions struct {
 	Branch        string
 	NewBranch     bool
+	Base          string   // Base branch for new branch creation
 	Cancelled     bool
 	SelectedRepos []string // Selected repo paths (when outside a repo)
 	SelectedHooks []string // Hook names to run (empty if NoHook is true)
@@ -73,7 +74,9 @@ type CheckoutWizardParams struct {
 	PreSelectedRepos []int         // Indices of pre-selected repos (e.g., current repo when inside one)
 	FetchBranches    BranchFetcher // Function to fetch branches for a repo
 	AvailableHooks   []HookInfo
-	HooksFromCLI     bool // True if --hook or --no-hook was passed (skip hooks step)
+	HooksFromCLI     bool   // True if --hook or --no-hook was passed (skip hooks step)
+	DefaultBranch    string // Default branch name for pre-selection in base step
+	BaseFromCLI      bool   // True if --base was explicitly passed (skip base step)
 }
 
 // CheckoutInteractive runs the interactive checkout wizard.
@@ -136,7 +139,36 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 		WithEmptyMessage("No matching branches")
 	w.AddStep(branchStep)
 
-	// Step 3: Hooks (only when available and not set via CLI)
+	// Step 3: Base branch (only when creating new branch and not set via CLI)
+	baseStep := steps.NewFilterableList("base", "Base Branch", "Select a base branch to create from", branchOptions).
+		WithRuneFilter(framework.RuneFilterNoSpaces).
+		WithEmptyMessage("No matching branches")
+
+	// Pre-select default branch
+	if params.DefaultBranch != "" {
+		for i, opt := range branchOptions {
+			if opt.Value == params.DefaultBranch {
+				baseStep.SetCursor(i)
+				break
+			}
+		}
+	}
+
+	w.AddStep(baseStep)
+
+	// Skip base step when selecting existing branch or --base passed on CLI
+	w.SkipWhen("base", func(wiz *framework.Wizard) bool {
+		if params.BaseFromCLI {
+			return true
+		}
+		branchStepResult, ok := wiz.GetStep("branch").(*steps.FilterableListStep)
+		if !ok {
+			return true
+		}
+		return !branchStepResult.IsCreateSelected()
+	})
+
+	// Step 4: Hooks (only when available and not set via CLI)
 	hasHooks := len(params.AvailableHooks) > 0 && !params.HooksFromCLI
 	if hasHooks {
 		addHookStep(w, params.AvailableHooks)
@@ -166,6 +198,13 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 			}
 			branchOpts := buildBranchOptions(result.Branches)
 			branchStepUpdate.SetOptions(branchOpts)
+
+			// Update base step with same branches
+			baseStepUpdate, ok := wiz.GetStep("base").(*steps.FilterableListStep)
+			if !ok {
+				return
+			}
+			baseStepUpdate.SetOptions(branchOpts)
 		})
 	}
 
@@ -191,6 +230,11 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	opts.Branch = result.GetString("branch")
 	if branchStepResult, ok := result.GetStep("branch").(*steps.FilterableListStep); ok {
 		opts.NewBranch = branchStepResult.IsCreateSelected()
+	}
+
+	// Base branch
+	if !params.BaseFromCLI {
+		opts.Base = result.GetString("base")
 	}
 
 	// Hooks
