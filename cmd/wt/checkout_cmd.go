@@ -56,6 +56,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			fetchExplicit := cmd.Flags().Changed("fetch")
+			baseExplicit := cmd.Flags().Changed("base")
 
 			var target string
 			if len(args) > 0 {
@@ -70,7 +71,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 
 			// Interactive mode
 			if interactive {
-				wizOpts, err := runCheckoutWizard(ctx, reg, hf.HookNames, hf.NoHook)
+				wizOpts, err := runCheckoutWizard(ctx, reg, hf.HookNames, hf.NoHook, baseExplicit)
 				if err != nil {
 					return err
 				}
@@ -83,6 +84,9 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				newBranch = wizOpts.NewBranch
 				hf.HookNames = wizOpts.SelectedHooks
 				hf.NoHook = wizOpts.NoHook
+				if wizOpts.Base != "" {
+					base = wizOpts.Base
+				}
 
 				// Build scope:branch if repos selected
 				if len(wizOpts.SelectedRepos) > 0 {
@@ -573,7 +577,7 @@ func getEffectiveHooksForCompletion(ctx context.Context) map[string]config.Hook 
 }
 
 // runCheckoutWizard runs the interactive checkout wizard
-func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []string, cliNoHook bool) (flows.CheckoutOptions, error) {
+func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []string, cliNoHook bool, baseFromCLI bool) (flows.CheckoutOptions, error) {
 	l := log.FromContext(ctx)
 
 	// Use global config for wizard — hooks from all repos are shown
@@ -626,6 +630,14 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 		initialBranches = result.Branches
 	}
 
+	// Detect default branch from first selected/available repo
+	var defaultBranch string
+	if len(preSelectedRepos) > 0 {
+		defaultBranch = git.GetDefaultBranch(ctx, repoPaths[preSelectedRepos[0]])
+	} else if len(repoPaths) > 0 {
+		defaultBranch = git.GetDefaultBranch(ctx, repoPaths[0])
+	}
+
 	// Build available hooks
 	var availableHooks []flows.HookInfo
 	for name, hook := range cfg.Hooks.Hooks {
@@ -645,6 +657,8 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 		FetchBranches:    fetchBranches,
 		AvailableHooks:   availableHooks,
 		HooksFromCLI:     len(cliHooks) > 0 || cliNoHook,
+		DefaultBranch:    defaultBranch,
+		BaseFromCLI:      baseFromCLI,
 	}
 
 	return flows.CheckoutInteractive(params)
