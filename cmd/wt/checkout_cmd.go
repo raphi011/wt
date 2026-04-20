@@ -324,7 +324,10 @@ func createWorktreeForBranch(ctx context.Context, gitDir, wtPath, branch string,
 	// Use remote ref by default, unless already explicit or config says local
 	_, _, isRemote := git.ParseRemoteRef(ctx, gitDir, baseRef)
 	if !isRemote && baseRefMode != "local" {
-		baseRef = "origin/" + baseRef
+		remoteRef := "origin/" + baseRef
+		if git.RefExists(ctx, gitDir, remoteRef) {
+			baseRef = remoteRef
+		}
 	}
 
 	if !git.RefExists(ctx, gitDir, baseRef) {
