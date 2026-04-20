@@ -96,6 +96,32 @@ func TestBuildBranchOptions_WorktreeLabelDiffersFromValue(t *testing.T) {
 	}
 }
 
+func TestBuildBaseBranchOptions_NoWorktreeDecoration(t *testing.T) {
+	t.Parallel()
+
+	branches := []BranchInfo{
+		{Name: "main", InWorktree: true},
+		{Name: "feature-a", InWorktree: false},
+		{Name: "develop", InWorktree: true},
+	}
+
+	opts := buildBaseBranchOptions(branches)
+
+	if len(opts) != 3 {
+		t.Fatalf("expected 3 options, got %d", len(opts))
+	}
+
+	// All labels should be plain branch names, regardless of InWorktree
+	for i, opt := range opts {
+		if opt.Label != branches[i].Name {
+			t.Errorf("opts[%d].Label = %q, want %q (no worktree decoration)", i, opt.Label, branches[i].Name)
+		}
+		if opt.Value != branches[i].Name {
+			t.Errorf("opts[%d].Value = %v, want %q", i, opt.Value, branches[i].Name)
+		}
+	}
+}
+
 func TestCheckoutOptions_Structure(t *testing.T) {
 	opts := CheckoutOptions{
 		Branch:        "feature-x",
@@ -165,7 +191,7 @@ func TestHookInfo_Structure(t *testing.T) {
 // The wizard has complex behavior:
 // - Repo step triggers branch fetch callback
 // - Branch step supports create-from-filter
-// - Fetch step is conditionally skipped for existing branches
+// - Base step is conditionally skipped for existing branches
 // - Hooks step pre-selects default hooks
 //
 // To test these, we would need to:

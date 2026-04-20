@@ -54,6 +54,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			fetchExplicit := cmd.Flags().Changed("fetch")
+			baseExplicit := cmd.Flags().Changed("base")
 
 			var target string
 			if len(args) > 0 {
@@ -68,7 +69,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 
 			// Interactive mode
 			if interactive {
-				result, err := runCheckoutInteractive(ctx, reg, hf)
+				result, err := runCheckoutInteractive(ctx, reg, hf, baseExplicit)
 				if err != nil {
 					return err
 				}
@@ -78,6 +79,9 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				target = result.Target
 				newBranch = result.NewBranch
 				hf = result.HookFlags
+				if result.Base != "" {
+					base = result.Base
+				}
 			}
 
 			// Parse target
@@ -306,7 +310,13 @@ func createWorktreeForBranch(ctx context.Context, gitDir, wtPath, branch string,
 	// Use remote ref by default, unless already explicit or config says local
 	_, _, isRemote := git.ParseRemoteRef(ctx, gitDir, baseRef)
 	if !isRemote && baseRefMode != "local" {
-		baseRef = "origin/" + baseRef
+		remoteRef := "origin/" + baseRef
+		if git.RefExists(ctx, gitDir, remoteRef) {
+			baseRef = remoteRef
+		} else {
+			l := log.FromContext(ctx)
+			l.Printf("Warning: %s not found, using local ref %s\n", remoteRef, baseRef)
+		}
 	}
 
 	if !git.RefExists(ctx, gitDir, baseRef) {
@@ -551,14 +561,15 @@ func getEffectiveHooksForCompletion(ctx context.Context) map[string]config.Hook 
 type checkoutInteractiveResult struct {
 	Target    string
 	NewBranch bool
+	Base      string
 	HookFlags hookFlags
 	Cancelled bool
 }
 
 // runCheckoutInteractive runs the checkout wizard and applies the selections to
-// produce a resolved target, newBranch flag, and updated hook flags.
-func runCheckoutInteractive(ctx context.Context, reg *registry.Registry, hf hookFlags) (checkoutInteractiveResult, error) {
-	wizOpts, err := runCheckoutWizard(ctx, reg, hf.HookNames, hf.NoHook)
+// produce a resolved target, newBranch flag, base branch, and updated hook flags.
+func runCheckoutInteractive(ctx context.Context, reg *registry.Registry, hf hookFlags, baseFromCLI bool) (checkoutInteractiveResult, error) {
+	wizOpts, err := runCheckoutWizard(ctx, reg, hf.HookNames, hf.NoHook, baseFromCLI)
 	if err != nil {
 		return checkoutInteractiveResult{}, err
 	}
@@ -581,12 +592,13 @@ func runCheckoutInteractive(ctx context.Context, reg *registry.Registry, hf hook
 	return checkoutInteractiveResult{
 		Target:    target,
 		NewBranch: wizOpts.NewBranch,
+		Base:      wizOpts.Base,
 		HookFlags: hf,
 	}, nil
 }
 
 // runCheckoutWizard runs the interactive checkout wizard
-func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []string, cliNoHook bool) (flows.CheckoutOptions, error) {
+func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []string, cliNoHook bool, baseFromCLI bool) (flows.CheckoutOptions, error) {
 	l := log.FromContext(ctx)
 
 	// Use global config for wizard — hooks from all repos are shown
@@ -626,17 +638,23 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 				InWorktree: wtBranches[b],
 			})
 		}
-		return flows.BranchFetchResult{Branches: result}
+		return flows.BranchFetchResult{
+			Branches:      result,
+			DefaultBranch: git.GetDefaultBranch(ctx, repoPath),
+		}
 	}
 
-	// Build initial branches from first repo (or current repo)
+	// Build initial branches and default branch from first repo (or current repo)
 	var initialBranches []flows.BranchInfo
+	var defaultBranch string
 	if len(preSelectedRepos) > 0 {
 		result := fetchBranches(repoPaths[preSelectedRepos[0]])
 		initialBranches = result.Branches
+		defaultBranch = result.DefaultBranch
 	} else if len(repoPaths) > 0 {
 		result := fetchBranches(repoPaths[0])
 		initialBranches = result.Branches
+		defaultBranch = result.DefaultBranch
 	}
 
 	// Build available hooks
@@ -658,6 +676,8 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 		FetchBranches:    fetchBranches,
 		AvailableHooks:   availableHooks,
 		HooksFromCLI:     len(cliHooks) > 0 || cliNoHook,
+		DefaultBranch:    defaultBranch,
+		BaseFromCLI:      baseFromCLI,
 	}
 
 	return flows.CheckoutInteractive(params)

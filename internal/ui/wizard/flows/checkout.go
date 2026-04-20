@@ -11,6 +11,7 @@ import (
 type CheckoutOptions struct {
 	Branch        string
 	NewBranch     bool
+	Base          string   // Base branch for new branch creation
 	Cancelled     bool
 	SelectedRepos []string // Selected repo paths (when outside a repo)
 	SelectedHooks []string // Hook names to run (empty if NoHook is true)
@@ -25,7 +26,8 @@ type BranchInfo struct {
 
 // BranchFetchResult contains branches with their worktree status.
 type BranchFetchResult struct {
-	Branches []BranchInfo
+	Branches      []BranchInfo
+	DefaultBranch string // Default branch name (e.g. "main", "master")
 }
 
 // BranchFetcher is a function that fetches branches for a repo path.
@@ -73,7 +75,9 @@ type CheckoutWizardParams struct {
 	PreSelectedRepos []int         // Indices of pre-selected repos (e.g., current repo when inside one)
 	FetchBranches    BranchFetcher // Function to fetch branches for a repo
 	AvailableHooks   []HookInfo
-	HooksFromCLI     bool // True if --hook or --no-hook was passed (skip hooks step)
+	HooksFromCLI     bool   // True if --hook or --no-hook was passed (skip hooks step)
+	DefaultBranch    string // Default branch name for pre-selection in base step
+	BaseFromCLI      bool   // True if --base was explicitly passed (skip base step)
 }
 
 // CheckoutInteractive runs the interactive checkout wizard.
@@ -104,19 +108,6 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 		}
 
 		w.AddStep(repoStep)
-
-		// Track previous repo selection to detect changes
-		var prevRepoSelection string
-		w.OnComplete("repos", func(wiz *framework.Wizard) {
-			currentSelection := wiz.GetStep("repos").Value().Label
-			if prevRepoSelection != "" && currentSelection != prevRepoSelection {
-				// Repo selection changed, reset branch step
-				if branchStep := wiz.GetStep("branch"); branchStep != nil {
-					branchStep.Reset()
-				}
-			}
-			prevRepoSelection = currentSelection
-		})
 	}
 
 	// Step 2: Branch (combined mode + branch selection)
@@ -136,36 +127,100 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 		WithEmptyMessage("No matching branches")
 	w.AddStep(branchStep)
 
-	// Step 3: Hooks (only when available and not set via CLI)
+	// Step 3: Base branch (only when creating new branch and not set via CLI)
+	// Use plain branch names without worktree decoration — the user is selecting
+	// a branch to fork from, not opening a worktree.
+	baseOptions := buildBaseBranchOptions(params.Branches)
+	baseStep := steps.NewFilterableList("base", "Base Branch", "Select a base branch to create from", baseOptions).
+		WithRuneFilter(framework.RuneFilterNoSpaces).
+		WithEmptyMessage("No matching branches")
+
+	// Pre-select default branch
+	if params.DefaultBranch != "" {
+		for i, opt := range baseOptions {
+			if opt.Value == params.DefaultBranch {
+				baseStep.SetCursor(i)
+				break
+			}
+		}
+	}
+
+	w.AddStep(baseStep)
+
+	// Skip base step when selecting existing branch or --base passed on CLI
+	w.SkipWhen("base", func(wiz *framework.Wizard) bool {
+		if params.BaseFromCLI {
+			return true
+		}
+		branchStepResult, ok := wiz.GetStep("branch").(*steps.FilterableListStep)
+		if !ok {
+			return true
+		}
+		return !branchStepResult.IsCreateSelected()
+	})
+
+	// Step 4: Hooks (only when available and not set via CLI)
 	hasHooks := len(params.AvailableHooks) > 0 && !params.HooksFromCLI
 	if hasHooks {
 		addHookStep(w, params.AvailableHooks)
 	}
 
 	// Callbacks
-	// When repos selection completes, fetch branches from first selected repo
-	if hasRepos && params.FetchBranches != nil {
+	// When repos selection completes, reset branch/base steps and fetch new branches
+	if hasRepos {
+		var prevRepoSelection string
 		w.OnComplete("repos", func(wiz *framework.Wizard) {
+			// Reset branch step when repo selection changes
+			currentSelection := wiz.GetStep("repos").Value().Label
+			if prevRepoSelection != "" && currentSelection != prevRepoSelection {
+				if branchStep := wiz.GetStep("branch"); branchStep != nil {
+					branchStep.Reset()
+				}
+				if baseStep := wiz.GetStep("base"); baseStep != nil {
+					baseStep.Reset()
+				}
+			}
+			prevRepoSelection = currentSelection
+
+			// Fetch branches from first selected repo
+			if params.FetchBranches == nil {
+				return
+			}
 			repoStep, ok := wiz.GetStep("repos").(*steps.FilterableListStep)
 			if !ok {
-				return // Skip if step not found or wrong type
+				return
 			}
 			indices := repoStep.GetSelectedIndices()
 			if len(indices) == 0 {
 				return
 			}
 
-			// Fetch branches from first selected repo
 			firstRepoPath := repoPaths[indices[0]]
 			result := params.FetchBranches(firstRepoPath)
 
 			// Update branch step with fetched branches
 			branchStepUpdate, ok := wiz.GetStep("branch").(*steps.FilterableListStep)
 			if !ok {
-				return // Skip if step not found or wrong type
+				return
 			}
 			branchOpts := buildBranchOptions(result.Branches)
 			branchStepUpdate.SetOptions(branchOpts)
+
+			// Update base step with plain branch names (no worktree decoration)
+			baseStepUpdate, ok := wiz.GetStep("base").(*steps.FilterableListStep)
+			if !ok {
+				return
+			}
+			baseOpts := buildBaseBranchOptions(result.Branches)
+			baseStepUpdate.SetOptions(baseOpts)
+			if result.DefaultBranch != "" {
+				for i, opt := range baseOpts {
+					if opt.Value == result.DefaultBranch {
+						baseStepUpdate.SetCursor(i)
+						break
+					}
+				}
+			}
 		})
 	}
 
@@ -193,6 +248,11 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 		opts.NewBranch = branchStepResult.IsCreateSelected()
 	}
 
+	// Base branch
+	if !params.BaseFromCLI {
+		opts.Base = result.GetString("base")
+	}
+
 	// Hooks
 	if hasHooks {
 		opts.SelectedHooks = result.GetStrings("hooks")
@@ -200,6 +260,19 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	}
 
 	return opts, nil
+}
+
+// buildBaseBranchOptions creates Option slice from branches using plain names
+// (no worktree decoration), suitable for the base branch selection step.
+func buildBaseBranchOptions(branches []BranchInfo) []framework.Option {
+	var opts []framework.Option
+	for _, branch := range branches {
+		opts = append(opts, framework.Option{
+			Label: branch.Name,
+			Value: branch.Name,
+		})
+	}
+	return opts
 }
 
 // buildBranchOptions creates Option slice from branches, appending " (worktree)" to branches that already have a worktree.

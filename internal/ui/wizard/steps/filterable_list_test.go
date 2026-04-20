@@ -590,3 +590,56 @@ func TestFilterableListStep_RuneFilter(t *testing.T) {
 		}
 	})
 }
+
+func TestFilterableListStep_SetCursor(t *testing.T) {
+	t.Parallel()
+
+	options := []framework.Option{
+		{Label: "alpha", Value: "alpha"},
+		{Label: "beta", Value: "beta"},
+		{Label: "gamma", Value: "gamma"},
+	}
+	step := NewFilterableList("test", "Test", "Pick one", options)
+
+	step.SetCursor(2)
+
+	if step.GetCursor() != 2 {
+		t.Errorf("GetCursor() = %d, want 2", step.GetCursor())
+	}
+}
+
+func TestFilterableListStep_SetCursor_ClampsBounds(t *testing.T) {
+	t.Parallel()
+
+	options := []framework.Option{
+		{Label: "alpha", Value: "alpha"},
+		{Label: "beta", Value: "beta"},
+	}
+	step := NewFilterableList("test", "Test", "Pick one", options)
+
+	step.SetCursor(10)
+	if step.GetCursor() != 1 {
+		t.Errorf("GetCursor() after out-of-bounds = %d, want 1", step.GetCursor())
+	}
+
+	step.SetCursor(-1)
+	if step.GetCursor() != 0 {
+		t.Errorf("GetCursor() after negative = %d, want 0", step.GetCursor())
+	}
+}
+
+func TestFilterableListStep_SetCursor_EmptyOptions(t *testing.T) {
+	t.Parallel()
+
+	step := NewFilterableList("test", "Test", "Pick one", nil)
+
+	step.SetCursor(0)
+	if step.GetCursor() != 0 {
+		t.Errorf("GetCursor() on empty list = %d, want 0", step.GetCursor())
+	}
+
+	step.SetCursor(5)
+	if step.GetCursor() != 0 {
+		t.Errorf("GetCursor() on empty list after out-of-bounds = %d, want 0", step.GetCursor())
+	}
+}

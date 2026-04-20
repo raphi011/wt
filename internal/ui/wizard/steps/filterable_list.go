@@ -698,6 +698,25 @@ func (s *FilterableListStep) GetCursor() int {
 	return s.cursor
 }
 
+// SetCursor sets the cursor position, clamping to valid bounds.
+// The idx refers to the position in the filtered options list (0-based),
+// not the visual cursor position (which may include a "create" option
+// at position 0 when WithCreateFromFilter is enabled).
+func (s *FilterableListStep) SetCursor(idx int) *FilterableListStep {
+	maxIdx := len(s.filtered) - 1
+	if maxIdx < 0 {
+		maxIdx = 0
+	}
+	if idx < 0 {
+		idx = 0
+	}
+	if idx > maxIdx {
+		idx = maxIdx
+	}
+	s.cursor = idx
+	return s
+}
+
 // GetSelectedValue returns the selected option's value, or nil if none.
 // If "Create" was selected, returns the filter string.
 func (s *FilterableListStep) GetSelectedValue() any {
