@@ -3733,3 +3733,70 @@ func TestCheckout_BaseBranch_LocalOnlyFallback(t *testing.T) {
 		t.Error("feature branch should have develop.txt (created from local develop)")
 	}
 }
+
+// TestCheckout_BaseBranch_PrefersRemoteOverLocal tests that --base uses the
+// remote tracking branch when both local and remote refs exist.
+//
+// Scenario: User runs `wt checkout -b feature --base develop` where both
+// local develop and origin/develop exist but have diverged (remote has extra
+// content). Expected: Branch is created from origin/develop (remote content).
+func TestCheckout_BaseBranch_PrefersRemoteOverLocal(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath, _ := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
+
+	// Create develop branch with a commit and push to origin
+	runGitCommand(repoPath, "checkout", "-b", "develop")
+	addCommit(t, repoPath, "develop-base.txt", "Base develop commit")
+	runGitCommand(repoPath, "push", "-u", "origin", "develop")
+
+	// Add a remote-only commit: push, then reset local branch back
+	addCommit(t, repoPath, "remote-only.txt", "Remote-only commit")
+	runGitCommand(repoPath, "push", "origin", "develop")
+	runGitCommand(repoPath, "reset", "--hard", "HEAD~1")
+
+	// Back to main for checkout
+	runGitCommand(repoPath, "checkout", "main")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--base", "develop"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the branch was created from origin/develop (should have remote-only.txt)
+	remoteFile := filepath.Join(wtPath, "remote-only.txt")
+	if _, err := os.Stat(remoteFile); os.IsNotExist(err) {
+		t.Error("feature branch should have remote-only.txt (created from origin/develop, not local develop)")
+	}
+}

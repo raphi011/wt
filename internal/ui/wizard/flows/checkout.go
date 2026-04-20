@@ -128,13 +128,16 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	w.AddStep(branchStep)
 
 	// Step 3: Base branch (only when creating new branch and not set via CLI)
-	baseStep := steps.NewFilterableList("base", "Base Branch", "Select a base branch to create from", branchOptions).
+	// Use plain branch names without worktree decoration — the user is selecting
+	// a branch to fork from, not opening a worktree.
+	baseOptions := buildBaseBranchOptions(params.Branches)
+	baseStep := steps.NewFilterableList("base", "Base Branch", "Select a base branch to create from", baseOptions).
 		WithRuneFilter(framework.RuneFilterNoSpaces).
 		WithEmptyMessage("No matching branches")
 
 	// Pre-select default branch
 	if params.DefaultBranch != "" {
-		for i, opt := range branchOptions {
+		for i, opt := range baseOptions {
 			if opt.Value == params.DefaultBranch {
 				baseStep.SetCursor(i)
 				break
@@ -203,14 +206,15 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 			branchOpts := buildBranchOptions(result.Branches)
 			branchStepUpdate.SetOptions(branchOpts)
 
-			// Update base step with same branches and re-select default branch
+			// Update base step with plain branch names (no worktree decoration)
 			baseStepUpdate, ok := wiz.GetStep("base").(*steps.FilterableListStep)
 			if !ok {
 				return
 			}
-			baseStepUpdate.SetOptions(branchOpts)
+			baseOpts := buildBaseBranchOptions(result.Branches)
+			baseStepUpdate.SetOptions(baseOpts)
 			if result.DefaultBranch != "" {
-				for i, opt := range branchOpts {
+				for i, opt := range baseOpts {
 					if opt.Value == result.DefaultBranch {
 						baseStepUpdate.SetCursor(i)
 						break
@@ -256,6 +260,19 @@ func CheckoutInteractive(params CheckoutWizardParams) (CheckoutOptions, error) {
 	}
 
 	return opts, nil
+}
+
+// buildBaseBranchOptions creates Option slice from branches using plain names
+// (no worktree decoration), suitable for the base branch selection step.
+func buildBaseBranchOptions(branches []BranchInfo) []framework.Option {
+	var opts []framework.Option
+	for _, branch := range branches {
+		opts = append(opts, framework.Option{
+			Label: branch.Name,
+			Value: branch.Name,
+		})
+	}
+	return opts
 }
 
 // buildBranchOptions creates Option slice from branches, appending " (worktree)" to branches that already have a worktree.

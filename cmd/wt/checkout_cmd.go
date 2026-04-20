@@ -313,6 +313,9 @@ func createWorktreeForBranch(ctx context.Context, gitDir, wtPath, branch string,
 		remoteRef := "origin/" + baseRef
 		if git.RefExists(ctx, gitDir, remoteRef) {
 			baseRef = remoteRef
+		} else {
+			l := log.FromContext(ctx)
+			l.Printf("Warning: %s not found, using local ref %s\n", remoteRef, baseRef)
 		}
 	}
 
@@ -641,22 +644,17 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 		}
 	}
 
-	// Build initial branches from first repo (or current repo)
+	// Build initial branches and default branch from first repo (or current repo)
 	var initialBranches []flows.BranchInfo
+	var defaultBranch string
 	if len(preSelectedRepos) > 0 {
 		result := fetchBranches(repoPaths[preSelectedRepos[0]])
 		initialBranches = result.Branches
+		defaultBranch = result.DefaultBranch
 	} else if len(repoPaths) > 0 {
 		result := fetchBranches(repoPaths[0])
 		initialBranches = result.Branches
-	}
-
-	// Detect default branch from first selected/available repo
-	var defaultBranch string
-	if len(preSelectedRepos) > 0 {
-		defaultBranch = git.GetDefaultBranch(ctx, repoPaths[preSelectedRepos[0]])
-	} else if len(repoPaths) > 0 {
-		defaultBranch = git.GetDefaultBranch(ctx, repoPaths[0])
+		defaultBranch = result.DefaultBranch
 	}
 
 	// Build available hooks

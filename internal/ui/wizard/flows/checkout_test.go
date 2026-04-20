@@ -96,6 +96,32 @@ func TestBuildBranchOptions_WorktreeLabelDiffersFromValue(t *testing.T) {
 	}
 }
 
+func TestBuildBaseBranchOptions_NoWorktreeDecoration(t *testing.T) {
+	t.Parallel()
+
+	branches := []BranchInfo{
+		{Name: "main", InWorktree: true},
+		{Name: "feature-a", InWorktree: false},
+		{Name: "develop", InWorktree: true},
+	}
+
+	opts := buildBaseBranchOptions(branches)
+
+	if len(opts) != 3 {
+		t.Fatalf("expected 3 options, got %d", len(opts))
+	}
+
+	// All labels should be plain branch names, regardless of InWorktree
+	for i, opt := range opts {
+		if opt.Label != branches[i].Name {
+			t.Errorf("opts[%d].Label = %q, want %q (no worktree decoration)", i, opt.Label, branches[i].Name)
+		}
+		if opt.Value != branches[i].Name {
+			t.Errorf("opts[%d].Value = %v, want %q", i, opt.Value, branches[i].Name)
+		}
+	}
+}
+
 func TestCheckoutOptions_Structure(t *testing.T) {
 	opts := CheckoutOptions{
 		Branch:        "feature-x",
@@ -158,32 +184,6 @@ func TestHookInfo_Structure(t *testing.T) {
 	}
 }
 
-func TestCheckoutOptions_IncludesBase(t *testing.T) {
-	opts := CheckoutOptions{
-		Branch:    "feature-x",
-		NewBranch: true,
-		Base:      "main",
-	}
-
-	if opts.Base != "main" {
-		t.Errorf("Base = %q, want %q", opts.Base, "main")
-	}
-}
-
-func TestCheckoutWizardParams_IncludesDefaultBranch(t *testing.T) {
-	params := CheckoutWizardParams{
-		DefaultBranch: "main",
-		BaseFromCLI:   false,
-	}
-
-	if params.DefaultBranch != "main" {
-		t.Errorf("DefaultBranch = %q, want %q", params.DefaultBranch, "main")
-	}
-	if params.BaseFromCLI {
-		t.Error("BaseFromCLI should be false")
-	}
-}
-
 // Note: Full interactive testing of CheckoutInteractive would require:
 // 1. Refactoring to separate wizard building from wizard.Run()
 // 2. Or using teatest with golden files for full TUI testing
@@ -191,7 +191,7 @@ func TestCheckoutWizardParams_IncludesDefaultBranch(t *testing.T) {
 // The wizard has complex behavior:
 // - Repo step triggers branch fetch callback
 // - Branch step supports create-from-filter
-// - Fetch step is conditionally skipped for existing branches
+// - Base step is conditionally skipped for existing branches
 // - Hooks step pre-selects default hooks
 //
 // To test these, we would need to:
