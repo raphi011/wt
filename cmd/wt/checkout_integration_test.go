@@ -3672,3 +3672,64 @@ func TestCheckout_HooksRunAlphabetically(t *testing.T) {
 		t.Errorf("expected alphabetical order (alpha, bravo, charlie), got:\n%s", lines)
 	}
 }
+
+// TestCheckout_BaseBranch_LocalOnlyFallback tests that --base falls back to
+// a local ref when the remote tracking branch does not exist.
+//
+// Scenario: User runs `wt checkout -b feature --base develop` where develop
+// only exists locally (no origin/develop). BaseRef config is NOT set to "local".
+// Expected: Branch is created from local develop ref (not origin/develop).
+func TestCheckout_BaseBranch_LocalOnlyFallback(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	// Create a develop branch with a unique commit (local only, no remote tracking)
+	runGitCommand(repoPath, "branch", "develop")
+	runGitCommand(repoPath, "checkout", "develop")
+	addCommit(t, repoPath, "develop.txt", "Develop commit")
+	runGitCommand(repoPath, "checkout", "main")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	// Note: BaseRef is NOT set to "local" — this is the default config
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--base", "develop"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v (should fall back to local ref when origin/develop doesn't exist)", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the branch was created from develop (should have develop.txt)
+	developFile := filepath.Join(wtPath, "develop.txt")
+	if _, err := os.Stat(developFile); os.IsNotExist(err) {
+		t.Error("feature branch should have develop.txt (created from local develop)")
+	}
+}

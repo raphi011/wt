@@ -627,3 +627,19 @@ func TestFilterableListStep_SetCursor_ClampsBounds(t *testing.T) {
 		t.Errorf("GetCursor() after negative = %d, want 0", step.GetCursor())
 	}
 }
+
+func TestFilterableListStep_SetCursor_EmptyOptions(t *testing.T) {
+	t.Parallel()
+
+	step := NewFilterableList("test", "Test", "Pick one", nil)
+
+	step.SetCursor(0)
+	if step.GetCursor() != 0 {
+		t.Errorf("GetCursor() on empty list = %d, want 0", step.GetCursor())
+	}
+
+	step.SetCursor(5)
+	if step.GetCursor() != 0 {
+		t.Errorf("GetCursor() on empty list after out-of-bounds = %d, want 0", step.GetCursor())
+	}
+}
