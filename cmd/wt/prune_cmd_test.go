@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 )
 
@@ -83,6 +84,30 @@ func TestIsStaleWorktree(t *testing.T) {
 			staleDays: -1,
 			want:      false,
 		},
+		{
+			name:      "open PR protects from stale",
+			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour), PRState: forge.PRStateOpen},
+			staleDays: 14,
+			want:      false,
+		},
+		{
+			name:      "merged PR does not protect from stale check",
+			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour), PRState: forge.PRStateMerged},
+			staleDays: 14,
+			want:      true,
+		},
+		{
+			name:      "no PR is stale by time",
+			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour)},
+			staleDays: 14,
+			want:      true,
+		},
+		{
+			name:      "closed PR does not protect from stale check",
+			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour), PRState: forge.PRStateClosed},
+			staleDays: 14,
+			want:      true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -90,6 +115,31 @@ func TestIsStaleWorktree(t *testing.T) {
 			got := isStaleWorktree(tt.wt, tt.staleDays)
 			if got != tt.want {
 				t.Errorf("isStaleWorktree() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsWorktreePrunable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		state string
+		want  bool
+	}{
+		{"merged PR is prunable", forge.PRStateMerged, true},
+		{"open PR is not prunable", forge.PRStateOpen, false},
+		{"closed PR is not prunable", forge.PRStateClosed, false},
+		{"no PR is not prunable", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wt := git.Worktree{PRState: tt.state}
+			got := isWorktreePrunable(wt)
+			if got != tt.want {
+				t.Errorf("isWorktreePrunable(%q) = %v, want %v", tt.state, got, tt.want)
 			}
 		})
 	}

@@ -290,10 +290,9 @@ Generated: 2026-03-01
 | `TestCheckout_ExplicitUpstreamRemoteRef` | Tests --base with upstream/branch syntax. |
 | `TestCheckout_LocalBaseRefWithFetchWarning` | Tests that --fetch with local base_ref prints warning. |
 | `TestCheckout_ExplicitOriginRemoteRef` | Tests --base with origin/branch syntax. |
-| `TestCheckout_PreserveFiles` | Tests that git-ignored files matching preserve patterns |
-| `TestCheckout_PreserveNoOverwrite` | Tests that preserved files never overwrite |
+| `TestCheckout_PreserveFiles` | Tests that listed paths are symlinked from repo root into new worktree. |
+| `TestCheckout_PreserveNoOverwrite` | Tests that preserve never overwrites existing files in target. |
 | `TestCheckout_NoPreserveFlag` | Tests that --no-preserve skips file preservation. |
-| `TestCheckout_PreserveExclude` | Tests that exclude patterns filter out matching path segments. |
 | `TestCheckout_AutoStash_NoChanges` | Tests that --autostash with clean working tree succeeds. |
 | `TestCheckout_AutoStash_UntrackedFiles` | Tests that untracked files are stashed and popped. |
 | `TestCheckout_AutoStash_StagedAndModified` | Tests autostash with a mix of staged and modified files. |

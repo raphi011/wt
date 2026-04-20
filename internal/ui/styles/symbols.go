@@ -137,11 +137,6 @@ func FormatStaleReason(commitAge string) string {
 	return "⏳ Stale (" + commitAge + ")"
 }
 
-// FormatLocallyMerged returns a formatted string indicating the branch was merged locally.
-func FormatLocallyMerged() string {
-	return MergedStyle.Render("✓ Merged (local)")
-}
-
 // PRStateSymbol returns just the symbol for a PR state
 func PRStateSymbol(state string, isDraft bool) string {
 	switch state {

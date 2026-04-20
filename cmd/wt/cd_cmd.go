@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -51,147 +52,32 @@ repo's worktrees. Use -g to show all repos.`,
 			cfg := config.FromContext(ctx)
 			out := output.FromContext(ctx)
 
-			// Load registry
 			reg, err := registry.Load(cfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("load registry: %w", err)
 			}
-
-			var targetPath, repoName, branchName string
 
 			histPath, err := cfg.GetHistoryPath()
 			if err != nil {
 				return fmt.Errorf("history path: %w", err)
 			}
 
-			if interactive {
-				// Interactive mode: repo-aware worktree list
-				l := log.FromContext(ctx)
+			var targetPath, repoName, branchName string
 
-				// Load history for recency ranking
-				hist, err := history.Load(histPath)
-				if err != nil {
-					l.Printf("Warning: failed to load history: %v\n", err)
-					hist = &history.History{}
-				}
-
-				var repos []registry.Repo
-				if global {
-					repos = reg.Repos
-				} else {
-					repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
-					if err != nil {
-						l.Debug("could not detect current repo, showing all", "error", err)
-						repos = reg.Repos
-					} else {
-						repos = []registry.Repo{repo}
-					}
-				}
-				repos = filterOrphanedRepos(l, repos)
-
-				loaded, warnings := git.LoadWorktreesForRepos(ctx, reposToRefs(repos))
-				for _, w := range warnings {
-					l.Debug("skipping repo", "repo", w.RepoName, "error", w.Err)
-				}
-
-				var allWorktrees []flows.CdWorktreeInfo
-				for _, wt := range loaded {
-					info := flows.CdWorktreeInfo{
-						RepoName: wt.RepoName,
-						Branch:   wt.Branch,
-						Path:     wt.Path,
-					}
-					if entry := hist.FindByPath(wt.Path); entry != nil {
-						info.LastAccess = entry.LastAccess
-					}
-					allWorktrees = append(allWorktrees, info)
-				}
-
-				if len(allWorktrees) == 0 {
-					return fmt.Errorf("no worktrees found")
-				}
-
-				// Opportunistically clean stale history entries
-				if removed := hist.RemoveStale(); removed > 0 {
-					if err := hist.Save(histPath); err != nil {
-						l.Printf("Warning: failed to save history after cleanup: %v\n", err)
-					}
-				}
-
-				// Sort: worktrees with history first (by LastAccess desc),
-				// then worktrees without history (alphabetical by repo:branch)
-				sort.Slice(allWorktrees, func(i, j int) bool {
-					iHasHistory := !allWorktrees[i].LastAccess.IsZero()
-					jHasHistory := !allWorktrees[j].LastAccess.IsZero()
-
-					if iHasHistory && jHasHistory {
-						return allWorktrees[i].LastAccess.After(allWorktrees[j].LastAccess)
-					}
-					if iHasHistory != jHasHistory {
-						return iHasHistory
-					}
-					// Both without history: alphabetical
-					if allWorktrees[i].RepoName != allWorktrees[j].RepoName {
-						return allWorktrees[i].RepoName < allWorktrees[j].RepoName
-					}
-					return allWorktrees[i].Branch < allWorktrees[j].Branch
-				})
-
-				result, err := flows.CdInteractive(flows.CdWizardParams{
-					Worktrees: allWorktrees,
-				})
-				if err != nil {
-					return err
-				}
-				if result.Cancelled {
-					os.Exit(1)
-				}
-
-				targetPath = result.SelectedPath
-				repoName = result.RepoName
-				branchName = result.Branch
-			} else if len(args) == 0 {
-				// No arguments: return most recently accessed worktree
-				hist, err := history.Load(histPath)
-				if err != nil {
-					return fmt.Errorf("load history: %w", err)
-				}
-				if len(hist.Entries) == 0 {
-					return fmt.Errorf("no worktree history (use wt cd <branch> first)")
-				}
-
-				// Clean stale entries and find first valid
-				if removed := hist.RemoveStale(); removed > 0 {
-					if err := hist.Save(histPath); err != nil {
-						l := log.FromContext(ctx)
-						l.Printf("Warning: failed to save history after cleanup: %v\n", err)
-					}
-				}
-
-				if len(hist.Entries) == 0 {
-					return fmt.Errorf("no worktree history (all entries stale)")
-				}
-
-				hist.SortByRecency()
-				entry := hist.Entries[0]
-				targetPath = entry.Path
-				repoName = entry.RepoName
-				branchName = entry.Branch
-			} else {
-				// Resolve [repo:]branch argument
-				match, err := resolveOneWorktreeTarget(ctx, reg, args[0])
-				if err != nil {
-					return err
-				}
-				targetPath = match.Path
-				repoName = match.RepoName
-				branchName = match.Branch
+			switch {
+			case interactive:
+				targetPath, repoName, branchName, err = runCdInteractive(ctx, reg, histPath, global)
+			case len(args) == 0:
+				targetPath, repoName, branchName, err = runCdRecent(ctx, cfg, histPath)
+			default:
+				targetPath, repoName, branchName, err = runCdTarget(ctx, reg, args[0])
+			}
+			if err != nil {
+				return err
 			}
 
-			// Record access to history for wt cd
 			recordHistory(ctx, cfg, targetPath, repoName, branchName)
 
-			// Copy to clipboard if requested
 			if copyToClipboard {
 				l := log.FromContext(ctx)
 				if err := clipboard.WriteAll(targetPath); err != nil {
@@ -199,7 +85,6 @@ repo's worktrees. Use -g to show all repos.`,
 				}
 			}
 
-			// Print path
 			out.Println(targetPath)
 
 			// Emit OSC 7 directory hint so supporting terminal emulators
@@ -225,4 +110,128 @@ repo's worktrees. Use -g to show all repos.`,
 	cmd.ValidArgsFunction = completeCdArg
 
 	return cmd
+}
+
+// runCdInteractive shows a fuzzy-searchable worktree list and returns the selected path.
+// When global is false, only worktrees from the current repo are shown.
+func runCdInteractive(ctx context.Context, reg *registry.Registry, histPath string, global bool) (path, repoName, branch string, err error) {
+	l := log.FromContext(ctx)
+
+	hist, err := history.Load(histPath)
+	if err != nil {
+		l.Printf("Warning: failed to load history: %v\n", err)
+		hist = &history.History{}
+	}
+
+	var repos []registry.Repo
+	if global {
+		repos = reg.Repos
+	} else {
+		repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
+		if err != nil {
+			l.Debug("could not detect current repo, showing all", "error", err)
+			repos = reg.Repos
+		} else {
+			repos = []registry.Repo{repo}
+		}
+	}
+	repos = filterOrphanedRepos(l, repos)
+
+	loaded, warnings := git.ListWorktreesForRepos(ctx, reposToRefs(repos))
+	for _, w := range warnings {
+		l.Debug("skipping repo", "repo", w.RepoName, "error", w.Err)
+	}
+
+	var allWorktrees []flows.CdWorktreeInfo
+	for _, wt := range loaded {
+		info := flows.CdWorktreeInfo{
+			RepoName: wt.RepoName,
+			Branch:   wt.Branch,
+			Path:     wt.Path,
+		}
+		if entry := hist.FindByPath(wt.Path); entry != nil {
+			info.LastAccess = entry.LastAccess
+		}
+		allWorktrees = append(allWorktrees, info)
+	}
+
+	if len(allWorktrees) == 0 {
+		return "", "", "", fmt.Errorf("no worktrees found")
+	}
+
+	// Opportunistically clean stale history entries
+	if removed := hist.RemoveStale(); removed > 0 {
+		if err := hist.Save(histPath); err != nil {
+			l.Printf("Warning: failed to save history after cleanup: %v\n", err)
+		}
+	}
+
+	sortCdWorktrees(allWorktrees)
+
+	result, err := flows.CdInteractive(flows.CdWizardParams{
+		Worktrees: allWorktrees,
+	})
+	if err != nil {
+		return "", "", "", err
+	}
+	if result.Cancelled {
+		os.Exit(1)
+	}
+
+	return result.SelectedPath, result.RepoName, result.Branch, nil
+}
+
+// runCdRecent returns the most recently accessed worktree from history.
+func runCdRecent(ctx context.Context, cfg *config.Config, histPath string) (path, repoName, branch string, err error) {
+	hist, err := history.Load(histPath)
+	if err != nil {
+		return "", "", "", fmt.Errorf("load history: %w", err)
+	}
+	if len(hist.Entries) == 0 {
+		return "", "", "", fmt.Errorf("no worktree history (use wt cd <branch> first)")
+	}
+
+	if removed := hist.RemoveStale(); removed > 0 {
+		if err := hist.Save(histPath); err != nil {
+			l := log.FromContext(ctx)
+			l.Printf("Warning: failed to save history after cleanup: %v\n", err)
+		}
+	}
+
+	if len(hist.Entries) == 0 {
+		return "", "", "", fmt.Errorf("no worktree history (all entries stale)")
+	}
+
+	hist.SortByRecency()
+	entry := hist.Entries[0]
+	return entry.Path, entry.RepoName, entry.Branch, nil
+}
+
+// sortCdWorktrees sorts worktrees with history first (by LastAccess desc),
+// then worktrees without history (alphabetical by repo:branch).
+func sortCdWorktrees(worktrees []flows.CdWorktreeInfo) {
+	sort.Slice(worktrees, func(i, j int) bool {
+		iHasHistory := !worktrees[i].LastAccess.IsZero()
+		jHasHistory := !worktrees[j].LastAccess.IsZero()
+
+		if iHasHistory && jHasHistory {
+			return worktrees[i].LastAccess.After(worktrees[j].LastAccess)
+		}
+		if iHasHistory != jHasHistory {
+			return iHasHistory
+		}
+		if worktrees[i].RepoName != worktrees[j].RepoName {
+			return worktrees[i].RepoName < worktrees[j].RepoName
+		}
+		return worktrees[i].Branch < worktrees[j].Branch
+	})
+}
+
+// runCdTarget resolves a [repo:]branch argument to a worktree path.
+func runCdTarget(ctx context.Context, reg *registry.Registry, arg string) (path, repoName, branch string, err error) {
+	match, err := resolveOneWorktreeTarget(ctx, reg, arg)
+	if err != nil {
+		return "", "", "", err
+	}
+	return match.Path, match.RepoName, match.Branch, nil
 }

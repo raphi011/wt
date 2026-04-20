@@ -223,22 +223,30 @@ func (s *FilterableListStep) Init() tea.Cmd {
 	return nil
 }
 
-func (s *FilterableListStep) Update(msg tea.KeyPressMsg) (framework.Step, tea.Cmd, framework.StepResult) {
-	// Handle global navigation keys regardless of focus
-	switch msg.String() {
-	case "left":
-		return s, nil, framework.StepBack
-	case "right":
-		return s.handleSelect(framework.StepAdvance)
-	case "enter":
-		return s.handleSelect(framework.StepSubmitIfReady)
+func (s *FilterableListStep) Update(msg tea.Msg) (framework.Step, tea.Cmd, framework.StepResult) {
+	switch msg := msg.(type) {
+	case tea.PasteMsg:
+		return s.handlePaste(msg)
+
+	case tea.KeyPressMsg:
+		// Handle global navigation keys regardless of focus
+		switch msg.String() {
+		case "left":
+			return s, nil, framework.StepBack
+		case "right":
+			return s.handleSelect(framework.StepAdvance)
+		case "enter":
+			return s.handleSelect(framework.StepSubmitIfReady)
+		}
+
+		// Delegate to focus-specific handler based on textinput focus state
+		if s.filterInput.Focused() {
+			return s.updateFilterFocused(msg)
+		}
+		return s.updateListFocused(msg)
 	}
 
-	// Delegate to focus-specific handler based on textinput focus state
-	if s.filterInput.Focused() {
-		return s.updateFilterFocused(msg)
-	}
-	return s.updateListFocused(msg)
+	return s, nil, framework.StepContinue
 }
 
 // updateFilterFocused handles input when the filter text input has focus.
@@ -386,6 +394,39 @@ func (s *FilterableListStep) handleSelect(result framework.StepResult) (framewor
 	}
 
 	return s, nil, framework.StepContinue
+}
+
+// handlePaste applies the rune filter to pasted content, auto-focuses the
+// filter input if needed, and forwards the sanitized text to the textinput.
+func (s *FilterableListStep) handlePaste(msg tea.PasteMsg) (framework.Step, tea.Cmd, framework.StepResult) {
+	content := msg.Content
+	if content == "" {
+		return s, nil, framework.StepContinue
+	}
+
+	// Apply rune filter to pasted content
+	filtered := framework.FilterRunes([]rune(content), s.runeFilter)
+	if filtered == "" {
+		return s, nil, framework.StepContinue
+	}
+
+	// Auto-focus filter if list was focused
+	if !s.filterInput.Focused() {
+		s.filterInput.Focus()
+	}
+
+	// Forward filtered paste to textinput
+	var cmd tea.Cmd
+	s.filterInput, cmd = s.filterInput.Update(tea.PasteMsg{Content: filtered})
+
+	// Sync filter value and re-apply fuzzy matching
+	newFilter := s.filterInput.Value()
+	if newFilter != s.filter {
+		s.filter = newFilter
+		s.applyFilter()
+	}
+
+	return s, cmd, framework.StepContinue
 }
 
 // canAdvanceMulti returns true if multi-select constraints are met.

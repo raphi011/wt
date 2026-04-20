@@ -59,6 +59,57 @@ func LoadWorktreesForRepos(ctx context.Context, repos []RepoRef) ([]Worktree, []
 	return all, warnings
 }
 
+// ListWorktreesForRepos lists worktrees from all repos in parallel (lightweight).
+// Only calls `git worktree list` per repo — no branch config, origin URL, or commit metadata.
+// Use [LoadWorktreesForRepos] when full metadata is needed (list, prune commands).
+// Results maintain stable ordering (by repo index, then worktree order within repo).
+func ListWorktreesForRepos(ctx context.Context, repos []RepoRef) ([]Worktree, []LoadWarning) {
+	type repoResult struct {
+		worktrees []Worktree
+		warning   *LoadWarning
+	}
+
+	results := make([]repoResult, len(repos))
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(8)
+
+	for i, repo := range repos {
+		g.Go(func() error {
+			wtInfos, err := ListWorktreesFromRepo(ctx, repo.Path)
+			if err != nil {
+				results[i] = repoResult{warning: &LoadWarning{RepoName: repo.Name, Err: err}}
+				return nil
+			}
+			worktrees := make([]Worktree, len(wtInfos))
+			for j, wti := range wtInfos {
+				worktrees[j] = Worktree{
+					Path:       wti.Path,
+					Branch:     wti.Branch,
+					CommitHash: wti.CommitHash,
+					RepoName:   repo.Name,
+					RepoPath:   repo.Path,
+				}
+			}
+			results[i] = repoResult{worktrees: worktrees}
+			return nil
+		})
+	}
+
+	_ = g.Wait()
+
+	var all []Worktree
+	var warnings []LoadWarning
+	for _, r := range results {
+		all = append(all, r.worktrees...)
+		if r.warning != nil {
+			warnings = append(warnings, *r.warning)
+		}
+	}
+
+	return all, warnings
+}
+
 // loadWorktreesForRepo fetches worktrees for a single repo.
 func loadWorktreesForRepo(ctx context.Context, repo RepoRef) ([]Worktree, *LoadWarning) {
 	wtInfos, err := ListWorktreesFromRepo(ctx, repo.Path)
@@ -88,36 +139,21 @@ func loadWorktreesForRepo(ctx context.Context, repo RepoRef) ([]Worktree, *LoadW
 		commitMetas = make(map[string]CommitMeta)
 	}
 
-	// Detect locally-merged branches via ancestry check.
-	// Uses the local default branch as the merge target, since local merges
-	// update the local ref — origin/<default> only updates after fetch/pull
-	// and those merges are typically PR-based (handled by the forge API).
-	defaultBranch := GetDefaultBranch(ctx, repo.Path)
-	mergedBranches, err := GetMergedBranches(ctx, repo.Path, defaultBranch)
-	if err != nil {
-		// Non-fatal: locally-merged worktrees will not be flagged, so they
-		// will only be pruned if the forge API detects them as merged.
-		mergedBranches = make(map[string]bool)
-	}
-	// The default branch is always "merged into itself" — exclude it.
-	delete(mergedBranches, defaultBranch)
-
 	worktrees := make([]Worktree, 0, len(wtInfos))
 	for _, wti := range wtInfos {
 		meta := commitMetas[wti.CommitHash]
 
 		worktrees = append(worktrees, Worktree{
-			Path:          wti.Path,
-			Branch:        wti.Branch,
-			CommitHash:    wti.CommitHash,
-			CommitAge:     meta.Age,
-			CommitDate:    meta.Date,
-			RepoName:      repo.Name,
-			RepoPath:      repo.Path,
-			OriginURL:     originURL,
-			Note:          notes[wti.Branch],
-			HasUpstream:   upstreams[wti.Branch],
-			LocallyMerged: mergedBranches[wti.Branch],
+			Path:        wti.Path,
+			Branch:      wti.Branch,
+			CommitHash:  wti.CommitHash,
+			CommitAge:   meta.Age,
+			CommitDate:  meta.Date,
+			RepoName:    repo.Name,
+			RepoPath:    repo.Path,
+			OriginURL:   originURL,
+			Note:        notes[wti.Branch],
+			HasUpstream: upstreams[wti.Branch],
 		})
 	}
 

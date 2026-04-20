@@ -616,28 +616,32 @@ func TestValidateEnum(t *testing.T) {
 	}
 }
 
-func TestValidatePreservePatterns(t *testing.T) {
+func TestValidatePreservePaths(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		patterns []string
-		context  string
-		wantErr  bool
+		name    string
+		paths   []string
+		context string
+		wantErr bool
 	}{
-		{"valid patterns", []string{".env", ".env.*", "*.local"}, "", false},
-		{"empty patterns", []string{}, "", false},
-		{"nil patterns", nil, "", false},
-		{"invalid pattern", []string{"[invalid"}, "", true},
-		{"with context info", []string{"[bad"}, ".wt.toml", true},
+		{"valid relative paths", []string{".env", "config/.env"}, "", false},
+		{"empty paths", []string{}, "", false},
+		{"nil paths", nil, "", false},
+		{"absolute path rejected", []string{"/etc/passwd"}, "", true},
+		{"parent escape rejected", []string{"../../../etc/passwd"}, "", true},
+		{"mid-path parent escape rejected", []string{"foo/../../etc/passwd"}, "", true},
+		{"empty string rejected", []string{""}, "", true},
+		{"dot rejected", []string{"."}, "", true},
+		{"with context info", []string{"/abs"}, ".wt.toml", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := validatePreservePatterns(tt.patterns, tt.context)
+			err := validatePreservePaths(tt.paths, tt.context)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("validatePreservePatterns(%v, %q) error = %v, wantErr %v", tt.patterns, tt.context, err, tt.wantErr)
+				t.Errorf("validatePreservePaths(%v, %q) error = %v, wantErr %v", tt.paths, tt.context, err, tt.wantErr)
 			}
 		})
 	}
@@ -952,8 +956,7 @@ delete_local_branches = true
 stale_days = 30
 
 [preserve]
-patterns = [".env", ".env.*"]
-exclude = ["node_modules"]
+paths = [".env", ".envrc"]
 
 [hosts]
 "gitlab.corp.com" = "gitlab"
@@ -1016,8 +1019,8 @@ on = ["checkout"]
 	if err := validateEnum(cfg.Clone.Mode, "clone.mode", ValidCloneModes); err != nil {
 		t.Fatalf("clone.mode validation failed: %v", err)
 	}
-	if err := validatePreservePatterns(cfg.Preserve.Patterns, ""); err != nil {
-		t.Fatalf("preserve.patterns validation failed: %v", err)
+	if err := validatePreservePaths(cfg.Preserve.Paths, ""); err != nil {
+		t.Fatalf("preserve.paths validation failed: %v", err)
 	}
 
 	// Apply defaults
@@ -1075,8 +1078,8 @@ on = ["checkout"]
 	if cfg.Prune.StaleDays != 30 {
 		t.Errorf("Prune.StaleDays = %d, want 30", cfg.Prune.StaleDays)
 	}
-	if len(cfg.Preserve.Patterns) != 2 {
-		t.Errorf("len(Preserve.Patterns) = %d, want 2", len(cfg.Preserve.Patterns))
+	if len(cfg.Preserve.Paths) != 2 {
+		t.Errorf("len(Preserve.Paths) = %d, want 2", len(cfg.Preserve.Paths))
 	}
 	if len(cfg.Hosts) != 2 {
 		t.Errorf("len(Hosts) = %d, want 2", len(cfg.Hosts))

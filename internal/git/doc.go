@@ -11,7 +11,8 @@
 //   - [CreateWorktree], [CreateWorktreeNewBranch]: Create worktrees for existing or new branches
 //   - [RemoveWorktree]: Remove worktrees with optional force flag
 //   - [PruneWorktrees]: Clean up stale worktree references
-//   - [LoadWorktreesForRepos]: Load worktrees from multiple repos in parallel
+//   - [LoadWorktreesForRepos]: Load worktrees from multiple repos in parallel (full metadata)
+//   - [ListWorktreesForRepos]: List worktrees from multiple repos in parallel (lightweight)
 //
 // # Repository Operations
 //

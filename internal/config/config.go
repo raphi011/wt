@@ -94,10 +94,9 @@ type PruneConfig struct {
 }
 
 // PreserveConfig holds file preservation settings for worktree creation.
-// Matching git-ignored files are copied from an existing worktree into new ones.
+// Listed paths are symlinked from the repo root into new worktrees.
 type PreserveConfig struct {
-	Patterns []string `toml:"patterns"` // Glob patterns matched against file basenames
-	Exclude  []string `toml:"exclude"`  // Path segments to exclude (e.g., "node_modules")
+	Paths []string `toml:"paths"` // Relative paths from repo root to symlink (e.g., ".env", "config/.env")
 }
 
 // CloneConfig holds clone-related configuration
@@ -320,7 +319,7 @@ func Load() (Config, error) {
 	if err := validateEnum(cfg.DefaultSort, "default_sort", ValidDefaultSortModes); err != nil {
 		return Default(), err
 	}
-	if err := validatePreservePatterns(cfg.Preserve.Patterns, ""); err != nil {
+	if err := validatePreservePaths(cfg.Preserve.Paths, ""); err != nil {
 		return Default(), err
 	}
 	if err := ValidateHookTriggers(cfg.Hooks.Hooks); err != nil {
@@ -599,14 +598,13 @@ worktree_format = ".worktrees/{branch}"
 # description = "Log removed branches"
 # on = ["prune"]
 
-# Preserve settings - auto-copy git-ignored files into new worktrees
-# Copies matching files from an existing worktree (preferring the default branch) into newly created ones.
-# Only git-ignored files are considered. Existing files are never overwritten.
+# Preserve settings - symlink files from repo root into new worktrees
+# Listed paths (relative to repo root) are symlinked into newly created worktrees.
+# Edits in any worktree are instantly visible in all others.
 # Use --no-preserve on checkout to skip for a single invocation.
 #
 # [preserve]
-# patterns = [".env", ".env.*", ".envrc", "docker-compose.override.yml"]
-# exclude = ["node_modules", ".cache", "vendor"]
+# paths = [".env", ".envrc"]
 
 # Forge settings - configure forge type, default org, and multi-account auth
 # Used for PR operations and "wt pr checkout <number> org/repo" when cloning

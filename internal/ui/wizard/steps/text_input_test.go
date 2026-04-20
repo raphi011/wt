@@ -2,10 +2,65 @@ package steps
 
 import (
 	"errors"
+	"strings"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
 )
+
+func TestTextInputStep_Paste(t *testing.T) {
+	t.Run("paste inserts text", func(t *testing.T) {
+		step := NewTextInput("test", "Test", "Enter name:", "")
+		step.Init() // Focus the input
+
+		result, _, stepResult := step.Update(tea.PasteMsg{Content: "pasted-text"})
+		if stepResult != framework.StepContinue {
+			t.Errorf("Result = %v, want StepContinue", stepResult)
+		}
+		step = result.(*TextInputStep)
+
+		if step.GetValue() != "pasted-text" {
+			t.Errorf("GetValue() = %q, want %q", step.GetValue(), "pasted-text")
+		}
+	})
+
+	t.Run("paste clears validation error", func(t *testing.T) {
+		step := NewTextInput("test", "Test", "Enter name:", "")
+		step.Init()
+
+		// Trigger validation error by submitting empty
+		updateStep(t, step, keyMsg("enter"))
+		if !strings.Contains(step.View(), "cannot be empty") {
+			t.Fatal("Expected validation error after empty submit")
+		}
+
+		// Paste should clear the error
+		result, _, _ := step.Update(tea.PasteMsg{Content: "hello"})
+		step = result.(*TextInputStep)
+
+		if strings.Contains(step.View(), "cannot be empty") {
+			t.Error("Validation error should be cleared after paste")
+		}
+		if step.GetValue() != "hello" {
+			t.Errorf("GetValue() = %q, want %q", step.GetValue(), "hello")
+		}
+	})
+
+	t.Run("paste appends to existing text", func(t *testing.T) {
+		step := NewTextInput("test", "Test", "Enter name:", "")
+		step.Init()
+		step.SetValue("hello-")
+
+		result, _, _ := step.Update(tea.PasteMsg{Content: "world"})
+		step = result.(*TextInputStep)
+
+		if step.GetValue() != "hello-world" {
+			t.Errorf("GetValue() = %q, want %q", step.GetValue(), "hello-world")
+		}
+	})
+}
 
 func TestTextInputStep_BasicInput(t *testing.T) {
 	t.Run("typing updates input value", func(t *testing.T) {

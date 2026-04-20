@@ -57,8 +57,7 @@ strategy = "rebase"
 delete_local_branches = true
 
 [preserve]
-patterns = [".env.local"]
-exclude = ["dist"]
+paths = [".env.local"]
 
 [forge]
 default = "gitlab"
@@ -105,11 +104,8 @@ enabled = false
 	if local.Forge.Default != "gitlab" {
 		t.Errorf("forge.default = %q, want gitlab", local.Forge.Default)
 	}
-	if len(local.Preserve.Patterns) != 1 || local.Preserve.Patterns[0] != ".env.local" {
-		t.Errorf("preserve.patterns = %v, want [.env.local]", local.Preserve.Patterns)
-	}
-	if len(local.Preserve.Exclude) != 1 || local.Preserve.Exclude[0] != "dist" {
-		t.Errorf("preserve.exclude = %v, want [dist]", local.Preserve.Exclude)
+	if len(local.Preserve.Paths) != 1 || local.Preserve.Paths[0] != ".env.local" {
+		t.Errorf("preserve.paths = %v, want [.env.local]", local.Preserve.Paths)
 	}
 
 	// Check hooks
@@ -177,12 +173,12 @@ base_ref = "invalid"
 	}
 }
 
-func TestLoadLocal_InvalidPreservePattern(t *testing.T) {
+func TestLoadLocal_InvalidPreservePath(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
 	content := `[preserve]
-patterns = ["[invalid"]
+paths = ["/absolute/path"]
 `
 	if err := os.WriteFile(filepath.Join(dir, LocalConfigFileName), []byte(content), 0644); err != nil {
 		t.Fatalf("write file: %v", err)
@@ -190,7 +186,7 @@ patterns = ["[invalid"]
 
 	_, err := LoadLocal(dir)
 	if err == nil {
-		t.Fatal("expected error for invalid preserve pattern")
+		t.Fatal("expected error for absolute preserve path")
 	}
 }
 

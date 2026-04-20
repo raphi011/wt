@@ -1758,3 +1758,217 @@ func TestPrune_ExplicitHookFlag(t *testing.T) {
 		t.Error("default hook should NOT have run when --hook is used")
 	}
 }
+
+// TestPrune_LocallyMergedBranch_RequiresForce tests that a branch merged via
+// git ancestry alone still requires --force, since only forge-confirmed PR merges
+// allow force-free pruning.
+//
+// Scenario: User runs `wt prune feature` where feature is merged into main via
+// git but has no PR cache entry
+// Expected: Error requiring -f
+func TestPrune_LocallyMergedBranch_RequiresForce(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	// Create feature branch with a commit, then merge it into main
+	if _, err := runGitCommand(repoPath, "checkout", "-b", "feature"); err != nil {
+		t.Fatalf("failed to create feature branch: %v", err)
+	}
+	addCommit(t, repoPath, "feature.txt", "feature commit")
+
+	// Merge feature into main
+	if _, err := runGitCommand(repoPath, "checkout", "main"); err != nil {
+		t.Fatalf("failed to checkout main: %v", err)
+	}
+	if _, err := runGitCommand(repoPath, "merge", "feature", "--no-ff", "-m", "Merge feature"); err != nil {
+		t.Fatalf("failed to merge feature: %v", err)
+	}
+
+	// Create worktree for the (git-merged) feature branch
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	// Without -f: should fail — git ancestry alone is not sufficient
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("prune should require -f when there is no forge-confirmed PR merge")
+	}
+	if !strings.Contains(err.Error(), "cannot prune unmerged worktrees without -f/--force") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify worktree was NOT removed
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Error("worktree should not be removed without -f")
+	}
+
+	// With -f: should succeed
+	cmd2 := newPruneCmd()
+	cmd2.SetContext(ctx)
+	cmd2.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("prune with -f should succeed: %v", err)
+	}
+
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("worktree should be removed after prune -f")
+	}
+}
+
+// TestPrune_UnmergedBranch_RequiresForce tests that unmerged branches require
+// --force for targeted prune.
+//
+// Scenario: User runs `wt prune feature` where feature has unique commits
+// Expected: Error listing the unmerged branch, suggesting -f
+func TestPrune_UnmergedBranch_RequiresForce(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	// Add a commit on the feature branch so it's not merged
+	addCommit(t, wtPath, "feature-only.txt", "unmerged commit")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"}) // No -f flag
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("prune should fail without -f for unmerged branch")
+	}
+	if !strings.Contains(err.Error(), "cannot prune unmerged worktrees without -f/--force") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "test-repo:feature") {
+		t.Fatalf("error should list the unmerged branch: %v", err)
+	}
+
+	// Verify worktree was NOT removed
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Error("worktree should not be removed when force is missing")
+	}
+}
+
+// TestPrune_MixedTargets_RequiresForce tests that mixed merged/unmerged
+// targets require --force, listing only the unmerged ones.
+//
+// Scenario: User runs `wt prune merged unmerged` where only one is merged
+// Expected: Error listing only the unmerged branch
+func TestPrune_MixedTargets_RequiresForce(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	// Create and merge the "merged" branch
+	if _, err := runGitCommand(repoPath, "checkout", "-b", "merged"); err != nil {
+		t.Fatalf("failed to create merged branch: %v", err)
+	}
+	addCommit(t, repoPath, "merged.txt", "merged commit")
+
+	if _, err := runGitCommand(repoPath, "checkout", "main"); err != nil {
+		t.Fatalf("failed to checkout main: %v", err)
+	}
+	if _, err := runGitCommand(repoPath, "merge", "merged", "--no-ff", "-m", "Merge merged"); err != nil {
+		t.Fatalf("failed to merge merged branch: %v", err)
+	}
+
+	// Create the "unmerged" branch with a unique commit
+	if _, err := runGitCommand(repoPath, "checkout", "-b", "unmerged"); err != nil {
+		t.Fatalf("failed to create unmerged branch: %v", err)
+	}
+	addCommit(t, repoPath, "unmerged.txt", "unmerged commit")
+
+	// Switch back to main before creating worktrees
+	if _, err := runGitCommand(repoPath, "checkout", "main"); err != nil {
+		t.Fatalf("failed to checkout main: %v", err)
+	}
+
+	// Create worktrees for both branches
+	mergedWtPath := createTestWorktree(t, repoPath, "merged")
+	unmergedWtPath := createTestWorktree(t, repoPath, "unmerged")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	os.MkdirAll(filepath.Dir(regFile), 0755)
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	pruneCmd := newPruneCmd()
+	pruneCmd.SetContext(ctx)
+	pruneCmd.SetArgs([]string{"merged", "unmerged"}) // No -f flag
+
+	err := pruneCmd.Execute()
+	if err == nil {
+		t.Fatal("prune should fail when any target is unmerged")
+	}
+	if !strings.Contains(err.Error(), "test-repo:unmerged") {
+		t.Fatalf("error should list the unmerged branch: %v", err)
+	}
+	// Without a forge-confirmed PR merge in the cache, git-merged branches also
+	// require -f — so both branches appear in the error.
+	if !strings.Contains(err.Error(), "test-repo:merged") {
+		t.Fatalf("error should list the git-merged branch too (no PR cache entry): %v", err)
+	}
+
+	// Verify neither worktree was removed (error returned before any removal)
+	if _, err := os.Stat(mergedWtPath); os.IsNotExist(err) {
+		t.Error("merged worktree should not be removed on error")
+	}
+	if _, err := os.Stat(unmergedWtPath); os.IsNotExist(err) {
+		t.Error("unmerged worktree should not be removed on error")
+	}
+}

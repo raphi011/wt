@@ -269,6 +269,46 @@ func GetOriginURL(ctx context.Context, repoPath string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// GetRemoteURLs returns a map of remote name → configured URL for a repository.
+// Returns an empty (non-nil) map if the repository has no remotes.
+// Uses `git config --get-regexp` to read stored URLs without applying insteadOf rewrites.
+func GetRemoteURLs(ctx context.Context, repoPath string) (map[string]string, error) {
+	output, err := outputGit(ctx, repoPath, "config", "--get-regexp", `remote\..*\.url`)
+	if err != nil {
+		// git config returns exit code 1 when no keys match — treat as no remotes.
+		// Any other error (e.g. invalid repo path) will also land here; we distinguish
+		// by checking whether output is empty.
+		if len(output) == 0 {
+			// Verify the repo path is valid by running a cheap git command.
+			if _, verr := outputGit(ctx, repoPath, "rev-parse", "--git-dir"); verr != nil {
+				return nil, fmt.Errorf("failed to list remotes: %v", verr)
+			}
+			return make(map[string]string), nil
+		}
+		return nil, fmt.Errorf("failed to list remotes: %v", err)
+	}
+
+	trimmed := strings.TrimSpace(string(output))
+	if trimmed == "" {
+		return make(map[string]string), nil
+	}
+
+	remotes := make(map[string]string)
+	for line := range strings.SplitSeq(trimmed, "\n") {
+		// Format: remote.<name>.url <url>
+		key, url, ok := strings.Cut(line, " ")
+		if !ok {
+			continue
+		}
+		key = strings.TrimPrefix(key, "remote.")
+		key = strings.TrimSuffix(key, ".url")
+		if key != "" {
+			remotes[key] = url
+		}
+	}
+	return remotes, nil
+}
+
 // WorktreeInfo contains basic worktree information from git worktree list.
 type WorktreeInfo struct {
 	Path       string
@@ -386,28 +426,6 @@ func GetAllBranchConfig(ctx context.Context, repoPath string) (notes map[string]
 	}
 
 	return notes, upstreams
-}
-
-// GetMergedBranches returns the set of local branch names that are fully merged
-// into the given target ref (e.g., "main"). Uses `git branch --merged`
-// which checks ancestry: a branch is "merged" if its tip is reachable from the target.
-// This detects regular merges and fast-forward merges but NOT squash merges.
-func GetMergedBranches(ctx context.Context, repoPath, targetRef string) (map[string]bool, error) {
-	if targetRef == "" {
-		return nil, fmt.Errorf("targetRef must not be empty")
-	}
-	output, err := outputGit(ctx, repoPath, "branch", "--merged", targetRef, "--format=%(refname:short)")
-	if err != nil {
-		return nil, fmt.Errorf("failed to list merged branches: %w", err)
-	}
-
-	merged := make(map[string]bool)
-	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
-		if branch := strings.TrimSpace(line); branch != "" {
-			merged[branch] = true
-		}
-	}
-	return merged, nil
 }
 
 // DeleteLocalBranch deletes a local branch
