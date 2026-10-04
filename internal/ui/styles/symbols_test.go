@@ -12,47 +12,18 @@ import (
 func TestSetNerdfont(t *testing.T) {
 	// Test default (off)
 	SetNerdfont(false)
-	if NerdfontEnabled() {
-		t.Error("expected nerdfont to be disabled")
-	}
-	if PRMergedSymbol() != "●" {
-		t.Errorf("expected default merged symbol, got %q", PRMergedSymbol())
+	if currentSymbols != defaultSymbols {
+		t.Errorf("expected default symbols, got %+v", currentSymbols)
 	}
 
 	// Test enabled
 	SetNerdfont(true)
-	if !NerdfontEnabled() {
-		t.Error("expected nerdfont to be enabled")
-	}
-	if PRMergedSymbol() != "\ueafe" {
-		t.Errorf("expected nerdfont merged symbol, got %q", PRMergedSymbol())
+	if currentSymbols != nerdfontSymbols {
+		t.Errorf("expected nerdfont symbols, got %+v", currentSymbols)
 	}
 
 	// Reset
 	SetNerdfont(false)
-}
-
-func TestPRSymbols(t *testing.T) {
-	SetNerdfont(false)
-
-	tests := []struct {
-		name     string
-		fn       func() string
-		expected string
-	}{
-		{"PRMergedSymbol", PRMergedSymbol, "●"},
-		{"PROpenSymbol", PROpenSymbol, "○"},
-		{"PRClosedSymbol", PRClosedSymbol, "✕"},
-		{"PRDraftSymbol", PRDraftSymbol, "◌"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.fn(); got != tt.expected {
-				t.Errorf("%s() = %q, want %q", tt.name, got, tt.expected)
-			}
-		})
-	}
 }
 
 func TestFormatPRState(t *testing.T) {
@@ -214,24 +185,6 @@ func TestFormatStaleReason(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestCurrentSymbols(t *testing.T) {
-	SetNerdfont(false)
-	symbols := CurrentSymbols()
-
-	if symbols.PRMerged != "●" {
-		t.Errorf("expected default PRMerged symbol")
-	}
-
-	SetNerdfont(true)
-	symbols = CurrentSymbols()
-
-	if symbols.PRMerged != "\ueafe" {
-		t.Errorf("expected nerdfont PRMerged symbol")
-	}
-
-	SetNerdfont(false)
 }
 
 func TestPRReferencesIncludeStateAndRespectLinkCapability(t *testing.T) {

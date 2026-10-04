@@ -1,10 +1,11 @@
 package static
 
 import (
-	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
@@ -113,7 +114,7 @@ func TestWorktreeTableRowStaleDisabled(t *testing.T) {
 func TestRenderTableEmptyRows(t *testing.T) {
 	t.Parallel()
 
-	result := RenderTable([]string{"COL1", "COL2"}, nil)
+	result := RenderTableAtWidth([]string{"COL1", "COL2"}, nil, 0)
 
 	if result != "" {
 		t.Errorf("empty rows: expected empty string, got %q", result)
@@ -126,7 +127,7 @@ func TestRenderTableSingleRow(t *testing.T) {
 	headers := []string{"NAME", "STATUS"}
 	rows := [][]string{{"alice", "active"}}
 
-	result := RenderTable(headers, rows)
+	result := RenderTableAtWidth(headers, rows, 0)
 
 	if result == "" {
 		t.Fatal("single row: expected non-empty output")
@@ -155,7 +156,7 @@ func TestRenderTableMultipleRows(t *testing.T) {
 		{"repo-c", "bugfix-y", "ghi9012"},
 	}
 
-	result := RenderTable(headers, rows)
+	result := RenderTableAtWidth(headers, rows, 0)
 
 	for _, header := range headers {
 		if !strings.Contains(result, header) {
@@ -192,7 +193,7 @@ func TestResponsiveTableWidths(t *testing.T) {
 		}
 	}
 	full := RenderTableAtWidth(WorktreeTableHeaders, rows, 0)
-	if full != RenderTable(WorktreeTableHeaders, rows) || !strings.Contains(full, rows[0][5]) {
+	if !strings.Contains(full, rows[0][5]) {
 		t.Fatal("pipe output lost full notes")
 	}
 	if rows[0][1] != strings.Repeat("feature-", 20) {

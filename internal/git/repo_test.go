@@ -235,41 +235,6 @@ func TestGetCommitMeta(t *testing.T) {
 	})
 }
 
-func TestGetMainRepoPath(t *testing.T) {
-	t.Parallel()
-
-	repoPath := setupTestRepo(t)
-	tmpDir := filepath.Dir(repoPath)
-	wtPath := filepath.Join(tmpDir, "test-worktree")
-
-	ctx := context.Background()
-	if err := runGit(ctx, repoPath, "worktree", "add", "-b", "test-branch", wtPath); err != nil {
-		t.Fatalf("failed to create worktree: %v", err)
-	}
-
-	mainPath, err := GetMainRepoPath(wtPath)
-	if err != nil {
-		t.Errorf("GetMainRepoPath from worktree failed: %v", err)
-	}
-	if mainPath != repoPath {
-		t.Errorf("expected %s, got %s", repoPath, mainPath)
-	}
-
-	mainPathFromRepo, err := GetMainRepoPath(repoPath)
-	if err != nil {
-		t.Errorf("GetMainRepoPath from main repo failed: %v", err)
-	}
-	if mainPathFromRepo != repoPath {
-		t.Errorf("expected %s, got %s", repoPath, mainPathFromRepo)
-	}
-
-	emptyDir := t.TempDir()
-	_, err = GetMainRepoPath(emptyDir)
-	if err == nil {
-		t.Error("expected error for non-git directory")
-	}
-}
-
 func TestGetDefaultBranch(t *testing.T) {
 	t.Parallel()
 

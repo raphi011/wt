@@ -14,13 +14,13 @@
 //
 // # Static Output
 //
-// Use [static.RenderTable] to render aligned tables:
+// Use [static.RenderTableAtWidth] to render aligned tables:
 //
 //	import "github.com/raphi011/wt/internal/ui/static"
 //
 //	headers := []string{"NAME", "VALUE"}
 //	rows := [][]string{{"foo", "bar"}, {"baz", "qux"}}
-//	output := static.RenderTable(headers, rows)
+//	output := static.RenderTableAtWidth(headers, rows, 0)
 //
 // # Progress Indicators
 //
@@ -45,7 +45,7 @@
 // For complex multi-step interactions, use the wizard subpackages:
 //
 //   - [wizard/framework]: Core wizard orchestration
-//   - [wizard/steps]: Reusable step components (FilterableListStep, SingleSelectStep, TextInputStep)
+//   - [wizard/steps]: Reusable step components (FilterableListStep, SingleSelectStep)
 //   - [wizard/flows]: Command-specific wizard implementations
 //
 // Example usage:

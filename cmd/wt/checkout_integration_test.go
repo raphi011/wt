@@ -1611,12 +1611,12 @@ func TestCheckout_RecordsHistory(t *testing.T) {
 	}
 
 	// Verify history was recorded
-	mostRecent, err := history.GetMostRecent(historyFile)
+	hist, err := history.Load(historyFile)
 	if err != nil {
-		t.Fatalf("failed to get most recent from history: %v", err)
+		t.Fatalf("failed to load history: %v", err)
 	}
-	if mostRecent != wtPath {
-		t.Errorf("expected history to contain %q, got %q", wtPath, mostRecent)
+	if len(hist.Entries) != 1 || hist.Entries[0].Path != wtPath {
+		t.Errorf("expected history to contain only %q, got %+v", wtPath, hist.Entries)
 	}
 }
 

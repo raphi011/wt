@@ -18,7 +18,6 @@ import (
 	"github.com/raphi011/wt/internal/fs"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
-	"github.com/raphi011/wt/internal/registry"
 )
 
 // testContext creates a context with log and output set to discard.
@@ -178,12 +177,6 @@ func testConfig() *config.Config {
 			Default: "github",
 		},
 	}
-}
-
-// testRegistry creates an empty test registry
-func testRegistry(t *testing.T) *registry.Registry {
-	t.Helper()
-	return &registry.Registry{Repos: []registry.Repo{}}
 }
 
 // executeCommand executes a cobra command with arguments and returns output/error
@@ -380,26 +373,6 @@ func runGitCommand(dir string, args ...string) (string, error) {
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	return string(out), err
-}
-
-// setupBareRepo creates a bare git repository
-func setupBareRepo(t *testing.T, dir, name string) string {
-	t.Helper()
-
-	dir = resolvePath(t, dir)
-	repoPath := filepath.Join(dir, name+".git")
-
-	if err := os.MkdirAll(repoPath, 0755); err != nil {
-		t.Fatalf("failed to create bare repo dir: %v", err)
-	}
-
-	cmd := exec.Command("git", "init", "--bare")
-	cmd.Dir = repoPath
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to init bare repo: %v\n%s", err, out)
-	}
-
-	return repoPath
 }
 
 // setupTestRepoWithSubmodule creates a git repo with a submodule

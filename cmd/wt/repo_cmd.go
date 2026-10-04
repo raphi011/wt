@@ -30,7 +30,7 @@ func newRepoCmd() *cobra.Command {
 		GroupID: GroupRegistry,
 		Long: `Manage registered repositories.
 
-Use subcommands to list, add, clone, or remove repositories from the registry.`,
+Use subcommands to list, add, clone, remove, or convert registered repositories.`,
 		Example: `  wt repo list                  # List all repos
   wt repo add ~/work/my-project # Register a repo
   wt repo clone <url|org/repo>  # Clone and register a repo
@@ -349,9 +349,6 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 	cmd.Flags().BoolVarP(&deleteFiles, "delete", "D", false, "Also delete repo and worktrees from disk")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force deletion without confirmation")
 
-	// Completions
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
-
 	return cmd
 }
 
@@ -360,7 +357,6 @@ func newRepoCloneCmd() *cobra.Command {
 		name           string
 		labels         []string
 		worktreeFormat string
-		destination    string
 		branch         string
 		cloneMode      string
 	)
@@ -377,7 +373,7 @@ By default, clones as a regular repo with a working tree at root:
   ├── .git/    # git directory
   └── ...      # working tree files
 
-Use --clone-mode bare for a bare clone (git data in .git, no working tree at root).
+Use --clone-mode bare (or clone.mode in config) for a bare clone (git data in .git, no working tree at root).
 
 When cloning bare, creates a worktree for the default branch (main/master).
 Use -b to specify a different branch instead.
@@ -387,14 +383,14 @@ Supports both full URLs and short-form org/repo format:
   - org/repo format uses gh/glab CLI (determined by forge config)
   - repo-only format uses default_org from config
 
-If destination is not specified, clones into the current directory.`,
+If destination is not specified, clones into <repo-name> in the current directory.`,
 		Example: `  wt repo clone https://github.com/org/repo           # Clone via git URL
   wt repo clone git@github.com:org/repo.git           # Clone via SSH URL
   wt repo clone org/repo                              # Clone via gh/glab (uses forge config)
   wt repo clone myrepo                                # Clone with default_org
-  wt repo clone org/repo -b main                      # Clone and create worktree for main
-  wt repo clone org/repo -l work                      # Clone with label
-  wt repo clone org/repo --clone-mode regular         # Standard (non-bare) clone`,
+  wt repo clone org/repo --clone-mode bare            # Bare clone with default branch worktree
+  wt repo clone org/repo --clone-mode bare -b develop # Bare clone with worktree for develop
+  wt repo clone org/repo -l work                      # Clone with label`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
@@ -404,7 +400,7 @@ If destination is not specified, clones into the current directory.`,
 			input := args[0]
 
 			// Determine destination name
-			dest := destination
+			var dest string
 			if len(args) > 1 {
 				dest = args[1]
 			}
@@ -568,7 +564,6 @@ If destination is not specified, clones into the current directory.`,
 	cmd.Flags().StringVarP(&name, "name", "n", "", "Display name (default: directory name)")
 	cmd.Flags().StringSliceVarP(&labels, "label", "l", nil, "Labels for grouping (repeatable)")
 	cmd.Flags().StringVarP(&worktreeFormat, "worktree-format", "w", "", "Worktree format override")
-	cmd.Flags().StringVarP(&destination, "destination", "d", "", "Destination directory")
 	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Create initial worktree for branch (bare mode only)")
 	cmd.Flags().StringVar(&cloneMode, "clone-mode", "", "Clone mode: bare or regular (default: config)")
 
@@ -579,7 +574,6 @@ If destination is not specified, clones into the current directory.`,
 	cmd.RegisterFlagCompletionFunc("name", cobra.NoFileCompletions)
 	cmd.RegisterFlagCompletionFunc("worktree-format", cobra.NoFileCompletions)
 	cmd.RegisterFlagCompletionFunc("branch", cobra.NoFileCompletions)
-	cmd.MarkFlagDirname("destination")
 
 	return cmd
 }

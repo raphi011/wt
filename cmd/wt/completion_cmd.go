@@ -11,7 +11,7 @@ func newCompletionCmd() *cobra.Command {
 		Use:       "completion <shell>",
 		Short:     "Generate completion script",
 		GroupID:   GroupConfig,
-		Long:      `Generate shell completion script.`,
+		Long:      `Generate shell completion script for bash, zsh, fish, or powershell.`,
 		ValidArgs: []string{"bash", "zsh", "fish", "powershell"},
 		Args:      cobra.ExactArgs(1),
 		Example: `  # Fish

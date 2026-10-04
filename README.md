@@ -83,9 +83,11 @@ worktree_format = "/tmp/worktrees/{repo}-{branch}"
 # Register a repo you already have cloned
 wt repo add ~/path/to/myrepo
 
-# Or clone and register a new repo (clones into current directory)
+# Or clone and register a new repo (clones into ./repo)
 wt repo clone git@github.com:org/repo.git
 ```
+
+Repos are cloned as regular repos by default. Use `--clone-mode bare` (or `clone.mode` in config) for a bare-in-`.git` layout with worktrees as siblings; `wt repo convert --clone-mode bare|regular` switches an existing repo.
 
 Repos are also auto-registered the first time you run `wt checkout` inside one.
 
@@ -132,7 +134,7 @@ See [Hooks](#hooks) and [Writing Hooks](#writing-hooks) for the full placeholder
 wt list -g
 ```
 
-You're ready to go! Most commands also support `-i` for an interactive wizard mode (e.g. `wt checkout -i`).
+You're ready to go! `checkout`, `cd`, `prune` and `pr checkout` also support `-i` for an interactive wizard.
 
 ## Scenarios
 
@@ -177,8 +179,11 @@ wt pr checkout 123
 # Checkout PR from a different local repo (by name)
 wt pr checkout backend-api 123
 
+# Checkout PR from a registered repo matched by its remote (org/repo)
+wt pr checkout org/repo 123
+
 # Clone repo you don't have locally and checkout PR
-wt pr checkout org/new-repo 456
+wt pr checkout --clone org/new-repo 456
 
 # Specify forge type when auto-detection fails
 wt pr checkout 123 --forge gitlab
@@ -195,7 +200,7 @@ wt pr view myrepo        # View PR for specific repo
 After review, merge and clean up in one command:
 
 ```bash
-wt pr merge              # Uses squash by default
+wt pr merge              # Uses squash by default; removes worktree and source branch
 wt pr merge -s rebase    # Or specify strategy
 wt pr merge --keep       # Merge but keep worktree
 ```
@@ -228,8 +233,11 @@ wt pr create --title "Add feature" myrepo
 # See what worktrees exist
 wt list
 
-# Remove merged worktrees (detects PR merges and local merges via ancestry)
+# Remove worktrees whose PR is merged (current repo; -g for all repos)
 wt prune
+
+# Also remove stale worktrees (last commit older than prune.stale_days, no open PR)
+wt prune --stale
 
 # Refresh PR status from GitHub/GitLab first
 wt prune -R
@@ -244,7 +252,7 @@ wt prune -d -v
 wt prune --reset-cache
 
 # Also delete local branches after removal
-wt prune --delete-branches
+wt prune -b
 
 # Keep local branches even if config says delete
 wt prune --no-delete-branches
@@ -298,12 +306,26 @@ wt cd feature-auth
 # Jump to worktree in specific repo (if branch exists in multiple repos)
 wt cd backend-api:feature-auth
 
-# Interactive fuzzy search
+# Interactive fuzzy search (current repo; -g for all repos)
 wt cd -i
+
+# Copy worktree path to clipboard
+wt cd --copy feature-auth
 
 # Run command in worktree
 wt exec -- git status                   # In current worktree
 wt exec myrepo:main -- code .
+```
+
+### Reviewing Changes
+
+```bash
+wt diff                        # What a PR would contain (vs origin/<default-branch>)
+wt diff myrepo:feature-auth    # Diff another worktree
+wt diff --working              # Uncommitted changes only
+wt diff --stat                 # Diffstat summary (or --name-only)
+wt diff --base origin/develop  # Different base
+wt diff --tool delta           # Use a specific pager
 ```
 
 ### Running Hooks Manually
@@ -344,7 +366,7 @@ wt note set "Ready for review" myrepo:feature
 ## Configuration
 
 Global config: `~/.wt/config.toml`
-Local config: `.wt.toml` (in bare repo root)
+Local config: `.wt.toml` (in repo root)
 
 ```bash
 wt config init               # Create default global config
@@ -375,7 +397,7 @@ base_ref = "remote"
 
 # Auto-fetch from origin before checkout (default: false)
 # Note: with base_ref="local" and an explicit --base, --fetch is skipped (warns) since fetch doesn't affect local refs
-auto_fetch = true
+# auto_fetch = false
 
 # Auto-set upstream tracking (default: false)
 # set_upstream = false
@@ -383,8 +405,13 @@ auto_fetch = true
 [prune]
 # Delete local branches after worktree removal (default: false)
 # delete_local_branches = false
-# Days before a worktree's commit age is highlighted as stale (default: 14, 0 = disabled)
+# Days before a worktree's commit age is highlighted as stale and eligible
+# for `wt prune --stale` (default: 14, 0 = disabled)
 # stale_days = 14
+
+[clone]
+# How `wt repo clone` and `wt pr checkout --clone` clone: "regular" (default) or "bare"
+# mode = "regular"
 ```
 
 **Base branch resolution (`--base` flag):**
@@ -469,7 +496,7 @@ Configure forge detection and multi-account auth for PR operations:
 ```toml
 [forge]
 default = "github"      # Default forge
-default_org = "my-company"  # Default org (allows: wt pr checkout repo 123)
+default_org = "my-company"  # Default org (allows: wt repo clone repo)
 
 [[forge.rules]]
 pattern = "company/*"
@@ -485,7 +512,7 @@ user = "work-account"  # Use specific gh account for matching repos
 
 ```toml
 [merge]
-strategy = "squash"  # squash, rebase, or merge
+strategy = "squash"  # squash, rebase, or merge (rebase is not supported on GitLab)
 ```
 
 ### Preserve Settings
@@ -538,7 +565,7 @@ Available color keys: `primary`, `accent`, `success`, `error`, `muted`, `normal`
 
 ### Per-Repo Config
 
-Place a `.wt.toml` file in your bare repo root to override global settings for that repo:
+Place a `.wt.toml` file in your repo root to override global settings for that repo:
 
 ```bash
 wt config init --local       # Creates .wt.toml in current repo root
@@ -554,6 +581,9 @@ worktree_format = "{branch}"  # replaces global
 base_ref = "local"            # replaces global
 auto_fetch = true             # replaces global
 set_upstream = true           # replaces global
+
+[clone]
+mode = "bare"                 # replaces global
 
 [merge]
 strategy = "rebase"           # replaces global
@@ -577,7 +607,7 @@ on = ["checkout"]
 enabled = false
 ```
 
-**Not overridable** (global-only): `default_sort`, `default_labels`, `forge.default_org`, `forge.rules`, `hosts`, `theme`.
+**Not overridable** (global-only): `default_sort`, `default_labels`, `prune.stale_days`, `forge.default_org`, `forge.rules`, `hosts`, `theme`.
 
 ## Writing Hooks
 
@@ -590,9 +620,9 @@ Hooks run with a working directory that depends on the command and phase:
 | Command | `before` CWD | `after` CWD |
 |---------|-------------|------------|
 | `checkout` | Worktree directory | Worktree directory |
-| `checkout:pr` (via `wt pr checkout`) | Repo root | Repo root |
+| `checkout:pr` (via `wt pr checkout`) | Worktree directory | Worktree directory |
 | `prune` | Worktree directory (still exists) | Repo root (worktree deleted) |
-| `merge` | Repo root | Repo root |
+| `merge` | Current directory | Repo root |
 
 For checkout hooks, the worktree already exists when before hooks run. A failing before hook aborts the command but does not roll back the worktree.
 
@@ -731,6 +761,9 @@ wt completion bash > ~/.local/share/bash-completion/completions/wt
 mkdir -p ~/.zfunc
 echo 'fpath=(~/.zfunc $fpath)' >> ~/.zshrc  # add once, before compinit
 wt completion zsh > ~/.zfunc/_wt
+
+# PowerShell - add to $PROFILE
+wt completion powershell | Out-String | Invoke-Expression
 ```
 
 ## Integration with gh-dash
@@ -745,7 +778,7 @@ keybindings:
       command: wt pr checkout {{.RepoName}} {{.PrNumber}}
 ```
 
-Press `O` to checkout PR → hooks auto-open your editor.
+Press `O` to checkout PR → hooks auto-open your editor. The repo must be registered; add `--clone` to clone unregistered repos.
 
 ## Development
 

@@ -7,7 +7,6 @@ package history
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"time"
 
@@ -30,12 +29,6 @@ type Entry struct {
 // History stores worktree access entries.
 type History struct {
 	Entries []Entry `json:"entries"`
-}
-
-// DefaultPath returns the default path to the history file.
-func DefaultPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".wt", "history.json")
 }
 
 // Load reads the history from disk at the given path.
@@ -151,19 +144,4 @@ func RecordAccess(path, repoName, branch, historyPath string) error {
 	}
 
 	return h.Save(historyPath)
-}
-
-// GetMostRecent returns the path of the most recently accessed worktree.
-// Returns empty string if no history exists.
-func GetMostRecent(historyPath string) (string, error) {
-	h, err := Load(historyPath)
-	if err != nil {
-		return "", err
-	}
-	if len(h.Entries) == 0 {
-		return "", nil
-	}
-
-	h.SortByRecency()
-	return h.Entries[0].Path, nil
 }

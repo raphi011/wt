@@ -25,7 +25,7 @@ func newCdCmd() *cobra.Command {
 	var global bool
 
 	cmd := &cobra.Command{
-		Use:     "cd [repo:]branch",
+		Use:     "cd [[scope:]branch]",
 		Short:   "Print worktree path for shell scripting",
 		GroupID: GroupUtility,
 		Args:    cobra.MaximumNArgs(1),
@@ -36,6 +36,7 @@ Use with shell command substitution: cd $(wt cd feature-x)
 The argument can be:
   - branch name: searches all repos, errors if ambiguous
   - repo:branch: finds exact worktree in specified repo
+  - label:branch: finds worktree in repos with that label, errors if ambiguous
 
 With no arguments, returns the most recently accessed worktree.
 

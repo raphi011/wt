@@ -141,45 +141,6 @@ func TestRecordAccess_MaxCap(t *testing.T) {
 	}
 }
 
-func TestGetMostRecent(t *testing.T) {
-	t.Parallel()
-
-	tmpDir := t.TempDir()
-	historyFile := filepath.Join(tmpDir, "history.json")
-
-	// Record two paths
-	if err := RecordAccess("/wt/old", "repo", "old", historyFile); err != nil {
-		t.Fatalf("RecordAccess failed: %v", err)
-	}
-	time.Sleep(10 * time.Millisecond)
-	if err := RecordAccess("/wt/new", "repo", "new", historyFile); err != nil {
-		t.Fatalf("RecordAccess failed: %v", err)
-	}
-
-	mostRecent, err := GetMostRecent(historyFile)
-	if err != nil {
-		t.Fatalf("GetMostRecent failed: %v", err)
-	}
-	if mostRecent != "/wt/new" {
-		t.Errorf("expected %q, got %q", "/wt/new", mostRecent)
-	}
-}
-
-func TestGetMostRecent_NoHistory(t *testing.T) {
-	t.Parallel()
-
-	tmpDir := t.TempDir()
-	historyFile := filepath.Join(tmpDir, "nonexistent.json")
-
-	mostRecent, err := GetMostRecent(historyFile)
-	if err != nil {
-		t.Fatalf("GetMostRecent failed: %v", err)
-	}
-	if mostRecent != "" {
-		t.Errorf("expected empty string, got %q", mostRecent)
-	}
-}
-
 func TestRemoveStale(t *testing.T) {
 	t.Parallel()
 
@@ -438,20 +399,5 @@ func TestSave_CreatesDirectory(t *testing.T) {
 
 	if _, err := os.Stat(historyFile); os.IsNotExist(err) {
 		t.Error("expected history file to be created")
-	}
-}
-
-func TestDefaultPath(t *testing.T) {
-	t.Parallel()
-
-	path := DefaultPath()
-	if path == "" {
-		t.Error("DefaultPath returned empty string")
-	}
-	if !filepath.IsAbs(path) {
-		t.Errorf("DefaultPath should return absolute path, got %q", path)
-	}
-	if filepath.Base(path) != "history.json" {
-		t.Errorf("expected filename 'history.json', got %q", filepath.Base(path))
 	}
 }

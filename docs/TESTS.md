@@ -1,6 +1,6 @@
 # Test Documentation
 
-Generated: 2026-03-01
+Generated: 2026-10-04
 
 ## Summary
 
@@ -12,30 +12,29 @@ Generated: 2026-03-01
 | [confighooks](#confighooks) | 4 |
 | [configinit](#configinit) | 1 |
 | [configshow](#configshow) | 2 |
-| [findignoredfiles](#findignoredfiles) | 1 |
-| [findsourceworktree](#findsourceworktree) | 1 |
+| [diff](#diff) | 12 |
 | [forge](#forge) | 9 |
-| [hook](#hook) | 6 |
+| [hook](#hook) | 9 |
 | [init](#init) | 4 |
-| [prcheckout](#prcheckout) | 5 |
+| [prcheckout](#prcheckout) | 13 |
 | [prcreate](#prcreate) | 3 |
 | [preservefiles](#preservefiles) | 1 |
 | [prmerge](#prmerge) | 3 |
 | [prview](#prview) | 2 |
-| [repoadd](#repoadd) | 6 |
-| [repoclone](#repoclone) | 10 |
+| [repoadd](#repoadd) | 7 |
+| [repoclone](#repoclone) | 11 |
 | [repoconvertbare](#repoconvertbare) | 17 |
 | [repoconvertregular](#repoconvertregular) | 4 |
 | [repolist](#repolist) | 5 |
 | [reporemove](#reporemove) | 5 |
-| [wt cd](#wt-cd) | 8 |
-| [wt checkout](#wt-checkout) | 45 |
+| [wt cd](#wt-cd) | 9 |
+| [wt checkout](#wt-checkout) | 62 |
 | [wt exec](#wt-exec) | 11 |
 | [wt label](#wt-label) | 13 |
 | [wt list](#wt-list) | 12 |
 | [wt note](#wt-note) | 8 |
-| [wt prune](#wt-prune) | 18 |
-| **Total** | **209** |
+| [wt prune](#wt-prune) | 35 |
+| **Total** | **267** |
 
 ## completebasebranches
 
@@ -79,17 +78,22 @@ Generated: 2026-03-01
 | `TestConfigShow_Basic` | Tests basic config display. |
 | `TestConfigShow_JSON` | Tests JSON output of config show. |
 
-## findignoredfiles
+## diff
 
 | Test | Description |
 |------|-------------|
-| `TestFindIgnoredFiles` | _No documentation_ |
-
-## findsourceworktree
-
-| Test | Description |
-|------|-------------|
-| `TestFindSourceWorktree` | _No documentation_ |
+| `TestDiff_CurrentWorktree` | Tests diffing the current worktree with default (full diff) mode. |
+| `TestDiff_ByBranch` | Tests diffing a specific worktree by branch name. |
+| `TestDiff_ScopedBranch` | Tests diffing with repo:branch targeting. |
+| `TestDiff_StatFlag` | Tests the --stat flag output. |
+| `TestDiff_NameOnlyFlag` | Tests the --name-only flag output. |
+| `TestDiff_WorkingFlag` | Tests diffing uncommitted changes. |
+| `TestDiff_CustomBase` | Tests the --base flag. |
+| `TestDiff_NotInGitRepo` | Tests error when running diff outside a git repo. |
+| `TestDiff_BranchNotFound` | Tests error when target branch doesn't exist. |
+| `TestDiff_InvalidBaseRef` | Tests error when --base ref doesn't exist. |
+| `TestDiff_BaseAndWorkingMutuallyExclusive` | Tests that --base and --working cannot be combined. |
+| `TestDiff_ToolFlag` | Tests the --tool flag for pager override. |
 
 ## forge
 
@@ -115,6 +119,9 @@ Generated: 2026-03-01
 | `TestHook_WithEnvVar` | Tests hook with environment variable. |
 | `TestHook_WithRepoBranchFormat` | Tests hook with repo:branch format. |
 | `TestHook_RepoBranchFormat_BranchNotFound` | Tests error when branch in repo:branch format is not found. |
+| `TestHook_BareBranchTarget` | Tests hook with unscoped branch as target. |
+| `TestHook_UnknownHookWithTarget` | Tests unknown hook error via the target code path. |
+| `TestHook_ActionPhasePlaceholders` | Tests that manual hook gets correct action/phase/trigger values. |
 
 ## init
 
@@ -133,7 +140,15 @@ Generated: 2026-03-01
 | `TestPrCheckout_RepoNotFound` | Tests error when specified repo doesn't exist. |
 | `TestPrCheckout_InvalidPRNumberWithRepo` | Tests error when second arg is not a valid PR number. |
 | `TestPrCheckout_HookNoHookMutuallyExclusive` | Tests that --hook and --no-hook cannot both be used. |
-| `TestPrCheckout_OrgRepoAlreadyInRegistry` | Tests error when org/repo format is used |
+| `TestPrCheckout_OrgRepoAlreadyInRegistry` | Tests that org/repo format finds a |
+| `TestPrCheckout_OrgRepoMatchesByRemote` | Tests that org/repo format finds a |
+| `TestPrCheckout_OrgRepoCaseInsensitiveMatch` | Tests that remote URL matching |
+| `TestPrCheckout_OrgRepoMultipleMatches` | Tests that an error is returned when |
+| `TestPrCheckout_OrgRepoNoMatchWithoutCloneFlag` | Tests that org/repo format |
+| `TestPrCheckout_OrgRepoWithCloneFlag` | Tests that --clone allows cloning |
+| `TestPrCheckout_OrgRepoMatchesByUpstreamRemote` | Tests that org/repo format |
+| `TestPrCheckout_CloneFlagWithExistingMatch` | Tests that --clone does not trigger |
+| `TestPrCheckout_AlreadyCheckedOut` | Tests that the pr checkout code path correctly |
 
 ## prcreate
 
@@ -168,6 +183,7 @@ Generated: 2026-03-01
 
 | Test | Description |
 |------|-------------|
+| `TestRepoAdd_CaseInsensitiveDuplicate` | Tests that `wt repo add` detects |
 | `TestRepoAdd_RegisterRepo` | Tests registering an existing git repo. |
 | `TestRepoAdd_WithLabels` | Tests registering a repo with labels. |
 | `TestRepoAdd_DuplicatePath` | Tests that adding the same path twice fails. |
@@ -179,7 +195,8 @@ Generated: 2026-03-01
 
 | Test | Description |
 |------|-------------|
-| `TestRepoClone_BareRepo` | Tests cloning a repository as bare (default behavior). |
+| `TestRepoClone_BareRepo` | Tests cloning a repository as bare with explicit --clone-mode bare. |
+| `TestRepoClone_DefaultRegularClone` | Tests that cloning without --clone-mode uses regular clone (default). |
 | `TestRepoClone_MasterDefaultBranch` | Tests cloning a repo with master as default branch. |
 | `TestRepoClone_WithLabels` | Tests cloning with labels. |
 | `TestRepoClone_WithCustomName` | Tests cloning with a custom display name. |
@@ -253,11 +270,13 @@ Generated: 2026-03-01
 | `TestCd_NoArgs_NoHistory` | Tests error when no args and no history. |
 | `TestCd_NoArgs_WithHistory` | Tests returning the most recent worktree. |
 | `TestCd_RecordsHistory` | Tests that cd writes to history after resolving a worktree. |
+| `TestCd_NoArgs_StaleHistory` | Tests that stale history entries are cleaned up. |
 
 ## wt checkout
 
 | Test | Description |
 |------|-------------|
+| `TestCheckout_NewBranchViaCaseInsensitivePath` | Tests that checkout works |
 | `TestCheckout_ExistingBranch` | Tests checking out an existing branch. |
 | `TestCheckout_NewBranch` | Tests creating a new branch. |
 | `TestCheckout_ByRepoName` | Tests checkout in a specific repo by name. |
@@ -269,8 +288,11 @@ Generated: 2026-03-01
 | `TestCheckout_LocalOnlyBranchNoUpstream` | Tests that local-only branches don't get upstream. |
 | `TestCheckout_SetUpstreamDisabled` | Tests that upstream is not set when disabled. |
 | `TestCheckout_NoOriginNoUpstream` | Tests checkout works without origin remote. |
-| `TestCheckout_AlreadyCheckedOut_ScopedTarget` | Tests checkout blocking with repo:branch syntax. |
-| `TestCheckout_AlreadyCheckedOut` | Tests that checkout fails for already checked-out branches. |
+| `TestCheckout_AlreadyCheckedOut_ScopedTarget` | Tests that checkout succeeds with repo:branch syntax |
+| `TestCheckout_AlreadyCheckedOut` | Tests that checkout succeeds for already checked-out branches |
+| `TestCheckout_AlreadyCheckedOut_RunsHooks` | Tests that opening an existing worktree runs hooks |
+| `TestCheckout_AlreadyCheckedOut_NoHook` | Tests that --no-hook is respected when opening |
+| `TestCheckout_AlreadyCheckedOut_RecordsHistory` | Tests that opening an existing worktree |
 | `TestCheckout_BaseBranch` | Tests creating a new branch from a specific base. |
 | `TestCheckout_Fetch` | Tests that --fetch fetches before creating branch. |
 | `TestCheckout_FetchExistingBranch` | Tests that --fetch fetches the target branch for existing branches. |
@@ -290,8 +312,8 @@ Generated: 2026-03-01
 | `TestCheckout_ExplicitUpstreamRemoteRef` | Tests --base with upstream/branch syntax. |
 | `TestCheckout_LocalBaseRefWithFetchWarning` | Tests that --fetch with local base_ref prints warning. |
 | `TestCheckout_ExplicitOriginRemoteRef` | Tests --base with origin/branch syntax. |
-| `TestCheckout_PreserveFiles` | Tests that listed paths are symlinked from repo root into new worktree. |
-| `TestCheckout_PreserveNoOverwrite` | Tests that preserve never overwrites existing files in target. |
+| `TestCheckout_PreserveFiles` | Tests that listed paths are symlinked from the |
+| `TestCheckout_PreserveNoOverwrite` | Tests that preserve never overwrites |
 | `TestCheckout_NoPreserveFlag` | Tests that --no-preserve skips file preservation. |
 | `TestCheckout_AutoStash_NoChanges` | Tests that --autostash with clean working tree succeeds. |
 | `TestCheckout_AutoStash_UntrackedFiles` | Tests that untracked files are stashed and popped. |
@@ -302,6 +324,20 @@ Generated: 2026-03-01
 | `TestCheckout_AutoStash_SecondaryWorktree` | Tests that --autostash works when the user |
 | `TestCheckout_AutoStash_Subdirectory` | Tests that --autostash works when the user |
 | `TestCheckout_AutoStash_LabelTarget` | Tests that --autostash errors when used |
+| `TestCheckout_NewBranchViaSymlink` | Tests that checkout -b works when the working |
+| `TestCheckout_BeforeHookAborts` | Tests that a failing before hook aborts checkout. |
+| `TestCheckout_BeforeHookAllows` | Tests that a passing before hook allows checkout. |
+| `TestCheckout_SubtypeCreate` | Tests that checkout:create matches new branch creation. |
+| `TestCheckout_SubtypeOpen` | Tests that checkout:open matches existing branch checkout. |
+| `TestCheckout_SubtypeCreateSkipsOpen` | Tests that checkout:create does NOT fire for existing branches. |
+| `TestCheckout_SubtypeOpenSkipsCreate` | Tests that checkout:open does NOT fire for new branches. |
+| `TestCheckout_AllTriggerMatchesCheckout` | Tests that on=["all"] matches checkout. |
+| `TestCheckout_ActionPhasePlaceholders` | Tests that {action}, {phase}, {trigger} are substituted correctly. |
+| `TestCheckout_MultipleHooksMatch` | Tests that multiple matching hooks all run. |
+| `TestCheckout_HookWorkingDirectory` | Tests that checkout hooks run in the worktree directory. |
+| `TestCheckout_HooksRunAlphabetically` | Tests that hooks run in alphabetical order by name. |
+| `TestCheckout_BaseBranch_LocalOnlyFallback` | Tests that --base falls back to |
+| `TestCheckout_BaseBranch_PrefersRemoteOverLocal` | Tests that --base uses the |
 
 ## wt exec
 
@@ -388,5 +424,22 @@ Generated: 2026-03-01
 | `TestPrune_UnscopedTarget_GlobalFlag` | Tests that `wt prune feature -f -g` |
 | `TestPrune_UnscopedTarget_NotInRepo_FallsBackToAll` | Tests that running from a |
 | `TestPrune_ForceDeleteBranch_MergedPRState` | Tests that branches with unmerged commits |
+| `TestPrune_StaleFlag_RemovesOldWorktrees` | Tests that --stale removes worktrees |
+| `TestPrune_StaleFlag_KeepsFreshWorktrees` | Tests that --stale keeps fresh worktrees. |
+| `TestPrune_StaleFlag_MergedAlwaysPruned` | Tests that merged PRs are always pruned |
+| `TestPrune_StaleFlag_DryRun` | Tests that --stale with --dry-run doesn't remove. |
+| `TestPrune_StaleFlag_Disabled` | Tests that StaleDays=0 disables stale pruning. |
+| `TestPrune_WithoutStaleFlag_KeepsStaleWorktrees` | Tests that stale worktrees |
 | `TestPrune_LocalConfigOverridesDeleteBranches` | Tests that a per-repo .wt.toml |
+| `TestPrune_AfterHookRuns` | Tests that a prune hook with on=["prune"] fires after pruning. |
+| `TestPrune_BeforeHookAborts` | Tests that a failing before:prune hook prevents removal. |
+| `TestPrune_BeforeHookCWD` | Tests that before:prune hooks run in the worktree directory. |
+| `TestPrune_AfterHookCWD` | Tests that after:prune hooks run in the repo root directory. |
+| `TestPrune_AllTriggerMatchesPrune` | Tests that on=["all"] matches prune. |
+| `TestPrune_Placeholders` | Tests that prune hooks get correct placeholder values. |
+| `TestPrune_NoHookFlag` | Tests that --no-hook suppresses prune hooks. |
+| `TestPrune_ExplicitHookFlag` | Tests that --hook runs only the named hook. |
+| `TestPrune_LocallyMergedBranch_RequiresForce` | Tests that a branch merged via |
+| `TestPrune_UnmergedBranch_RequiresForce` | Tests that unmerged branches require |
+| `TestPrune_MixedTargets_RequiresForce` | Tests that mixed merged/unmerged |
 

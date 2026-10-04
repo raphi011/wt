@@ -62,9 +62,8 @@ func TestWizardAndCdTerminalLayouts(t *testing.T) {
 }
 
 func TestLongSummaryScrollsAndReturnsToStep(t *testing.T) {
-	input := steps.NewTextInput("text", "Text", "Enter text", "")
-	input.SetCharLimit(1000)
-	input.SetValue(strings.Repeat("summary-value 界é👩‍💻 ", 7) + "final-value")
+	value := strings.Repeat("summary-value 界é👩‍💻 ", 7) + "final-value"
+	input := steps.NewSingleSelect("text", "Text", "Select text", []framework.Option{{Label: value, Value: value}})
 	w := framework.NewWizard("Summary test").AddStep(input)
 	w.Init()
 	w.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
@@ -86,8 +85,8 @@ func TestLongSummaryScrollsAndReturnsToStep(t *testing.T) {
 		t.Fatal("summary overscroll trapped the cursor")
 	}
 	w.Update(tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModAlt})
-	if w.CurrentStepID() != "text" || input.GetValue() == "" {
-		t.Fatal("back navigation lost input")
+	if w.CurrentStepID() != "text" || input.GetSelectedIndex() != 0 {
+		t.Fatal("back navigation lost selection")
 	}
 }
 

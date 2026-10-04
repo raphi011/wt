@@ -12,7 +12,7 @@ func TestInit_DefaultTheme(t *testing.T) {
 	// Initialize with empty config (should use default theme)
 	Init(config.ThemeConfig{})
 
-	theme := Current()
+	theme := currentTheme
 
 	// Verify default colors are set
 	if theme.Primary != lipgloss.Color("62") {
@@ -43,7 +43,7 @@ func TestInit_PresetTheme(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			Init(config.ThemeConfig{Name: tt.preset, Mode: tt.mode})
 
-			theme := Current()
+			theme := currentTheme
 			if theme.Primary != tt.expectedColor {
 				t.Errorf("expected primary color %v for theme %s mode %s, got %v",
 					tt.expectedColor, tt.preset, tt.mode, theme.Primary)
@@ -61,7 +61,7 @@ func TestInit_CustomColors(t *testing.T) {
 		Accent:  "#00ff00",
 	})
 
-	theme := Current()
+	theme := currentTheme
 
 	if theme.Primary != lipgloss.Color("#ff0000") {
 		t.Errorf("expected custom primary color #ff0000, got %v", theme.Primary)
@@ -81,7 +81,7 @@ func TestInit_PresetWithOverride(t *testing.T) {
 		Accent: "#123456",
 	})
 
-	theme := Current()
+	theme := currentTheme
 
 	// Primary should be dracula's purple
 	if theme.Primary != lipgloss.Color("#bd93f9") {
@@ -95,37 +95,6 @@ func TestInit_PresetWithOverride(t *testing.T) {
 
 	// Reset to default
 	Init(config.ThemeConfig{})
-}
-
-func TestGetPreset(t *testing.T) {
-	// Valid preset
-	preset := GetPreset("dracula")
-	if preset == nil {
-		t.Error("expected dracula preset to exist")
-	}
-
-	// Invalid preset
-	preset = GetPreset("nonexistent")
-	if preset != nil {
-		t.Error("expected nil for nonexistent preset")
-	}
-}
-
-func TestPresetNames(t *testing.T) {
-	names := PresetNames()
-
-	// Theme families (not individual variants)
-	expected := []string{"none", "default", "dracula", "nord", "gruvbox", "catppuccin"}
-
-	if len(names) != len(expected) {
-		t.Errorf("expected %d preset names, got %d", len(expected), len(names))
-	}
-
-	for i, name := range expected {
-		if names[i] != name {
-			t.Errorf("expected preset name %s at index %d, got %s", name, i, names[i])
-		}
-	}
 }
 
 func TestApplyTheme_UpdatesGlobalStyles(t *testing.T) {
@@ -151,7 +120,7 @@ func TestInit_UnknownThemeFallsBackToDefault(t *testing.T) {
 	// Unknown theme should fall back to default (with warning logged to stderr)
 	Init(config.ThemeConfig{Name: "nonexistent-theme"})
 
-	theme := Current()
+	theme := currentTheme
 
 	// Should use default colors
 	if theme.Primary != lipgloss.Color("62") {
@@ -169,7 +138,7 @@ func TestInit_DarkOnlyThemeFallsBackToDark(t *testing.T) {
 	// Dracula only has dark mode - requesting light should fall back to dark
 	Init(config.ThemeConfig{Name: "dracula", Mode: "light"})
 
-	theme := Current()
+	theme := currentTheme
 
 	// Should use dracula dark colors (no light variant available)
 	if theme.Primary != lipgloss.Color("#bd93f9") {
@@ -200,7 +169,7 @@ func TestInit_ThemeModeVariants(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			Init(config.ThemeConfig{Name: tt.themeName, Mode: tt.mode})
 
-			theme := Current()
+			theme := currentTheme
 			if theme.Primary != tt.expectedColor {
 				t.Errorf("expected %s %s primary %v, got %v",
 					tt.themeName, tt.mode, tt.expectedColor, theme.Primary)
@@ -216,7 +185,7 @@ func TestInit_InvalidModeFallsBackToAuto(t *testing.T) {
 	// Invalid mode should log warning and use auto (falls back to dark in non-TTY)
 	Init(config.ThemeConfig{Name: "nord", Mode: "invalid"})
 
-	theme := Current()
+	theme := currentTheme
 
 	// In test environment (non-TTY), auto detects as dark
 	// Should be one of the nord variants (test passes if it doesn't crash)
@@ -232,7 +201,7 @@ func TestInit_NoneTheme(t *testing.T) {
 	// None theme should use NoColor{} for all colors
 	Init(config.ThemeConfig{Name: "none"})
 
-	theme := Current()
+	theme := currentTheme
 
 	// All colors should be lipgloss.NoColor{}
 	if theme.Primary != (lipgloss.NoColor{}) {
@@ -259,9 +228,9 @@ func TestInit_NoneTheme(t *testing.T) {
 
 	// Mode shouldn't matter - both light and dark resolve to same theme
 	Init(config.ThemeConfig{Name: "none", Mode: "light"})
-	themeLight := Current()
+	themeLight := currentTheme
 	Init(config.ThemeConfig{Name: "none", Mode: "dark"})
-	themeDark := Current()
+	themeDark := currentTheme
 
 	if themeLight.Primary != themeDark.Primary {
 		t.Errorf("expected same theme for light and dark modes")
@@ -274,22 +243,22 @@ func TestInit_NoneTheme(t *testing.T) {
 func TestInteractiveAutoThemePreservesOverrides(t *testing.T) {
 	defer Init(config.ThemeConfig{})
 	Init(config.ThemeConfig{Name: "nord", Mode: "auto", Accent: "#123456"})
-	if Current().Primary != NordTheme.Primary || BackgroundCommand() == nil {
+	if currentTheme.Primary != NordTheme.Primary || BackgroundCommand() == nil {
 		t.Fatal("auto startup must use dark fallback and request async detection")
 	}
 	ApplyBackground(false)
-	if Current().Primary != NordLightTheme.Primary || Current().Accent != lipgloss.Color("#123456") {
+	if currentTheme.Primary != NordLightTheme.Primary || currentTheme.Accent != lipgloss.Color("#123456") {
 		t.Fatal("light response lost variant or custom overrides")
 	}
 	ApplyBackground(true)
-	if Current().Primary != NordTheme.Primary {
+	if currentTheme.Primary != NordTheme.Primary {
 		t.Fatal("dark response was ignored")
 	}
 	for _, mode := range []string{"light", "dark"} {
 		Init(config.ThemeConfig{Name: "nord", Mode: mode})
-		before := Current()
+		before := currentTheme
 		ApplyBackground(mode == "light")
-		if BackgroundCommand() != nil || Current() != before {
+		if BackgroundCommand() != nil || currentTheme != before {
 			t.Fatalf("explicit %s mode changed after terminal reply", mode)
 		}
 	}

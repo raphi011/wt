@@ -156,32 +156,6 @@ func ListRemotes(ctx context.Context, repoPath string) ([]string, error) {
 	return remotes, nil
 }
 
-// GetMainRepoPath returns the main repository path from a worktree path.
-// Uses git commands rather than reading .git files directly.
-func GetMainRepoPath(worktreePath string) (string, error) {
-	return GetMainRepoPathWithContext(context.Background(), worktreePath)
-}
-
-// GetMainRepoPathWithContext returns the main repository path from a worktree path.
-// Uses git rev-parse --git-common-dir to find the shared git directory.
-func GetMainRepoPathWithContext(ctx context.Context, worktreePath string) (string, error) {
-	output, err := outputGit(ctx, worktreePath, "rev-parse", "--git-common-dir")
-	if err != nil {
-		return "", fmt.Errorf("not a git repository: %w", err)
-	}
-
-	gitCommonDir := strings.TrimSpace(string(output))
-
-	// Handle relative paths
-	if !filepath.IsAbs(gitCommonDir) {
-		gitCommonDir = filepath.Join(worktreePath, gitCommonDir)
-	}
-	gitCommonDir = filepath.Clean(gitCommonDir)
-
-	// The main repo is the parent of the git common directory
-	return filepath.Dir(gitCommonDir), nil
-}
-
 // GetUpstreamBranch returns the remote branch name for a local branch.
 // Returns empty string if no upstream is configured.
 func GetUpstreamBranch(ctx context.Context, repoPath, branch string) string {

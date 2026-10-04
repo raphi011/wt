@@ -42,7 +42,7 @@ If no target is specified, uses the current worktree's branch.`,
 
 func newNoteSetCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:               "set <text> [scope:]branch",
+		Use:               "set <text> [[scope:]branch]",
 		Short:             "Set a note on a branch",
 		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: completeNoteArg,
