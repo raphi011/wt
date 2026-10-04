@@ -349,9 +349,6 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 	cmd.Flags().BoolVarP(&deleteFiles, "delete", "D", false, "Also delete repo and worktrees from disk")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force deletion without confirmation")
 
-	// Completions
-	cmd.RegisterFlagCompletionFunc("repository", completeRepoNames)
-
 	return cmd
 }
 
