@@ -9,7 +9,7 @@ Last updated: 2026-10-04
 - **Phase 5 implementation and benchmarks are complete**, delivered through [PR #178](https://github.com/raphi011/wt/pull/178) from `perf/refresh-completions`; results are recorded below. Consult the PR for merge/CI status. Human terminal/link compatibility inspection remains pending; do not reimplement completed phases.
 - Both PR CI and the post-merge [main CI run](https://github.com/raphi011/wt/actions/runs/37185988449) passed, including unit and live forge integration tests in CI. PR patch coverage passed at 82.23%; CI instruments cross-package calls with `-coverpkg=./...`.
 - Local race tests, vet, build, module verification, completion checks, and PTY probes passed. Human terminal visual/link-click checks remain pending; automated PTY checks do not replace those checks.
-- Unrelated local changes were intentionally excluded: deletions of `docs/context-adoption.md`, `docs/git-merge-detection.md`, the two interactive-hooks documents under `docs/superpowers/`, and untracked `reddit-post.md`. Preserve these unless the user explicitly includes them in later work.
+- Untracked local `reddit-post.md` was intentionally excluded. Preserve it unless the user explicitly includes it in later work.
 
 ## Scope and sequencing
 
