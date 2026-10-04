@@ -1,6 +1,15 @@
 # Dependency refresh and performance/UI improvement plan
 
 Date: 2026-10-03
+Last updated: 2026-10-04
+
+## Handoff for the next conversation
+
+- Phases 0–4 are complete and merged into `main` through [PR #177](https://github.com/raphi011/wt/pull/177), squash commit `fb78ed7ae2c3305de721dd77240357867209b343`. Local `main` and `origin/main` matched after delivery.
+- **Phase 5 implementation and benchmarks are complete**, delivered through [PR #178](https://github.com/raphi011/wt/pull/178) from `perf/refresh-completions`; results are recorded below. Consult the PR for merge/CI status. Human terminal/link compatibility inspection remains pending; do not reimplement completed phases.
+- Both PR CI and the post-merge [main CI run](https://github.com/raphi011/wt/actions/runs/37185988449) passed, including unit and live forge integration tests in CI. PR patch coverage passed at 82.23%; CI instruments cross-package calls with `-coverpkg=./...`.
+- Local race tests, vet, build, module verification, completion checks, and PTY probes passed. Human terminal visual/link-click checks remain pending; automated PTY checks do not replace those checks.
+- Unrelated local changes were intentionally excluded: deletions of `docs/context-adoption.md`, `docs/git-merge-detection.md`, the two interactive-hooks documents under `docs/superpowers/`, and untracked `reddit-post.md`. Preserve these unless the user explicitly includes them in later work.
 
 ## Scope and sequencing
 
@@ -204,11 +213,11 @@ Review findings: **5, 6**.
 
 Files: `cmd/wt/pr_refresh.go`, `cmd/wt/completions.go`, `internal/git/load.go`, `internal/git/repo.go`, and both forge implementations.
 
-- [ ] Preserve upstream branch names from the existing batch branch-config read; remove the per-worktree `git config` lookup during refresh.
-- [ ] Check forge availability/authentication once per effective forge/host/account for a refresh invocation. Keep tokens in memory only and avoid logging credentials.
-- [ ] Reuse resolved forge clients/configuration while preserving multi-account and self-hosted behavior.
-- [ ] Load label-scoped completions with bounded concurrency, stable aggregation, sorting, and deduplication. Reuse `ListWorktreesForRepos` where possible; avoid the full metadata loader for completion.
-- [ ] Preserve partial-success behavior and stop scheduling unnecessary work after cancellation.
+- [x] Preserve upstream branch names from the existing batch branch-config read; remove the per-worktree `git config` lookup during refresh.
+- [x] Check forge availability/authentication once per effective forge/host/account for a refresh invocation. Keep tokens in memory only and avoid logging credentials.
+- [x] Reuse resolved forge clients/configuration while preserving multi-account and self-hosted behavior.
+- [x] Load label-scoped completions with bounded concurrency, stable aggregation, sorting, and deduplication. Reuse `ListWorktreesForRepos` where possible; avoid the full metadata loader for completion.
+- [x] Preserve partial-success behavior and stop scheduling unnecessary work after cancellation.
 
 Acceptance and measurement:
 
@@ -216,6 +225,38 @@ Acceptance and measurement:
 - Verify local/upstream branch-name differences, missing tools, failed authentication, absent repositories, and cancellation.
 - Measure label completion across 1, 10, and 50 local fixture repos and PR refresh with deterministic fake latency. Record median/p95 duration and subprocess counts before/after on the same machine.
 - Assert the concurrency ceiling and identical completion contents despite randomized completion order. Keep real network timings separate from deterministic regression checks.
+
+### Phase 5 implementation results
+
+Implemented on 2026-10-04:
+
+- The existing batched branch-config read retains upstream names, including names different from local branches. Full worktree loading carries them in an internal `UpstreamBranch` field, excluded from JSON. Refresh no longer runs a per-worktree Git config command; cache keys still use local branch identity.
+- A refresh-scoped forge session reuses clients, successful authentication, failed authentication, and GitHub account tokens by effective forge/host/account. GitHub checks target the host and active credentials, with configured account tokens supplied in memory; enterprise requests receive the enterprise token variable. GitLab checks and requests target their host and retain the existing CLI-managed account behavior. Conventional `github.com-<account>` SSH aliases continue using github.com unless explicitly mapped as a host. Sessions are discarded after each invocation, so subsequent refreshes retry authentication.
+- Label-scoped cd/worktree completions reuse `ListWorktreesForRepos`. Checkout completions use a lightweight branch/worktree loader, excluding checked-out branches without loading notes, origins, commit metadata, or PRs. Both use at most eight repository loaders, preserve successful repositories when another fails, and sort/deduplicate their results.
+- Repository loaders and refresh stop scheduling on cancellation, and subprocesses retain the caller's context. Refresh bounds workers before launching them and returns failures in stable sorted order. Successful PR results remain cached when another query fails.
+- Added six default regression tests and one opt-in measurement test. Fake executables verify five authentication contexts across public/self-hosted GitHub/GitLab and two configured GitHub accounts, correct token environments, SSH alias reuse, auth failure caching, partial query failure, missing tools, merged/no-origin/no-upstream skips, local/upstream name differences, and cancellation before/during loading. Ten repositories with three worktrees each require ten batch upstream reads and thirty PR queries. Completion tests verify sorted/deduplicated contents, partial results, varying completion order, and the eight-process ceiling across fifty repositories.
+
+#### Deterministic before/after measurements
+
+macOS arm64, Go 1.26.0, same machine; twenty samples per case, each fake Git/gh/glab invocation sleeps 10 ms. Numbers include process startup and scheduling. Median uses the upper middle sample; p95 uses the nineteenth sorted sample. Baseline is `fb78ed7` extracted into a temporary source directory; both versions use isolated repository directories, the same registry/worktree/branch contents, and fake executables. Content assertions require matching completions and successful refreshes. Measurements run sequentially without race instrumentation. No live network operations are included.
+
+Each refresh fixture has one eligible worktree per repository and one shared configured GitHub account. Repository metadata loading is excluded from refresh timing; a separate regression measures its batch upstream reads. Completion counts are unchanged because the improvement comes from concurrent loading; refresh changes from four subprocesses per branch (auth status, upstream config, account token, PR query) to one query per branch plus two shared auth/token subprocesses.
+
+| Operation | Repos | Before median / p95 (ms) | After median / p95 (ms) | Subprocesses before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Label cd completion | 1 | 23.31 / 35.76 | 22.67 / 30.80 | 1 → 1 |
+| Label cd completion | 10 | 198.76 / 212.75 | 39.31 / 40.65 | 10 → 10 |
+| Label cd completion | 50 | 1034.32 / 1059.74 | 143.30 / 148.12 | 50 → 50 |
+| Label checkout completion | 1 | 41.99 / 45.89 | 43.23 / 45.09 | 2 → 2 |
+| Label checkout completion | 10 | 411.65 / 422.51 | 77.67 / 79.71 | 20 → 20 |
+| Label checkout completion | 50 | 2092.89 / 2152.50 | 284.70 / 287.99 | 100 → 100 |
+| PR refresh | 1 | 85.05 / 100.03 | 65.77 / 74.75 | 4 → 3 |
+| PR refresh | 10 | 153.70 / 156.35 | 78.99 / 81.93 | 40 → 12 |
+| PR refresh | 50 | 754.80 / 765.02 | 227.14 / 236.12 | 200 → 52 |
+
+Reproduce the current measurements with `WT_PERF_MEASURE=1 go test ./cmd/wt -run '^TestPerformanceMeasurements$' -v`. The opt-in test is skipped in normal test runs. Small single-repository timing differences reflect process/scheduler variance; these measurements establish bounded scheduling and reduced subprocess work, not real-network speed guarantees.
+
+Validation: `go test -race ./...`, `go vet ./...`, `go build ./...`, `go mod verify`, and `git diff --check` passed. Shell completion generation/syntax and redirected command output were checked on the completed build. Live forge mutation/network timing and human terminal/link compatibility checks were not run in this phase. Release workflow Go setup now matches CI and the module’s Go 1.26 baseline. Phase 5 delivery is tracked in [PR #178](https://github.com/raphi011/wt/pull/178); human terminal/link checks remain pending.
 
 ## Delivery and validation
 
@@ -234,7 +275,7 @@ Phases 0–4 are included in this delivery; phase 5 remains planned. Final revie
 - Re-ran 36 wizard PTY cases, the display-only progress stdin probe, and 36 table capability/theme/width cases with redirected output and JSON checks; all passed.
 - One 123-case local command integration run passed with race detection and eight parallel test slots. A three-run repeat passed 368 cases and failed one during fixture setup because `/usr/bin/git` (Apple Git 2.50.1) segfaulted in `git config user.email`; that case passed in the other two repetitions. A subsequent single-slot run passed all 123 selected cases with race detection. Live forge mutation tests were not invoked locally.
 
-The dependency baseline and behavior changes are committed separately on the feature branch and are being delivered through a squash PR. Human terminal/click compatibility checks and phase 5 benchmarks remain pending.
+The dependency baseline and behavior changes were committed separately on the feature branch, then squash-merged through PR #177 as `fb78ed7`. PR CI and post-merge main CI passed; the final PR patch coverage was 82.23%. Human terminal/click compatibility checks remain pending; completed phase 5 benchmarks are recorded above.
 
 ### Dependency refresh results
 

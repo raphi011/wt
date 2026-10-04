@@ -17,6 +17,7 @@ import (
 // Note: glab doesn't support --user flag like gh, so user field in config is ignored
 type GitLab struct {
 	ForgeConfig *config.ForgeConfig
+	host        string
 }
 
 // Name returns "gitlab"
@@ -31,7 +32,14 @@ func (g *GitLab) Check(ctx context.Context) error {
 		return fmt.Errorf("glab not found: please install GitLab CLI (https://gitlab.com/gitlab-org/cli)")
 	}
 
-	c := exec.CommandContext(ctx, "glab", "auth", "status")
+	args := []string{"auth", "status"}
+	if g.host != "" {
+		args = append(args, "--hostname", g.host)
+	}
+	c := exec.CommandContext(ctx, "glab", args...)
+	if g.host != "" {
+		c.Env = append(os.Environ(), "GITLAB_HOST="+g.host)
+	}
 	if out, err := c.CombinedOutput(); err != nil {
 		errMsg := string(out)
 		if strings.Contains(errMsg, "not logged") || strings.Contains(errMsg, "no token") {
@@ -46,6 +54,9 @@ func (g *GitLab) Check(ctx context.Context) error {
 // runGlab runs a glab command and returns error
 func (g *GitLab) runGlab(ctx context.Context, args ...string) error {
 	c := exec.CommandContext(ctx, "glab", args...)
+	if g.host != "" {
+		c.Env = append(os.Environ(), "GITLAB_HOST="+g.host)
+	}
 	c.Stderr = os.Stderr
 	return c.Run()
 }
@@ -53,6 +64,9 @@ func (g *GitLab) runGlab(ctx context.Context, args ...string) error {
 // outputGlab runs a glab command and returns output
 func (g *GitLab) outputGlab(ctx context.Context, args ...string) ([]byte, error) {
 	c := exec.CommandContext(ctx, "glab", args...)
+	if g.host != "" {
+		c.Env = append(os.Environ(), "GITLAB_HOST="+g.host)
+	}
 	out, err := c.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -317,6 +331,9 @@ func (g *GitLab) ViewPR(ctx context.Context, repoURL string, number int, web boo
 		args = append(args, "--web")
 	}
 	c := exec.CommandContext(ctx, "glab", args...)
+	if g.host != "" {
+		c.Env = append(os.Environ(), "GITLAB_HOST="+g.host)
+	}
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	return c.Run()
