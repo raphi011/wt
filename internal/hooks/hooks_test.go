@@ -1012,44 +1012,6 @@ func TestRunSingle_Failure(t *testing.T) {
 	}
 }
 
-func TestRunAllNonFatal_EmptyMatches(t *testing.T) {
-	t.Parallel()
-
-	var buf bytes.Buffer
-	ctx := logCtx(&buf)
-	hookCtx := Context{WorktreeDir: t.TempDir()}
-
-	RunAllNonFatal(ctx, nil, hookCtx, hookCtx.WorktreeDir)
-
-	if !strings.Contains(buf.String(), "No hooks matched") {
-		t.Errorf("output = %q, want to contain 'No hooks matched'", buf.String())
-	}
-}
-
-func TestRunAllNonFatal_WithFailures(t *testing.T) {
-	t.Parallel()
-
-	var buf bytes.Buffer
-	ctx := logCtx(&buf)
-	failHook := config.Hook{Command: "sh -c 'exit 1'"}
-	successHook := config.Hook{Command: "echo ok", Description: "OK"}
-	matches := []HookMatch{
-		{Hook: &failHook, Name: "failing"},
-		{Hook: &successHook, Name: "passing"},
-	}
-	hookCtx := Context{WorktreeDir: t.TempDir()}
-
-	RunAllNonFatal(ctx, matches, hookCtx, hookCtx.WorktreeDir)
-
-	out := buf.String()
-	if !strings.Contains(out, "Warning: hook \"failing\" failed") {
-		t.Errorf("output = %q, want warning for failing hook", out)
-	}
-	if !strings.Contains(out, "Running OK...") {
-		t.Errorf("output = %q, want running message for passing hook", out)
-	}
-}
-
 func TestRunForEach_LogsFailuresPerBranch(t *testing.T) {
 	t.Parallel()
 
@@ -1081,7 +1043,7 @@ func TestRunForEach_EmptyMatches(t *testing.T) {
 
 	RunForEach(ctx, nil, hookCtx, hookCtx.WorktreeDir)
 
-	// RunForEach does NOT print "No hooks matched" (unlike RunAllNonFatal)
+	// RunForEach does NOT print "No hooks matched"
 	if strings.Contains(buf.String(), "No hooks matched") {
 		t.Errorf("RunForEach should not print 'No hooks matched', got %q", buf.String())
 	}

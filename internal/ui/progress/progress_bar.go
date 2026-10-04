@@ -109,9 +109,6 @@ type Option func(*ProgressBar)
 // WithContext stops the display and its pending commands on cancellation.
 func WithContext(ctx context.Context) Option { return func(p *ProgressBar) { p.ctx = ctx } }
 
-// WithOutput selects the diagnostic destination (stderr by default).
-func WithOutput(output io.Writer) Option { return func(p *ProgressBar) { p.output = output } }
-
 // NewProgressBar creates a progress bar with plain diagnostics for non-TTY output.
 func NewProgressBar(total int, message string, options ...Option) *ProgressBar {
 	p := &ProgressBar{
@@ -236,11 +233,6 @@ func (p *ProgressBar) Stop() {
 
 	// Clear to stderr (UI output shouldn't pollute stdout for piping)
 	fmt.Fprint(p.output, "\r\033[K")
-}
-
-// Total returns the total count for the progress bar.
-func (p *ProgressBar) Total() int {
-	return p.total
 }
 
 func (p *ProgressBar) writePlain(current int, message string) {

@@ -352,33 +352,6 @@ func TestFilterableListStep_Filtering(t *testing.T) {
 }
 ```
 
-### TextInputStep Tests
-
-```go
-func TestTextInputStep_Input(t *testing.T) {
-    t.Run("typing updates value", func(t *testing.T) {
-        step := NewTextInput("test", "Test", "Enter:", "")
-        step.Init() // IMPORTANT: Focus the input first!
-
-        updateStep(t, step, keyMsg("h"))
-        updateStep(t, step, keyMsg("i"))
-
-        if step.GetValue() != "hi" {
-            t.Errorf("Value = %q, want %q", step.GetValue(), "hi")
-        }
-    })
-
-    t.Run("validation prevents empty submit", func(t *testing.T) {
-        step := NewTextInput("test", "Test", "Enter:", "")
-
-        _, result := updateStep(t, step, keyMsg("enter"))
-        if result == framework.StepSubmitIfReady {
-            t.Error("Should not submit with empty value")
-        }
-    })
-}
-```
-
 ## Wizard Orchestration Tests
 
 Use a mock step for testing wizard behavior:
@@ -495,12 +468,6 @@ func TestWizard_Navigation(t *testing.T) {
 - [ ] Multi-select: space toggles, SetMinMax enforces
 - [ ] Create-from-filter: appears when no exact match
 - [ ] ClearInput(): clears filter
-
-### TextInputStep
-- [ ] Input: typing works (after Init/Focus)
-- [ ] Validation: custom validators, empty rejection
-- [ ] Submission: enter submits, right advances
-- [ ] ClearInput(): clears text
 
 ### Wizard
 - [ ] Navigation: enter advances, left goes back

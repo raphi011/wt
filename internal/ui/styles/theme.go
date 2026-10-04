@@ -158,11 +158,6 @@ var themeFamilies = map[string]themeFamily{
 var currentTheme = DefaultTheme
 var themeConfig config.ThemeConfig
 
-// Current returns the current theme
-func Current() Theme {
-	return currentTheme
-}
-
 // Init initializes the theme from config
 // Call this after loading config and before displaying any UI
 func Init(cfg config.ThemeConfig) {
@@ -295,23 +290,6 @@ func applyTheme(t Theme) {
 		Foreground(t.Accent).
 		Bold(true).
 		Underline(true)
-}
-
-// GetPreset returns a theme preset by name, or nil if not found
-// For theme families with variants, returns the dark variant by default
-func GetPreset(name string) *Theme {
-	if family, ok := themeFamilies[name]; ok {
-		if family.Dark != nil {
-			return family.Dark
-		}
-		return family.Light
-	}
-	return nil
-}
-
-// PresetNames returns a list of available preset names (theme families)
-func PresetNames() []string {
-	return config.ValidThemeNames
 }
 
 // BackgroundCommand requests auto-theme detection inside the interactive loop.

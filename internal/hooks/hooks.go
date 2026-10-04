@@ -141,24 +141,6 @@ func hookMatchesCommand(hook config.Hook, cmdType CommandType, subtype, phase st
 	return false
 }
 
-// RunAllNonFatal runs all matched hooks, logging failures as warnings instead of returning errors.
-// Hooks run in alphabetical order by name (determined by SelectHooks).
-// Prints "No hooks matched" if matches is empty.
-func RunAllNonFatal(goCtx context.Context, matches []HookMatch, ctx Context, workDir string) {
-	l := log.FromContext(goCtx)
-
-	if len(matches) == 0 {
-		l.Printf("No hooks matched\n")
-		return
-	}
-
-	for _, match := range matches {
-		if err := runHook(goCtx, match.Name, match.Hook, ctx, workDir); err != nil {
-			l.Printf("Warning: hook %q failed: %v\n", match.Name, err)
-		}
-	}
-}
-
 // RunForEach runs all matched hooks for a single item (e.g., one worktree in a batch).
 // Hooks run in alphabetical order by name (determined by SelectHooks).
 // Logs failures as warnings with branch context. Does NOT print "no hooks matched".

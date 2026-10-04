@@ -39,13 +39,6 @@ func WorktreeTableRow(wt git.Worktree, staleDays int, hyperlinks bool) []string 
 	return []string{wt.RepoName, wt.Branch, commit, age, pr, wt.Note}
 }
 
-// RenderTable creates a formatted table with proper column alignment.
-// Headers and rows are rendered using lipgloss/table which automatically
-// calculates column widths based on content. No borders are rendered.
-func RenderTable(headers []string, rows [][]string) string {
-	return RenderTableAtWidth(headers, rows, 0)
-}
-
 // RenderTableAtWidth constrains terminal tables. Width zero preserves the full,
 // stable table for pipes and files. JSON is rendered separately by callers.
 func RenderTableAtWidth(headers []string, rows [][]string, width int) string {

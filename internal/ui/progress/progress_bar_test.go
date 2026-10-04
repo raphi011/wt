@@ -12,8 +12,8 @@ import (
 
 func TestProgressBar_New(t *testing.T) {
 	pb := NewProgressBar(100, "Test message")
-	if pb.Total() != 100 {
-		t.Errorf("expected total 100, got %d", pb.Total())
+	if pb.total != 100 {
+		t.Errorf("expected total 100, got %d", pb.total)
 	}
 }
 
@@ -117,30 +117,11 @@ func TestProgressBarModel_Update_QuitState(t *testing.T) {
 	}
 }
 
-func TestProgressBar_Total(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		total int
-	}{
-		{0},
-		{1},
-		{100},
-		{999},
-	}
-
-	for _, tt := range tests {
-		pb := NewProgressBar(tt.total, "msg")
-		if pb.Total() != tt.total {
-			t.Errorf("Total() = %d, want %d", pb.Total(), tt.total)
-		}
-	}
-}
-
 func TestProgressPlainOutputAndCancellation(t *testing.T) {
 	var output bytes.Buffer
 	ctx, cancel := context.WithCancel(context.Background())
-	pb := NewProgressBar(2, "Fetching", WithOutput(&output), WithContext(ctx))
+	pb := NewProgressBar(2, "Fetching", WithContext(ctx))
+	pb.output = &output
 	pb.Start()
 	pb.SetProgress(1, "Fetched first")
 	cancel()

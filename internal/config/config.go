@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 
 	"github.com/BurntSushi/toml"
 )
@@ -432,11 +431,6 @@ var ValidThemeNames = []string{"none", "default", "dracula", "nord", "gruvbox", 
 
 // ValidThemeModes is the list of supported theme modes
 var ValidThemeModes = []string{"auto", "light", "dark"}
-
-// isValidThemeName checks if the theme name is a known preset
-func isValidThemeName(name string) bool {
-	return slices.Contains(ValidThemeNames, name)
-}
 
 // matchPattern checks if repoSpec matches the pattern
 // Supports simple glob patterns: * matches any sequence of characters

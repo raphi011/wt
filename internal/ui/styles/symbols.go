@@ -32,50 +32,16 @@ var nerdfontSymbols = Symbols{
 	PRDraft:  "\uebdb", // nf-oct-git_pull_request_draft
 }
 
-// useNerdfont tracks whether nerd font symbols are enabled
-var useNerdfont bool
-
 // currentSymbols holds the active symbol set
 var currentSymbols = defaultSymbols
 
 // SetNerdfont enables or disables nerd font symbols
 func SetNerdfont(enabled bool) {
-	useNerdfont = enabled
 	if enabled {
 		currentSymbols = nerdfontSymbols
 	} else {
 		currentSymbols = defaultSymbols
 	}
-}
-
-// NerdfontEnabled returns whether nerd font symbols are enabled
-func NerdfontEnabled() bool {
-	return useNerdfont
-}
-
-// CurrentSymbols returns the current symbol set
-func CurrentSymbols() Symbols {
-	return currentSymbols
-}
-
-// PRMergedSymbol returns the symbol for merged PRs
-func PRMergedSymbol() string {
-	return currentSymbols.PRMerged
-}
-
-// PROpenSymbol returns the symbol for open PRs
-func PROpenSymbol() string {
-	return currentSymbols.PROpen
-}
-
-// PRClosedSymbol returns the symbol for closed PRs
-func PRClosedSymbol() string {
-	return currentSymbols.PRClosed
-}
-
-// PRDraftSymbol returns the symbol for draft PRs
-func PRDraftSymbol() string {
-	return currentSymbols.PRDraft
 }
 
 // FormatPRState returns a formatted string with symbol and state.

@@ -209,34 +209,6 @@ auto_fetch = false`, false},
 	}
 }
 
-func TestIsValidThemeName(t *testing.T) {
-	tests := []struct {
-		name  string
-		valid bool
-	}{
-		{"none", true},
-		{"default", true},
-		{"dracula", true},
-		{"nord", true},
-		{"gruvbox", true},
-		{"catppuccin", true}, // family name (not variant suffixes)
-		{"invalid", false},
-		{"", false},
-		{"DRACULA", false},           // case-sensitive
-		{"catppuccin-mocha", false},  // old variant name no longer valid
-		{"catppuccin-frappe", false}, // old variant name no longer valid
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isValidThemeName(tt.name)
-			if result != tt.valid {
-				t.Errorf("isValidThemeName(%q) = %v, want %v", tt.name, result, tt.valid)
-			}
-		})
-	}
-}
-
 func TestThemeConfigParsing(t *testing.T) {
 	tests := []struct {
 		name     string

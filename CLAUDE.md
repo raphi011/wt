@@ -235,7 +235,6 @@ Key points for wizard tests:
 - Test steps by calling `Update()` directly with synthetic `tea.KeyPressMsg`
 - Use `keyMsg("enter")` helper to create key events
 - Use `updateStep[T]()` generic helper for type-safe step updates
-- For TextInputStep, call `Init()` before typing (to focus the input)
 
 ### PRs & Release Notes
 
