@@ -229,7 +229,7 @@ Manually exercise checkout, PR checkout, cd, and prune wizards across small/larg
 
 Phases 0–4 are included in this delivery; phase 5 remains planned. Final review fixed an ANSI-styled empty description consuming a list row and added a regression. README usage now includes interactive PR checkout.
 
-- Unit/race tests, vet, build, module verification, and diff checks passed.
+- Unit/race tests, vet, build, module verification, and diff checks passed. CI initially undercounted existing flow tests exercising framework/step packages; coverage now uses `-coverpkg=./...` for both suites to record those calls. Added loading-key retry and parent-cancellation regressions while reviewing the report. The 80% patch target is unchanged.
 - Generated bash/zsh/fish completion scripts on the completed build; bash/zsh syntax checks passed. Runtime completion offers the PR checkout `--interactive` flag, and generated scripts keep stderr separate from stdout.
 - Re-ran 36 wizard PTY cases, the display-only progress stdin probe, and 36 table capability/theme/width cases with redirected output and JSON checks; all passed.
 - One 123-case local command integration run passed with race detection and eight parallel test slots. A three-run repeat passed 368 cases and failed one during fixture setup because `/usr/bin/git` (Apple Git 2.50.1) segfaulted in `git config user.email`; that case passed in the other two repetitions. A subsequent single-slot run passed all 123 selected cases with race detection. Live forge mutation tests were not invoked locally.
