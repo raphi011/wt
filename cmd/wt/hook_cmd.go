@@ -30,27 +30,17 @@ func newHookCmd() *cobra.Command {
 		ValidArgsFunction: completeHookArg,
 		Long: `Run a configured hook manually.
 
-Hooks are defined in config.toml with an "on" trigger and optional placeholders.
+Hooks are defined under [hooks.<name>] in config.toml or .wt.toml. Any hook
+can be run manually, with or without an "on" trigger.
 When run manually, the hook always executes as an "after" hook
 ({phase}=after, {trigger}=run, {action}=manual).
 
 With one argument, runs in the current worktree.
-With two arguments, the first is a [scope:]branch target and the second is the hook name.
+With two arguments, the first is a [scope:]branch target (scope is a repo name
+or label) and the second is the hook name.
 
-Target worktrees using [scope:]branch format where scope can be a repo name or label.
-
-Trigger syntax for "on" field:
-  [before:|after:]trigger[:subtype]
-
-  Triggers: checkout, prune, merge, all
-  Subtypes (checkout only): create, open, pr
-  Timing: before (can cancel operation), after (default)
-
-Examples:
-  on = ["checkout"]              # All checkouts (after)
-  on = ["checkout:pr"]           # PR checkouts only
-  on = ["before:prune"]          # Pre-prune guard (can abort)
-  on = ["before:checkout:pr"]    # Before PR checkout only`,
+Run 'wt config hooks' to list hooks, 'wt config init -s' for trigger syntax
+and placeholders.`,
 		Example: `  wt hook code                        # Run 'code' hook in current worktree
   wt hook main code                   # Run 'code' in main worktree (all repos)
   wt hook myrepo:main code            # Run in specific repo's worktree

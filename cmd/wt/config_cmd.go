@@ -27,7 +27,7 @@ func newConfigCmd() *cobra.Command {
 		Long: `Manage wt configuration.
 
 Global config: ~/.wt/config.toml
-Local config:  .wt.toml (in bare repo root)`,
+Local config:  .wt.toml (in repo root)`,
 		Example: `  wt config init          # Create default global config
   wt config init --local  # Create local repo config
   wt config show          # Show effective config
@@ -468,6 +468,9 @@ func newConfigHooksCmd() *cobra.Command {
 		Long: `List available hooks.
 
 When inside a repo (or with --repo), shows merged hooks with source annotations.`,
+		Example: `  wt config hooks               # List hooks (merged if in a repo)
+  wt config hooks --repo myrepo # List hooks for specific repo
+  wt config hooks --json        # Output as JSON`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)

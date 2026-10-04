@@ -31,16 +31,19 @@ type hookParams struct {
 	HooksCfg  config.HooksConfig
 	ConfigDir string // ~/.wt/ config dir
 	WtPath    string // worktree path (used as workDir for hook execution)
-	RepoPath  string
-	RepoName  string
-	Branch    string
-	Trigger   hooks.CommandType
-	Action    string
-	PRNumber  *int
-	PRRepo    string
-	HookNames []string
-	NoHook    bool
-	Env       map[string]string
+	// AfterWorkDir overrides the workDir of after-hooks, for commands that
+	// remove the worktree. Empty = WtPath.
+	AfterWorkDir string
+	RepoPath     string
+	RepoName     string
+	Branch       string
+	Trigger      hooks.CommandType
+	Action       string
+	PRNumber     *int
+	PRRepo       string
+	HookNames    []string
+	NoHook       bool
+	Env          map[string]string
 }
 
 // withHooks runs before-hooks, then fn, then after-hooks.
@@ -82,7 +85,11 @@ func withHooks(ctx context.Context, p hookParams, fn func() error) error {
 	}
 	if len(afterMatches) > 0 {
 		hookCtx.Phase = hooks.PhaseAfter
-		hooks.RunForEach(ctx, afterMatches, hookCtx, p.WtPath)
+		afterWorkDir := p.WtPath
+		if p.AfterWorkDir != "" {
+			afterWorkDir = p.AfterWorkDir
+		}
+		hooks.RunForEach(ctx, afterMatches, hookCtx, afterWorkDir)
 	}
 
 	return nil

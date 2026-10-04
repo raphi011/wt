@@ -16,20 +16,22 @@ import (
 
 func newExecCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "exec [repo:]branch... -- <command>",
+		Use:     "exec [[scope:]branch...] -- <command>",
 		Short:   "Run command in worktree(s)",
 		Aliases: []string{"x"},
 		GroupID: GroupUtility,
 		Long: `Run a command in one or more worktrees.
 
-Target worktrees using [repo:]branch arguments before --:
-  - branch: finds worktree in current repo, or all repos if ambiguous
+Target worktrees using [scope:]branch arguments before --:
+  - branch: runs in every registered repo's worktree for that branch
   - repo:branch: finds exact worktree in specified repo
+  - label:branch: runs in all repos with that label
 
 With no targets, runs in the current worktree.`,
 		Example: `  wt exec -- git status                  # In current worktree
-  wt exec main -- git status             # In main worktree
+  wt exec main -- git status             # In main worktree of every repo
   wt exec wt:main -- git status          # In main worktree of wt repo
+  wt exec backend:main -- make test      # In main worktree of backend-labeled repos
   wt exec wt:main myrepo:dev -- make test  # In multiple worktrees`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

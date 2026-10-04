@@ -130,7 +130,7 @@ type CheckoutConfig struct {
 	WorktreeFormat string `toml:"worktree_format"` // Template for worktree folder names
 	BaseRef        string `toml:"base_ref"`        // "local" or "remote" (default: "remote")
 	AutoFetch      bool   `toml:"auto_fetch"`      // Fetch from origin before checkout
-	SetUpstream    *bool  `toml:"set_upstream"`    // Auto-set upstream tracking (default: true)
+	SetUpstream    *bool  `toml:"set_upstream"`    // Auto-set upstream tracking (default: false)
 }
 
 // ThemeConfig holds theme/color configuration for interactive UI
@@ -466,6 +466,16 @@ func matchPattern(pattern, repoSpec string) bool {
 // defaultConfig is the full default config template
 const defaultConfig = `# wt configuration
 
+# Default sort order for 'wt list'
+# Available values: "date", "repo", "branch"
+#   "date"    - sort by commit date, newest first (default)
+#   "repo"    - sort by repository name
+#   "branch"  - sort by branch name
+# default_sort = "date"
+
+# Labels applied to newly auto-registered repos
+# default_labels = ["work"]
+
 # Clone settings - controls how repos are cloned by "wt repo clone" and "wt pr checkout"
 # [clone]
 # Clone mode: "bare" or "regular" (default)
@@ -500,13 +510,6 @@ worktree_format = ".worktrees/{branch}"
 # This enables git push/pull without specifying remote.
 # set_upstream = false
 
-# Default sort order for 'wt list'
-# Available values: "date", "repo", "branch"
-#   "date"    - sort by commit date, newest first (default)
-#   "repo"    - sort by repository name
-#   "branch"  - sort by branch name
-# default_sort = "date"
-
 # Hooks - run commands when creating, removing, or merging worktrees
 # Use --hook=name to run a specific hook, --no-hook to skip all hooks
 #
@@ -531,6 +534,7 @@ worktree_format = ".worktrees/{branch}"
 # Hooks run with working directory set to the worktree path.
 # For "prune" after-hooks, working directory is the main repo (worktree is deleted).
 # For "prune" before-hooks, working directory is the worktree (still exists).
+# For "merge" after-hooks, working directory is the main repo.
 #
 # Available placeholders:
 #   {worktree-dir}      - absolute worktree path
@@ -541,6 +545,8 @@ worktree_format = ".worktrees/{branch}"
 #   {action}            - checkout subtype (create, open, pr, manual)
 #   {phase}             - hook timing (before, after)
 #   {config-dir}        - absolute path to ~/.wt/ config directory
+#   {pr-number}         - PR/MR number (empty for non-PR checkouts)
+#   {pr-repo}           - forge repo path, e.g. owner/repo (empty for non-PR checkouts)
 #   {key}               - custom variable passed via --arg key=value
 #   {key:-def}          - custom variable with default
 #   {key:+text}         - conditional: includes text only if key is set
@@ -549,13 +555,13 @@ worktree_format = ".worktrees/{branch}"
 #
 # VS Code - open worktree in VS Code
 # [hooks.code]
-# command = "code {worktree-dir}"
+# command = "code '{worktree-dir}'"
 # description = "Open in VS Code"
 # on = ["checkout"]
 #
 # IntelliJ IDEA - open worktree in IDEA
 # [hooks.idea]
-# command = "idea {worktree-dir}"
+# command = "idea '{worktree-dir}'"
 # description = "Open in IntelliJ IDEA"
 # on = ["checkout"]
 #
@@ -568,19 +574,19 @@ worktree_format = ".worktrees/{branch}"
 #
 # Claude Code with custom prompt
 # [hooks.claude-task]
-# command = "claude -p {prompt}"
+# command = "claude -p '{prompt}'"
 # description = "Run Claude with a task"
 # Run with: wt hook claude-task --arg prompt="implement feature X"
 #
 # Claude Code with conditional flags (use -a skip to skip permissions)
 # [hooks.claude-auto]
-# command = "claude {skip:+--dangerously-skip-permissions} -p {prompt:-help}"
+# command = "claude {skip:+--dangerously-skip-permissions} -p '{prompt:-help}'"
 # description = "Run Claude with optional permission skip"
 # Run with: wt hook claude-auto -a skip -a prompt="implement feature X"
 #
 # Claude Code in new terminal tab (kitty example)
 # [hooks.claude-tab]
-# command = "kitty @ launch --type=tab --cwd={worktree-dir} -- claude"
+# command = "kitty @ launch --type=tab --cwd='{worktree-dir}' -- claude"
 # description = "Open Claude in new tab"
 # on = ["checkout"]
 #
@@ -590,7 +596,7 @@ worktree_format = ".worktrees/{branch}"
 # [hooks.setup]
 # command = "npm install"
 # description = "Install dependencies"
-# on = ["checkout", "pr"]
+# on = ["checkout"]
 #
 # Cleanup notification
 # [hooks.cleanup]
@@ -607,21 +613,21 @@ worktree_format = ".worktrees/{branch}"
 # paths = [".env", ".envrc"]
 
 # Forge settings - configure forge type, default org, and multi-account auth
-# Used for PR operations and "wt pr checkout <number> org/repo" when cloning
+# Used for PR operations and "wt repo clone org/repo"
 #
 # [forge]
 # default = "github"     # default forge type (github or gitlab)
 # default_org = "my-org" # default org when repo specified without org/ prefix
 #
 # [[forge.rules]]
-# pattern = "n26/*"           # glob pattern (* matches anything)
+# pattern = "work-org/*"      # glob pattern (* matches anything)
 # type = "github"             # forge type for matching repos
-# user = "raphaelgrubern26"   # gh/glab user for authentication (optional)
+# user = "work-account"       # gh/glab user for authentication (optional)
 #
 # [[forge.rules]]
-# pattern = "raphi011/*"
+# pattern = "my-user/*"
 # type = "github"
-# user = "raphi011"           # different gh account for personal repos
+# user = "personal-account"   # different gh account for personal repos
 #
 # [[forge.rules]]
 # pattern = "company/*"

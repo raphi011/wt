@@ -529,7 +529,7 @@ func newPrMergeCmd() *cobra.Command {
 		ValidArgsFunction: completeRepoNames,
 		Long: `Merge the PR for the current branch.
 
-Merges the PR, removes the worktree (if applicable), and deletes the local branch.`,
+Merges the PR, deletes its source branch, and removes the worktree (unless --keep).`,
 		Example: `  wt pr merge                  # Merge current branch's PR
   wt pr merge myrepo           # Merge for specific repo
   wt pr merge --keep           # Keep worktree after merge
@@ -570,6 +570,8 @@ Merges the PR, removes the worktree (if applicable), and deletes the local branc
 			if err != nil {
 				return err
 			}
+			// The worktree is removed during merge, so after-hooks run from the repo root
+			hp.AfterWorkDir = res.repo.Path
 
 			return withHooks(ctx, hp, func() error {
 				if pr.State == forge.PRStateMerged {
