@@ -192,3 +192,24 @@ func TestLoadWorktreesForRepos_BadRepo(t *testing.T) {
 		t.Error("should have worktrees from good-repo")
 	}
 }
+
+func TestLoadWorktreesPreservesUpstreamName(t *testing.T) {
+	t.Parallel()
+	repo := setupTestRepo(t)
+	ctx := context.Background()
+	infos, err := ListWorktreesFromRepo(ctx, repo)
+	if err != nil || len(infos) == 0 {
+		t.Fatalf("worktrees: %v %v", infos, err)
+	}
+	branch := infos[0].Branch
+	if err := runGit(ctx, repo, "config", "branch."+branch+".merge", "refs/heads/remote-name"); err != nil {
+		t.Fatal(err)
+	}
+	wts, warnings := LoadWorktreesForRepos(ctx, []RepoRef{{Name: "repo", Path: repo}})
+	if len(warnings) != 0 || len(wts) != 1 {
+		t.Fatalf("worktrees=%v warnings=%v", wts, warnings)
+	}
+	if !wts[0].HasUpstream || wts[0].UpstreamBranch != "remote-name" {
+		t.Fatalf("upstream=%q has=%v", wts[0].UpstreamBranch, wts[0].HasUpstream)
+	}
+}

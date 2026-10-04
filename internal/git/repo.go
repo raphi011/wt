@@ -382,9 +382,9 @@ func GetWorktreeBranches(ctx context.Context, repoPath string) map[string]bool {
 // GetAllBranchConfig returns branch notes and upstreams for a repository in one call.
 // Uses: `git config --get-regexp 'branch\.'`
 // Returns: notes map (branch -> note), upstreams map (branch -> upstream ref)
-func GetAllBranchConfig(ctx context.Context, repoPath string) (notes map[string]string, upstreams map[string]bool) {
+func GetAllBranchConfig(ctx context.Context, repoPath string) (notes map[string]string, upstreams map[string]string) {
 	notes = make(map[string]string)
-	upstreams = make(map[string]bool)
+	upstreams = make(map[string]string)
 
 	output, err := outputGit(ctx, repoPath, "config", "--get-regexp", `branch\.`)
 	if err != nil {
@@ -419,8 +419,8 @@ func GetAllBranchConfig(ctx context.Context, repoPath string) (notes map[string]
 		// Handle branch.<name>.merge
 		if strings.HasPrefix(key, "branch.") && strings.HasSuffix(key, ".merge") {
 			branch := key[7 : len(key)-6] // Remove "branch." prefix and ".merge" suffix
-			if branch != "" {
-				upstreams[branch] = true
+			if branch != "" && len(parts) == 2 {
+				upstreams[branch] = strings.TrimPrefix(parts[1], "refs/heads/")
 			}
 		}
 	}

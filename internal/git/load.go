@@ -37,7 +37,13 @@ func LoadWorktreesForRepos(ctx context.Context, repos []RepoRef) ([]Worktree, []
 	g.SetLimit(8) // Bound concurrent git operations
 
 	for i, repo := range repos {
+		if ctx.Err() != nil {
+			break
+		}
 		g.Go(func() error {
+			if ctx.Err() != nil {
+				return nil
+			}
 			wts, warn := loadWorktreesForRepo(ctx, repo)
 			results[i] = repoResult{worktrees: wts, warning: warn}
 			return nil // Never fail — warnings are non-fatal
@@ -75,7 +81,13 @@ func ListWorktreesForRepos(ctx context.Context, repos []RepoRef) ([]Worktree, []
 	g.SetLimit(8)
 
 	for i, repo := range repos {
+		if ctx.Err() != nil {
+			break
+		}
 		g.Go(func() error {
+			if ctx.Err() != nil {
+				return nil
+			}
 			wtInfos, err := ListWorktreesFromRepo(ctx, repo.Path)
 			if err != nil {
 				results[i] = repoResult{warning: &LoadWarning{RepoName: repo.Name, Err: err}}
@@ -144,18 +156,74 @@ func loadWorktreesForRepo(ctx context.Context, repo RepoRef) ([]Worktree, *LoadW
 		meta := commitMetas[wti.CommitHash]
 
 		worktrees = append(worktrees, Worktree{
-			Path:        wti.Path,
-			Branch:      wti.Branch,
-			CommitHash:  wti.CommitHash,
-			CommitAge:   meta.Age,
-			CommitDate:  meta.Date,
-			RepoName:    repo.Name,
-			RepoPath:    repo.Path,
-			OriginURL:   originURL,
-			Note:        notes[wti.Branch],
-			HasUpstream: upstreams[wti.Branch],
+			Path:           wti.Path,
+			Branch:         wti.Branch,
+			CommitHash:     wti.CommitHash,
+			CommitAge:      meta.Age,
+			CommitDate:     meta.Date,
+			RepoName:       repo.Name,
+			RepoPath:       repo.Path,
+			OriginURL:      originURL,
+			Note:           notes[wti.Branch],
+			HasUpstream:    upstreams[wti.Branch] != "",
+			UpstreamBranch: upstreams[wti.Branch],
 		})
 	}
 
 	return worktrees, nil
+}
+
+// ListAvailableBranchesForRepos loads local branches not checked out in a worktree.
+// Only branch/worktree lists are read; failures retain results from other repos.
+func ListAvailableBranchesForRepos(ctx context.Context, repos []RepoRef) ([]string, []LoadWarning) {
+	type result struct {
+		branches []string
+		warning  *LoadWarning
+	}
+	results := make([]result, len(repos))
+	g, ctx := errgroup.WithContext(ctx)
+	g.SetLimit(8)
+	for i, repo := range repos {
+		if ctx.Err() != nil {
+			break
+		}
+		g.Go(func() error {
+			if ctx.Err() != nil {
+				return nil
+			}
+			branches, err := ListLocalBranches(ctx, repo.Path)
+			if err != nil {
+				results[i].warning = &LoadWarning{RepoName: repo.Name, Err: err}
+				return nil
+			}
+			if ctx.Err() != nil {
+				return nil
+			}
+			wts, err := ListWorktreesFromRepo(ctx, repo.Path)
+			if err != nil {
+				results[i].warning = &LoadWarning{RepoName: repo.Name, Err: err}
+				return nil
+			}
+			checked := make(map[string]bool, len(wts))
+			for _, wt := range wts {
+				checked[wt.Branch] = true
+			}
+			for _, branch := range branches {
+				if !checked[branch] {
+					results[i].branches = append(results[i].branches, branch)
+				}
+			}
+			return nil
+		})
+	}
+	_ = g.Wait()
+	var branches []string
+	var warnings []LoadWarning
+	for _, r := range results {
+		branches = append(branches, r.branches...)
+		if r.warning != nil {
+			warnings = append(warnings, *r.warning)
+		}
+	}
+	return branches, warnings
 }

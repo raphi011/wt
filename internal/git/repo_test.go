@@ -701,10 +701,10 @@ func TestGetAllBranchConfig(t *testing.T) {
 	if notes["feature-a"] != "Working on A" {
 		t.Errorf("notes[feature-a] = %q, want %q", notes["feature-a"], "Working on A")
 	}
-	if !upstreams["feature-b"] {
+	if upstreams["feature-b"] != "feature-b" {
 		t.Error("upstreams[feature-b] should be true")
 	}
-	if upstreams["feature-a"] {
+	if upstreams["feature-a"] != "" {
 		t.Error("upstreams[feature-a] should be false")
 	}
 }

@@ -16,6 +16,8 @@ import (
 // GitHub implements Forge for GitHub repositories using the gh CLI.
 type GitHub struct {
 	ForgeConfig *config.ForgeConfig
+	host        string
+	token       string
 }
 
 // Name returns "github"
@@ -30,7 +32,12 @@ func (g *GitHub) Check(ctx context.Context) error {
 		return fmt.Errorf("gh not found: please install GitHub CLI (https://cli.github.com)")
 	}
 
-	c := exec.CommandContext(ctx, "gh", "auth", "status")
+	args := []string{"auth", "status"}
+	if g.host != "" {
+		args = append(args, "--hostname", g.host, "--active")
+	}
+	c := exec.CommandContext(ctx, "gh", args...)
+	c.Env = g.environment()
 	if out, err := c.CombinedOutput(); err != nil {
 		errMsg := string(out)
 		if strings.Contains(errMsg, "not logged") || strings.Contains(errMsg, "no accounts") {
@@ -250,6 +257,7 @@ func (g *GitHub) ViewPR(ctx context.Context, repoURL string, number int, web boo
 		args = append(args, "--web")
 	}
 	c := exec.CommandContext(ctx, "gh", args...)
+	c.Env = g.environment()
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 
@@ -259,7 +267,7 @@ func (g *GitHub) ViewPR(ctx context.Context, repoURL string, number int, web boo
 		if err != nil {
 			return err
 		}
-		c.Env = append(os.Environ(), "GH_TOKEN="+token)
+		c.Env = append(g.environment(), "GH_TOKEN="+token)
 	}
 
 	return c.Run()
@@ -330,7 +338,14 @@ func (g *GitHub) getUserForRepo(repoPath string) string {
 
 // getToken retrieves the auth token for a specific gh user
 func (g *GitHub) getToken(ctx context.Context, user string) (string, error) {
-	out, err := exec.CommandContext(ctx, "gh", "auth", "token", "--user", user).Output()
+	if g.token != "" {
+		return g.token, nil
+	}
+	args := []string{"auth", "token", "--user", user}
+	if g.host != "" {
+		args = append(args, "--hostname", g.host)
+	}
+	out, err := exec.CommandContext(ctx, "gh", args...).Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get token for user %s: %w", user, err)
 	}
@@ -341,6 +356,7 @@ func (g *GitHub) getToken(ctx context.Context, user string) (string, error) {
 func (g *GitHub) runWithUser(ctx context.Context, repoPath string, args ...string) error {
 	user := g.getUserForRepo(repoPath)
 	c := exec.CommandContext(ctx, "gh", args...)
+	c.Env = g.environment()
 	c.Stderr = os.Stderr
 
 	if user != "" {
@@ -348,7 +364,7 @@ func (g *GitHub) runWithUser(ctx context.Context, repoPath string, args ...strin
 		if err != nil {
 			return err
 		}
-		c.Env = append(os.Environ(), "GH_TOKEN="+token)
+		c.Env = append(g.environment(), "GH_TOKEN="+token)
 	}
 
 	return c.Run()
@@ -358,13 +374,14 @@ func (g *GitHub) runWithUser(ctx context.Context, repoPath string, args ...strin
 func (g *GitHub) outputWithUser(ctx context.Context, repoPath string, args ...string) ([]byte, error) {
 	user := g.getUserForRepo(repoPath)
 	c := exec.CommandContext(ctx, "gh", args...)
+	c.Env = g.environment()
 
 	if user != "" {
 		token, err := g.getToken(ctx, user)
 		if err != nil {
 			return nil, err
 		}
-		c.Env = append(os.Environ(), "GH_TOKEN="+token)
+		c.Env = append(g.environment(), "GH_TOKEN="+token)
 	}
 
 	out, err := c.Output()
@@ -375,4 +392,16 @@ func (g *GitHub) outputWithUser(ctx context.Context, repoPath string, args ...st
 		return nil, err
 	}
 	return out, nil
+}
+
+// environment preserves normal CLI behavior outside refresh sessions.
+func (g *GitHub) environment() []string {
+	env := os.Environ()
+	if g.host != "" {
+		env = append(env, "GH_HOST="+g.host)
+	}
+	if g.token != "" {
+		env = append(env, "GH_TOKEN="+g.token, "GH_ENTERPRISE_TOKEN="+g.token)
+	}
+	return env
 }

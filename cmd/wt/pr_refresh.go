@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/raphi011/wt/internal/config"
@@ -15,10 +16,10 @@ import (
 
 // prFetchItem describes a single branch whose PR status needs to be fetched.
 type prFetchItem struct {
-	originURL string
-	repoPath  string
-	branch    string
-	cacheKey  string // key for prCache (repoName:folderName)
+	originURL      string
+	upstreamBranch string
+	branch         string
+	cacheKey       string // key for prCache (repoName:folderName)
 }
 
 // refreshPRs fetches PR status for the given worktrees in parallel with a
@@ -40,10 +41,10 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 			continue
 		}
 		items = append(items, prFetchItem{
-			originURL: wt.OriginURL,
-			repoPath:  wt.RepoPath,
-			branch:    wt.Branch,
-			cacheKey:  cacheKey,
+			originURL:      wt.OriginURL,
+			upstreamBranch: wt.UpstreamBranch,
+			branch:         wt.Branch,
+			cacheKey:       cacheKey,
 		})
 	}
 
@@ -55,6 +56,7 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 	pb.Start()
 	defer pb.Stop()
 
+	session := forge.NewSession(hosts, forgeConfig)
 	var prMutex sync.Mutex
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, forge.MaxConcurrentFetches)
@@ -75,14 +77,26 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 		pb.SetProgress(completedCount, msg)
 	}
 
+schedule:
 	for _, item := range items {
+		if ctx.Err() != nil {
+			break
+		}
+		select {
+		case semaphore <- struct{}{}:
+		case <-ctx.Done():
+			break schedule
+		}
+		if ctx.Err() != nil {
+			<-semaphore
+			break
+		}
 		wg.Go(func() {
-			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			f := forge.Detect(item.originURL, hosts, forgeConfig)
+			f, err := session.Resolve(ctx, item.originURL)
 
-			if err := f.Check(ctx); err != nil {
+			if err != nil {
 				l.Debug("forge check failed", "origin", item.originURL, "err", err)
 				countMutex.Lock()
 				recordProgress(item.branch)
@@ -91,7 +105,7 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 			}
 
 			// Get upstream branch name (may differ from local branch name)
-			upstreamBranch := git.GetUpstreamBranch(ctx, item.repoPath, item.branch)
+			upstreamBranch := item.upstreamBranch
 			if upstreamBranch == "" {
 				upstreamBranch = item.branch
 			}
@@ -117,6 +131,7 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 
 	wg.Wait()
 
+	slices.Sort(failedBranches)
 	return failedBranches
 }
 
