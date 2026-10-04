@@ -6,7 +6,7 @@ Last updated: 2026-10-04
 ## Handoff for the next conversation
 
 - Phases 0–4 are complete and merged into `main` through [PR #177](https://github.com/raphi011/wt/pull/177), squash commit `fb78ed7ae2c3305de721dd77240357867209b343`. Local `main` and `origin/main` matched after delivery.
-- **Phase 5 is implemented locally** on `perf/refresh-completions`; results and deterministic benchmarks are recorded below. Phases 0–4 remain the merged baseline. Remaining delivery work is human terminal/link compatibility inspection and PR/CI delivery of phase 5; do not reimplement completed phases.
+- **Phase 5 implementation and benchmarks are complete**, delivered through [PR #178](https://github.com/raphi011/wt/pull/178) from `perf/refresh-completions`; results are recorded below. Consult the PR for merge/CI status. Human terminal/link compatibility inspection remains pending; do not reimplement completed phases.
 - Both PR CI and the post-merge [main CI run](https://github.com/raphi011/wt/actions/runs/37185988449) passed, including unit and live forge integration tests in CI. PR patch coverage passed at 82.23%; CI instruments cross-package calls with `-coverpkg=./...`.
 - Local race tests, vet, build, module verification, completion checks, and PTY probes passed. Human terminal visual/link-click checks remain pending; automated PTY checks do not replace those checks.
 - Unrelated local changes were intentionally excluded: deletions of `docs/context-adoption.md`, `docs/git-merge-detection.md`, the two interactive-hooks documents under `docs/superpowers/`, and untracked `reddit-post.md`. Preserve these unless the user explicitly includes them in later work.
@@ -256,7 +256,7 @@ Each refresh fixture has one eligible worktree per repository and one shared con
 
 Reproduce the current measurements with `WT_PERF_MEASURE=1 go test ./cmd/wt -run '^TestPerformanceMeasurements$' -v`. The opt-in test is skipped in normal test runs. Small single-repository timing differences reflect process/scheduler variance; these measurements establish bounded scheduling and reduced subprocess work, not real-network speed guarantees.
 
-Validation: `go test -race ./...`, `go vet ./...`, `go build ./...`, `go mod verify`, and `git diff --check` passed. Shell completion generation/syntax and redirected command output were checked on the completed build. Live forge mutation/network timing and human terminal/link compatibility checks were not run in this phase. Release workflow Go setup now matches CI and the module’s Go 1.26 baseline. Phase 5 is being delivered through a PR; human terminal/link checks remain pending.
+Validation: `go test -race ./...`, `go vet ./...`, `go build ./...`, `go mod verify`, and `git diff --check` passed. Shell completion generation/syntax and redirected command output were checked on the completed build. Live forge mutation/network timing and human terminal/link compatibility checks were not run in this phase. Release workflow Go setup now matches CI and the module’s Go 1.26 baseline. Phase 5 delivery is tracked in [PR #178](https://github.com/raphi011/wt/pull/178); human terminal/link checks remain pending.
 
 ## Delivery and validation
 
@@ -275,7 +275,7 @@ Phases 0–4 are included in this delivery; phase 5 remains planned. Final revie
 - Re-ran 36 wizard PTY cases, the display-only progress stdin probe, and 36 table capability/theme/width cases with redirected output and JSON checks; all passed.
 - One 123-case local command integration run passed with race detection and eight parallel test slots. A three-run repeat passed 368 cases and failed one during fixture setup because `/usr/bin/git` (Apple Git 2.50.1) segfaulted in `git config user.email`; that case passed in the other two repetitions. A subsequent single-slot run passed all 123 selected cases with race detection. Live forge mutation tests were not invoked locally.
 
-The dependency baseline and behavior changes were committed separately on the feature branch, then squash-merged through PR #177 as `fb78ed7`. PR CI and post-merge main CI passed; the final PR patch coverage was 82.23%. Human terminal/click compatibility checks and phase 5 benchmarks remain pending.
+The dependency baseline and behavior changes were committed separately on the feature branch, then squash-merged through PR #177 as `fb78ed7`. PR CI and post-merge main CI passed; the final PR patch coverage was 82.23%. Human terminal/click compatibility checks remain pending; completed phase 5 benchmarks are recorded above.
 
 ### Dependency refresh results
 
