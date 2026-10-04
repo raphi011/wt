@@ -232,7 +232,7 @@ Phases 0–4 are included in this delivery; phase 5 remains planned. Final revie
 - Unit/race tests, vet, build, module verification, and diff checks passed.
 - Generated bash/zsh/fish completion scripts on the completed build; bash/zsh syntax checks passed. Runtime completion offers the PR checkout `--interactive` flag, and generated scripts keep stderr separate from stdout.
 - Re-ran 36 wizard PTY cases, the display-only progress stdin probe, and 36 table capability/theme/width cases with redirected output and JSON checks; all passed.
-- One 123-case local command integration run passed with race detection and eight parallel test slots. A three-run repeat passed 368 cases and failed one during fixture setup because `/usr/bin/git` (Apple Git 2.50.1) segfaulted in `git config user.email`; that case passed in the other two repetitions. A single-slot run is being used to check the suite independently of that parallel subprocess failure. Live forge mutation tests were not invoked locally.
+- One 123-case local command integration run passed with race detection and eight parallel test slots. A three-run repeat passed 368 cases and failed one during fixture setup because `/usr/bin/git` (Apple Git 2.50.1) segfaulted in `git config user.email`; that case passed in the other two repetitions. A subsequent single-slot run passed all 123 selected cases with race detection. Live forge mutation tests were not invoked locally.
 
 The dependency baseline and behavior changes are committed separately on the feature branch and are being delivered through a squash PR. Human terminal/click compatibility checks and phase 5 benchmarks remain pending.
 
