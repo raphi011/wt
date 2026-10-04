@@ -25,7 +25,7 @@ func TestWizardAndCdTerminalLayouts(t *testing.T) {
 			w.Init()
 			w.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 			w.Update(tea.KeyPressMsg{Code: tea.KeyEnd})
-			check := func(view string, focused string) {
+			check := func(view string, focused string, cancelKey string) {
 				t.Helper()
 				if len(strings.Split(view, "\n")) > size[1] {
 					t.Fatalf("height overflow:\n%s", view)
@@ -35,25 +35,25 @@ func TestWizardAndCdTerminalLayouts(t *testing.T) {
 						t.Fatalf("width overflow: %q", line)
 					}
 				}
-				for _, text := range []string{focused, "ctrl+c", "enter"} {
+				for _, text := range []string{focused, cancelKey, "enter"} {
 					if !strings.Contains(view, text) {
 						t.Fatalf("%q missing:\n%s", text, view)
 					}
 				}
 			}
-			check(w.View().Content, "branch-49")
+			check(w.View().Content, "branch-49", "ctrl+c")
 			w.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 			w.Update(tea.KeyPressMsg{Code: tea.KeyEnd})
-			check(w.View().Content, "branch-49")
+			check(w.View().Content, "branch-49", "ctrl+c")
 			// Lightweight cd uses the same row budget without wizard chrome.
 			cd := &cdListModel{step: steps.NewFilterableList("cd", "Cd", "", options)}
 			cd.Init()
 			cd.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 			cd.Update(tea.KeyPressMsg{Code: tea.KeyEnd})
-			check(cd.View().Content, "branch-49")
+			check(cd.View().Content, "branch-49", "esc")
 			// Resize with the filter active, retaining input and contextual help.
 			cd.Update(tea.PasteMsg{Content: "branch-49"})
-			check(cd.View().Content, "branch-49")
+			check(cd.View().Content, "branch-49", "esc")
 			if !strings.Contains(strings.Join(strings.Fields(ansi.Strip(cd.View().Content)), " "), "esc clear filter") {
 				t.Fatal("clear-filter help missing")
 			}

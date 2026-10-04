@@ -166,7 +166,7 @@ func (m *cdListModel) dimensions() (int, int) {
 	return m.width, m.height
 }
 func (m *cdListModel) help(width, height int) string {
-	return framework.HelpStyle().MarginTop(0).Render(framework.Wrap(m.step.Help(), width, min(3, max(1, height/4))))
+	return framework.HelpStyle().MarginTop(0).Render(framework.Wrap(m.step.PickerHelp(), width, min(3, max(1, height/4))))
 }
 func (m *cdListModel) resizeStep() {
 	width, height := m.dimensions()
