@@ -1,10 +1,13 @@
 package flows
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
 	"github.com/raphi011/wt/internal/ui/wizard/steps"
@@ -118,5 +121,83 @@ func TestCdListModelInputEditingAndBlink(t *testing.T) {
 	model.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if !model.cancelled || !step.HasClearableInput() {
 		t.Fatal("Ctrl+C must immediately cancel cd with a filter present")
+	}
+}
+
+func TestCdListModelPageNavigation(t *testing.T) {
+	t.Parallel()
+	for _, filtered := range []bool{false, true} {
+		t.Run(fmt.Sprintf("filtered=%v", filtered), func(t *testing.T) {
+			options := make([]framework.Option, 30)
+			for i := range options {
+				options[i] = framework.Option{Label: fmt.Sprintf("repo:branch-%02d", i), Value: i}
+			}
+			model := &cdListModel{step: steps.NewFilterableList("cd", "Cd", "", options), selectedAt: -1}
+			model.Init()
+			model.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+			for _, tc := range []struct {
+				code rune
+				want int
+			}{{tea.KeyPgDown, 29}, {tea.KeyPgUp, 0}} {
+				if filtered {
+					model.Update(tea.PasteMsg{Content: "repo:"})
+				}
+				model.Update(tea.KeyPressMsg{Code: tc.code})
+				if got := model.step.GetCursor(); got != tc.want {
+					t.Fatalf("key=%v cursor=%d want=%d", tc.code, got, tc.want)
+				}
+				if filtered && model.step.GetFilter() != "repo:" {
+					t.Fatalf("paging changed filter: %q", model.step.GetFilter())
+				}
+				if model.done || model.cancelled {
+					t.Fatal("paging ended picker")
+				}
+				label := fmt.Sprintf("repo:branch-%02d", tc.want)
+				if !strings.Contains(ansi.Strip(model.View().Content), label) {
+					t.Fatalf("focused row %q missing from view", label)
+				}
+				if filtered {
+					model.step.ClearInput()
+				}
+			}
+			model.Update(tea.KeyPressMsg{Code: tea.KeyPgDown})
+			model.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+			if !model.done || model.selectedAt != 29 {
+				t.Fatalf("selected=%d done=%v", model.selectedAt, model.done)
+			}
+		})
+	}
+}
+
+func TestCdListModelHelp(t *testing.T) {
+	t.Parallel()
+	model := &cdListModel{step: steps.NewFilterableList("cd", "Cd", "", []framework.Option{{Label: "repo:main", Value: 0}}), selectedAt: -1}
+	model.Init()
+	model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	for _, filtered := range []bool{false, true} {
+		if filtered {
+			model.Update(tea.PasteMsg{Content: "repo:"})
+		}
+		help := ansi.Strip(model.help(80, 24))
+		for _, hidden := range []string{"ctrl+c", "back", "next", "alt+"} {
+			if strings.Contains(help, hidden) {
+				t.Fatalf("unexpected %q hint: %s", hidden, help)
+			}
+		}
+		for _, visible := range []string{"enter confirm", "pgup/pgdn jump", "esc"} {
+			if !strings.Contains(help, visible) {
+				t.Fatalf("missing %q hint: %s", visible, help)
+			}
+		}
+		if strings.Contains(help, "\n") {
+			t.Fatalf("help should fit in one 80-cell line: %s", help)
+		}
+		if filtered && !strings.Contains(help, "esc clear filter") {
+			t.Fatalf("missing clear-filter hint: %s", help)
+		}
+	}
+	model.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if !model.cancelled {
+		t.Fatal("Ctrl+C must still cancel despite omitted help hint")
 	}
 }
