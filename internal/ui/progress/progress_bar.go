@@ -1,13 +1,16 @@
 package progress
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"time"
 
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
+	"github.com/mattn/go-isatty"
 	"github.com/raphi011/wt/internal/ui/styles"
 )
 
@@ -20,19 +23,24 @@ type progressUpdate struct {
 // ProgressBar wraps a Bubbletea progress bar for simple non-interactive use.
 // Use this for determinate operations where you know the total count.
 type ProgressBar struct {
-	program   *tea.Program
-	updateCh  chan progressUpdate
-	done      chan struct{}
-	mu        sync.Mutex
-	isRunning bool
-	total     int
-	current   int
-	message   string
+	program     *tea.Program
+	ctx         context.Context
+	output      io.Writer
+	interactive bool
+	stopped     bool
+	updateCh    chan progressUpdate
+	done        chan struct{}
+	mu          sync.Mutex
+	isRunning   bool
+	total       int
+	current     int
+	message     string
 }
 
 // progressBarModel is the internal Bubbletea model
 type progressBarModel struct {
 	progress progress.Model
+	ctx      context.Context
 	total    int
 	current  int
 	message  string
@@ -46,11 +54,15 @@ func (m progressBarModel) Init() tea.Cmd {
 
 func (m progressBarModel) waitForUpdate() tea.Cmd {
 	return func() tea.Msg {
-		update, ok := <-m.updateCh
-		if !ok {
+		select {
+		case <-m.ctx.Done():
 			return tea.Quit()
+		case update, ok := <-m.updateCh:
+			if !ok {
+				return tea.Quit()
+			}
+			return update
 		}
-		return update
 	}
 }
 
@@ -65,7 +77,7 @@ func (m progressBarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.message = msg.message
 		return m, m.waitForUpdate()
 	case tea.KeyPressMsg:
-		return m, tea.Quit
+		return m, nil
 	default:
 		var cmd tea.Cmd
 		m.progress, cmd = m.progress.Update(msg)
@@ -91,14 +103,35 @@ func (m progressBarModel) View() tea.View {
 	return tea.NewView(fmt.Sprintf("%s %3d%% %s", bar, pct, m.message))
 }
 
-// NewProgressBar creates a new progress bar with the given total and message.
-func NewProgressBar(total int, message string) *ProgressBar {
-	return &ProgressBar{
+// Option configures the progress display.
+type Option func(*ProgressBar)
+
+// WithContext stops the display and its pending commands on cancellation.
+func WithContext(ctx context.Context) Option { return func(p *ProgressBar) { p.ctx = ctx } }
+
+// WithOutput selects the diagnostic destination (stderr by default).
+func WithOutput(output io.Writer) Option { return func(p *ProgressBar) { p.output = output } }
+
+// NewProgressBar creates a progress bar with plain diagnostics for non-TTY output.
+func NewProgressBar(total int, message string, options ...Option) *ProgressBar {
+	p := &ProgressBar{
+		ctx:      context.Background(),
+		output:   os.Stderr,
 		updateCh: make(chan progressUpdate, 10),
 		done:     make(chan struct{}),
 		total:    total,
 		message:  message,
 	}
+	for _, option := range options {
+		option(p)
+	}
+	if p.ctx == nil {
+		p.ctx = context.Background()
+	}
+	if file, ok := p.output.(*os.File); ok {
+		p.interactive = isatty.IsTerminal(file.Fd()) || isatty.IsCygwinTerminal(file.Fd())
+	}
+	return p
 }
 
 // Start begins the progress bar display.
@@ -106,7 +139,13 @@ func (p *ProgressBar) Start() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.isRunning {
+	if p.isRunning || p.stopped || p.ctx.Err() != nil {
+		return
+	}
+
+	if !p.interactive {
+		p.isRunning = true
+		p.writePlain(p.current, p.message)
 		return
 	}
 
@@ -119,6 +158,7 @@ func (p *ProgressBar) Start() {
 
 	model := progressBarModel{
 		progress: prog,
+		ctx:      p.ctx,
 		total:    p.total,
 		current:  p.current,
 		message:  p.message,
@@ -126,7 +166,7 @@ func (p *ProgressBar) Start() {
 	}
 
 	// Write to stderr so stdout remains clean for piping (e.g., cd $(wt cd ...))
-	p.program = tea.NewProgram(model, tea.WithoutSignalHandler(), tea.WithOutput(os.Stderr))
+	p.program = tea.NewProgram(model, tea.WithoutSignalHandler(), tea.WithOutput(p.output), tea.WithInput(nil), tea.WithContext(p.ctx))
 	p.isRunning = true
 
 	go func() {
@@ -140,9 +180,20 @@ func (p *ProgressBar) SetProgress(current int, message string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if p.stopped || p.ctx.Err() != nil {
+		return
+	}
 	if !p.isRunning {
 		p.current = current
 		p.message = message
+		return
+	}
+
+	if !p.interactive {
+		if current != p.current || message != p.message {
+			p.writePlain(current, message)
+		}
+		p.current, p.message = current, message
 		return
 	}
 
@@ -163,6 +214,11 @@ func (p *ProgressBar) Stop() {
 		return
 	}
 	p.isRunning = false
+	p.stopped = true
+	if !p.interactive {
+		p.mu.Unlock()
+		return
+	}
 	// Close channel inside mutex to prevent race with SetProgress
 	close(p.updateCh)
 	p.mu.Unlock()
@@ -179,10 +235,17 @@ func (p *ProgressBar) Stop() {
 	}
 
 	// Clear to stderr (UI output shouldn't pollute stdout for piping)
-	fmt.Fprint(os.Stderr, "\r\033[K")
+	fmt.Fprint(p.output, "\r\033[K")
 }
 
 // Total returns the total count for the progress bar.
 func (p *ProgressBar) Total() int {
 	return p.total
+}
+
+func (p *ProgressBar) writePlain(current int, message string) {
+	if message == "" {
+		return
+	}
+	fmt.Fprintf(p.output, "%s (%d/%d)\n", message, current, p.total)
 }

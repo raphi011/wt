@@ -1,6 +1,7 @@
 package steps
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -641,5 +642,46 @@ func TestFilterableListStep_SetCursor_EmptyOptions(t *testing.T) {
 	step.SetCursor(5)
 	if step.GetCursor() != 0 {
 		t.Errorf("GetCursor() on empty list after out-of-bounds = %d, want 0", step.GetCursor())
+	}
+}
+
+func TestFilterableListCanonicalSearch(t *testing.T) {
+	options := []framework.Option{
+		{Label: "main (worktree)", SearchText: "main", Value: "main"},
+		{Label: "develop", SearchText: "develop", Value: "develop"},
+	}
+	for _, filter := range []string{"main", "Main", "MAIN", "new-branch", "worktree"} {
+		t.Run(filter, func(t *testing.T) {
+			s := NewFilterableList("branch", "Branch", "", options).
+				WithCreateFromFilter(func(f string) string { return "+ Create " + f })
+			s.Update(tea.PasteMsg{Content: filter})
+			wantCreate := filter != "main"
+			if s.shouldShowCreate() != wantCreate {
+				t.Fatalf("create shown = %v, want %v", s.shouldShowCreate(), wantCreate)
+			}
+			if filter == "worktree" && len(s.filtered) != 0 {
+				t.Fatal("presentation metadata matched canonical search")
+			}
+			s.Update(keyMsg("enter"))
+			if s.IsCreateSelected() != wantCreate || s.GetSelectedValue() != filter {
+				t.Fatalf("selection = %v, new = %v", s.GetSelectedValue(), s.IsCreateSelected())
+			}
+		})
+	}
+}
+
+func TestFilterableListFocusedHelp(t *testing.T) {
+	s := NewFilterableList("hooks", "Hooks", "", []framework.Option{{Label: "hook"}}).WithMultiSelect()
+	if !strings.Contains(s.Help(), "space toggle") {
+		t.Fatal("list help should advertise Space")
+	}
+	s.Update(tea.PasteMsg{Content: "hook"})
+	if strings.Contains(s.Help(), "space toggle") || !strings.Contains(s.Help(), "←/→ edit") {
+		t.Fatalf("filter help = %s", s.Help())
+	}
+	s.Update(keyMsg("down"))
+	s.Update(keyMsg("space"))
+	if s.SelectedCount() != 1 {
+		t.Fatal("Space should still toggle selection with list focus")
 	}
 }

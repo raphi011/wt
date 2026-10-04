@@ -51,7 +51,7 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 		return nil
 	}
 
-	pb := progress.NewProgressBar(len(items), "Fetching PR status...")
+	pb := progress.NewProgressBar(len(items), "Fetching PR status...", progress.WithContext(ctx))
 	pb.Start()
 	defer pb.Stop()
 

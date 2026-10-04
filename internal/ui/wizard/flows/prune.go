@@ -2,6 +2,7 @@ package flows
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/ui/styles"
@@ -15,6 +16,7 @@ type pruneOptionValue struct {
 	IsPrunable bool
 	IsStale    bool
 	Reason     string
+	Worktree   git.Worktree
 }
 
 // PruneOptions holds the options gathered from interactive mode.
@@ -62,6 +64,7 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 				IsPrunable: wt.IsPrunable,
 				IsStale:    wt.IsStale,
 				Reason:     wt.Reason,
+				Worktree:   wt.Worktree,
 			},
 			Description: wt.Reason, // Fallback for default renderer
 			Disabled:    false,     // All can be selected in interactive mode
@@ -127,30 +130,34 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 	return opts, nil
 }
 
-// pruneDescriptionRenderer renders the description for prune options with colored status.
-// - Prunable items: reason in success (green) color
-// - Non-prunable selected items: "Force" prefix in error (red) color + reason
-// - Non-prunable non-selected items: reason in muted color
+// pruneDescriptionRenderer keeps PR state colors consistent with list output.
+// Eligibility, age and a forced selection are separate action/safety labels.
 func pruneDescriptionRenderer(opt framework.Option, isSelected bool) string {
 	val, ok := opt.Value.(pruneOptionValue)
 	if !ok {
 		return styles.MutedStyle.Render(opt.Description)
 	}
-
-	if val.IsPrunable {
-		if val.IsStale {
-			// Stale: show reason in warning color (orange)
-			return styles.WarningStyle.Render(val.Reason)
+	wt := val.Worktree
+	status := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.PRDraft, "", false)
+	if wt.PRNumber == 0 {
+		if stateText := styles.FormatPRState(wt.PRState, wt.PRDraft); stateText != "" {
+			status = styles.PRStateStyle(wt.PRState, wt.PRDraft).Render(stateText)
 		}
-		// Merged: show reason in success color (green)
-		return styles.SuccessStyle.Render(val.Reason)
 	}
-
-	if isSelected {
-		// Non-prunable but selected: show "Force" in error color + reason
-		return styles.ErrorStyle.Render("Force") + " " + styles.MutedStyle.Render(val.Reason)
+	if status == "" && !val.IsStale {
+		status = styles.MutedStyle.Render(val.Reason)
 	}
-
-	// Non-prunable and not selected: show reason in muted color
-	return styles.MutedStyle.Render(val.Reason)
+	parts := []string{}
+	if val.IsPrunable {
+		parts = append(parts, styles.SuccessStyle.Render("Eligible"))
+	} else if isSelected {
+		parts = append(parts, styles.ErrorStyle.Render("Force"))
+	}
+	if val.IsStale {
+		parts = append(parts, styles.WarningStyle.Render(val.Reason))
+	}
+	if status != "" {
+		parts = append(parts, status)
+	}
+	return strings.Join(parts, " • ")
 }

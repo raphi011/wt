@@ -1,6 +1,7 @@
 package framework
 
 import (
+	"context"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -721,5 +722,15 @@ func TestWizard_WindowSizeMsg(t *testing.T) {
 
 	if w.width != 100 || w.height != 50 {
 		t.Errorf("Window size = %dx%d, want 100x50", w.width, w.height)
+	}
+}
+
+func TestWizardRunCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	w := NewWizard("Test").AddStep(newMockStep("input", "Input"))
+	result, err := w.RunContext(ctx)
+	if err != nil || result != w || !w.IsCancelled() {
+		t.Fatalf("context cancellation: result=%v error=%v", result, err)
 	}
 }

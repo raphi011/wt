@@ -35,9 +35,8 @@ type Step interface {
 	Init() tea.Cmd
 
 	// Update handles input messages forwarded by the Wizard.
-	// Callers only forward tea.KeyPressMsg and tea.PasteMsg;
-	// implementations must return (self, nil, StepContinue) for
-	// any other message type.
+	// Component messages (including cursor blink messages) are forwarded too.
+	// Implementations should ignore messages they do not handle.
 	Update(msg tea.Msg) (Step, tea.Cmd, StepResult)
 
 	// View renders the step content.
@@ -67,7 +66,19 @@ type Step interface {
 // Option represents a selectable item in list-based steps.
 type Option struct {
 	Label       string // Display text
+	SearchText  string // Canonical search/creation text; empty falls back to Label
 	Value       any    // Actual value
 	Description string // Optional description (for disabled reason)
 	Disabled    bool   // Whether option is disabled/unselectable
 }
+
+// MatchText returns undecorated search text when supplied.
+func (o Option) MatchText() string {
+	if o.SearchText != "" {
+		return o.SearchText
+	}
+	return o.Label
+}
+
+// Deactivatable steps cancel pending work when navigation makes it obsolete.
+type Deactivatable interface{ Deactivate() }

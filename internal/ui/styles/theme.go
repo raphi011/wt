@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/raphi011/wt/internal/config"
 )
@@ -155,6 +156,7 @@ var themeFamilies = map[string]themeFamily{
 
 // currentTheme holds the active theme
 var currentTheme = DefaultTheme
+var themeConfig config.ThemeConfig
 
 // Current returns the current theme
 func Current() Theme {
@@ -164,6 +166,11 @@ func Current() Theme {
 // Init initializes the theme from config
 // Call this after loading config and before displaying any UI
 func Init(cfg config.ThemeConfig) {
+	themeConfig = cfg
+	applyConfig(cfg)
+}
+
+func applyConfig(cfg config.ThemeConfig) {
 	theme := selectTheme(cfg)
 
 	// Override individual colors if specified
@@ -228,23 +235,12 @@ func selectTheme(cfg config.ThemeConfig) Theme {
 	case "dark":
 		theme = family.Dark
 	case "auto":
-		// Detect terminal background using lipgloss v2
-		isDark := lipgloss.HasDarkBackground(os.Stdin, os.Stderr)
-		if isDark {
-			theme = family.Dark
-		} else {
-			theme = family.Light
-		}
+		// Keep startup, shell completion and plain output free of terminal queries.
+		// Interactive programs replace this dark fallback after receiving a reply.
+		theme = family.Dark
 	default:
-		// Invalid mode - log warning and use auto
-		fmt.Fprintf(os.Stderr, "Warning: unknown theme mode %q, using auto (available: %s)\n",
-			mode, strings.Join(config.ValidThemeModes, ", "))
-		isDark := lipgloss.HasDarkBackground(os.Stdin, os.Stderr)
-		if isDark {
-			theme = family.Dark
-		} else {
-			theme = family.Light
-		}
+		fmt.Fprintf(os.Stderr, "Warning: unknown theme mode %q, using auto (available: %s)\n", mode, strings.Join(config.ValidThemeModes, ", "))
+		theme = family.Dark
 	}
 
 	// Fall back if the requested variant doesn't exist
@@ -283,6 +279,10 @@ func applyTheme(t Theme) {
 	NormalStyle = lipgloss.NewStyle().Foreground(t.Normal)
 	InfoStyle = lipgloss.NewStyle().Foreground(t.Info).Italic(true)
 	WarningStyle = lipgloss.NewStyle().Foreground(t.Warning)
+	MergedStyle = lipgloss.NewStyle().Foreground(Merged)
+	if _, colorless := t.Normal.(lipgloss.NoColor); colorless {
+		MergedStyle = lipgloss.NewStyle()
+	}
 
 	// Update border styles
 	RoundedBorder = lipgloss.NewStyle().
@@ -312,4 +312,31 @@ func GetPreset(name string) *Theme {
 // PresetNames returns a list of available preset names (theme families)
 func PresetNames() []string {
 	return config.ValidThemeNames
+}
+
+// BackgroundCommand requests auto-theme detection inside the interactive loop.
+// Explicit modes and families without both variants require no terminal query.
+func BackgroundCommand() tea.Cmd {
+	if themeConfig.Mode == "light" || themeConfig.Mode == "dark" {
+		return nil
+	}
+	family, ok := themeFamilies[themeConfig.Name]
+	if !ok || family.Light == nil || family.Dark == nil || family.Light == family.Dark {
+		return nil
+	}
+	return tea.RequestBackgroundColor
+}
+
+// ApplyBackground preserves explicit modes and custom color overrides.
+func ApplyBackground(isDark bool) {
+	if BackgroundCommand() == nil {
+		return
+	}
+	cfg := themeConfig
+	if isDark {
+		cfg.Mode = "dark"
+	} else {
+		cfg.Mode = "light"
+	}
+	applyConfig(cfg)
 }

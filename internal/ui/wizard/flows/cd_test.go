@@ -3,6 +3,7 @@ package flows
 import (
 	"testing"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
@@ -99,4 +100,23 @@ func TestCdListModel_Paste(t *testing.T) {
 			t.Errorf("FilteredCount = %d, want 1", model.step.FilteredCount())
 		}
 	})
+}
+
+func TestCdListModelInputEditingAndBlink(t *testing.T) {
+	step := steps.NewFilterableList("worktree", "Worktree", "", []framework.Option{{Label: "repo:main", Value: 0}})
+	model := &cdListModel{step: step, selectedAt: -1}
+	model.Init()
+	model.Update(tea.PasteMsg{Content: "repo:man"})
+	model.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	model.Update(tea.KeyPressMsg{Code: 'i', Text: "i"})
+	if step.GetFilter() != "repo:main" || model.done || model.selectedAt != -1 {
+		t.Fatalf("editing selected an item or lost caret: %q, done=%v", step.GetFilter(), model.done)
+	}
+	if _, cmd := model.Update(textinput.Blink()); cmd == nil {
+		t.Fatal("cursor initialization message did not reach cd input")
+	}
+	model.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if !model.cancelled || !step.HasClearableInput() {
+		t.Fatal("Ctrl+C must immediately cancel cd with a filter present")
+	}
 }

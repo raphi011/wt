@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 )
 
@@ -153,7 +154,7 @@ func TestFormatPRRef(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FormatPRRef(tt.number, tt.state, tt.isDraft, tt.url)
+			got := FormatPRRef(tt.number, tt.state, tt.isDraft, tt.url, false)
 			if tt.empty {
 				if got != "" {
 					t.Errorf("FormatPRRef() = %q, want empty", got)
@@ -170,7 +171,7 @@ func TestFormatPRRef(t *testing.T) {
 
 func TestFormatPRRef_Hyperlink(t *testing.T) {
 	url := "https://github.com/org/repo/pull/42"
-	got := FormatPRRef(42, forge.PRStateOpen, false, url)
+	got := FormatPRRef(42, forge.PRStateOpen, false, url, true)
 
 	// OSC 8 hyperlinks use \x1b]8;; prefix
 	if !strings.Contains(got, "\x1b]8;;") {
@@ -186,7 +187,7 @@ func TestFormatPRRef_Hyperlink(t *testing.T) {
 	}
 
 	// Without URL, no OSC 8 and no underline
-	noURL := FormatPRRef(42, forge.PRStateOpen, false, "")
+	noURL := FormatPRRef(42, forge.PRStateOpen, false, "", false)
 	if strings.Contains(noURL, "\x1b]8;;") {
 		t.Errorf("FormatPRRef without URL should not contain OSC 8 sequence, got %q", noURL)
 	}
@@ -231,4 +232,59 @@ func TestCurrentSymbols(t *testing.T) {
 	}
 
 	SetNerdfont(false)
+}
+
+func TestPRReferencesIncludeStateAndRespectLinkCapability(t *testing.T) {
+	for _, nerdfont := range []bool{false, true} {
+		SetNerdfont(nerdfont)
+		for _, tc := range []struct {
+			state string
+			draft bool
+			text  string
+		}{
+			{forge.PRStateOpen, false, "Open"}, {forge.PRStateOpen, true, "Draft"},
+			{forge.PRStateMerged, true, "Merged"}, {forge.PRStateClosed, true, "Closed"},
+			{"", true, ""}, {"UNKNOWN", false, ""},
+		} {
+			for _, links := range []bool{false, true} {
+				ref := FormatPRRef(123, tc.state, tc.draft, "https://example.com/123", links)
+				want := "#123"
+				if tc.text != "" {
+					want += " " + PRStateSymbol(tc.state, tc.draft) + " " + tc.text
+				}
+				if ansi.Strip(ref) != want {
+					t.Fatalf("ref=%q want %q", ansi.Strip(ref), want)
+				}
+				if strings.Contains(ref, "\x1b]8;") != links {
+					t.Fatalf("OSC 8 not gated: %q", ref)
+				}
+			}
+		}
+	}
+	SetNerdfont(false)
+}
+
+func TestPRStatesRemainDistinctWithoutColor(t *testing.T) {
+	saved := themeConfig
+	Init(config.ThemeConfig{Name: "none"})
+	defer Init(saved)
+	for _, tc := range []struct {
+		state string
+		draft bool
+		text  string
+	}{
+		{forge.PRStateOpen, false, "#42 ○ Open"}, {forge.PRStateOpen, true, "#42 ◌ Draft"},
+		{forge.PRStateMerged, false, "#42 ● Merged"}, {forge.PRStateClosed, false, "#42 ✕ Closed"},
+	} {
+		if got := FormatPRRef(42, tc.state, tc.draft, "https://example.com/42", false); got != tc.text {
+			t.Fatalf("colorless ref=%q want %q", got, tc.text)
+		}
+		linked := FormatPRRef(42, tc.state, tc.draft, "https://example.com/42", true)
+		if !strings.Contains(linked, "\x1b]8;") || ansi.Strip(linked) != tc.text {
+			t.Fatalf("colorless terminal lost link/text: %q", linked)
+		}
+		if strings.Contains(linked, "38;") {
+			t.Fatalf("colorless link emitted color: %q", linked)
+		}
+	}
 }

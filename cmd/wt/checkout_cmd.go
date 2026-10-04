@@ -620,7 +620,7 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 	}
 
 	// Build branch fetcher
-	fetchBranches := func(repoPath string) flows.BranchFetchResult {
+	fetchBranches := func(ctx context.Context, repoPath string) (flows.BranchFetchResult, error) {
 		// Get worktree branches to mark them
 		wtBranches := git.GetWorktreeBranches(ctx, repoPath)
 
@@ -628,7 +628,7 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 		branches, err := git.ListLocalBranches(ctx, repoPath)
 		if err != nil {
 			l.Debug("failed to list branches for wizard", "repo", repoPath, "error", err)
-			return flows.BranchFetchResult{}
+			return flows.BranchFetchResult{}, err
 		}
 
 		var result []flows.BranchInfo
@@ -641,20 +641,7 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 		return flows.BranchFetchResult{
 			Branches:      result,
 			DefaultBranch: git.GetDefaultBranch(ctx, repoPath),
-		}
-	}
-
-	// Build initial branches and default branch from first repo (or current repo)
-	var initialBranches []flows.BranchInfo
-	var defaultBranch string
-	if len(preSelectedRepos) > 0 {
-		result := fetchBranches(repoPaths[preSelectedRepos[0]])
-		initialBranches = result.Branches
-		defaultBranch = result.DefaultBranch
-	} else if len(repoPaths) > 0 {
-		result := fetchBranches(repoPaths[0])
-		initialBranches = result.Branches
-		defaultBranch = result.DefaultBranch
+		}, nil
 	}
 
 	// Build available hooks
@@ -669,14 +656,13 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 	}
 
 	params := flows.CheckoutWizardParams{
-		Branches:         initialBranches,
+		Context:          ctx,
 		AvailableRepos:   repoPaths,
 		RepoNames:        repoNames,
 		PreSelectedRepos: preSelectedRepos,
 		FetchBranches:    fetchBranches,
 		AvailableHooks:   availableHooks,
 		HooksFromCLI:     len(cliHooks) > 0 || cliNoHook,
-		DefaultBranch:    defaultBranch,
 		BaseFromCLI:      baseFromCLI,
 	}
 

@@ -1,6 +1,7 @@
 package flows
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/raphi011/wt/internal/forge"
@@ -18,10 +19,11 @@ type PrCheckoutOptions struct {
 }
 
 // PRFetcher is a function that fetches open PRs for a repo path.
-type PRFetcher func(repoPath string) ([]forge.OpenPR, error)
+type PRFetcher func(ctx context.Context, repoPath string) ([]forge.OpenPR, error)
 
 // PrCheckoutWizardParams contains parameters for the PR checkout wizard.
 type PrCheckoutWizardParams struct {
+	Context         context.Context
 	AvailableRepos  []string   // All available repo paths
 	RepoNames       []string   // Display names for repos
 	PreSelectedRepo int        // Index of pre-selected repo (-1 if none)
@@ -30,16 +32,13 @@ type PrCheckoutWizardParams struct {
 	HooksFromCLI    bool       // True if --hook or --no-hook was passed (skip hooks step)
 }
 
-// PrCheckoutInteractive runs the interactive PR checkout wizard.
-func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, error) {
+// buildPrCheckoutWizard constructs the flow without running subprocesses.
+func buildPrCheckoutWizard(params PrCheckoutWizardParams) *framework.Wizard {
 	w := framework.NewWizard("PR Checkout")
 
 	// Track repo paths/names for the wizard
 	repoPaths := params.AvailableRepos
 	repoNames := params.RepoNames
-
-	// Variable to store the selected repo path for PR fetching
-	var selectedRepoPath string
 
 	// Only show repo selection step if there are multiple repos to choose from
 	showRepoStep := len(repoPaths) > 1
@@ -65,88 +64,34 @@ func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, er
 
 	// Step 2: PR selection (single-select with two-row display)
 	prStep := steps.NewSingleSelect("pr", "PR", "Select a PR to checkout", nil)
-	w.AddStep(prStep)
+	if params.FetchPRs != nil {
+		w.AddStep(steps.NewLoadingStep(prStep, steps.LoadingConfig[[]forge.OpenPR]{
+			Context: params.Context,
+			Key: func() (string, error) {
+				if showRepoStep {
+					return w.GetString("repo"), nil
+				}
+				if len(repoPaths) == 0 {
+					return "", fmt.Errorf("no repository available")
+				}
+				return repoPaths[0], nil
+			},
+			Fetch: params.FetchPRs,
+			Apply: func(prs []forge.OpenPR) bool {
+				prStep.SetOptions(buildPROptions(prs))
+				return len(prs) == 0
+			},
+			LoadingText: "Loading open PRs…",
+			EmptyText:   "No open PRs found. Refresh with Ctrl+R or go back to choose another repository.",
+		}))
+	} else {
+		w.AddStep(prStep)
+	}
 
 	// Step 3: Hooks (only when available and not set via CLI)
 	hasHooks := len(params.AvailableHooks) > 0 && !params.HooksFromCLI
 	if hasHooks {
 		addHookStep(w, params.AvailableHooks)
-	}
-
-	// Callbacks
-	// When repo selection completes, fetch PRs
-	if showRepoStep && params.FetchPRs != nil {
-		w.OnComplete("repo", func(wiz *framework.Wizard) {
-			repoStep := wiz.GetStep("repo").(*steps.SingleSelectStep)
-			selectedIdx := repoStep.GetSelectedIndex()
-			if selectedIdx < 0 || selectedIdx >= len(repoPaths) {
-				return
-			}
-
-			selectedRepoPath = repoPaths[selectedIdx]
-			prs, err := params.FetchPRs(selectedRepoPath)
-			if err != nil {
-				// Show error in options
-				prStepUpdate := wiz.GetStep("pr").(*steps.SingleSelectStep)
-				prStepUpdate.SetOptions([]framework.Option{
-					{Label: fmt.Sprintf("Error: %v", err), Disabled: true},
-				})
-				return
-			}
-
-			if len(prs) == 0 {
-				prStepUpdate := wiz.GetStep("pr").(*steps.SingleSelectStep)
-				prStepUpdate.SetOptions([]framework.Option{
-					{Label: "No open PRs found", Disabled: true},
-				})
-				return
-			}
-
-			// Build PR options with two-row display
-			prOptions := make([]framework.Option, len(prs))
-			for i, pr := range prs {
-				desc := fmt.Sprintf("@%s (%s)", pr.Author, pr.Branch)
-				if pr.IsDraft {
-					desc += " [draft]"
-				}
-				prOptions[i] = framework.Option{
-					Label:       pr.Title,
-					Description: desc,
-					Value:       pr.Number,
-				}
-			}
-
-			prStepUpdate := wiz.GetStep("pr").(*steps.SingleSelectStep)
-			prStepUpdate.SetOptions(prOptions)
-		})
-	}
-
-	// If no repo step (single repo), fetch PRs immediately before wizard runs
-	if !showRepoStep && len(repoPaths) > 0 && params.FetchPRs != nil {
-		selectedRepoPath = repoPaths[0]
-		prs, err := params.FetchPRs(selectedRepoPath)
-		if err != nil {
-			return PrCheckoutOptions{}, fmt.Errorf("failed to fetch PRs: %w", err)
-		}
-
-		if len(prs) == 0 {
-			return PrCheckoutOptions{}, fmt.Errorf("no open PRs found")
-		}
-
-		// Build PR options with two-row display
-		prOptions := make([]framework.Option, len(prs))
-		for i, pr := range prs {
-			desc := fmt.Sprintf("@%s (%s)", pr.Author, pr.Branch)
-			if pr.IsDraft {
-				desc += " [draft]"
-			}
-			prOptions[i] = framework.Option{
-				Label:       pr.Title,
-				Description: desc,
-				Value:       pr.Number,
-			}
-		}
-		prStep.SetOptions(prOptions)
 	}
 
 	// Info line showing selected repo
@@ -164,8 +109,21 @@ func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, er
 		})
 	}
 
+	return w
+}
+
+// PrCheckoutInteractive runs the wizard with command-context cancellation.
+func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, error) {
+	w := buildPrCheckoutWizard(params)
+	ctx := params.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	repoPaths := params.AvailableRepos
+	showRepoStep := len(repoPaths) > 1
+	hasHooks := len(params.AvailableHooks) > 0 && !params.HooksFromCLI
 	// Run the wizard
-	result, err := w.Run()
+	result, err := w.RunContext(ctx)
 	if err != nil {
 		return PrCheckoutOptions{}, err
 	}
@@ -198,4 +156,16 @@ func PrCheckoutInteractive(params PrCheckoutWizardParams) (PrCheckoutOptions, er
 	}
 
 	return opts, nil
+}
+
+func buildPROptions(prs []forge.OpenPR) []framework.Option {
+	options := make([]framework.Option, len(prs))
+	for i, pr := range prs {
+		desc := fmt.Sprintf("@%s (%s)", pr.Author, pr.Branch)
+		if pr.IsDraft {
+			desc += " [draft]"
+		}
+		options[i] = framework.Option{Label: pr.Title, Description: desc, Value: pr.Number}
+	}
+	return options
 }

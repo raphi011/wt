@@ -6,12 +6,17 @@
 package framework
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/raphi011/wt/internal/ui/styles"
 )
 
 // Wizard orchestrates a multi-step interactive flow.
@@ -29,6 +34,7 @@ type Wizard struct {
 	cancelled      bool
 	width          int
 	height         int
+	summaryOffset  int
 	confirmedSteps map[string]bool // tracks steps user has confirmed (advanced past)
 }
 
@@ -145,7 +151,18 @@ func (w *Wizard) IsCancelled() bool {
 // Run executes the wizard and returns when complete or cancelled.
 // The TUI renders to stderr so stdout remains available for piping
 // (e.g., cd $(wt cd -i) works correctly).
-func (w *Wizard) Run() (*Wizard, error) {
+func (w *Wizard) Run() (*Wizard, error) { return w.RunContext(context.Background()) }
+
+// RunContext binds UI lifetime to the calling command's context.
+func (w *Wizard) RunContext(ctx context.Context) (*Wizard, error) {
+	defer w.Close()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if errors.Is(ctx.Err(), context.Canceled) {
+		w.cancelled, w.done = true, true
+		return w, nil
+	}
 	if len(w.steps) == 0 {
 		return w, fmt.Errorf("wizard has no steps")
 	}
@@ -157,10 +174,15 @@ func (w *Wizard) Run() (*Wizard, error) {
 	// (e.g., cd $(wt cd -i) redirects stdout but stderr remains a TTY)
 	p := tea.NewProgram(w,
 		tea.WithOutput(os.Stderr),
+		tea.WithContext(ctx),
 		tea.WithColorProfile(profile),
 	)
 	finalModel, err := p.Run()
 	if err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			w.cancelled, w.done = true, true
+			return w, nil
+		}
 		return nil, err
 	}
 
@@ -191,18 +213,25 @@ func (w *Wizard) Init() tea.Cmd {
 			}
 		}
 		if w.currentStep < len(w.steps) {
-			return w.steps[w.currentStep].Init()
+			w.resizeStep()
+			return tea.Batch(w.steps[w.currentStep].Init(), styles.BackgroundCommand())
 		}
 	}
-	return nil
+	return styles.BackgroundCommand()
 }
 
 func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	defer w.resizeStep()
+	if w.done {
+		return w, nil
+	}
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		styles.ApplyBackground(msg.IsDark())
+
 	case tea.WindowSizeMsg:
 		w.width = msg.Width
 		w.height = msg.Height
-		return w, nil
 
 	case tea.PasteMsg:
 		// Forward paste to current step (not summary).
@@ -216,8 +245,13 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return w, nil
 
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "ctrl+c", "esc":
+		switch {
+		case key.Matches(msg, Keys.Cancel):
+			w.cancelled = true
+			w.done = true
+			w.Close()
+			return w, tea.Quit
+		case key.Matches(msg, Keys.Clear):
 			// If step has clearable input, clear it first
 			if w.currentStep < len(w.steps) {
 				step := w.steps[w.currentStep]
@@ -229,6 +263,7 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// No input to clear, cancel wizard
 			w.cancelled = true
 			w.done = true
+			w.Close()
 			return w, tea.Quit
 		}
 
@@ -256,12 +291,13 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// No more steps - go to summary or submit if skipSummary
 				if w.skipSummary {
 					w.done = true
+					w.Close()
 					return w, tea.Quit
 				}
 				w.currentStep = len(w.steps) // Go to summary
 			} else {
 				w.currentStep = next
-				return w, w.steps[w.currentStep].Init()
+				return w, tea.Batch(cmd, w.steps[w.currentStep].Init())
 			}
 		case StepAdvance:
 			// Mark step as confirmed (user advanced past it)
@@ -277,24 +313,35 @@ func (w *Wizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if w.skipSummary {
 					// Skip summary, finish immediately
 					w.done = true
+					w.Close()
 					return w, tea.Quit
 				}
 				// Go to summary
 				w.currentStep = len(w.steps)
 			} else {
 				w.currentStep = next
-				return w, w.steps[w.currentStep].Init()
+				return w, tea.Batch(cmd, w.steps[w.currentStep].Init())
 			}
 		case StepBack:
 			prev := w.findPrevStep(w.currentStep)
 			if prev >= 0 {
+				if step, ok := w.steps[w.currentStep].(Deactivatable); ok {
+					step.Deactivate()
+				}
 				w.currentStep = prev
+				return w, tea.Batch(cmd, w.steps[w.currentStep].Init())
 			}
 		}
 
 		return w, cmd
 	}
 
+	// Forward component messages, such as cursor blink ticks, to the active step.
+	if !w.done && w.currentStep < len(w.steps) {
+		step, cmd, _ := w.steps[w.currentStep].Update(msg)
+		w.steps[w.currentStep] = step
+		return w, cmd
+	}
 	return w, nil
 }
 
@@ -303,54 +350,36 @@ func (w *Wizard) View() tea.View {
 		return tea.NewView("")
 	}
 
-	var b strings.Builder
-
-	// Title
-	b.WriteString(TitleStyle().Render(w.title))
-	b.WriteString("\n\n")
-
-	// Info line
-	if w.infoLine != nil {
-		if info := w.infoLine(w); info != "" {
-			b.WriteString(InfoStyle().Render(info))
-			b.WriteString("\n\n")
-		}
-	}
-
-	// Step tabs (skip if single step with no summary)
-	if !(len(w.steps) == 1 && w.skipSummary) {
-		b.WriteString(w.renderStepTabs())
-		b.WriteString("\n\n")
-	}
-
-	// Current step content or summary
+	border, width, height, header, help := w.layout()
+	content := ""
 	if w.currentStep >= len(w.steps) {
-		b.WriteString(w.renderSummary())
+		lines := strings.Split(ansi.Wrap(w.renderSummary(), width, ""), "\n")
+		offset := min(w.summaryOffset, max(0, len(lines)-height))
+		content = Fit(strings.Join(lines[offset:], "\n"), width, height)
 	} else {
-		b.WriteString(w.steps[w.currentStep].View())
+		content = Fit(w.steps[w.currentStep].View(), width, height)
 	}
-	b.WriteString("\n")
-
-	// Help text
-	if w.currentStep >= len(w.steps) {
-		b.WriteString(HelpStyle().Render("← back • enter confirm • esc cancel"))
-	} else {
-		b.WriteString(HelpStyle().Render(w.steps[w.currentStep].Help()))
-	}
-
-	return tea.NewView(BorderStyle().Render(b.String()))
+	return tea.NewView(Fit(border.Render(header+"\n\n"+content+"\n"+help), w.width, w.height))
 }
 
 func (w *Wizard) handleSummaryInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "enter":
+	switch {
+	case msg.String() == "down" || msg.String() == "pgdown":
+		_, width, height, _, _ := w.layout()
+		lines := strings.Count(ansi.Wrap(w.renderSummary(), width, ""), "\n") + 1
+		w.summaryOffset = min(w.summaryOffset+1, max(0, lines-height))
+	case msg.String() == "up" || msg.String() == "pgup":
+		w.summaryOffset = max(0, w.summaryOffset-1)
+	case key.Matches(msg, Keys.Confirm):
 		w.done = true
+		w.Close()
 		return w, tea.Quit
-	case "left":
+	case key.Matches(msg, Keys.ListBack):
 		// Go back to last step
 		prev := w.findPrevStep(len(w.steps))
 		if prev >= 0 {
 			w.currentStep = prev
+			return w, w.steps[w.currentStep].Init()
 		}
 	}
 	return w, nil
@@ -491,4 +520,13 @@ func (w *Wizard) AllStepsComplete() bool {
 		}
 	}
 	return true
+}
+
+// Close cancels all pending step I/O. It is safe to call repeatedly.
+func (w *Wizard) Close() {
+	for _, step := range w.steps {
+		if step, ok := step.(Deactivatable); ok {
+			step.Deactivate()
+		}
+	}
 }

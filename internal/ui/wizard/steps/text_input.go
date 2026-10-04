@@ -12,6 +12,7 @@ import (
 
 // TextInputStep allows entering free-form text.
 type TextInputStep struct {
+	width, height   int
 	id              string
 	title           string
 	prompt          string
@@ -61,8 +62,11 @@ func (s *TextInputStep) Update(msg tea.Msg) (framework.Step, tea.Cmd, framework.
 		return s, cmd, framework.StepContinue
 
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "enter":
+		result := framework.Navigation(msg, true)
+		switch result {
+		case framework.StepBack:
+			return s, nil, result
+		case framework.StepAdvance, framework.StepSubmitIfReady:
 			value := strings.TrimSpace(s.input.Value())
 			if value == "" {
 				s.validationError = "Value cannot be empty"
@@ -77,25 +81,7 @@ func (s *TextInputStep) Update(msg tea.Msg) (framework.Step, tea.Cmd, framework.
 			s.validationError = ""
 			s.submitted = true
 			s.submitValue = value
-			return s, nil, framework.StepSubmitIfReady
-		case "right":
-			value := strings.TrimSpace(s.input.Value())
-			if value == "" {
-				s.validationError = "Value cannot be empty"
-				return s, nil, framework.StepContinue
-			}
-			if s.validate != nil {
-				if err := s.validate(value); err != nil {
-					s.validationError = err.Error()
-					return s, nil, framework.StepContinue
-				}
-			}
-			s.validationError = ""
-			s.submitted = true
-			s.submitValue = value
-			return s, nil, framework.StepAdvance
-		case "left":
-			return s, nil, framework.StepBack
+			return s, nil, result
 		}
 
 		// Clear error when user types
@@ -107,21 +93,32 @@ func (s *TextInputStep) Update(msg tea.Msg) (framework.Step, tea.Cmd, framework.
 		return s, cmd, framework.StepContinue
 	}
 
-	return s, nil, framework.StepContinue
+	var cmd tea.Cmd
+	s.input, cmd = s.input.Update(msg)
+	return s, cmd, framework.StepContinue
 }
 
 func (s *TextInputStep) View() string {
-	var b strings.Builder
-	b.WriteString(s.prompt + "\n\n")
-	b.WriteString(s.input.View())
-	if s.validationError != "" {
-		b.WriteString("\n" + framework.ErrorStyle().Render(s.validationError))
+	width, height := s.width, s.height
+	if width == 0 {
+		width = 80
 	}
-	return b.String()
+	if height == 0 {
+		height = 20
+	}
+	rows := []string{}
+	if height >= 3 {
+		rows = append(rows, framework.Fit(s.prompt, width, 1), "")
+	}
+	rows = append(rows, framework.Fit(s.input.View(), width, 1))
+	if s.validationError != "" && height > len(rows) {
+		rows = append(rows, framework.Wrap(framework.ErrorStyle().Render(s.validationError), width, height-len(rows)))
+	}
+	return strings.Join(rows, "\n")
 }
 
 func (s *TextInputStep) Help() string {
-	return "type text • ←/→ navigate • enter confirm • esc cancel"
+	return "type text • ←/→ edit • " + framework.NavigationHelp(true) + " • " + framework.CancellationHelp(s.HasClearableInput(), "input")
 }
 
 func (s *TextInputStep) Value() framework.StepValue {
@@ -213,4 +210,14 @@ func (s *TextInputStep) WithCursor(shape tea.CursorShape, blink bool) *TextInput
 func (s *TextInputStep) String() string {
 	return fmt.Sprintf("TextInputStep{id=%s, submitted=%v, value=%q}",
 		s.id, s.submitted, s.submitValue)
+}
+
+// SetSize constrains the input to its content area, including its prompt/cursor.
+func (s *TextInputStep) SetSize(width, height int) {
+	s.width, s.height = max(1, width), max(1, height)
+	s.input.SetWidth(max(1, width-3))
+}
+
+func (s *TextInputStep) CompactHelp() string {
+	return "←/→ edit • " + framework.BindingHelp(framework.Keys.Confirm, framework.Keys.Back) + " • " + framework.CancellationHelp(s.HasClearableInput(), "input")
 }
