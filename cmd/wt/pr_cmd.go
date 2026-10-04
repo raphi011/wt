@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
+	"github.com/raphi011/wt/internal/ui/wizard/flows"
 	"github.com/raphi011/wt/internal/worktree"
 )
 
@@ -100,25 +102,33 @@ func resolveRepoForge(ctx context.Context, repoArg string) (*repoForgeResult, er
 
 func newPrCheckoutCmd() *cobra.Command {
 	var (
-		forgeName string
-		cloneMode string
-		cloneRepo bool
-		note      string
-		hf        hookFlags
+		forgeName   string
+		cloneMode   string
+		cloneRepo   bool
+		interactive bool
+		note        string
+		hf          hookFlags
 	)
 
 	cmd := &cobra.Command{
-		Use:     "checkout [repo] <number>",
+		Use:     "checkout [repo] [number]",
 		Short:   "Checkout a PR into a worktree",
 		Aliases: []string{"co"},
-		Args:    cobra.RangeArgs(1, 2),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if interactive {
+				return cobra.MaximumNArgs(1)(cmd, args)
+			}
+			return cobra.RangeArgs(1, 2)(cmd, args)
+		},
 		Long: `Checkout a PR into a worktree.
 
 If repo contains '/', it's treated as org/repo and matched against remotes of
 registered repos. Use --clone to clone the repo if no local match is found.
 Otherwise, the repo argument is looked up in the local registry by name.
-Use --clone-mode (with --clone) to control whether the repo is cloned as bare or regular.`,
-		Example: `  wt pr checkout 123                                    # PR from current repo
+Use --clone-mode (with --clone) to control whether the repo is cloned as bare or regular.
+Use --interactive to select an open PR from registered repositories.`,
+		Example: `  wt pr checkout -i                                     # Select an open PR interactively
+  wt pr checkout 123                                    # PR from current repo
   wt pr checkout myrepo 123                             # PR from local repo in registry
   wt pr checkout org/repo 123                           # PR from registered repo matched by remote
   wt pr checkout --clone org/repo 123                   # Clone repo and checkout PR
@@ -132,7 +142,11 @@ Use --clone-mode (with --clone) to control whether the repo is cloned as bare or
 			// Parse arguments: [repo] <number>
 			var prNumber int
 			var repoArg string
-			if len(args) == 1 {
+			if interactive {
+				if len(args) == 1 {
+					repoArg = args[0]
+				}
+			} else if len(args) == 1 {
 				// Just PR number
 				num, err := strconv.Atoi(args[0])
 				if err != nil {
@@ -155,6 +169,21 @@ Use --clone-mode (with --clone) to control whether the repo is cloned as bare or
 				return fmt.Errorf("load registry: %w", err)
 			}
 
+			var interactiveRepoPath string
+			if interactive {
+				options, err := runPrCheckoutWizard(ctx, reg, repoArg, forgeName, hf)
+				if err != nil {
+					return err
+				}
+				if options.Cancelled {
+					return nil
+				}
+				interactiveRepoPath, prNumber = options.SelectedRepo, options.SelectedPR
+				if len(hf.HookNames) == 0 && !hf.NoHook {
+					hf.HookNames, hf.NoHook = options.SelectedHooks, options.NoHook
+				}
+			}
+
 			// Determine target repo
 			var repo registry.Repo
 			var repoPath string
@@ -162,7 +191,15 @@ Use --clone-mode (with --clone) to control whether the repo is cloned as bare or
 
 			var justClonedRegular bool
 
-			if repoArg != "" && strings.Contains(repoArg, "/") {
+			if interactiveRepoPath != "" {
+				for _, registered := range reg.Repos {
+					if registered.Path == interactiveRepoPath {
+						repo = registered
+						break
+					}
+				}
+				repoPath = interactiveRepoPath
+			} else if repoArg != "" && strings.Contains(repoArg, "/") {
 				// Org/repo format: match by remote URL, or clone with --clone
 				orgRepo := repoArg
 
@@ -256,7 +293,11 @@ Use --clone-mode (with --clone) to control whether the repo is cloned as bare or
 			}
 
 			if f == nil {
-				f = forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
+				if forgeName != "" {
+					f = forge.ByNameWithConfig(forgeName, &effCfg.Forge)
+				} else {
+					f = forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
+				}
 				if err := f.Check(ctx); err != nil {
 					return err
 				}
@@ -360,8 +401,10 @@ Use --clone-mode (with --clone) to control whether the repo is cloned as bare or
 		},
 	}
 
+	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Select an open PR interactively")
 	cmd.Flags().StringVar(&forgeName, "forge", "", "Forge type: github or gitlab")
 	cmd.Flags().BoolVar(&cloneRepo, "clone", false, "Clone the repo if no local match (for org/repo format)")
+	cmd.MarkFlagsMutuallyExclusive("interactive", "clone")
 	cmd.Flags().StringVar(&cloneMode, "clone-mode", "", "Clone mode: bare or regular (default: config)")
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
 	registerHookFlags(cmd, &hf)
@@ -669,4 +712,63 @@ func isMac() bool {
 func runCommand(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
 	return cmd.Run()
+}
+
+// runPrCheckoutWizard defers PR fetching until the selector's command runs.
+func runPrCheckoutWizard(ctx context.Context, reg *registry.Registry, repoArg, forgeName string, hf hookFlags) (flows.PrCheckoutOptions, error) {
+	params, err := prCheckoutWizardParams(ctx, reg, repoArg, forgeName, hf)
+	if err != nil {
+		return flows.PrCheckoutOptions{}, err
+	}
+	return flows.PrCheckoutInteractive(params)
+}
+
+func prCheckoutWizardParams(ctx context.Context, reg *registry.Registry, repoArg, forgeName string, hf hookFlags) (flows.PrCheckoutWizardParams, error) {
+	repos := reg.Repos
+	if repoArg != "" {
+		var repo registry.Repo
+		var err error
+		if strings.Contains(repoArg, "/") {
+			repo, err = findRepoByRemoteRepoPath(ctx, reg, repoArg)
+		} else {
+			repo, err = reg.FindByName(repoArg)
+		}
+		if err != nil {
+			return flows.PrCheckoutWizardParams{}, err
+		}
+		repos = []registry.Repo{repo}
+	}
+	if len(repos) == 0 {
+		return flows.PrCheckoutWizardParams{}, fmt.Errorf("no registered repositories; register one with 'wt repo add'")
+	}
+	params := flows.PrCheckoutWizardParams{Context: ctx, PreSelectedRepo: -1, HooksFromCLI: len(hf.HookNames) > 0 || hf.NoHook}
+	currentRepo := git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx))
+	for i, repo := range repos {
+		params.AvailableRepos = append(params.AvailableRepos, repo.Path)
+		params.RepoNames = append(params.RepoNames, repo.Name)
+		if repo.Path == currentRepo {
+			params.PreSelectedRepo = i
+		}
+	}
+	cfg := config.FromContext(ctx)
+	for name, hook := range cfg.Hooks.Hooks {
+		isDefault := slices.Contains(hook.On, "checkout")
+		params.AvailableHooks = append(params.AvailableHooks, flows.HookInfo{Name: name, Description: hook.Description, IsDefault: isDefault})
+	}
+	params.FetchPRs = func(ctx context.Context, repoPath string) ([]forge.OpenPR, error) {
+		effCfg := resolveEffectiveConfig(ctx, repoPath)
+		originURL, err := git.GetOriginURL(ctx, repoPath)
+		if err != nil {
+			return nil, fmt.Errorf("get origin URL: %w", err)
+		}
+		f := forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
+		if forgeName != "" {
+			f = forge.ByNameWithConfig(forgeName, &effCfg.Forge)
+		}
+		if err := f.Check(ctx); err != nil {
+			return nil, err
+		}
+		return f.ListOpenPRs(ctx, originURL)
+	}
+	return params, nil
 }

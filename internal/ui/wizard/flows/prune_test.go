@@ -1,6 +1,10 @@
 package flows
 
 import (
+	"github.com/charmbracelet/x/ansi"
+	"github.com/raphi011/wt/internal/forge"
+	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/ui/styles"
 	"strings"
 	"testing"
 
@@ -53,7 +57,7 @@ func TestPruneDescriptionRenderer_Prunable(t *testing.T) {
 		},
 	}
 
-	// Prunable items should be rendered in success style (green)
+	// Eligibility is rendered separately from the PR state.
 	result := pruneDescriptionRenderer(opt, false)
 
 	// The result should contain the reason
@@ -136,7 +140,7 @@ func TestPruneDescriptionRenderer_StalePrunable(t *testing.T) {
 		},
 	}
 
-	// Stale prunable items should be rendered in warning style (orange), not success
+	// Stale reasons retain warning styling alongside eligibility.
 	result := pruneDescriptionRenderer(opt, false)
 
 	if !strings.Contains(result, "Stale (3w)") {
@@ -145,7 +149,7 @@ func TestPruneDescriptionRenderer_StalePrunable(t *testing.T) {
 }
 
 func TestPruneDescriptionRenderer_MergedNotStale(t *testing.T) {
-	// A merged (non-stale) prunable item should use success style, not warning
+	// A merged item retains its state text and separate eligibility label.
 	opt := framework.Option{
 		Label:       "repo:branch",
 		Description: "● Merged",
@@ -199,3 +203,40 @@ func TestPruneWorktreeInfo_Structure(t *testing.T) {
 // - Shows custom description with colored status
 // - Has info line showing selected count
 // - Uses "Confirm removal" as summary title
+
+func TestPruneStateAndActionAreSeparate(t *testing.T) {
+	for _, tc := range []struct {
+		state                            string
+		draft, eligible, stale, selected bool
+		action                           string
+	}{
+		{forge.PRStateMerged, false, true, false, false, "Eligible"},
+		{forge.PRStateOpen, false, false, false, true, "Force"},
+		{forge.PRStateOpen, true, false, false, false, ""},
+		{forge.PRStateClosed, false, true, true, false, "Eligible"},
+	} {
+		wt := git.Worktree{PRNumber: 123, PRState: tc.state, PRDraft: tc.draft, PRURL: "https://example.com/123"}
+		reason := styles.FormatPRState(tc.state, tc.draft)
+		if tc.stale {
+			reason = styles.FormatStaleReason("3w")
+		}
+		result := pruneDescriptionRenderer(framework.Option{Value: pruneOptionValue{Worktree: wt, IsPrunable: tc.eligible, IsStale: tc.stale, Reason: reason}}, tc.selected)
+		state := styles.FormatPRRef(123, tc.state, tc.draft, "", false)
+		if !strings.Contains(result, state) {
+			t.Fatalf("prune recolored PR state: %q want %q", result, state)
+		}
+		plain := ansi.Strip(result)
+		if !strings.Contains(plain, "#123") || !strings.Contains(plain, styles.PRStateText(tc.state, tc.draft)) {
+			t.Fatalf("missing state: %q", plain)
+		}
+		if tc.action != "" && !strings.Contains(plain, tc.action) {
+			t.Fatalf("missing action: %q", plain)
+		}
+		if tc.stale && !strings.Contains(plain, "Stale (3w)") {
+			t.Fatalf("stale eligibility hid PR state: %q", plain)
+		}
+		if strings.Contains(result, "\x1b]8;") {
+			t.Fatal("prune emitted an unsolicited hyperlink")
+		}
+	}
+}

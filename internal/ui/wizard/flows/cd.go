@@ -5,8 +5,11 @@ import (
 	"os"
 	"time"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/raphi011/wt/internal/ui/styles"
 
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
 	"github.com/raphi011/wt/internal/ui/wizard/steps"
@@ -36,36 +39,44 @@ type CdWizardParams struct {
 // cdListModel is a lightweight BubbleTea model wrapping FilterableListStep
 // directly, bypassing the wizard framework chrome (borders, title, tabs).
 type cdListModel struct {
-	step       *steps.FilterableListStep
-	worktrees  []CdWorktreeInfo
-	done       bool
-	cancelled  bool
-	selectedAt int // index into worktrees; -1 means no selection
+	width, height int
+	step          *steps.FilterableListStep
+	worktrees     []CdWorktreeInfo
+	done          bool
+	cancelled     bool
+	selectedAt    int // index into worktrees; -1 means no selection
 }
 
 func (m *cdListModel) Init() tea.Cmd {
-	return m.step.Init()
+	m.resizeStep()
+	return tea.Batch(m.step.Init(), styles.BackgroundCommand())
 }
 
-// Update handles incoming messages. Processes tea.KeyPressMsg for navigation
-// and tea.PasteMsg for filter input. Other message types are ignored.
+// Update handles navigation and forwards component messages to the list input.
 func (m *cdListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	defer m.resizeStep()
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width, m.height = max(1, msg.Width), max(1, msg.Height)
+		m.resizeStep()
+		return m, nil
+	case tea.BackgroundColorMsg:
+		styles.ApplyBackground(msg.IsDark())
 	case tea.PasteMsg:
 		// Paste never triggers navigation; discard StepResult.
 		_, cmd, _ := m.step.Update(msg)
 		return m, cmd
 
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "esc":
+		switch {
+		case key.Matches(msg, framework.Keys.Clear):
 			if m.step.HasClearableInput() {
 				cmd := m.step.ClearInput()
 				return m, cmd
 			}
 			m.cancelled = true
 			return m, tea.Quit
-		case "ctrl+c":
+		case key.Matches(msg, framework.Keys.Cancel):
 			m.cancelled = true
 			return m, tea.Quit
 		}
@@ -84,6 +95,10 @@ func (m *cdListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	if !m.done && !m.cancelled {
+		_, cmd, _ := m.step.Update(msg)
+		return m, cmd
+	}
 	return m, nil
 }
 
@@ -91,7 +106,9 @@ func (m *cdListModel) View() tea.View {
 	if m.done || m.cancelled {
 		return tea.NewView("")
 	}
-	return tea.NewView(m.step.View() + "\n" + framework.HelpStyle().Render(m.step.Help()) + "\n")
+	width, height := m.dimensions()
+	help := m.help(width, height)
+	return tea.NewView(framework.Fit(m.step.View()+"\n"+help, width, height))
 }
 
 // CdInteractive runs the interactive cd list with fuzzy search.
@@ -140,4 +157,18 @@ func CdInteractive(params CdWizardParams) (CdOptions, error) {
 		RepoName:     wt.RepoName,
 		Branch:       wt.Branch,
 	}, nil
+}
+
+func (m *cdListModel) dimensions() (int, int) {
+	if m.width == 0 {
+		return 80, 24
+	}
+	return m.width, m.height
+}
+func (m *cdListModel) help(width, height int) string {
+	return framework.HelpStyle().MarginTop(0).Render(framework.Wrap(m.step.Help(), width, min(3, max(1, height/4))))
+}
+func (m *cdListModel) resizeStep() {
+	width, height := m.dimensions()
+	m.step.SetSize(width, max(1, height-lipgloss.Height(m.help(width, height))))
 }

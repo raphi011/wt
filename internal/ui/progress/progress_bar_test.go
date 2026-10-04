@@ -1,6 +1,9 @@
 package progress
 
 import (
+	"bytes"
+	"context"
+	"strings"
 	"testing"
 
 	"charm.land/bubbles/v2/progress"
@@ -28,6 +31,7 @@ func TestProgressBar_StopBeforeStart(t *testing.T) {
 
 func newTestModel(total int, message string) progressBarModel {
 	return progressBarModel{
+		ctx:      context.Background(),
 		progress: progress.New(progress.WithWidth(40), progress.WithoutPercentage()),
 		total:    total,
 		message:  message,
@@ -93,9 +97,9 @@ func TestProgressBarModel_Update_KeyPress(t *testing.T) {
 
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 'q'})
 
-	// KeyPress should return tea.Quit
-	if cmd == nil {
-		t.Fatal("Update(KeyPressMsg) returned nil cmd, want tea.Quit")
+	// Progress is display-only; keyboard input must not stop it.
+	if cmd != nil {
+		t.Fatal("Update(KeyPressMsg) should ignore keyboard input")
 	}
 }
 
@@ -130,5 +134,35 @@ func TestProgressBar_Total(t *testing.T) {
 		if pb.Total() != tt.total {
 			t.Errorf("Total() = %d, want %d", pb.Total(), tt.total)
 		}
+	}
+}
+
+func TestProgressPlainOutputAndCancellation(t *testing.T) {
+	var output bytes.Buffer
+	ctx, cancel := context.WithCancel(context.Background())
+	pb := NewProgressBar(2, "Fetching", WithOutput(&output), WithContext(ctx))
+	pb.Start()
+	pb.SetProgress(1, "Fetched first")
+	cancel()
+	pb.SetProgress(2, "Should be ignored")
+	pb.Stop()
+	pb.Stop()
+	pb.Start() // Stopped displays cannot reuse a closed channel.
+	if pb.program != nil {
+		t.Fatal("redirected output started a TUI")
+	}
+	got := output.String()
+	if got != "Fetching (0/2)\nFetched first (1/2)\n" || strings.Contains(got, "\x1b") {
+		t.Fatalf("plain stderr = %q", got)
+	}
+}
+
+func TestProgressWaitEndsOnContextCancellation(t *testing.T) {
+	m := newTestModel(2, "Fetching")
+	ctx, cancel := context.WithCancel(context.Background())
+	m.ctx = ctx
+	cancel()
+	if _, ok := m.waitForUpdate()().(tea.QuitMsg); !ok {
+		t.Fatal("pending update did not exit on cancellation")
 	}
 }

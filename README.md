@@ -167,6 +167,10 @@ wt checkout -b myrepo:feature-login --base develop -f
 ### Reviewing a Pull Request
 
 ```bash
+# Select an open PR interactively from registered repositories
+wt pr checkout -i
+wt pr checkout -i backend-api
+
 # Checkout PR from current repo
 wt pr checkout 123
 

@@ -139,11 +139,11 @@ func TestTextInputStep_Submission(t *testing.T) {
 		}
 	})
 
-	t.Run("right arrow submits and advances", func(t *testing.T) {
+	t.Run("alt+right submits and advances", func(t *testing.T) {
 		step := NewTextInput("test", "Test", "Enter name:", "")
 		step.SetValue("hello")
 
-		_, result := updateStep(t, step, keyMsg("right"))
+		_, result := updateStep(t, step, keyMsg("alt+right"))
 
 		if result != framework.StepAdvance {
 			t.Errorf("Result = %v, want StepAdvance", result)
@@ -153,10 +153,10 @@ func TestTextInputStep_Submission(t *testing.T) {
 		}
 	})
 
-	t.Run("left arrow goes back", func(t *testing.T) {
+	t.Run("alt+left goes back", func(t *testing.T) {
 		step := NewTextInput("test", "Test", "Enter name:", "")
 
-		_, result := updateStep(t, step, keyMsg("left"))
+		_, result := updateStep(t, step, keyMsg("alt+left"))
 
 		if result != framework.StepBack {
 			t.Errorf("Result = %v, want StepBack", result)
@@ -205,7 +205,7 @@ func TestTextInputStep_Validation(t *testing.T) {
 		}
 	})
 
-	t.Run("right arrow respects validation", func(t *testing.T) {
+	t.Run("alt+right respects validation", func(t *testing.T) {
 		step := NewTextInput("test", "Test", "Enter name:", "")
 		step.SetValidate(func(s string) error {
 			if s != "valid" {
@@ -215,7 +215,7 @@ func TestTextInputStep_Validation(t *testing.T) {
 		})
 		step.SetValue("invalid")
 
-		_, result := updateStep(t, step, keyMsg("right"))
+		_, result := updateStep(t, step, keyMsg("alt+right"))
 
 		if result == framework.StepAdvance {
 			t.Error("Should not advance with validation error")

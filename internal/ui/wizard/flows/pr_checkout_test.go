@@ -1,7 +1,10 @@
 package flows
 
 import (
+	tea "charm.land/bubbletea/v2"
+	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/raphi011/wt/internal/forge"
@@ -13,18 +16,23 @@ func TestPrCheckoutInteractive_SingleRepo_FetchError(t *testing.T) {
 		AvailableRepos:  []string{"/path/to/repo"},
 		RepoNames:       []string{"my-repo"},
 		PreSelectedRepo: -1,
-		FetchPRs: func(repoPath string) ([]forge.OpenPR, error) {
+		FetchPRs: func(ctx context.Context, repoPath string) ([]forge.OpenPR, error) {
 			return nil, errors.New("network error")
 		},
 	}
 
-	_, err := PrCheckoutInteractive(params)
-
-	if err == nil {
-		t.Fatal("expected error for fetch failure")
+	w := buildPrCheckoutWizard(params)
+	cmd := w.Init()
+	if !strings.Contains(w.GetStep("pr").View(), "Loading") {
+		t.Fatal("expected loading state")
 	}
-	if err.Error() != "failed to fetch PRs: network error" {
-		t.Errorf("unexpected error message: %v", err)
+	w.Update(cmd())
+	if !strings.Contains(w.GetStep("pr").View(), "network error") || !strings.Contains(w.GetStep("pr").Help(), "retry") {
+		t.Fatal("expected actionable fetch failure")
+	}
+	w.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if w.CurrentStepID() != "pr" {
+		t.Fatal("error state allowed confirmation")
 	}
 }
 
@@ -34,18 +42,20 @@ func TestPrCheckoutInteractive_SingleRepo_NoPRs(t *testing.T) {
 		AvailableRepos:  []string{"/path/to/repo"},
 		RepoNames:       []string{"my-repo"},
 		PreSelectedRepo: -1,
-		FetchPRs: func(repoPath string) ([]forge.OpenPR, error) {
+		FetchPRs: func(ctx context.Context, repoPath string) ([]forge.OpenPR, error) {
 			return []forge.OpenPR{}, nil // Empty slice
 		},
 	}
 
-	_, err := PrCheckoutInteractive(params)
-
-	if err == nil {
-		t.Fatal("expected error for empty PRs")
+	w := buildPrCheckoutWizard(params)
+	cmd := w.Init()
+	w.Update(cmd())
+	if !strings.Contains(w.GetStep("pr").View(), "No open PRs found") {
+		t.Fatal("expected actionable empty state")
 	}
-	if err.Error() != "no open PRs found" {
-		t.Errorf("unexpected error message: %v", err)
+	w.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if w.CurrentStepID() != "pr" {
+		t.Fatal("empty PR state allowed confirmation")
 	}
 }
 
@@ -92,7 +102,7 @@ func TestPrCheckoutOptions_Structure(t *testing.T) {
 
 func TestPrCheckoutWizardParams_Structure(t *testing.T) {
 	// Test that PRFetcher signature matches expected type
-	var fetcher PRFetcher = func(repoPath string) ([]forge.OpenPR, error) {
+	var fetcher PRFetcher = func(ctx context.Context, repoPath string) ([]forge.OpenPR, error) {
 		return []forge.OpenPR{
 			{Number: 1, Title: "PR 1", Author: "user1", Branch: "feature-1", IsDraft: false},
 			{Number: 2, Title: "PR 2", Author: "user2", Branch: "feature-2", IsDraft: true},
@@ -118,7 +128,7 @@ func TestPrCheckoutWizardParams_Structure(t *testing.T) {
 	}
 
 	// Test the fetcher works
-	prs, err := params.FetchPRs("/any/path")
+	prs, err := params.FetchPRs(context.Background(), "/any/path")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

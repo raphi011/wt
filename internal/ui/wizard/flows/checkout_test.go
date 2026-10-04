@@ -2,6 +2,10 @@ package flows
 
 import (
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/raphi011/wt/internal/ui/wizard/framework"
+	"github.com/raphi011/wt/internal/ui/wizard/steps"
 )
 
 func TestBuildBranchOptions_MarksCheckedOutBranches(t *testing.T) {
@@ -198,3 +202,15 @@ func TestHookInfo_Structure(t *testing.T) {
 // - Build the wizard without calling Run()
 // - Inspect skip conditions and callbacks
 // - Simulate key events to test the full flow
+
+func TestCheckoutDecoratedBranchSelection(t *testing.T) {
+	options := buildBranchOptions([]BranchInfo{{Name: "main", InWorktree: true}})
+	step := steps.NewFilterableList("branch", "Branch", "", options).
+		WithCreateFromFilter(func(f string) string { return "+ Create " + f }).
+		WithValueLabel(func(value string, _ bool, _ framework.Option) string { return value })
+	step.Update(tea.PasteMsg{Content: "main"})
+	step.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if step.IsCreateSelected() || step.Value().Raw != "main" || step.Value().Label != "main" {
+		t.Fatalf("existing branch selection = %+v, new = %v", step.Value(), step.IsCreateSelected())
+	}
+}

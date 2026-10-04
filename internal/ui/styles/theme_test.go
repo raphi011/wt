@@ -270,3 +270,31 @@ func TestInit_NoneTheme(t *testing.T) {
 	// Reset to default
 	Init(config.ThemeConfig{})
 }
+
+func TestInteractiveAutoThemePreservesOverrides(t *testing.T) {
+	defer Init(config.ThemeConfig{})
+	Init(config.ThemeConfig{Name: "nord", Mode: "auto", Accent: "#123456"})
+	if Current().Primary != NordTheme.Primary || BackgroundCommand() == nil {
+		t.Fatal("auto startup must use dark fallback and request async detection")
+	}
+	ApplyBackground(false)
+	if Current().Primary != NordLightTheme.Primary || Current().Accent != lipgloss.Color("#123456") {
+		t.Fatal("light response lost variant or custom overrides")
+	}
+	ApplyBackground(true)
+	if Current().Primary != NordTheme.Primary {
+		t.Fatal("dark response was ignored")
+	}
+	for _, mode := range []string{"light", "dark"} {
+		Init(config.ThemeConfig{Name: "nord", Mode: mode})
+		before := Current()
+		ApplyBackground(mode == "light")
+		if BackgroundCommand() != nil || Current() != before {
+			t.Fatalf("explicit %s mode changed after terminal reply", mode)
+		}
+	}
+	Init(config.ThemeConfig{Name: "none"})
+	if BackgroundCommand() != nil {
+		t.Fatal("colorless theme requested a background query")
+	}
+}

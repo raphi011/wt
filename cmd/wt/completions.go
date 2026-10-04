@@ -242,8 +242,9 @@ func completeScopedWorktreeArg(cmd *cobra.Command, args []string, toComplete str
 	return matches, cobra.ShellCompDirectiveNoFileComp
 }
 
-// completePrCheckoutArgs provides completion for `wt pr checkout [repo] <number>`.
-// First arg: repo names (if not numeric). No completion for PR numbers.
+// completePrCheckoutArgs offers repo names for both `wt pr checkout [repo] <number>`
+// and `wt pr checkout -i [repo]`. Cobra generates flag completion for all shells;
+// PR numbers and arguments after the optional repo have no completion.
 func completePrCheckoutArgs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	// If we already have an arg that looks like a PR number, no more completion
 	if len(args) >= 1 {

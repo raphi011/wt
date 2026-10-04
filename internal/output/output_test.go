@@ -93,3 +93,19 @@ func TestPrinter_Writer(t *testing.T) {
 		t.Errorf("direct Write produced %q, want %q", got, "direct")
 	}
 }
+
+func TestTerminalWidthUsesDataDestination(t *testing.T) {
+	var buf bytes.Buffer
+	if got := FromContext(WithPrinter(context.Background(), &buf)).TerminalWidth(); got != 0 {
+		t.Fatalf("buffer width = %d, want unconstrained", got)
+	}
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	defer writer.Close()
+	if got := FromContext(WithPrinter(context.Background(), writer)).TerminalWidth(); got != 0 {
+		t.Fatalf("pipe width = %d, want unconstrained", got)
+	}
+}

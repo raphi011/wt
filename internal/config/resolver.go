@@ -1,6 +1,9 @@
 package config
 
-import "context"
+import (
+	"context"
+	"sync"
+)
 
 // resolverKey is the context key for ConfigResolver
 type resolverKey struct{}
@@ -8,6 +11,7 @@ type resolverKey struct{}
 // ConfigResolver provides lazy per-repo config resolution with caching.
 // It loads and merges per-repo .wt.toml files with the global config on demand.
 type ConfigResolver struct {
+	mu     sync.Mutex
 	global *Config
 	cache  map[string]*Config // repoPath -> merged config
 }
@@ -23,6 +27,8 @@ func NewResolver(global *Config) *ConfigResolver {
 // ConfigForRepo returns the effective config for a repo, merging any .wt.toml
 // found at the repo path with the global config. Results are cached per repoPath.
 func (r *ConfigResolver) ConfigForRepo(repoPath string) (*Config, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if cached, ok := r.cache[repoPath]; ok {
 		return cached, nil
 	}

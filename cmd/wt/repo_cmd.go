@@ -146,7 +146,7 @@ Use positional args to filter by label(s).`,
 				rows = append(rows, []string{repo.Name, repo.Path, labels})
 			}
 
-			out.Print(static.RenderTable(headers, rows))
+			out.Print(static.RenderTableAtWidth(headers, rows, out.TerminalWidth()))
 
 			return nil
 		},

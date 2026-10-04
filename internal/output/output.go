@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/charmbracelet/x/term"
 )
 
 type ctxKey struct{}
@@ -49,4 +51,18 @@ func (p *Printer) Println(a ...any) {
 // Writer returns the underlying writer.
 func (p *Printer) Writer() io.Writer {
 	return p.w
+}
+
+// TerminalWidth reports the actual data destination's width. Redirected output
+// deliberately has no width constraint, even when stderr is a terminal.
+func (p *Printer) TerminalWidth() int {
+	f, ok := p.w.(*os.File)
+	if !ok || !term.IsTerminal(f.Fd()) {
+		return 0
+	}
+	width, _, err := term.GetSize(f.Fd())
+	if err != nil {
+		return 0
+	}
+	return width
 }

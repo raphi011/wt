@@ -145,11 +145,12 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 
 			// Build table rows
 			var rows [][]string
+			hyperlinks := out.HyperlinksSupported()
 			for _, wt := range allWorktrees {
-				rows = append(rows, static.WorktreeTableRow(wt, cfg.Prune.StaleDays))
+				rows = append(rows, static.WorktreeTableRow(wt, cfg.Prune.StaleDays, hyperlinks))
 			}
 
-			out.Print(static.RenderTable(static.WorktreeTableHeaders, rows))
+			out.Print(static.RenderTableAtWidth(static.WorktreeTableHeaders, rows, out.TerminalWidth()))
 
 			return nil
 		},

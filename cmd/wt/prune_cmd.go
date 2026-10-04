@@ -187,6 +187,7 @@ Use -f to prune worktrees whose PR is not yet confirmed merged.`,
 						Reason:     reason,
 						IsPrunable: isPrunable,
 						IsStale:    isStaleWt,
+						Worktree:   wt,
 					})
 				}
 
@@ -254,10 +255,11 @@ Use -f to prune worktrees whose PR is not yet confirmed merged.`,
 			if len(removed) > 0 {
 				out.Println()
 				var rows [][]string
+				hyperlinks := out.HyperlinksSupported()
 				for _, wt := range removed {
-					rows = append(rows, static.WorktreeTableRow(wt, cfg.Prune.StaleDays))
+					rows = append(rows, static.WorktreeTableRow(wt, cfg.Prune.StaleDays, hyperlinks))
 				}
-				out.Print(static.RenderTable(static.WorktreeTableHeaders, rows))
+				out.Print(static.RenderTableAtWidth(static.WorktreeTableHeaders, rows, out.TerminalWidth()))
 			}
 
 			// Save PR cache once at the end

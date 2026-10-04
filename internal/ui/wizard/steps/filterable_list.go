@@ -19,7 +19,7 @@ import (
 // optionSource implements fuzzy.Source for options.
 type optionSource []framework.Option
 
-func (s optionSource) String(i int) string { return s[i].Label }
+func (s optionSource) String(i int) string { return s[i].MatchText() }
 func (s optionSource) Len() int            { return len(s) }
 
 // FilterableListStep allows selecting one or more options from a filterable list
@@ -28,14 +28,15 @@ func (s optionSource) Len() int            { return len(s) }
 // Optionally supports a "create from filter" option that appears when the filter
 // doesn't match any existing option exactly.
 type FilterableListStep struct {
-	id       string
-	title    string
-	prompt   string
-	options  []framework.Option
-	filtered []fuzzy.Match // fuzzy matches with indices and matched positions
-	cursor   int           // position in filtered list (0 = create option if shown)
-	selected int           // selected index in filtered list, -1 if none (single-select mode)
-	filter   string        // current filter value (synced from filterInput)
+	width, height int
+	id            string
+	title         string
+	prompt        string
+	options       []framework.Option
+	filtered      []fuzzy.Match // fuzzy matches with indices and matched positions
+	cursor        int           // position in filtered list (0 = create option if shown)
+	selected      int           // selected index in filtered list, -1 if none (single-select mode)
+	filter        string        // current filter value (synced from filterInput)
 
 	// Filter input with cursor - focus state is derived from filterInput.Focused()
 	// When filterInput.Focused() is true, filter has focus; otherwise list has focus
@@ -114,7 +115,7 @@ func (s *FilterableListStep) ID() string    { return s.id }
 func (s *FilterableListStep) Title() string { return s.title }
 
 // WithCreateFromFilter enables the "Create {filter}" option when the filter
-// doesn't match any existing option exactly (case-insensitive).
+// doesn't match any existing option exactly (case-sensitive).
 // labelFn formats the create option label, e.g. func(f string) string { return fmt.Sprintf("+ Create %q", f) }
 func (s *FilterableListStep) WithCreateFromFilter(labelFn func(filter string) string) *FilterableListStep {
 	s.allowCreate = true
@@ -208,10 +209,9 @@ func (s *FilterableListStep) shouldShowCreate() bool {
 	if !s.allowCreate || s.filter == "" {
 		return false
 	}
-	// Check for case-insensitive exact match
-	filterLower := strings.ToLower(s.filter)
+	// Branch identities are case-sensitive, even though fuzzy search is not.
 	for _, opt := range s.options {
-		if strings.ToLower(opt.Label) == filterLower {
+		if opt.MatchText() == s.filter {
 			return false
 		}
 	}
@@ -219,24 +219,30 @@ func (s *FilterableListStep) shouldShowCreate() bool {
 }
 
 func (s *FilterableListStep) Init() tea.Cmd {
-	// List starts with focus, no blink cmd needed until filter is focused
+	// Preserve focus when returning to an already edited step.
+	if s.filterInput.Focused() {
+		return textinput.Blink
+	}
 	return nil
 }
 
 func (s *FilterableListStep) Update(msg tea.Msg) (framework.Step, tea.Cmd, framework.StepResult) {
 	switch msg := msg.(type) {
+	case tea.BackgroundColorMsg:
+		styles := s.filterInput.Styles()
+		styles.Focused.Text = framework.FilterStyle()
+		styles.Blurred.Text = framework.FilterStyle()
+		s.filterInput.SetStyles(styles)
+		return s, nil, framework.StepContinue
 	case tea.PasteMsg:
 		return s.handlePaste(msg)
 
 	case tea.KeyPressMsg:
-		// Handle global navigation keys regardless of focus
-		switch msg.String() {
-		case "left":
-			return s, nil, framework.StepBack
-		case "right":
-			return s.handleSelect(framework.StepAdvance)
-		case "enter":
-			return s.handleSelect(framework.StepSubmitIfReady)
+		switch result := framework.Navigation(msg, s.filterInput.Focused()); result {
+		case framework.StepBack:
+			return s, nil, result
+		case framework.StepAdvance, framework.StepSubmitIfReady:
+			return s.handleSelect(result)
 		}
 
 		// Delegate to focus-specific handler based on textinput focus state
@@ -246,7 +252,9 @@ func (s *FilterableListStep) Update(msg tea.Msg) (framework.Step, tea.Cmd, frame
 		return s.updateListFocused(msg)
 	}
 
-	return s, nil, framework.StepContinue
+	var cmd tea.Cmd
+	s.filterInput, cmd = s.filterInput.Update(msg)
+	return s, cmd, framework.StepContinue
 }
 
 // updateFilterFocused handles input when the filter text input has focus.
@@ -437,153 +445,103 @@ func (s *FilterableListStep) canAdvanceMulti() bool {
 	return len(s.multiSelected) > 0 || s.minSelect == 0
 }
 
+// SetSize sets the area available to the prompt, filter and list.
+func (s *FilterableListStep) SetSize(width, height int) {
+	s.width, s.height = max(1, width), max(1, height)
+	s.filterInput.SetWidth(max(1, width-8))
+}
+
 func (s *FilterableListStep) View() string {
-	var b strings.Builder
-	if s.prompt != "" {
+	width, height := s.width, s.height
+	if width == 0 {
+		width = 80
+	}
+	if height == 0 {
+		height = 24
+	}
+	var header []string
+	if s.prompt != "" && height >= 4 {
+		prompt := s.prompt + ":"
 		if s.multiSelect {
-			fmt.Fprintf(&b, "%s (%d selected):\n", s.prompt, len(s.multiSelected))
-		} else {
-			b.WriteString(s.prompt + ":\n")
+			prompt = fmt.Sprintf("%s (%d selected):", s.prompt, len(s.multiSelected))
 		}
+		header = append(header, framework.Fit(prompt, width, 1))
 	}
-
-	// Render filter line: show textinput view when focused (includes cursor), plain text otherwise
-	filterLabel := framework.FilterLabelStyle().Render("Filter: ")
-	if s.filterInput.Focused() {
-		b.WriteString(filterLabel + s.filterInput.View() + "\n\n")
-	} else {
-		b.WriteString(filterLabel + framework.FilterStyle().Render(s.filter) + "\n\n")
+	filterView := s.filterInput.View()
+	if !s.filterInput.Focused() {
+		filterView = framework.FilterStyle().Render(s.filter)
 	}
-
+	if height >= 2 {
+		header = append(header, framework.Fit(framework.FilterLabelStyle().Render("Filter: ")+filterView, width, 1))
+	}
+	budget := max(1, height-len(header))
 	showCreate := s.shouldShowCreate()
-
-	// Calculate total items (create option + filtered options)
 	totalItems := len(s.filtered)
 	if showCreate {
 		totalItems++
 	}
-
-	// Show filtered list with scroll
-	maxVisible := 10
-	start := 0
-	if s.cursor >= maxVisible {
-		start = s.cursor - maxVisible + 1
-	}
-	end := min(start+maxVisible, totalItems)
-
-	if start > 0 {
-		b.WriteString(framework.OptionNormalStyle().Render("  ↑ more above") + "\n")
-	}
-
-	// Show > cursor: always in single-select (indicates what will be selected),
-	// only when list focused in multi-select (checkbox shows selection state)
-	showListCursor := !s.multiSelect || !s.filterInput.Focused()
-
-	for i := start; i < end; i++ {
-		// Handle create option at position 0 when shown
-		if showCreate && i == 0 {
-			cursor := "  "
+	content := ""
+	if totalItems == 0 {
+		msg := s.emptyMessage
+		if msg == "" {
+			msg = "No matching items"
+		}
+		content = framework.Fit(framework.OptionNormalStyle().Render("  "+msg), width, budget)
+	} else {
+		showCursor := !s.multiSelect || !s.filterInput.Focused()
+		content = renderList(totalItems, s.cursor, width, budget, func(i int) string {
+			prefix := "  "
 			style := framework.OptionNormalStyle()
-			if showListCursor && s.cursor == 0 {
-				cursor = "> "
+			if showCursor && i == s.cursor {
+				prefix = "> "
 				style = framework.OptionSelectedStyle()
 			}
-			createLabel := s.createLabelFn(s.filter)
-			b.WriteString(cursor + style.Render(createLabel) + "\n")
-			continue
-		}
-
-		// Adjust index for filtered options when create is shown
-		filteredIdx := i
-		if showCreate {
-			filteredIdx = i - 1
-		}
-
-		if filteredIdx < 0 || filteredIdx >= len(s.filtered) {
-			continue
-		}
-
-		match := s.filtered[filteredIdx]
-		opt := s.options[match.Index]
-
-		cursor := "  "
-		style := framework.OptionNormalStyle()
-
-		if opt.Disabled {
-			style = framework.OptionDisabledStyle()
-			label := opt.Label
-			if opt.Description != "" {
-				label += " (" + opt.Description + ")"
+			if showCreate && i == 0 {
+				return optionRow(prefix, style.Render(s.createLabelFn(s.filter)), "", width)
 			}
-			b.WriteString("  " + style.Render(label) + "\n")
-			continue
-		}
-
-		if showListCursor && i == s.cursor {
-			cursor = "> "
-			style = framework.OptionSelectedStyle()
-		}
-
-		// Show checkbox in multi-select mode
-		checkbox := ""
-		if s.multiSelect {
-			if s.multiSelected[match.Index] {
-				checkbox = "[✓] "
-			} else {
-				checkbox = "[ ] "
+			idx := i
+			if showCreate {
+				idx--
 			}
-		}
-
-		// Highlight matched characters if filtering
-		var label string
-		if s.filter != "" && len(match.MatchedIndexes) > 0 {
-			label = s.highlightMatches(opt.Label, match.MatchedIndexes, i == s.cursor)
-		} else {
-			label = style.Render(opt.Label)
-		}
-
-		b.WriteString(cursor + checkbox + label + "\n")
-
-		// Render description (custom renderer or default)
-		isItemSelected := s.multiSelect && s.multiSelected[match.Index]
-		if s.descriptionRenderer != nil {
-			desc := s.descriptionRenderer(opt, isItemSelected)
-			if desc != "" {
-				descIndent := "    "
-				if s.multiSelect {
-					descIndent = "      " // Extra indent for checkbox
+			match := s.filtered[idx]
+			opt := s.options[match.Index]
+			if opt.Disabled {
+				label := opt.Label
+				if opt.Description != "" {
+					label += " (" + opt.Description + ")"
 				}
-				b.WriteString(descIndent + desc + "\n")
+				return optionRow("  ", framework.OptionDisabledStyle().Render(label), "", width)
 			}
-		} else if opt.Description != "" {
-			descIndent := "    "
 			if s.multiSelect {
-				descIndent = "      " // Extra indent for checkbox
+				if s.multiSelected[match.Index] {
+					prefix += "[✓] "
+				} else {
+					prefix += "[ ] "
+				}
 			}
-			b.WriteString(descIndent + framework.OptionDescriptionStyle().Render(opt.Description) + "\n")
-		}
+			label := style.Render(opt.Label)
+			if s.filter != "" && len(match.MatchedIndexes) > 0 && strings.HasPrefix(opt.Label, opt.MatchText()) {
+				label = s.highlightMatches(opt.Label, match.MatchedIndexes, i == s.cursor)
+			}
+			desc := framework.OptionDescriptionStyle().Render(opt.Description)
+			if s.descriptionRenderer != nil {
+				desc = s.descriptionRenderer(opt, s.multiSelect && s.multiSelected[match.Index])
+			}
+			return optionRow(prefix, label, desc, width)
+		})
 	}
-
-	if end < totalItems {
-		b.WriteString(framework.OptionNormalStyle().Render("  ↓ more below") + "\n")
-	}
-
-	if totalItems == 0 {
-		msg := "No matching items"
-		if s.emptyMessage != "" {
-			msg = s.emptyMessage
-		}
-		b.WriteString(framework.OptionNormalStyle().Render("  "+msg) + "\n")
-	}
-
-	return b.String()
+	header = append(header, content)
+	return strings.Join(header, "\n")
 }
 
 func (s *FilterableListStep) Help() string {
-	if s.multiSelect {
-		return "↑/↓ move • space toggle • pgup/pgdn jump • type to filter • ←/→ navigate • enter confirm • esc cancel"
+	action := "↑/↓ select • pgup/pgdn jump • type to filter"
+	if s.filterInput.Focused() {
+		action = "←/→ edit • ↓ focus list"
+	} else if s.multiSelect {
+		action = "↑/↓ move • space toggle • pgup/pgdn jump • type to filter"
 	}
-	return "↑/↓ select • pgup/pgdn jump • type to filter • ←/→ navigate • enter confirm • esc cancel"
+	return action + " • " + framework.NavigationHelp(s.filterInput.Focused()) + " • " + framework.CancellationHelp(s.HasClearableInput(), "filter")
 }
 
 func (s *FilterableListStep) Value() framework.StepValue {
@@ -703,10 +661,7 @@ func (s *FilterableListStep) GetCursor() int {
 // not the visual cursor position (which may include a "create" option
 // at position 0 when WithCreateFromFilter is enabled).
 func (s *FilterableListStep) SetCursor(idx int) *FilterableListStep {
-	maxIdx := len(s.filtered) - 1
-	if maxIdx < 0 {
-		maxIdx = 0
-	}
+	maxIdx := max(len(s.filtered)-1, 0)
 	if idx < 0 {
 		idx = 0
 	}
@@ -971,4 +926,14 @@ func (s *FilterableListStep) FilteredCount() int {
 func (s *FilterableListStep) String() string {
 	return fmt.Sprintf("FilterableListStep{id=%s, cursor=%d, selected=%d, filter=%q}",
 		s.id, s.cursor, s.selected, s.filter)
+}
+
+func (s *FilterableListStep) CompactHelp() string {
+	action := "↑/↓ select"
+	if s.filterInput.Focused() {
+		action = "←/→ edit • ↓ list"
+	} else if s.multiSelect {
+		action = "↑/↓ move • space toggle"
+	}
+	return action + " • " + framework.BindingHelp(framework.Keys.Confirm, framework.Keys.Back) + " • " + framework.CancellationHelp(s.HasClearableInput(), "filter")
 }
