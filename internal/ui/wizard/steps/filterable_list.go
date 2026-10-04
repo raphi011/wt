@@ -260,6 +260,9 @@ func (s *FilterableListStep) Update(msg tea.Msg) (framework.Step, tea.Cmd, frame
 // updateFilterFocused handles input when the filter text input has focus.
 func (s *FilterableListStep) updateFilterFocused(msg tea.KeyPressMsg) (framework.Step, tea.Cmd, framework.StepResult) {
 	switch msg.String() {
+	case "pgup", "pgdown":
+		s.filterInput.Blur()
+		return s.updateListFocused(msg)
 	case "down":
 		// Move focus to list
 		s.filterInput.Blur()
@@ -534,14 +537,27 @@ func (s *FilterableListStep) View() string {
 	return strings.Join(header, "\n")
 }
 
-func (s *FilterableListStep) Help() string {
+func (s *FilterableListStep) controlsHelp() string {
 	action := "↑/↓ select • pgup/pgdn jump • type to filter"
 	if s.filterInput.Focused() {
-		action = "←/→ edit • ↓ focus list"
+		action = "←/→ edit • ↓ focus list • pgup/pgdn jump"
 	} else if s.multiSelect {
 		action = "↑/↓ move • space toggle • pgup/pgdn jump • type to filter"
 	}
-	return action + " • " + framework.NavigationHelp(s.filterInput.Focused()) + " • " + framework.CancellationHelp(s.HasClearableInput(), "filter")
+	return action
+}
+
+func (s *FilterableListStep) Help() string {
+	return s.controlsHelp() + " • " + framework.NavigationHelp(s.filterInput.Focused()) + " • " + framework.CancellationHelp(s.HasClearableInput(), "filter")
+}
+
+// PickerHelp describes a standalone picker without wizard step-navigation hints.
+func (s *FilterableListStep) PickerHelp() string {
+	escape := framework.Keys.Clear
+	if s.HasClearableInput() {
+		escape.SetHelp(escape.Help().Key, "clear filter")
+	}
+	return s.controlsHelp() + " • " + framework.BindingHelp(framework.Keys.Confirm, escape)
 }
 
 func (s *FilterableListStep) Value() framework.StepValue {
