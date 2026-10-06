@@ -11,6 +11,7 @@ import (
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/history"
+	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/preserve"
 	"github.com/raphi011/wt/internal/registry"
 )
@@ -3798,5 +3799,213 @@ func TestCheckout_BaseBranch_PrefersRemoteOverLocal(t *testing.T) {
 	remoteFile := filepath.Join(wtPath, "remote-only.txt")
 	if _, err := os.Stat(remoteFile); os.IsNotExist(err) {
 		t.Error("feature branch should have remote-only.txt (created from origin/develop, not local develop)")
+	}
+}
+
+// TestCheckout_AutoStash_FailedCheckoutKeepsChanges tests that a failed checkout
+// leaves uncommitted changes in the working tree instead of in the stash.
+//
+// Scenario: User has uncommitted changes, runs `wt checkout -b feature --autostash`
+// for a branch that already exists
+// Expected: Checkout fails, changes are still in the working tree, stash is empty
+func TestCheckout_AutoStash_FailedCheckoutKeepsChanges(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+
+	// Create uncommitted changes in main worktree
+	changedFile := filepath.Join(repoPath, "uncommitted.txt")
+	if err := os.WriteFile(changedFile, []byte("uncommitted changes\n"), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--autostash"})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("creating an existing branch should fail")
+	}
+
+	// Verify the changes are still in the working tree
+	if _, err := os.Stat(changedFile); err != nil {
+		t.Errorf("uncommitted changes should stay in the working tree: %v", err)
+	}
+
+	// Verify nothing was left in the stash
+	out, err := runGitCommand(repoPath, "stash", "list")
+	if err != nil {
+		t.Fatalf("failed to list stash: %v", err)
+	}
+	if strings.TrimSpace(out) != "" {
+		t.Errorf("stash should be empty, got: %q", out)
+	}
+}
+
+// TestCheckout_AutoStash_PopConflictKeepsStash tests that a failed stash apply
+// keeps the changes in the stash and tells the user where they are.
+//
+// Scenario: User has an untracked file that the target branch already tracks,
+// runs `wt checkout feature --autostash`
+// Expected: Worktree is created, stash entry is kept, warning names the stash entry
+func TestCheckout_AutoStash_PopConflictKeepsStash(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+
+	// Commit conflict.txt on feature only
+	if out, err := runGitCommand(repoPath, "checkout", "feature"); err != nil {
+		t.Fatalf("failed to checkout feature: %v\n%s", err, out)
+	}
+	addCommit(t, repoPath, "conflict.txt", "add conflict.txt")
+	if out, err := runGitCommand(repoPath, "checkout", "main"); err != nil {
+		t.Fatalf("failed to checkout main: %v\n%s", err, out)
+	}
+
+	// Untracked file on main with the same name
+	if err := os.WriteFile(filepath.Join(repoPath, "conflict.txt"), []byte("uncommitted changes\n"), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	var logs strings.Builder
+	ctx := log.WithLogger(testContextWithConfig(t, cfg, repoPath), log.New(&logs, false, false))
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "--autostash"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify worktree was created
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	// Verify the changes are still in the stash
+	out, err := runGitCommand(repoPath, "stash", "list")
+	if err != nil {
+		t.Fatalf("failed to list stash: %v", err)
+	}
+	if !strings.Contains(out, "stash@{0}") {
+		t.Errorf("stash entry should be kept after a failed apply, got: %q", out)
+	}
+
+	// Verify the warning tells the user where the changes are
+	if !strings.Contains(logs.String(), "stash@{0}") {
+		t.Errorf("warning should name the stash entry, got: %q", logs.String())
+	}
+}
+
+// TestCheckout_AutoStash_NestedWorktree tests autostash when the new worktree is
+// created inside the working tree that gets stashed.
+//
+// Scenario: Worktree format is `.worktrees/{branch}`, user has an untracked file,
+// runs `wt checkout feature --autostash`
+// Expected: New worktree survives the stash and receives the changes
+func TestCheckout_AutoStash_NestedWorktree(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+
+	// Create an untracked file in main worktree
+	changedFile := filepath.Join(repoPath, "uncommitted.txt")
+	if err := os.WriteFile(changedFile, []byte("uncommitted changes\n"), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: ".worktrees/{branch}"},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: ".worktrees/{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "--autostash"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	// Verify the changes moved to the new worktree
+	wtPath := filepath.Join(repoPath, ".worktrees", "feature")
+	if _, err := os.Stat(filepath.Join(wtPath, "uncommitted.txt")); err != nil {
+		t.Errorf("stashed changes should be applied to new worktree: %v", err)
+	}
+	if _, err := os.Stat(changedFile); !os.IsNotExist(err) {
+		t.Error("original worktree should not have the uncommitted file after autostash")
+	}
+
+	// Verify the new worktree is intact
+	out, err := runGitCommand(wtPath, "status", "--porcelain")
+	if err != nil {
+		t.Fatalf("new worktree should be a valid git worktree: %v\n%s", err, out)
 	}
 }

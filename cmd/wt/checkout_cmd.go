@@ -180,10 +180,8 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, opts
 	gitDir := git.GetGitDir(repo.Path, repoType)
 	repoHasCommits := git.RefExists(ctx, gitDir, "HEAD")
 
-	var stashed bool
 	if opts.AutoStash {
-		stashed, err = autoStashChanges(ctx, repo, repoHasCommits)
-		if err != nil {
+		if err := checkAutoStash(ctx, repo); err != nil {
 			return err
 		}
 	}
@@ -198,9 +196,12 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, opts
 
 	fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
 
-	if stashed {
+	// Stash only after the worktree exists, so a failed checkout leaves the
+	// working tree untouched
+	if opts.AutoStash && autoStashChanges(ctx, repoHasCommits) {
 		if err := git.StashPop(ctx, wtPath); err != nil {
-			l.Printf("Warning: failed to apply stashed changes: %v\n", err)
+			l.Printf("Warning: failed to apply stashed changes in %s: %v\n", wtPath, err)
+			l.Printf("Your changes are kept in the latest stash entry (stash@{0}); run 'git stash pop' to retry\n")
 		}
 	}
 
@@ -228,35 +229,40 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, opts
 	})
 }
 
-// autoStashChanges stashes uncommitted changes in the current worktree if autostash
-// is enabled (via checkoutOpts.AutoStash). Returns true if changes were stashed.
-func autoStashChanges(ctx context.Context, repo registry.Repo, repoHasCommits bool) (bool, error) {
-	l := log.FromContext(ctx)
-
+// checkAutoStash verifies that --autostash is run from a worktree of the target repo.
+func checkAutoStash(ctx context.Context, repo registry.Repo) error {
 	workDir := config.WorkDirFromContext(ctx)
 	mainPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
 	if mainPath == "" {
-		return false, fmt.Errorf("--autostash: cannot determine repo from working directory %s (are you in a git repository?)", workDir)
+		return fmt.Errorf("--autostash: cannot determine repo from working directory %s (are you in a git repository?)", workDir)
 	}
 	// Both paths are already canonical (symlinks resolved by
 	// GetCurrentRepoMainPathFrom and the registry).
 	if mainPath != repo.Path {
-		return false, fmt.Errorf("--autostash requires running from a worktree of %s", repo.Name)
+		return fmt.Errorf("--autostash requires running from a worktree of %s", repo.Name)
 	}
+	return nil
+}
+
+// autoStashChanges stashes uncommitted changes in the current worktree.
+// Returns true if changes were stashed.
+func autoStashChanges(ctx context.Context, repoHasCommits bool) bool {
+	l := log.FromContext(ctx)
+
 	if !repoHasCommits {
-		return false, nil
+		return false
 	}
 
-	n, err := git.Stash(ctx, workDir)
+	n, err := git.Stash(ctx, config.WorkDirFromContext(ctx))
 	if err != nil {
 		l.Printf("Warning: stash failed: %v\n", err)
-		return false, nil
+		return false
 	}
 	if n > 0 {
 		l.Printf("Stashed %d file(s)\n", n)
-		return true, nil
+		return true
 	}
-	return false, nil
+	return false
 }
 
 // fetchForCheckout fetches the relevant branch from the remote before checkout.
