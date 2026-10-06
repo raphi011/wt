@@ -4,6 +4,7 @@ package fs
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 )
@@ -26,24 +27,40 @@ func WtDir() (string, error) {
 // SaveJSON atomically writes data as JSON to the specified path.
 // It ensures the parent directory exists, writes to a temp file,
 // then renames to the final path for atomic operation.
+// Use UpdateJSON for read-modify-write cycles.
 func SaveJSON(path string, data any) error {
 	// Ensure directory exists
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 
-	tempPath := path + ".tmp"
-
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(tempPath, jsonData, 0o600); err != nil {
+	// Unique temp name so concurrent writers never share a temp file
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
 		return err
 	}
+	tempPath := tmp.Name()
 
-	return os.Rename(tempPath, path)
+	if _, err := tmp.Write(jsonData); err != nil {
+		return errors.Join(err, tmp.Close(), os.Remove(tempPath))
+	}
+	// Flush to disk so a crash after the rename can't leave an empty file
+	if err := tmp.Sync(); err != nil {
+		return errors.Join(err, tmp.Close(), os.Remove(tempPath))
+	}
+	if err := tmp.Close(); err != nil {
+		return errors.Join(err, os.Remove(tempPath))
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		return errors.Join(err, os.Remove(tempPath))
+	}
+
+	return nil
 }
 
 // LoadJSON reads JSON from the specified path into dest.

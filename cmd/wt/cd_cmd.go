@@ -162,7 +162,7 @@ func runCdInteractive(ctx context.Context, reg *registry.Registry, histPath stri
 
 	// Opportunistically clean stale history entries
 	if removed := hist.RemoveStale(); removed > 0 {
-		if err := hist.Save(histPath); err != nil {
+		if err := removeStaleHistory(histPath); err != nil {
 			l.Printf("Warning: failed to save history after cleanup: %v\n", err)
 		}
 	}
@@ -193,7 +193,7 @@ func runCdRecent(ctx context.Context, cfg *config.Config, histPath string) (path
 	}
 
 	if removed := hist.RemoveStale(); removed > 0 {
-		if err := hist.Save(histPath); err != nil {
+		if err := removeStaleHistory(histPath); err != nil {
 			l := log.FromContext(ctx)
 			l.Printf("Warning: failed to save history after cleanup: %v\n", err)
 		}
@@ -206,6 +206,14 @@ func runCdRecent(ctx context.Context, cfg *config.Config, histPath string) (path
 	hist.SortByRecency()
 	entry := hist.Entries[0]
 	return entry.Path, entry.RepoName, entry.Branch, nil
+}
+
+// removeStaleHistory removes stale entries from the history file.
+func removeStaleHistory(histPath string) error {
+	return history.Update(histPath, func(h *history.History) error {
+		h.RemoveStale()
+		return nil
+	})
 }
 
 // sortCdWorktrees sorts worktrees with history first (by LastAccess desc),

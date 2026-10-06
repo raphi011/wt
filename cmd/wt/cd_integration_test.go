@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/fs"
 	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/registry"
 )
@@ -418,7 +419,7 @@ func TestCd_NoArgs_StaleHistory(t *testing.T) {
 			},
 		},
 	}
-	if err := hist.Save(historyPath); err != nil {
+	if err := fs.SaveJSON(historyPath, hist); err != nil {
 		t.Fatalf("failed to save history: %v", err)
 	}
 

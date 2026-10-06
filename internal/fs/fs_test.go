@@ -1,8 +1,10 @@
 package fs
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -210,5 +212,207 @@ func TestResolvePath_AlreadyCanonical(t *testing.T) {
 	got := ResolvePath(resolved)
 	if got != resolved {
 		t.Errorf("ResolvePath(canonical) = %q, want %q (unchanged)", got, resolved)
+	}
+}
+
+func TestSaveJSON_Concurrent(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.json")
+
+	const writers = 50
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for i := range writers {
+		wg.Go(func() {
+			errs <- SaveJSON(path, map[string]int{"writer": i})
+		})
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Errorf("SaveJSON failed: %v", err)
+		}
+	}
+
+	var loaded map[string]int
+	if err := LoadJSON(path, &loaded); err != nil {
+		t.Fatalf("LoadJSON failed: %v", err)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir failed: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected only test.json, found %d files", len(entries))
+	}
+}
+
+func TestUpdateJSON_Concurrent(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "sub", "counter.json")
+
+	type counter struct {
+		N int `json:"n"`
+	}
+
+	const writers = 50
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for range writers {
+		wg.Go(func() {
+			errs <- UpdateJSON(path, func(c *counter) error {
+				c.N++
+				return nil
+			})
+		})
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Errorf("UpdateJSON failed: %v", err)
+		}
+	}
+
+	var got counter
+	if err := LoadJSON(path, &got); err != nil {
+		t.Fatalf("LoadJSON failed: %v", err)
+	}
+	if got.N != writers {
+		t.Errorf("expected n=%d, got n=%d", writers, got.N)
+	}
+}
+
+func TestUpdateJSON_FnError(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "test.json")
+	if err := SaveJSON(path, map[string]int{"v": 1}); err != nil {
+		t.Fatalf("SaveJSON failed: %v", err)
+	}
+
+	wantErr := errors.New("abort")
+	err := UpdateJSON(path, func(m *map[string]int) error {
+		(*m)["v"] = 2
+		return wantErr
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected fn error, got %v", err)
+	}
+
+	var loaded map[string]int
+	if err := LoadJSON(path, &loaded); err != nil {
+		t.Fatalf("LoadJSON failed: %v", err)
+	}
+	if loaded["v"] != 1 {
+		t.Errorf("expected v=1 after failed update, got v=%d", loaded["v"])
+	}
+}
+
+func TestUpdateJSON_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "test.json")
+	if err := os.WriteFile(path, []byte("not json"), 0o600); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	called := false
+	err := UpdateJSON(path, func(m *map[string]int) error {
+		called = true
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid JSON, got nil")
+	}
+	if called {
+		t.Error("fn should not run when the file cannot be read")
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	if string(data) != "not json" {
+		t.Errorf("file was overwritten: %q", data)
+	}
+}
+
+func TestSaveJSON_RenameError(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "test.json")
+
+	// A directory at the target path makes the final rename fail
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	if err := SaveJSON(path, map[string]int{"v": 1}); err == nil {
+		t.Fatal("expected error when target is a directory, got nil")
+	}
+
+	// Verify no temp file left behind
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		t.Fatalf("ReadDir failed: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected only the target directory, got %d entries", len(entries))
+	}
+}
+
+func TestUpdateJSON_LockError(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "test.json")
+
+	// A directory at the lock path can't be opened for writing
+	if err := os.Mkdir(path+".lock", 0o755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	called := false
+	err := UpdateJSON(path, func(m *map[string]int) error {
+		called = true
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected error when the lock can't be taken, got nil")
+	}
+	if called {
+		t.Error("fn should not run without the lock")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("file should not be created without the lock, stat error: %v", err)
+	}
+}
+
+func TestUpdateJSON_ParentNotDirectory(t *testing.T) {
+	t.Parallel()
+
+	parent := filepath.Join(t.TempDir(), "parent")
+	if err := os.WriteFile(parent, []byte("x"), 0o600); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	called := false
+	err := UpdateJSON(filepath.Join(parent, "test.json"), func(m *map[string]int) error {
+		called = true
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected error when the parent is a file, got nil")
+	}
+	if called {
+		t.Error("fn should not run when the directory can't be created")
 	}
 }
