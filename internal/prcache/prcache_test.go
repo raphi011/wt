@@ -188,18 +188,17 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 	}
 }
 
-func TestPath(t *testing.T) {
+func TestSaveWithoutPath(t *testing.T) {
 	t.Parallel()
 
-	p := Path()
-	if p == "" {
-		t.Fatal("Path() returned empty string")
+	c := New()
+	c.Set("/repo:main", &forge.PRInfo{Number: 1, State: "OPEN"})
+
+	if err := c.SaveIfDirty(); err == nil {
+		t.Fatal("SaveIfDirty on a cache without a path should fail")
 	}
-	if filepath.Base(p) != "prs.json" {
-		t.Errorf("Path() = %q, want base name prs.json", p)
-	}
-	if filepath.Base(filepath.Dir(p)) != ".wt" {
-		t.Errorf("Path() parent = %q, want .wt", filepath.Dir(p))
+	if !c.dirty {
+		t.Error("dirty should stay true after a failed save")
 	}
 }
 
@@ -388,11 +387,11 @@ func TestLoadFrom(t *testing.T) {
 }
 
 func TestSaveIfDirtyWhenDirty(t *testing.T) {
-	// Not parallel: t.Setenv modifies process-global HOME
-	tmpDir := t.TempDir()
-	t.Setenv("HOME", tmpDir)
+	t.Parallel()
 
-	c := New()
+	path := filepath.Join(t.TempDir(), ".wt", "prs.json")
+
+	c := LoadFrom(path)
 	c.Set("/repo:main", &forge.PRInfo{Number: 1, State: "OPEN"})
 
 	if !c.dirty {
@@ -409,7 +408,7 @@ func TestSaveIfDirtyWhenDirty(t *testing.T) {
 
 	// Verify the file was actually written
 	var loaded Cache
-	if err := fs.LoadJSON(filepath.Join(tmpDir, ".wt", "prs.json"), &loaded); err != nil {
+	if err := fs.LoadJSON(path, &loaded); err != nil {
 		t.Fatalf("failed to load saved cache: %v", err)
 	}
 	if loaded.PRs["/repo:main"] == nil {

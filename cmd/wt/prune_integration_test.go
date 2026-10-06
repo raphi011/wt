@@ -11,6 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -1970,5 +1971,64 @@ func TestPrune_MixedTargets_RequiresForce(t *testing.T) {
 	}
 	if _, err := os.Stat(unmergedWtPath); os.IsNotExist(err) {
 		t.Error("unmerged worktree should not be removed on error")
+	}
+}
+
+// TestPrune_UsesPRCacheFromConfiguredDir tests that prune reads and writes the
+// PR cache next to the configured registry instead of ~/.wt/prs.json.
+//
+// Scenario: PR cache in the configured wt dir marks an unmerged branch as merged
+// Expected: `wt prune feature` succeeds without -f and removes the cache entry
+func TestPrune_UsesPRCacheFromConfiguredDir(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	// Add a commit on the feature branch so only the PR cache makes it prunable
+	addCommit(t, wtPath, "feature-only.txt", "unmerged commit")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cachePath := filepath.Join(tmpDir, ".wt", "prs.json")
+	cacheKey := prcache.CacheKey(repoPath, "feature")
+	cache := prcache.New()
+	cache.Set(cacheKey, &forge.PRInfo{Number: 1, State: forge.PRStateMerged, Fetched: true})
+	if err := cache.SaveTo(cachePath); err != nil {
+		t.Fatalf("failed to save PR cache: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"}) // No -f flag
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune should use the PR cache from the configured dir: %v", err)
+	}
+
+	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+		t.Error("worktree should be removed")
+	}
+
+	if pr := prcache.LoadFrom(cachePath).Get(cacheKey); pr != nil {
+		t.Error("cache entry should be removed from the configured PR cache")
 	}
 }

@@ -128,7 +128,10 @@ Use -f to prune worktrees whose PR is not yet confirmed merged.`,
 			}
 
 			// Load PR cache
-			prCache := prcache.Load()
+			prCache, err := loadPRCache(cfg)
+			if err != nil {
+				return err
+			}
 
 			// Reset cache if requested
 			if resetCache {
@@ -350,7 +353,10 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 	}
 
 	// Enrich with merge info to determine if force is needed
-	prCache := prcache.Load()
+	prCache, err := loadPRCache(config.FromContext(ctx))
+	if err != nil {
+		return err
+	}
 
 	// Enrich with PR state from cache
 	populatePRFields(toRemove, prCache)
