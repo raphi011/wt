@@ -302,6 +302,57 @@ func TestRepoClone_WithCustomName(t *testing.T) {
 	}
 }
 
+// TestRepoClone_NameConflict tests cloning with a name that is already registered.
+//
+// Scenario: User runs `wt repo clone file:///repo new-dir --name taken`
+// Expected: Command fails, the clone is removed and the registry is unchanged
+func TestRepoClone_NameConflict(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "taken", Path: sourceRepo},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := testConfig()
+	cfg.RegistryPath = regFile
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newRepoCloneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"file://" + sourceRepo, "new-dir", "--name", "taken"})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected error when name is already registered")
+	}
+
+	if _, err := os.Stat(filepath.Join(tmpDir, "new-dir")); !os.IsNotExist(err) {
+		t.Errorf("clone should be removed after failed registration, stat error: %v", err)
+	}
+
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	if len(reg.Repos) != 1 {
+		t.Errorf("expected 1 repo, got %d", len(reg.Repos))
+	}
+}
+
 // TestRepoClone_DestinationExists tests that cloning to an existing path fails.
 //
 // Scenario: User runs `wt repo clone file:///repo existing-dir`

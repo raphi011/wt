@@ -94,7 +94,7 @@ func TestCompleteBranches_WithContext(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -143,7 +143,7 @@ func TestCompleteBaseBranches_WithContext(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 

@@ -36,7 +36,7 @@ func TestPrune_NoWorktrees(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -72,7 +72,7 @@ func TestPrune_WithWorktree(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -119,7 +119,7 @@ func TestPrune_DryRun(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -161,7 +161,7 @@ func TestPrune_ByRepoName(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -213,7 +213,7 @@ func TestPrune_WithRepoBranchFormat(t *testing.T) {
 			{Name: "repo2", Path: repo2Path},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -265,7 +265,7 @@ func TestPrune_RepoBranchFormat_RepoNotFound(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -308,7 +308,7 @@ func TestPrune_DeleteBranchesFlag(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -364,7 +364,7 @@ func TestPrune_NoDeleteBranchesDefault(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -414,7 +414,7 @@ func TestPrune_ConfigDeleteBranches(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -470,7 +470,7 @@ func TestPrune_NoDeleteBranchesOverridesConfig(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -537,7 +537,7 @@ func TestPrune_DeleteBranches_UnmergedBranch(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -590,7 +590,7 @@ func TestPrune_DryRun_DoesNotDeleteBranch(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -643,7 +643,7 @@ func TestPrune_DeleteBranchesFlag_OverridesConfigFalse(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -707,7 +707,7 @@ func TestPrune_UnscopedTarget_OnlyCurrentRepo(t *testing.T) {
 			{Name: "repo2", Path: repo2Path},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -762,7 +762,7 @@ func TestPrune_UnscopedTarget_GlobalFlag(t *testing.T) {
 			{Name: "repo2", Path: repo2Path},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -815,7 +815,7 @@ func TestPrune_UnscopedTarget_NotInRepo_FallsBackToAll(t *testing.T) {
 			{Name: "repo2", Path: repo2Path},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -936,7 +936,7 @@ func TestPrune_StaleFlag_RemovesOldWorktrees(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -987,7 +987,7 @@ func TestPrune_StaleFlag_KeepsFreshWorktrees(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1039,7 +1039,7 @@ func TestPrune_StaleFlag_MergedAlwaysPruned(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1105,7 +1105,7 @@ func TestPrune_StaleFlag_DryRun(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1156,7 +1156,7 @@ func TestPrune_StaleFlag_Disabled(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1208,7 +1208,7 @@ func TestPrune_WithoutStaleFlag_KeepsStaleWorktrees(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1260,7 +1260,7 @@ func TestPrune_LocalConfigOverridesDeleteBranches(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1323,7 +1323,7 @@ func TestPrune_AfterHookRuns(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1384,7 +1384,7 @@ func TestPrune_BeforeHookAborts(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1438,7 +1438,7 @@ func TestPrune_BeforeHookCWD(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1497,7 +1497,7 @@ func TestPrune_AfterHookCWD(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1556,7 +1556,7 @@ func TestPrune_AllTriggerMatchesPrune(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1609,7 +1609,7 @@ func TestPrune_Placeholders(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1668,7 +1668,7 @@ func TestPrune_NoHookFlag(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1721,7 +1721,7 @@ func TestPrune_ExplicitHookFlag(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1801,7 +1801,7 @@ func TestPrune_LocallyMergedBranch_RequiresForce(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1865,7 +1865,7 @@ func TestPrune_UnmergedBranch_RequiresForce(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1942,7 +1942,7 @@ func TestPrune_MixedTargets_RequiresForce(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2002,7 +2002,7 @@ func TestPrune_UsesPRCacheFromConfiguredDir(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2055,7 +2055,7 @@ func setupMergedWorktree(t *testing.T) (cfg *config.Config, repoPath, wtPath str
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2186,7 +2186,7 @@ func TestPrune_DirtyStaleWorktree_SkippedWithoutForce(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 

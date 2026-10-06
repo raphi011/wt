@@ -36,7 +36,7 @@ func TestCd_BranchName(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -78,7 +78,7 @@ func TestCd_RepoBranch(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -119,7 +119,7 @@ func TestCd_BranchNotFound(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -156,7 +156,7 @@ func TestCd_RepoNotFound(t *testing.T) {
 	reg := &registry.Registry{
 		Repos: []registry.Repo{},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -200,7 +200,7 @@ func TestCd_AmbiguousBranch(t *testing.T) {
 			{Name: "repo2", Path: repo2Path},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -235,7 +235,7 @@ func TestCd_NoArgs_NoHistory(t *testing.T) {
 	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -281,7 +281,7 @@ func TestCd_NoArgs_WithHistory(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -333,7 +333,7 @@ func TestCd_RecordsHistory(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -396,7 +396,7 @@ func TestCd_NoArgs_StaleHistory(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 

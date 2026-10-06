@@ -39,7 +39,7 @@ func TestCheckout_ExistingBranch(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestCheckout_NewBranch(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -146,7 +146,7 @@ func TestCheckout_ByRepoName(t *testing.T) {
 			{Name: "myrepo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -200,7 +200,7 @@ func TestCheckout_ByLabel(t *testing.T) {
 			{Name: "web-client", Path: repo2Path, Labels: []string{"frontend"}, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -257,7 +257,7 @@ func TestCheckout_SlashBranchName(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -298,7 +298,7 @@ func TestCheckout_NotInRepo(t *testing.T) {
 
 	// Empty registry
 	reg := &registry.Registry{Repos: []registry.Repo{}}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -340,7 +340,7 @@ func TestCheckout_NewBranchPushesAndSetsUpstream(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -398,7 +398,7 @@ func TestCheckout_ExistingBranchWithRemoteSetsUpstream(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -449,7 +449,7 @@ func TestCheckout_LocalOnlyBranchNoUpstream(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -497,7 +497,7 @@ func TestCheckout_SetUpstreamDisabled(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -550,7 +550,7 @@ func TestCheckout_NoOriginNoUpstream(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -604,7 +604,7 @@ func TestCheckout_AlreadyCheckedOut_ScopedTarget(t *testing.T) {
 			{Name: "myrepo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -671,7 +671,7 @@ func TestCheckout_AlreadyCheckedOut(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -734,7 +734,7 @@ func TestCheckout_AlreadyCheckedOut_RunsHooks(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -807,7 +807,7 @@ func TestCheckout_AlreadyCheckedOut_NoHook(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -880,7 +880,7 @@ func TestCheckout_AlreadyCheckedOut_RecordsHistory(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -958,7 +958,7 @@ func TestCheckout_BaseBranch(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1020,7 +1020,7 @@ func TestCheckout_Fetch(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1088,7 +1088,7 @@ func TestCheckout_FetchExistingBranch(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1150,7 +1150,7 @@ func TestCheckout_FetchWithBase(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1209,7 +1209,7 @@ func TestCheckout_AutoStash(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1270,7 +1270,7 @@ func TestCheckout_Note(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1327,7 +1327,7 @@ func TestCheckout_Hook(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1389,7 +1389,7 @@ func TestCheckout_NoHook(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1452,7 +1452,7 @@ func TestCheckout_HookWithArg(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1518,7 +1518,7 @@ func TestCheckout_DefaultHookRuns(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1584,7 +1584,7 @@ func TestCheckout_RecordsHistory(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1647,7 +1647,7 @@ func TestCheckout_NewBranchEmptyRepo(t *testing.T) {
 			{Name: "empty-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1714,7 +1714,7 @@ func TestCheckout_NewBranchEmptyRepoWithFetch(t *testing.T) {
 			{Name: "empty-repo-fetch", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1771,7 +1771,7 @@ func TestCheckout_NewBranchEmptyRepoLocalBaseRef(t *testing.T) {
 			{Name: "empty-repo-local", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1826,7 +1826,7 @@ func TestCheckout_NewBranchInvalidBaseRef(t *testing.T) {
 			{Name: "valid-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1874,7 +1874,7 @@ func TestCheckout_HistoryEnablesCdNoArgs(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1955,7 +1955,7 @@ func TestCheckout_ExplicitUpstreamRemoteRef(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2014,7 +2014,7 @@ func TestCheckout_LocalBaseRefWithFetchWarning(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2082,7 +2082,7 @@ func TestCheckout_ExplicitOriginRemoteRef(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2144,7 +2144,7 @@ func TestCheckout_PreserveFiles(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2290,7 +2290,7 @@ func TestCheckout_NoPreserveFlag(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2344,7 +2344,7 @@ func TestCheckout_AutoStash_NoChanges(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2406,7 +2406,7 @@ func TestCheckout_AutoStash_UntrackedFiles(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2489,7 +2489,7 @@ func TestCheckout_AutoStash_StagedAndModified(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2588,7 +2588,7 @@ func TestCheckout_AutoStash_BareInGitRepo(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2661,7 +2661,7 @@ func TestCheckout_AutoStash_BareInGitRepo_NoChanges(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2712,7 +2712,7 @@ func TestCheckout_AutoStash_NotInTargetRepo(t *testing.T) {
 			{Name: "repo-b", Path: repoB, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2799,7 +2799,7 @@ func TestCheckout_AutoStash_SecondaryWorktree(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2881,7 +2881,7 @@ func TestCheckout_AutoStash_Subdirectory(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2941,7 +2941,7 @@ func TestCheckout_AutoStash_LabelTarget(t *testing.T) {
 			{Name: "repo-b", Path: repoB, Labels: []string{"backend"}, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -2995,7 +2995,7 @@ func TestCheckout_NewBranchViaSymlink(t *testing.T) {
 			{Name: "real-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3051,7 +3051,7 @@ func TestCheckout_BeforeHookAborts(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3104,7 +3104,7 @@ func TestCheckout_BeforeHookAllows(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3167,7 +3167,7 @@ func TestCheckout_SubtypeCreate(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3222,7 +3222,7 @@ func TestCheckout_SubtypeOpen(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3276,7 +3276,7 @@ func TestCheckout_SubtypeCreateSkipsOpen(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3330,7 +3330,7 @@ func TestCheckout_SubtypeOpenSkipsCreate(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3385,7 +3385,7 @@ func TestCheckout_AllTriggerMatchesCheckout(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3440,7 +3440,7 @@ func TestCheckout_ActionPhasePlaceholders(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3500,7 +3500,7 @@ func TestCheckout_MultipleHooksMatch(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3563,7 +3563,7 @@ func TestCheckout_HookWorkingDirectory(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3625,7 +3625,7 @@ func TestCheckout_HooksRunAlphabetically(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3702,7 +3702,7 @@ func TestCheckout_BaseBranch_LocalOnlyFallback(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3770,7 +3770,7 @@ func TestCheckout_BaseBranch_PrefersRemoteOverLocal(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3832,7 +3832,7 @@ func TestCheckout_AutoStash_FailedCheckoutKeepsChanges(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3904,7 +3904,7 @@ func TestCheckout_AutoStash_PopConflictKeepsStash(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -3975,7 +3975,7 @@ func TestCheckout_AutoStash_NestedWorktree(t *testing.T) {
 			{Name: "test-repo", Path: repoPath, WorktreeFormat: ".worktrees/{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 

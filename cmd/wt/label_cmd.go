@@ -67,14 +67,22 @@ Scopes are resolved as repo name first, then label.`,
 				return err
 			}
 
-			for _, repo := range repos {
-				if err := reg.AddLabel(repo.Name, label); err != nil {
-					return fmt.Errorf("%s: %w", repo.Name, err)
+			if _, err := registry.Update(cfg.RegistryPath, func(r *registry.Registry) error {
+				for _, repo := range repos {
+					if err := r.AddLabel(repo.Name, label); err != nil {
+						return fmt.Errorf("%s: %w", repo.Name, err)
+					}
 				}
+				return nil
+			}); err != nil {
+				return err
+			}
+
+			for _, repo := range repos {
 				fmt.Printf("Added label %q to %s\n", label, repo.Name)
 			}
 
-			return reg.Save(cfg.RegistryPath)
+			return nil
 		},
 	}
 
@@ -112,14 +120,22 @@ Scopes are resolved as repo name first, then label.`,
 				return err
 			}
 
-			for _, repo := range repos {
-				if err := reg.RemoveLabel(repo.Name, label); err != nil {
-					return fmt.Errorf("%s: %w", repo.Name, err)
+			if _, err := registry.Update(cfg.RegistryPath, func(r *registry.Registry) error {
+				for _, repo := range repos {
+					if err := r.RemoveLabel(repo.Name, label); err != nil {
+						return fmt.Errorf("%s: %w", repo.Name, err)
+					}
 				}
+				return nil
+			}); err != nil {
+				return err
+			}
+
+			for _, repo := range repos {
 				fmt.Printf("Removed label %q from %s\n", label, repo.Name)
 			}
 
-			return reg.Save(cfg.RegistryPath)
+			return nil
 		},
 	}
 
@@ -220,14 +236,22 @@ Scopes are resolved as repo name first, then label.`,
 				return err
 			}
 
-			for _, repo := range repos {
-				if err := reg.ClearLabels(repo.Name); err != nil {
-					return fmt.Errorf("%s: %w", repo.Name, err)
+			if _, err := registry.Update(cfg.RegistryPath, func(r *registry.Registry) error {
+				for _, repo := range repos {
+					if err := r.ClearLabels(repo.Name); err != nil {
+						return fmt.Errorf("%s: %w", repo.Name, err)
+					}
 				}
+				return nil
+			}); err != nil {
+				return err
+			}
+
+			for _, repo := range repos {
 				fmt.Printf("Cleared labels from %s\n", repo.Name)
 			}
 
-			return reg.Save(cfg.RegistryPath)
+			return nil
 		},
 	}
 

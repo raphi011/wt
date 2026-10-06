@@ -52,7 +52,7 @@ func setupDiffRegistry(t *testing.T, tmpDir string, repos []registry.Repo) strin
 	}
 
 	reg := &registry.Registry{Repos: repos}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 

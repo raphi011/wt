@@ -194,13 +194,12 @@ be managed with other wt commands. Non-git directories are silently skipped.`,
 				return fmt.Errorf("--name can only be used with a single path")
 			}
 
-			// Load registry once
-			reg, err := registry.Load(cfg.RegistryPath)
-			if err != nil {
-				return fmt.Errorf("load registry: %w", err)
+			// Validate paths before taking the registry lock
+			type candidate struct {
+				repo     registry.Repo
+				repoType git.RepoType
 			}
-
-			var added int
+			var candidates []candidate
 			for _, path := range args {
 				// Resolve to absolute path
 				absPath, err := filepath.Abs(path)
@@ -232,26 +231,39 @@ be managed with other wt commands. Non-git directories are silently skipped.`,
 					Labels:         labels,
 				}
 
-				if err := reg.Add(repo); err != nil {
-					l.Printf("skipping %s: %v\n", absPath, err)
-					continue
+				candidates = append(candidates, candidate{repo: repo, repoType: repoType})
+			}
+
+			var added []candidate
+			var skipped []string
+			_, err := registry.Update(cfg.RegistryPath, func(r *registry.Registry) error {
+				for _, c := range candidates {
+					if err := r.Add(c.repo); err != nil {
+						skipped = append(skipped, fmt.Sprintf("skipping %s: %v\n", c.repo.Path, err))
+						continue
+					}
+					added = append(added, c)
 				}
 
+				if len(added) == 0 {
+					return fmt.Errorf("no repositories added")
+				}
+				return nil
+			})
+
+			for _, msg := range skipped {
+				l.Printf("%s", msg)
+			}
+			if err != nil {
+				return err
+			}
+
+			for _, c := range added {
 				typeStr := "regular"
-				if repoType == git.RepoTypeBare {
+				if c.repoType == git.RepoTypeBare {
 					typeStr = "bare"
 				}
-				fmt.Printf("Registered %s repo: %s (%s)\n", typeStr, repoName, absPath)
-				added++
-			}
-
-			if added == 0 {
-				return fmt.Errorf("no repositories added")
-			}
-
-			// Save registry
-			if err := reg.Save(cfg.RegistryPath); err != nil {
-				return fmt.Errorf("save registry: %w", err)
+				fmt.Printf("Registered %s repo: %s (%s)\n", typeStr, c.repo.Name, c.repo.Path)
 			}
 
 			return nil
@@ -323,13 +335,10 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 			}
 
 			// Remove from registry
-			if err := reg.Remove(nameOrPath); err != nil {
+			if _, err := registry.Update(cfg.RegistryPath, func(r *registry.Registry) error {
+				return r.Remove(nameOrPath)
+			}); err != nil {
 				return err
-			}
-
-			// Save registry
-			if err := reg.Save(cfg.RegistryPath); err != nil {
-				return fmt.Errorf("save registry: %w", err)
 			}
 
 			// Delete files if requested
@@ -490,12 +499,6 @@ If destination is not specified, clones into <repo-name> in the current director
 				repoName = filepath.Base(absPath)
 			}
 
-			// Load registry
-			reg, err := registry.Load(cfg.RegistryPath)
-			if err != nil {
-				return fmt.Errorf("load registry: %w", err)
-			}
-
 			// Register the repo
 			repo := registry.Repo{
 				Path:           absPath,
@@ -504,14 +507,17 @@ If destination is not specified, clones into <repo-name> in the current director
 				Labels:         labels,
 			}
 
-			if err := reg.Add(repo); err != nil {
-				// Clean up on failure
-				os.RemoveAll(absPath)
-				return fmt.Errorf("register repo: %w", err)
-			}
-
-			if err := reg.Save(cfg.RegistryPath); err != nil {
-				return fmt.Errorf("save registry: %w", err)
+			var addErr error
+			if _, err := registry.Update(cfg.RegistryPath, func(r *registry.Registry) error {
+				addErr = r.Add(repo)
+				return addErr
+			}); err != nil {
+				if addErr != nil {
+					// Clean up on failure
+					os.RemoveAll(absPath)
+					return fmt.Errorf("register repo: %w", err)
+				}
+				return err
 			}
 
 			fmt.Printf("Cloned repo: %s (%s)\n", repoName, absPath)
@@ -710,7 +716,6 @@ The conversion:
 				out:               out,
 				l:                 l,
 				cfg:               cfg,
-				reg:               reg,
 				absPath:           absPath,
 				repoName:          repoName,
 				effectiveFormat:   effectiveFormat,
@@ -763,7 +768,6 @@ type convertParams struct {
 	out               *output.Printer
 	l                 *log.Logger
 	cfg               *config.Config
-	reg               *registry.Registry
 	absPath           string
 	repoName          string
 	effectiveFormat   string
@@ -787,12 +791,13 @@ func registerAndVerify(p convertParams, warnings []string) error {
 			Labels:         p.labels,
 		}
 
-		if err := p.reg.Add(repo); err != nil {
-			return fmt.Errorf("register repo: %w", err)
-		}
-
-		if err := p.reg.Save(p.cfg.RegistryPath); err != nil {
-			return fmt.Errorf("save registry: %w", err)
+		if _, err := registry.Update(p.cfg.RegistryPath, func(r *registry.Registry) error {
+			if err := r.Add(repo); err != nil {
+				return fmt.Errorf("register repo: %w", err)
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
 	}
 

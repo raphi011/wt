@@ -43,7 +43,7 @@ func TestCheckout_NewBranchViaCaseInsensitivePath(t *testing.T) {
 			{Name: "myrepo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 

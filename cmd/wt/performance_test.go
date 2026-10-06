@@ -93,7 +93,7 @@ func TestPerformanceMeasurements(t *testing.T) {
 			wts[i] = git.Worktree{RepoPath: path, Branch: "main", OriginURL: "https://github.com/org/repo.git", HasUpstream: true}
 		}
 		regPath := filepath.Join(t.TempDir(), "registry.json")
-		if err := reg.Save(regPath); err != nil {
+		if err := saveRegistry(reg, regPath); err != nil {
 			t.Fatal(err)
 		}
 		ctx := config.WithConfig(context.Background(), &config.Config{RegistryPath: regPath})
@@ -231,7 +231,7 @@ func TestLabelCompletionBoundedAndStable(t *testing.T) {
 		reg.Repos = append(reg.Repos, registry.Repo{Name: fmt.Sprintf("repo-%d", i), Path: path, Labels: []string{"group"}})
 	}
 	regPath := filepath.Join(t.TempDir(), "registry.json")
-	if err := reg.Save(regPath); err != nil {
+	if err := saveRegistry(reg, regPath); err != nil {
 		t.Fatal(err)
 	}
 	ctx := config.WithConfig(context.Background(), &config.Config{RegistryPath: regPath})
@@ -243,7 +243,7 @@ func TestLabelCompletionBoundedAndStable(t *testing.T) {
 	for _, mode := range []string{"cd", "checkout"} {
 		for range 3 {
 			rand.Shuffle(len(reg.Repos), func(i, j int) { reg.Repos[i], reg.Repos[j] = reg.Repos[j], reg.Repos[i] })
-			if err := reg.Save(regPath); err != nil {
+			if err := saveRegistry(reg, regPath); err != nil {
 				t.Fatal(err)
 			}
 			if err := os.WriteFile(events, nil, 0600); err != nil {

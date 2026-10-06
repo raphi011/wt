@@ -1,8 +1,11 @@
 package registry
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -328,8 +331,11 @@ func TestRegistrySaveLoad(t *testing.T) {
 	}
 
 	// Save to explicit path
-	if err := reg.Save(regPath); err != nil {
-		t.Fatalf("Save() failed: %v", err)
+	if _, err := Update(regPath, func(r *Registry) error {
+		*r = *reg
+		return nil
+	}); err != nil {
+		t.Fatalf("Update() failed: %v", err)
 	}
 
 	// Verify file exists
@@ -747,5 +753,121 @@ func TestRepoString(t *testing.T) {
 	repo2 := Repo{Name: "myrepo", Path: "/tmp/myrepo", Labels: []string{"backend", "api"}}
 	if got := repo2.String(); got != "myrepo (backend, api)" {
 		t.Errorf("String() = %q, want 'myrepo (backend, api)'", got)
+	}
+}
+
+func TestUpdate_Concurrent(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	regPath := filepath.Join(dir, "repos.json")
+
+	const writers = 20
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for i := range writers {
+		wg.Go(func() {
+			name := fmt.Sprintf("repo-%d", i)
+			_, err := Update(regPath, func(r *Registry) error {
+				return r.Add(Repo{Name: name, Path: filepath.Join(dir, name)})
+			})
+			errs <- err
+		})
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Errorf("Update failed: %v", err)
+		}
+	}
+
+	reg, err := Load(regPath)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if len(reg.Repos) != writers {
+		t.Errorf("expected %d repos, got %d", writers, len(reg.Repos))
+	}
+}
+
+func TestUpdate_ReturnsSavedState(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	regPath := filepath.Join(dir, "repos.json")
+
+	for _, name := range []string{"foo", "bar"} {
+		reg, err := Update(regPath, func(r *Registry) error {
+			return r.Add(Repo{Name: name, Path: filepath.Join(dir, name)})
+		})
+		if err != nil {
+			t.Fatalf("Update failed: %v", err)
+		}
+		if _, err := reg.FindByName(name); err != nil {
+			t.Errorf("returned registry is missing %s: %v", name, err)
+		}
+	}
+
+	reg, err := Update(regPath, func(r *Registry) error { return nil })
+	if err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+	if len(reg.Repos) != 2 {
+		t.Errorf("expected 2 repos, got %d", len(reg.Repos))
+	}
+}
+
+func TestUpdate_FnError(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	regPath := filepath.Join(dir, "repos.json")
+
+	wantErr := errors.New("abort")
+	reg, err := Update(regPath, func(r *Registry) error {
+		if err := r.Add(Repo{Name: "foo", Path: filepath.Join(dir, "foo")}); err != nil {
+			return err
+		}
+		return wantErr
+	})
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected fn error, got %v", err)
+	}
+	if reg != nil {
+		t.Error("expected nil registry on error")
+	}
+
+	loaded, err := Load(regPath)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if len(loaded.Repos) != 0 {
+		t.Errorf("expected no repos after failed update, got %d", len(loaded.Repos))
+	}
+}
+
+func TestUpdate_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	regPath := filepath.Join(t.TempDir(), "repos.json")
+	if err := os.WriteFile(regPath, []byte("not json"), 0o600); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	_, err := Update(regPath, func(r *Registry) error {
+		return r.Add(Repo{Name: "foo", Path: "/tmp/foo"})
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid JSON, got nil")
+	}
+
+	data, err := os.ReadFile(regPath)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	if string(data) != "not json" {
+		t.Errorf("file was overwritten: %q", data)
 	}
 }

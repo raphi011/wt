@@ -33,7 +33,7 @@ func TestNoteSet_CurrentBranch(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -84,7 +84,7 @@ func TestNoteGet_CurrentBranch(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -126,7 +126,7 @@ func TestNoteGet_NoNote(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -173,7 +173,7 @@ func TestNoteClear_CurrentBranch(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -216,7 +216,7 @@ func TestNoteSet_ExplicitRepoBranch(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -267,7 +267,7 @@ func TestNoteGet_ExplicitBranch(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -308,7 +308,7 @@ func TestNote_BranchNotFound(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -352,7 +352,7 @@ func TestNoteSet_LabelScope(t *testing.T) {
 			{Name: "svc-b", Path: repo2Path, Labels: []string{"backend"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
