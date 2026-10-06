@@ -246,3 +246,11 @@ func TestHasUncommittedChanges(t *testing.T) {
 		})
 	}
 }
+
+func TestHasUncommittedChanges_NotARepo(t *testing.T) {
+	t.Parallel()
+
+	if _, err := HasUncommittedChanges(context.Background(), resolveTempDir(t)); err == nil {
+		t.Error("HasUncommittedChanges on a non-repo directory returned no error")
+	}
+}

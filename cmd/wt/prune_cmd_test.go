@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -140,6 +142,30 @@ func TestIsWorktreePrunable(t *testing.T) {
 			got := isWorktreePrunable(wt)
 			if got != tt.want {
 				t.Errorf("isWorktreePrunable(%q) = %v, want %v", tt.state, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsWorktreeDirty(t *testing.T) {
+	t.Parallel()
+
+	notARepo := t.TempDir()
+
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"missing directory is clean", filepath.Join(notARepo, "gone"), false},
+		{"unreadable state is dirty", notARepo, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isWorktreeDirty(context.Background(), git.Worktree{Path: tt.path})
+			if got != tt.want {
+				t.Errorf("isWorktreeDirty(%q) = %v, want %v", tt.path, got, tt.want)
 			}
 		})
 	}
