@@ -3,10 +3,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
@@ -63,7 +65,7 @@ func TestRepoList_ListRepos(t *testing.T) {
 			{Name: "repo2", Path: "/tmp/repo2", Labels: []string{"frontend"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -109,7 +111,7 @@ func TestRepoList_FilterByLabel(t *testing.T) {
 			{Name: "frontend-app", Path: "/tmp/frontend-app", Labels: []string{"frontend"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -154,7 +156,7 @@ func TestRepoList_LabelNotFound(t *testing.T) {
 			{Name: "repo1", Path: "/tmp/repo1", Labels: []string{"backend"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -195,7 +197,7 @@ func TestRepoList_JSON(t *testing.T) {
 			{Name: "test-repo", Path: "/tmp/test-repo"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -437,6 +439,59 @@ func TestRepoAdd_MultiplePaths(t *testing.T) {
 	}
 }
 
+// TestRepoAdd_Concurrent tests that concurrent adds don't lose each other's repos.
+//
+// Scenario: Several `wt repo add <repo>` commands run at the same time
+// Expected: All repos are registered
+func TestRepoAdd_Concurrent(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	const writers = 8
+	repos := make([]string, writers)
+	for i := range writers {
+		repos[i] = setupTestRepo(t, tmpDir, fmt.Sprintf("repo%d", i))
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for _, repo := range repos {
+		wg.Go(func() {
+			cmd := newRepoAddCmd()
+			cmd.SetContext(ctx)
+			cmd.SetArgs([]string{repo})
+			errs <- cmd.Execute()
+		})
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Errorf("repo add command failed: %v", err)
+		}
+	}
+
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	if len(reg.Repos) != writers {
+		t.Errorf("expected %d repos, got %d", writers, len(reg.Repos))
+	}
+}
+
 // TestRepoAdd_SkipsNonGitDirs tests that non-git directories are skipped.
 //
 // Scenario: User runs `wt repo add repo1 notgit repo2`
@@ -515,7 +570,7 @@ func TestRepoRemove_UnregisterRepo(t *testing.T) {
 			{Name: "remove-test", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -599,7 +654,7 @@ func TestRepoRemove_OutputShowsCorrectName(t *testing.T) {
 			{Name: "second-repo", Path: repo2Path},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -687,6 +742,44 @@ func TestRepoConvertBare_BasicMigration(t *testing.T) {
 
 	if reg.Repos[0].Name != "migrate-test" {
 		t.Errorf("expected name 'migrate-test', got %q", reg.Repos[0].Name)
+	}
+}
+
+// TestRepoConvertBare_RegistryUpdateFails tests migration when the registry can't be updated.
+//
+// Scenario: User runs `wt repo convert --clone-mode bare` while the registry lock can't be taken
+// Expected: Command fails and nothing is registered
+func TestRepoConvertBare_RegistryUpdateFails(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "migrate-test")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	// A directory at the lock path can't be opened for writing
+	if err := os.MkdirAll(regFile+".lock", 0755); err != nil {
+		t.Fatalf("failed to create lock directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+	cmd := newRepoConvertCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare"})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected error when the registry can't be updated")
+	}
+
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	if len(reg.Repos) != 0 {
+		t.Errorf("expected no repos, got %d", len(reg.Repos))
 	}
 }
 
@@ -1175,7 +1268,7 @@ func TestRepoConvertBare_AlreadyRegistered(t *testing.T) {
 			{Name: "already-registered", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1237,7 +1330,7 @@ func TestRepoConvertBare_NameConflict(t *testing.T) {
 			{Name: "name-conflict", Path: "/some/other/path"},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1329,7 +1422,7 @@ func TestRepoRemove_DeleteForce(t *testing.T) {
 			{Name: "delete-test", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -1379,7 +1472,7 @@ func TestRepoRemove_ByPath(t *testing.T) {
 			{Name: "path-remove-test", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 

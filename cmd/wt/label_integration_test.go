@@ -3,9 +3,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
@@ -34,7 +36,7 @@ func TestLabel_Add(t *testing.T) {
 			{Name: "myrepo", Path: repoPath, Labels: []string{}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -95,7 +97,7 @@ func TestLabel_Remove(t *testing.T) {
 			{Name: "myrepo", Path: repoPath, Labels: []string{"backend", "api"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -161,7 +163,7 @@ func TestLabel_List(t *testing.T) {
 			{Name: "myrepo", Path: repoPath, Labels: []string{"backend", "api"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -209,7 +211,7 @@ func TestLabel_Clear(t *testing.T) {
 			{Name: "myrepo", Path: repoPath, Labels: []string{"backend", "api"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -265,7 +267,7 @@ func TestLabel_Add_ByLabelScope(t *testing.T) {
 			{Name: "repo3", Path: filepath.Join(tmpDir, "repo3"), Labels: []string{"frontend"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -332,7 +334,7 @@ func TestLabel_Add_DuplicateLabel(t *testing.T) {
 			{Name: "myrepo", Path: repoPath, Labels: []string{"backend"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -385,7 +387,7 @@ func TestLabel_Remove_LabelNotFound(t *testing.T) {
 			{Name: "myrepo", Path: repoPath, Labels: []string{"backend"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -435,7 +437,7 @@ func TestLabel_List_Global(t *testing.T) {
 			{Name: "repo2", Path: repo2Path, Labels: []string{"frontend", "api"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -478,7 +480,7 @@ func TestLabel_List_NoLabels(t *testing.T) {
 			{Name: "myrepo", Path: repoPath, Labels: []string{}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -517,7 +519,7 @@ func TestLabel_List_MultipleRepos(t *testing.T) {
 			{Name: "repo2", Path: repo2Path, Labels: []string{"frontend"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -564,7 +566,7 @@ func TestLabel_Add_CurrentRepo(t *testing.T) {
 			{Name: "myrepo", Path: repoPath, Labels: []string{}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -620,7 +622,7 @@ func TestLabel_Remove_NotInGitRepo(t *testing.T) {
 	reg := &registry.Registry{
 		Repos: []registry.Repo{},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -666,7 +668,7 @@ func TestLabel_Clear_CurrentRepo(t *testing.T) {
 			{Name: "myrepo", Path: repoPath, Labels: []string{"backend", "api"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -694,5 +696,144 @@ func TestLabel_Clear_CurrentRepo(t *testing.T) {
 
 	if len(repo.Labels) != 0 {
 		t.Errorf("expected 0 labels after clear, got %d: %v", len(repo.Labels), repo.Labels)
+	}
+}
+
+// TestLabel_Add_Concurrent tests that concurrent label changes don't lose each other.
+//
+// Scenario: Several `wt label add <label> myrepo` commands run at the same time
+// Expected: The repo has all labels
+func TestLabel_Add_Concurrent(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	const writers = 8
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for i := range writers {
+		wg.Go(func() {
+			cmd := newLabelCmd()
+			cmd.SetContext(ctx)
+			cmd.SetArgs([]string{"add", fmt.Sprintf("label%d", i), "myrepo"})
+			errs <- cmd.Execute()
+		})
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Errorf("label add command failed: %v", err)
+		}
+	}
+
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	repo, err := reg.FindByName("myrepo")
+	if err != nil {
+		t.Fatalf("failed to find repo: %v", err)
+	}
+
+	if len(repo.Labels) != writers {
+		t.Errorf("expected %d labels, got %v", writers, repo.Labels)
+	}
+}
+
+// TestLabel_RegistryUpdateFails tests label changes when the registry can't be updated.
+//
+// Scenario: User runs `wt label add/remove/clear` while the registry lock can't be taken
+// Expected: Command fails and the registry is unchanged
+func TestLabel_RegistryUpdateFails(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "add", args: []string{"add", "backend", "myrepo"}},
+		{name: "remove", args: []string{"remove", "existing", "myrepo"}},
+		{name: "clear", args: []string{"clear", "myrepo"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tmpDir := t.TempDir()
+			tmpDir = resolvePath(t, tmpDir)
+
+			repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+			regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+			if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+				t.Fatalf("failed to create registry directory: %v", err)
+			}
+
+			reg := &registry.Registry{
+				Repos: []registry.Repo{
+					{Name: "myrepo", Path: repoPath, Labels: []string{"existing"}},
+				},
+			}
+			if err := saveRegistry(reg, regFile); err != nil {
+				t.Fatalf("failed to save registry: %v", err)
+			}
+
+			// A directory at the lock path can't be opened for writing
+			if err := os.Remove(regFile + ".lock"); err != nil {
+				t.Fatalf("failed to remove lock file: %v", err)
+			}
+			if err := os.Mkdir(regFile+".lock", 0755); err != nil {
+				t.Fatalf("failed to create lock directory: %v", err)
+			}
+
+			cfg := &config.Config{RegistryPath: regFile}
+			ctx := testContextWithConfig(t, cfg, repoPath)
+
+			cmd := newLabelCmd()
+			cmd.SetContext(ctx)
+			cmd.SetArgs(tt.args)
+
+			if err := cmd.Execute(); err == nil {
+				t.Fatal("expected error when the registry can't be updated")
+			}
+
+			reg, err := registry.Load(regFile)
+			if err != nil {
+				t.Fatalf("failed to load registry: %v", err)
+			}
+
+			repo, err := reg.FindByName("myrepo")
+			if err != nil {
+				t.Fatalf("failed to find repo: %v", err)
+			}
+
+			if len(repo.Labels) != 1 || repo.Labels[0] != "existing" {
+				t.Errorf("expected labels [existing], got %v", repo.Labels)
+			}
+		})
 	}
 }

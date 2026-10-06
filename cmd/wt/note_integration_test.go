@@ -33,7 +33,7 @@ func TestNoteSet_CurrentBranch(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -84,7 +84,7 @@ func TestNoteGet_CurrentBranch(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -126,7 +126,7 @@ func TestNoteGet_NoNote(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -173,7 +173,7 @@ func TestNoteClear_CurrentBranch(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -216,7 +216,7 @@ func TestNoteSet_ExplicitRepoBranch(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -267,7 +267,7 @@ func TestNoteGet_ExplicitBranch(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -308,7 +308,7 @@ func TestNote_BranchNotFound(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -325,6 +325,36 @@ func TestNote_BranchNotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "worktree not found") {
 		t.Errorf("expected 'worktree not found' error, got %q", err.Error())
+	}
+}
+
+// TestNote_NotInGitRepo tests error when no target is given outside a git repo.
+//
+// Scenario: User runs `wt note get` outside a git repository
+// Expected: Returns error about not being in a git repository
+func TestNote_NotInGitRepo(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newNoteCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"get"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error outside a git repository, got nil")
+	}
+	if !strings.Contains(err.Error(), "not in a git repository") {
+		t.Errorf("expected 'not in a git repository' error, got %q", err.Error())
 	}
 }
 
@@ -352,7 +382,7 @@ func TestNoteSet_LabelScope(t *testing.T) {
 			{Name: "svc-b", Path: repo2Path, Labels: []string{"backend"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 

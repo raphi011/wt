@@ -55,21 +55,37 @@ func Load(path string) (*Registry, error) {
 	return &reg, nil
 }
 
-// Save writes the registry to the specified path, or ~/.wt/repos.json if empty.
-func (r *Registry) Save(path string) error {
+// Update applies fn to the registry stored at the specified path, or
+// ~/.wt/repos.json if empty, saves the result and returns it.
+// The read-modify-write cycle holds a file lock, so concurrent wt processes
+// don't lose each other's changes. fn must only modify r.
+func Update(path string, fn func(r *Registry) error) (*Registry, error) {
 	if path == "" {
 		var err error
 		path, err = registryPath()
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	if err := fs.SaveJSON(path, r); err != nil {
-		return fmt.Errorf("save registry: %w", err)
+	var saved *Registry
+	var fnErr error
+	err := fs.UpdateJSON(path, func(r *Registry) error {
+		if r.Repos == nil {
+			r.Repos = []Repo{}
+		}
+		saved = r
+		fnErr = fn(r)
+		return fnErr
+	})
+	if fnErr != nil {
+		return nil, fnErr
+	}
+	if err != nil {
+		return nil, fmt.Errorf("update registry: %w", err)
 	}
 
-	return nil
+	return saved, nil
 }
 
 // Add registers a new repo. Returns error if path already registered.

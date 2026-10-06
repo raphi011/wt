@@ -56,13 +56,17 @@ func findOrRegisterCurrentRepo(ctx context.Context, reg *registry.Registry, cfg 
 		Labels: cfg.DefaultLabels,
 	}
 
-	if err := reg.Add(newRepo); err != nil {
+	// Another process may have registered the repo since reg was loaded
+	updated, err := registry.Update(cfg.RegistryPath, func(r *registry.Registry) error {
+		if _, err := r.FindByPath(repoPath); err == nil {
+			return nil
+		}
+		return r.Add(newRepo)
+	})
+	if err != nil {
 		return registry.Repo{}, err
 	}
-
-	if err := reg.Save(cfg.RegistryPath); err != nil {
-		return registry.Repo{}, err
-	}
+	*reg = *updated
 
 	return reg.FindByPath(repoPath)
 }

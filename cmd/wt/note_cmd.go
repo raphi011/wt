@@ -238,29 +238,9 @@ func resolveNoteTargets(ctx context.Context, cfg *config.Config, workDir string,
 
 // getCurrentRepoBranch gets the repo and current branch from current directory
 func getCurrentRepoBranch(ctx context.Context, cfg *config.Config, workDir string, reg *registry.Registry) (registry.Repo, string, error) {
-	repoPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
-	if repoPath == "" {
-		return registry.Repo{}, "", fmt.Errorf("not in a git repository")
-	}
-
-	repo, err := reg.FindByPath(repoPath)
+	repo, err := findOrRegisterCurrentRepo(ctx, reg, cfg)
 	if err != nil {
-		// Auto-register
-		newRepo := registry.Repo{
-			Path:   repoPath,
-			Name:   git.GetRepoDisplayName(repoPath),
-			Labels: cfg.DefaultLabels,
-		}
-		if err := reg.Add(newRepo); err != nil {
-			return registry.Repo{}, "", err
-		}
-		if err := reg.Save(cfg.RegistryPath); err != nil {
-			return registry.Repo{}, "", err
-		}
-		repo, err = reg.FindByPath(repoPath)
-		if err != nil {
-			return registry.Repo{}, "", err
-		}
+		return registry.Repo{}, "", err
 	}
 
 	branch, err := git.GetCurrentBranch(ctx, workDir)

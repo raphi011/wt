@@ -33,7 +33,7 @@ func TestList_EmptyRepo(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -81,7 +81,7 @@ func TestList_WithWorktrees(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -127,7 +127,7 @@ func TestList_ByRepoName(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -178,7 +178,7 @@ func TestList_ByLabel(t *testing.T) {
 			{Name: "myrepo", Path: repoPath, Labels: []string{"backend"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -234,7 +234,7 @@ func TestList_MultipleScopes(t *testing.T) {
 			{Name: "repo2", Path: repo2Path, Labels: []string{"backend"}},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -283,7 +283,7 @@ func TestList_ScopeNotFound(t *testing.T) {
 	reg := &registry.Registry{
 		Repos: []registry.Repo{},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -332,7 +332,7 @@ func TestList_JSON(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -377,7 +377,7 @@ func TestList_OrphanedRepoFiltered(t *testing.T) {
 			{Name: "orphaned-repo", Path: filepath.Join(tmpDir, "no-such-path")},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -431,7 +431,7 @@ func TestList_SortByBranch(t *testing.T) {
 			{Name: "test-repo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -489,7 +489,7 @@ func TestList_SortByRepo(t *testing.T) {
 			{Name: "alpha-repo", Path: repo2Path},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -547,7 +547,7 @@ func TestList_Global(t *testing.T) {
 			{Name: "repo2", Path: repo2Path},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -595,7 +595,7 @@ func TestList_GlobalFromNonRepo(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 

@@ -35,7 +35,7 @@ func TestPrCheckout_InvalidPRNumber(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -71,7 +71,7 @@ func TestPrCheckout_RepoNotFound(t *testing.T) {
 	reg := &registry.Registry{
 		Repos: []registry.Repo{},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -118,7 +118,7 @@ func TestPrCheckout_InvalidPRNumberWithRepo(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -153,7 +153,7 @@ func TestPrCreate_NotInGitRepo(t *testing.T) {
 	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -193,7 +193,7 @@ func TestPrCreate_RepoNotFound(t *testing.T) {
 	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -228,7 +228,7 @@ func TestPrMerge_NotInGitRepo(t *testing.T) {
 	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -268,7 +268,7 @@ func TestPrMerge_RepoNotFound(t *testing.T) {
 	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -303,7 +303,7 @@ func TestPrView_NotInGitRepo(t *testing.T) {
 	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -343,7 +343,7 @@ func TestPrView_RepoNotFound(t *testing.T) {
 	}
 
 	reg := &registry.Registry{Repos: []registry.Repo{}}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -383,7 +383,7 @@ func TestPrCreate_BodyAndBodyFileMutuallyExclusive(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -423,7 +423,7 @@ func TestPrCheckout_HookNoHookMutuallyExclusive(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -463,7 +463,7 @@ func TestPrMerge_HookNoHookMutuallyExclusive(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -507,7 +507,7 @@ func TestPrCheckout_OrgRepoAlreadyInRegistry(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -572,7 +572,7 @@ func TestPrCheckout_OrgRepoMatchesByRemote(t *testing.T) {
 			{Name: "protectedaccounts", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -624,7 +624,7 @@ func TestPrCheckout_OrgRepoCaseInsensitiveMatch(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -678,7 +678,7 @@ func TestPrCheckout_OrgRepoMultipleMatches(t *testing.T) {
 			{Name: "repo2", Path: repoPath2},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -722,7 +722,7 @@ func TestPrCheckout_OrgRepoNoMatchWithoutCloneFlag(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -766,7 +766,7 @@ func TestPrCheckout_OrgRepoWithCloneFlag(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -820,7 +820,7 @@ func TestPrCheckout_OrgRepoMatchesByUpstreamRemote(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -862,7 +862,7 @@ func TestPrCheckout_CloneFlagWithExistingMatch(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
@@ -921,7 +921,7 @@ func TestPrCheckout_AlreadyCheckedOut(t *testing.T) {
 			{Name: "myrepo", Path: repoPath},
 		},
 	}
-	if err := reg.Save(regFile); err != nil {
+	if err := saveRegistry(reg, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
