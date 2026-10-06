@@ -15,6 +15,7 @@ type pruneOptionValue struct {
 	ID         int
 	IsPrunable bool
 	IsStale    bool
+	IsDirty    bool
 	Reason     string
 	Worktree   git.Worktree
 }
@@ -33,6 +34,7 @@ type PruneWorktreeInfo struct {
 	Reason     string // PR state display string (e.g. "● Merged", "○ Open", "⏳ Stale (3w)")
 	IsPrunable bool   // Whether worktree can be auto-pruned (merged PR or stale)
 	IsStale    bool   // Whether worktree is stale (old commit, not merged)
+	IsDirty    bool   // Whether worktree has uncommitted changes (removal needs --force)
 	Worktree   git.Worktree
 }
 
@@ -63,6 +65,7 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 				ID:         wt.ID,
 				IsPrunable: wt.IsPrunable,
 				IsStale:    wt.IsStale,
+				IsDirty:    wt.IsDirty,
 				Reason:     wt.Reason,
 				Worktree:   wt.Worktree,
 			},
@@ -70,8 +73,8 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 			Disabled:    false,     // All can be selected in interactive mode
 		}
 
-		// Pre-select prunable worktrees
-		if wt.IsPrunable {
+		// Pre-select prunable worktrees, except those with uncommitted changes
+		if wt.IsPrunable && !wt.IsDirty {
 			preSelected = append(preSelected, i)
 		}
 	}
@@ -152,6 +155,9 @@ func pruneDescriptionRenderer(opt framework.Option, isSelected bool) string {
 		parts = append(parts, styles.SuccessStyle.Render("Eligible"))
 	} else if isSelected {
 		parts = append(parts, styles.ErrorStyle.Render("Force"))
+	}
+	if val.IsDirty {
+		parts = append(parts, styles.WarningStyle.Render("Dirty"))
 	}
 	if val.IsStale {
 		parts = append(parts, styles.WarningStyle.Render(val.Reason))
