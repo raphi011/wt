@@ -344,3 +344,75 @@ func TestUpdateJSON_InvalidJSON(t *testing.T) {
 		t.Errorf("file was overwritten: %q", data)
 	}
 }
+
+func TestSaveJSON_RenameError(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "test.json")
+
+	// A directory at the target path makes the final rename fail
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	if err := SaveJSON(path, map[string]int{"v": 1}); err == nil {
+		t.Fatal("expected error when target is a directory, got nil")
+	}
+
+	// Verify no temp file left behind
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		t.Fatalf("ReadDir failed: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected only the target directory, got %d entries", len(entries))
+	}
+}
+
+func TestUpdateJSON_LockError(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "test.json")
+
+	// A directory at the lock path can't be opened for writing
+	if err := os.Mkdir(path+".lock", 0o755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	called := false
+	err := UpdateJSON(path, func(m *map[string]int) error {
+		called = true
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected error when the lock can't be taken, got nil")
+	}
+	if called {
+		t.Error("fn should not run without the lock")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("file should not be created without the lock, stat error: %v", err)
+	}
+}
+
+func TestUpdateJSON_ParentNotDirectory(t *testing.T) {
+	t.Parallel()
+
+	parent := filepath.Join(t.TempDir(), "parent")
+	if err := os.WriteFile(parent, []byte("x"), 0o600); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	called := false
+	err := UpdateJSON(filepath.Join(parent, "test.json"), func(m *map[string]int) error {
+		called = true
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected error when the parent is a file, got nil")
+	}
+	if called {
+		t.Error("fn should not run when the directory can't be created")
+	}
+}
