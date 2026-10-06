@@ -482,17 +482,10 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 	l := log.FromContext(ctx)
 	cfg := config.FromContext(ctx)
 
-	// Load history for cleanup
 	histPath, err := cfg.GetHistoryPath()
 	if err != nil {
 		l.Printf("Warning: failed to determine history path: %v\n", err)
 	}
-	hist, err := history.Load(histPath)
-	if err != nil {
-		l.Printf("Warning: failed to load history for prune cleanup: %v\n", err)
-		hist = &history.History{}
-	}
-	historyChanged := false
 
 	hookEnv, err := hooks.ParseEnvWithStdin(opts.Hooks.RawArgs)
 	if err != nil {
@@ -547,11 +540,6 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 			opts.PRCache.Delete(prcache.CacheKey(wt.RepoPath, wt.Branch))
 		}
 
-		// Remove from history
-		if hist.RemoveByPath(wt.Path) {
-			historyChanged = true
-		}
-
 		removed = append(removed, wt)
 
 		// Delete local branch if enabled (per-repo config unless CLI flag was explicit)
@@ -581,9 +569,15 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		}
 	}
 
-	// Save history if any entries were removed
-	if historyChanged {
-		if err := hist.Save(histPath); err != nil {
+	// Remove pruned worktrees from history
+	if histPath != "" && len(removed) > 0 {
+		err := history.Update(histPath, func(h *history.History) error {
+			for _, wt := range removed {
+				h.RemoveByPath(wt.Path)
+			}
+			return nil
+		})
+		if err != nil {
 			l.Printf("Warning: failed to save history after prune: %v\n", err)
 		}
 	}

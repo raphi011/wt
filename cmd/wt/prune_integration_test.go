@@ -11,6 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
 )
@@ -2248,5 +2249,44 @@ func TestPrune_Target_DirtyMergedWorktree_RequiresForce(t *testing.T) {
 	}
 	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
 		t.Error("dirty worktree should be removed with -f")
+	}
+}
+
+// TestPrune_RemovesHistoryEntry tests that pruning a worktree removes it from
+// the history and keeps the other entries.
+//
+// Scenario: History has entries for a merged worktree and for the main repo, user runs `wt prune`
+// Expected: The pruned worktree's entry is gone, the main repo's entry remains
+func TestPrune_RemovesHistoryEntry(t *testing.T) {
+	t.Parallel()
+
+	cfg, repoPath, wtPath := setupMergedWorktree(t)
+	cfg.HistoryPath = filepath.Join(t.TempDir(), "history.json")
+
+	if err := history.RecordAccess(wtPath, "test-repo", "feature", cfg.HistoryPath); err != nil {
+		t.Fatalf("failed to record history: %v", err)
+	}
+	if err := history.RecordAccess(repoPath, "test-repo", "main", cfg.HistoryPath); err != nil {
+		t.Fatalf("failed to record history: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	hist, err := history.Load(cfg.HistoryPath)
+	if err != nil {
+		t.Fatalf("failed to load history: %v", err)
+	}
+	if hist.FindByPath(wtPath) != nil {
+		t.Error("pruned worktree should be removed from history")
+	}
+	if hist.FindByPath(repoPath) == nil {
+		t.Error("history entry of the main repo should be kept")
 	}
 }

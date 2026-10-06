@@ -1,10 +1,14 @@
 package history
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/raphi011/wt/internal/fs"
 )
 
 func TestRecordAccess(t *testing.T) {
@@ -111,7 +115,7 @@ func TestRecordAccess_MaxCap(t *testing.T) {
 			LastAccess:  base.Add(time.Duration(i) * time.Second),
 		})
 	}
-	if err := h.Save(historyFile); err != nil {
+	if err := fs.SaveJSON(historyFile, h); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
 
@@ -393,11 +397,43 @@ func TestSave_CreatesDirectory(t *testing.T) {
 			{Path: "/some/path", RepoName: "repo", Branch: "main", AccessCount: 1, LastAccess: time.Now()},
 		},
 	}
-	if err := h.Save(historyFile); err != nil {
+	if err := fs.SaveJSON(historyFile, h); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
 
 	if _, err := os.Stat(historyFile); os.IsNotExist(err) {
 		t.Error("expected history file to be created")
+	}
+}
+
+func TestRecordAccess_Concurrent(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	histPath := filepath.Join(dir, "history.json")
+
+	const writers = 20
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for i := range writers {
+		wg.Go(func() {
+			errs <- RecordAccess(filepath.Join(dir, fmt.Sprintf("wt-%d", i)), "repo", fmt.Sprintf("branch-%d", i), histPath)
+		})
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Errorf("RecordAccess failed: %v", err)
+		}
+	}
+
+	h, err := Load(histPath)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	if len(h.Entries) != writers {
+		t.Errorf("expected %d entries, got %d", writers, len(h.Entries))
 	}
 }

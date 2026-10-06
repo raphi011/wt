@@ -46,9 +46,11 @@ func Load(path string) (*History, error) {
 	return &h, nil
 }
 
-// Save writes the history to disk atomically at the given path.
-func (h *History) Save(path string) error {
-	return fs.SaveJSON(path, h)
+// Update applies fn to the history stored at the given path and saves the
+// result. The read-modify-write cycle holds a file lock, so concurrent wt
+// processes don't lose each other's changes. fn must only modify h.
+func Update(path string, fn func(h *History) error) error {
+	return fs.UpdateJSON(path, fn)
 }
 
 // FindByPath returns the entry matching the given path, or nil if not found.
@@ -114,34 +116,31 @@ func RecordAccess(path, repoName, branch, historyPath string) error {
 	// Store canonical path so future lookups match regardless of symlink form.
 	path = fs.ResolvePath(path)
 
-	h, err := Load(historyPath)
-	if err != nil {
-		return fmt.Errorf("load history: %w", err)
-	}
+	return Update(historyPath, func(h *History) error {
+		now := time.Now()
 
-	now := time.Now()
+		if entry := h.FindByPath(path); entry != nil {
+			entry.AccessCount++
+			entry.LastAccess = now
+			// Update repo/branch in case they changed
+			entry.RepoName = repoName
+			entry.Branch = branch
+		} else {
+			h.Entries = append(h.Entries, Entry{
+				Path:        path,
+				RepoName:    repoName,
+				Branch:      branch,
+				AccessCount: 1,
+				LastAccess:  now,
+			})
+		}
 
-	if entry := h.FindByPath(path); entry != nil {
-		entry.AccessCount++
-		entry.LastAccess = now
-		// Update repo/branch in case they changed
-		entry.RepoName = repoName
-		entry.Branch = branch
-	} else {
-		h.Entries = append(h.Entries, Entry{
-			Path:        path,
-			RepoName:    repoName,
-			Branch:      branch,
-			AccessCount: 1,
-			LastAccess:  now,
-		})
-	}
+		// Evict oldest entries if over cap
+		if len(h.Entries) > maxEntries {
+			h.SortByRecency()
+			h.Entries = h.Entries[:maxEntries]
+		}
 
-	// Evict oldest entries if over cap
-	if len(h.Entries) > maxEntries {
-		h.SortByRecency()
-		h.Entries = h.Entries[:maxEntries]
-	}
-
-	return h.Save(historyPath)
+		return nil
+	})
 }
