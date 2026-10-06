@@ -353,6 +353,49 @@ func TestRepoClone_NameConflict(t *testing.T) {
 	}
 }
 
+// TestRepoClone_RegistryUpdateFails tests cloning when the registry can't be updated.
+//
+// Scenario: User runs `wt repo clone file:///repo new-dir` while the registry lock can't be taken
+// Expected: Command fails, the clone is kept and nothing is registered
+func TestRepoClone_RegistryUpdateFails(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	// A directory at the lock path can't be opened for writing
+	if err := os.MkdirAll(regFile+".lock", 0755); err != nil {
+		t.Fatalf("failed to create lock directory: %v", err)
+	}
+
+	cfg := testConfig()
+	cfg.RegistryPath = regFile
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newRepoCloneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"file://" + sourceRepo, "new-dir"})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected error when the registry can't be updated")
+	}
+
+	if _, err := os.Stat(filepath.Join(tmpDir, "new-dir")); err != nil {
+		t.Errorf("clone should be kept: %v", err)
+	}
+
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	if len(reg.Repos) != 0 {
+		t.Errorf("expected no repos, got %d", len(reg.Repos))
+	}
+}
+
 // TestRepoClone_DestinationExists tests that cloning to an existing path fails.
 //
 // Scenario: User runs `wt repo clone file:///repo existing-dir`

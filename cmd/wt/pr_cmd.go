@@ -258,12 +258,7 @@ Use --interactive to select an open PR from registered repositories.`,
 						Name:   repoName,
 						Labels: cfg.DefaultLabels,
 					}
-					if _, err := registry.Update(cfg.RegistryPath, func(r *registry.Registry) error {
-						if err := r.Add(repo); err != nil {
-							return fmt.Errorf("register repo: %w", err)
-						}
-						return nil
-					}); err != nil {
+					if err := registerRepo(cfg, repo); err != nil {
 						return err
 					}
 

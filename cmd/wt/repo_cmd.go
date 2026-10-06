@@ -777,6 +777,17 @@ type convertParams struct {
 	alreadyRegistered bool
 }
 
+// registerRepo adds the repo to the registry.
+func registerRepo(cfg *config.Config, repo registry.Repo) error {
+	_, err := registry.Update(cfg.RegistryPath, func(r *registry.Registry) error {
+		if err := r.Add(repo); err != nil {
+			return fmt.Errorf("register repo: %w", err)
+		}
+		return nil
+	})
+	return err
+}
+
 // registerAndVerify registers the repo (if not already registered) and lists worktrees for verification.
 func registerAndVerify(p convertParams, warnings []string) error {
 	for _, w := range warnings {
@@ -791,12 +802,7 @@ func registerAndVerify(p convertParams, warnings []string) error {
 			Labels:         p.labels,
 		}
 
-		if _, err := registry.Update(p.cfg.RegistryPath, func(r *registry.Registry) error {
-			if err := r.Add(repo); err != nil {
-				return fmt.Errorf("register repo: %w", err)
-			}
-			return nil
-		}); err != nil {
+		if err := registerRepo(p.cfg, repo); err != nil {
 			return err
 		}
 	}

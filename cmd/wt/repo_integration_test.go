@@ -745,6 +745,44 @@ func TestRepoConvertBare_BasicMigration(t *testing.T) {
 	}
 }
 
+// TestRepoConvertBare_RegistryUpdateFails tests migration when the registry can't be updated.
+//
+// Scenario: User runs `wt repo convert --clone-mode bare` while the registry lock can't be taken
+// Expected: Command fails and nothing is registered
+func TestRepoConvertBare_RegistryUpdateFails(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "migrate-test")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	// A directory at the lock path can't be opened for writing
+	if err := os.MkdirAll(regFile+".lock", 0755); err != nil {
+		t.Fatalf("failed to create lock directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+	cmd := newRepoConvertCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare"})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected error when the registry can't be updated")
+	}
+
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	if len(reg.Repos) != 0 {
+		t.Errorf("expected no repos, got %d", len(reg.Repos))
+	}
+}
+
 // TestRepoConvertBare_WithCustomName tests migration with custom display name.
 //
 // Scenario: User runs `wt repo convert --clone-mode bare -n myapp ./repo`
