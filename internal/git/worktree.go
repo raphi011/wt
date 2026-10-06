@@ -45,6 +45,16 @@ func RemoveWorktree(ctx context.Context, worktree Worktree, force bool) error {
 	return runGit(ctx, worktree.RepoPath, args...)
 }
 
+// HasUncommittedChanges reports whether the worktree at path has modified,
+// staged or untracked files. Ignored files do not count.
+func HasUncommittedChanges(ctx context.Context, path string) (bool, error) {
+	out, err := outputGit(ctx, path, "status", "--porcelain")
+	if err != nil {
+		return false, err
+	}
+	return len(out) > 0, nil
+}
+
 // PruneWorktrees prunes stale worktree references
 func PruneWorktrees(ctx context.Context, repoPath string) error {
 	return runGit(ctx, repoPath, "worktree", "prune")

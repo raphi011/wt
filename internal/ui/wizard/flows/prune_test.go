@@ -240,3 +240,21 @@ func TestPruneStateAndActionAreSeparate(t *testing.T) {
 		}
 	}
 }
+
+func TestPruneDescriptionRenderer_Dirty(t *testing.T) {
+	opt := framework.Option{
+		Label: "repo:branch",
+		Value: pruneOptionValue{
+			ID:         5,
+			IsPrunable: true,
+			IsDirty:    true,
+			Reason:     "Merged",
+		},
+	}
+
+	result := pruneDescriptionRenderer(opt, false)
+
+	if !strings.Contains(result, "Dirty") {
+		t.Errorf("expected result to contain 'Dirty', got %q", result)
+	}
+}

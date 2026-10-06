@@ -2032,3 +2032,221 @@ func TestPrune_UsesPRCacheFromConfiguredDir(t *testing.T) {
 		t.Error("cache entry should be removed from the configured PR cache")
 	}
 }
+
+// setupMergedWorktree creates a repo with a "feature" worktree whose PR is
+// cached as merged, so auto-prune and targeted prune consider it prunable.
+func setupMergedWorktree(t *testing.T) (cfg *config.Config, repoPath, wtPath string) {
+	t.Helper()
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	repoPath = setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath = createTestWorktree(t, repoPath, "feature")
+	addCommit(t, wtPath, "feature-only.txt", "feature commit")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cache := prcache.New()
+	cache.Set(prcache.CacheKey(repoPath, "feature"), &forge.PRInfo{Number: 1, State: forge.PRStateMerged, Fetched: true})
+	if err := cache.SaveTo(filepath.Join(tmpDir, ".wt", "prs.json")); err != nil {
+		t.Fatalf("failed to save PR cache: %v", err)
+	}
+
+	return &config.Config{RegistryPath: regFile}, repoPath, wtPath
+}
+
+// writeUntrackedFile makes a worktree dirty with an untracked file.
+func writeUntrackedFile(t *testing.T, wtPath string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(wtPath, "wip.txt"), []byte("work in progress\n"), 0644); err != nil {
+		t.Fatalf("failed to write untracked file: %v", err)
+	}
+}
+
+// TestPrune_DirtyMergedWorktree_SkippedWithoutForce tests that auto-prune keeps
+// worktrees with uncommitted changes.
+//
+// Scenario: Worktree has a merged PR and an untracked file, user runs `wt prune`
+// Expected: Worktree is kept and listed as skipped with the reason
+func TestPrune_DirtyMergedWorktree_SkippedWithoutForce(t *testing.T) {
+	t.Parallel()
+
+	cfg, repoPath, wtPath := setupMergedWorktree(t)
+	writeUntrackedFile(t, wtPath)
+
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(wtPath, "wip.txt")); err != nil {
+		t.Errorf("dirty worktree should be kept: %v", err)
+	}
+	if !strings.Contains(out.String(), "uncommitted changes") || !strings.Contains(out.String(), "test-repo:feature") {
+		t.Errorf("output should list the skipped worktree with a reason, got: %q", out.String())
+	}
+}
+
+// TestPrune_DirtyMergedWorktree_RemovedWithForce tests that -f overrides the
+// dirty check in auto-prune.
+//
+// Scenario: Worktree has a merged PR and an untracked file, user runs `wt prune -f`
+// Expected: Worktree is removed
+func TestPrune_DirtyMergedWorktree_RemovedWithForce(t *testing.T) {
+	t.Parallel()
+
+	cfg, repoPath, wtPath := setupMergedWorktree(t)
+	writeUntrackedFile(t, wtPath)
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune -f command failed: %v", err)
+	}
+
+	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+		t.Error("dirty worktree should be removed with -f")
+	}
+}
+
+// TestPrune_DirtyMergedWorktree_DryRunShowsSkip tests that dry-run reports the
+// same skip as a real run.
+//
+// Scenario: Worktree has a merged PR and an untracked file, user runs `wt prune -d`
+// Expected: Output reports 0 to remove and lists the worktree as skipped
+func TestPrune_DirtyMergedWorktree_DryRunShowsSkip(t *testing.T) {
+	t.Parallel()
+
+	cfg, repoPath, wtPath := setupMergedWorktree(t)
+	writeUntrackedFile(t, wtPath)
+
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-d"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune -d command failed: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "Would remove 0 worktree(s)") {
+		t.Errorf("dry-run should not plan to remove the dirty worktree, got: %q", out.String())
+	}
+	if !strings.Contains(out.String(), "uncommitted changes") || !strings.Contains(out.String(), "test-repo:feature") {
+		t.Errorf("dry-run should list the skipped worktree with a reason, got: %q", out.String())
+	}
+}
+
+// TestPrune_DirtyStaleWorktree_SkippedWithoutForce tests that --stale keeps
+// stale worktrees with uncommitted changes.
+//
+// Scenario: Worktree has an old commit and a modified tracked file, user runs `wt prune --stale`
+// Expected: Worktree is kept
+func TestPrune_DirtyStaleWorktree_SkippedWithoutForce(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"stale-branch"})
+	wtPath := createTestWorktree(t, repoPath, "stale-branch")
+	addCommitWithDate(t, wtPath, "old-file.txt", "old commit", "2020-01-01T00:00:00+00:00")
+
+	// Modify a tracked file without committing
+	if err := os.WriteFile(filepath.Join(wtPath, "old-file.txt"), []byte("uncommitted edit\n"), 0644); err != nil {
+		t.Fatalf("failed to modify file: %v", err)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := reg.Save(regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Prune: config.PruneConfig{
+			StaleDays: 1,
+		},
+	}
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--stale"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune --stale command failed: %v", err)
+	}
+
+	if _, err := os.Stat(wtPath); err != nil {
+		t.Errorf("dirty stale worktree should be kept: %v", err)
+	}
+	if !strings.Contains(out.String(), "uncommitted changes") {
+		t.Errorf("output should give the skip reason, got: %q", out.String())
+	}
+}
+
+// TestPrune_Target_DirtyMergedWorktree_RequiresForce tests that targeted prune
+// refuses a merged worktree with uncommitted changes.
+//
+// Scenario: Worktree has a merged PR and an untracked file, user runs `wt prune feature`
+// Expected: Error naming the worktree, worktree is kept; `-f` removes it
+func TestPrune_Target_DirtyMergedWorktree_RequiresForce(t *testing.T) {
+	t.Parallel()
+
+	cfg, repoPath, wtPath := setupMergedWorktree(t)
+	writeUntrackedFile(t, wtPath)
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"}) // No -f flag
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("prune should fail without -f for a dirty worktree")
+	}
+	if !strings.Contains(err.Error(), "uncommitted changes") || !strings.Contains(err.Error(), "test-repo:feature") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(wtPath, "wip.txt")); err != nil {
+		t.Errorf("dirty worktree should be kept: %v", err)
+	}
+
+	cmd = newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune -f command failed: %v", err)
+	}
+	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+		t.Error("dirty worktree should be removed with -f")
+	}
+}

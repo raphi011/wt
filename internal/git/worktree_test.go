@@ -161,3 +161,88 @@ func TestPruneWorktrees(t *testing.T) {
 		}
 	}
 }
+
+func TestHasUncommittedChanges(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		setup func(t *testing.T, repoPath string)
+		want  bool
+	}{
+		{
+			name:  "clean",
+			setup: func(t *testing.T, repoPath string) {},
+			want:  false,
+		},
+		{
+			name: "modified tracked file",
+			setup: func(t *testing.T, repoPath string) {
+				if err := os.WriteFile(filepath.Join(repoPath, "README.md"), []byte("# changed\n"), 0644); err != nil {
+					t.Fatalf("failed to write file: %v", err)
+				}
+			},
+			want: true,
+		},
+		{
+			name: "staged file",
+			setup: func(t *testing.T, repoPath string) {
+				if err := os.WriteFile(filepath.Join(repoPath, "staged.txt"), []byte("staged\n"), 0644); err != nil {
+					t.Fatalf("failed to write file: %v", err)
+				}
+				if err := runGit(context.Background(), repoPath, "add", "staged.txt"); err != nil {
+					t.Fatalf("failed to stage file: %v", err)
+				}
+			},
+			want: true,
+		},
+		{
+			name: "untracked file",
+			setup: func(t *testing.T, repoPath string) {
+				if err := os.WriteFile(filepath.Join(repoPath, "untracked.txt"), []byte("untracked\n"), 0644); err != nil {
+					t.Fatalf("failed to write file: %v", err)
+				}
+			},
+			want: true,
+		},
+		{
+			name: "ignored file only",
+			setup: func(t *testing.T, repoPath string) {
+				ctx := context.Background()
+				if err := os.WriteFile(filepath.Join(repoPath, ".gitignore"), []byte("build/\n"), 0644); err != nil {
+					t.Fatalf("failed to write file: %v", err)
+				}
+				if err := runGit(ctx, repoPath, "add", ".gitignore"); err != nil {
+					t.Fatalf("failed to stage file: %v", err)
+				}
+				if err := runGit(ctx, repoPath, "commit", "-m", "Add gitignore"); err != nil {
+					t.Fatalf("failed to commit: %v", err)
+				}
+				if err := os.MkdirAll(filepath.Join(repoPath, "build"), 0755); err != nil {
+					t.Fatalf("failed to create dir: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(repoPath, "build", "out.bin"), []byte("artifact\n"), 0644); err != nil {
+					t.Fatalf("failed to write file: %v", err)
+				}
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			repoPath := setupTestRepo(t)
+			tt.setup(t, repoPath)
+
+			got, err := HasUncommittedChanges(context.Background(), repoPath)
+			if err != nil {
+				t.Fatalf("HasUncommittedChanges failed: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("HasUncommittedChanges = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

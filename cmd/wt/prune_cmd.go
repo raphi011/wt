@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -52,11 +53,15 @@ Use --interactive to select worktrees to prune.
 
 Target specific worktrees using [scope:]branch arguments where scope can be
 a repo name or label. Worktrees with a merged PR can be pruned without -f.
-Use -f to prune worktrees whose PR is not yet confirmed merged.`,
+Use -f to prune worktrees whose PR is not yet confirmed merged.
+
+Worktrees with uncommitted changes (modified, staged or untracked files) are
+never removed without -f.`,
 		Example: `  wt prune                         # Remove worktrees with merged PRs
   wt prune --stale                 # Also prune stale worktrees
   wt prune --global                # Prune all repos
   wt prune -d                      # Dry-run: preview without removing
+  wt prune -f                      # Also remove worktrees with uncommitted changes
   wt prune -i                      # Interactive mode
   wt prune feature                 # Remove merged feature worktree
   wt prune feature -f              # Remove unmerged feature worktree
@@ -190,6 +195,7 @@ Use -f to prune worktrees whose PR is not yet confirmed merged.`,
 						Reason:     reason,
 						IsPrunable: isPrunable,
 						IsStale:    isStaleWt,
+						IsDirty:    isWorktreeDirty(ctx, wt),
 						Worktree:   wt,
 					})
 				}
@@ -227,6 +233,13 @@ Use -f to prune worktrees whose PR is not yet confirmed merged.`,
 				}
 			}
 
+			// Worktrees with uncommitted changes are only removed with --force
+			var dirty []git.Worktree
+			if !force {
+				toRemove, dirty = splitDirtyWorktrees(ctx, toRemove)
+				toSkip = append(toSkip, dirty...)
+			}
+
 			deleteBranchesExplicit := cmd.Flags().Changed("delete-branches") || cmd.Flags().Changed("no-delete-branches")
 			// Determine if we should delete local branches (default from global config)
 			shouldDeleteBranches := cfg.Prune.DeleteLocalBranches
@@ -254,6 +267,13 @@ Use -f to prune worktrees whose PR is not yet confirmed merged.`,
 				out.Printf("Removed %d worktree(s), skipped %d\n", len(removed), len(toSkip)+len(failed))
 			}
 
+			if len(dirty) > 0 {
+				out.Println("Skipped (uncommitted changes, use -f to remove):")
+				for _, wt := range dirty {
+					out.Printf("  %s:%s (%s)\n", wt.RepoName, wt.Branch, wt.Path)
+				}
+			}
+
 			// Display results table
 			if len(removed) > 0 {
 				out.Println()
@@ -275,7 +295,7 @@ Use -f to prune worktrees whose PR is not yet confirmed merged.`,
 	}
 
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Preview without removing")
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force remove unmerged worktrees")
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force remove unmerged worktrees and worktrees with uncommitted changes")
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "Prune all repos")
 	cmd.Flags().BoolVarP(&refresh, "refresh-pr", "R", false, "Refresh PR status first")
 	cmd.Flags().BoolVar(&resetCache, "reset-cache", false, "Clear all cached data")
@@ -372,6 +392,14 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 		if len(unprunable) > 0 {
 			return fmt.Errorf("cannot prune unmerged worktrees without -f/--force: %s\nHint: run with -R/--refresh-pr to fetch latest PR status, or use -f to force removal", strings.Join(unprunable, ", "))
 		}
+
+		if _, dirty := splitDirtyWorktrees(ctx, toRemove); len(dirty) > 0 {
+			names := make([]string, 0, len(dirty))
+			for _, wt := range dirty {
+				names = append(names, wt.RepoName+":"+wt.Branch)
+			}
+			return fmt.Errorf("cannot prune worktrees with uncommitted changes without -f/--force: %s", strings.Join(names, ", "))
+		}
 	}
 
 	if dryRun {
@@ -411,6 +439,33 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 // (merged via forge-confirmed PR).
 func isWorktreePrunable(wt git.Worktree) bool {
 	return wt.PRState == forge.PRStateMerged
+}
+
+// isWorktreeDirty reports whether a worktree has uncommitted changes.
+// A worktree whose state cannot be determined counts as dirty.
+func isWorktreeDirty(ctx context.Context, wt git.Worktree) bool {
+	// A worktree whose directory is gone has nothing left to lose
+	if _, err := os.Stat(wt.Path); os.IsNotExist(err) {
+		return false
+	}
+	dirty, err := git.HasUncommittedChanges(ctx, wt.Path)
+	if err != nil {
+		log.FromContext(ctx).Printf("Warning: cannot check %s for uncommitted changes: %v\n", wt.Path, err)
+		return true
+	}
+	return dirty
+}
+
+// splitDirtyWorktrees separates worktrees with uncommitted changes from clean ones.
+func splitDirtyWorktrees(ctx context.Context, worktrees []git.Worktree) (clean, dirty []git.Worktree) {
+	for _, wt := range worktrees {
+		if isWorktreeDirty(ctx, wt) {
+			dirty = append(dirty, wt)
+		} else {
+			clean = append(clean, wt)
+		}
+	}
+	return clean, dirty
 }
 
 // pruneWorktrees removes the given worktrees and runs hooks.
