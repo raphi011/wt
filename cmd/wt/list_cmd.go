@@ -101,7 +101,7 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 			populatePRFields(allWorktrees, prCache)
 
 			// Save PR cache if modified
-			if err := prCache.SaveIfDirty(); err != nil {
+			if err := prCache.Save(); err != nil {
 				l.Printf("Warning: failed to save PR cache: %v\n", err)
 			}
 

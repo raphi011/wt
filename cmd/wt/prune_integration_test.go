@@ -2008,9 +2008,9 @@ func TestPrune_UsesPRCacheFromConfiguredDir(t *testing.T) {
 
 	cachePath := filepath.Join(tmpDir, ".wt", "prs.json")
 	cacheKey := prcache.CacheKey(repoPath, "feature")
-	cache := prcache.New()
+	cache := prcache.LoadFrom(cachePath)
 	cache.Set(cacheKey, &forge.PRInfo{Number: 1, State: forge.PRStateMerged, Fetched: true})
-	if err := cache.SaveTo(cachePath); err != nil {
+	if err := cache.Save(); err != nil {
 		t.Fatalf("failed to save PR cache: %v", err)
 	}
 
@@ -2059,9 +2059,9 @@ func setupMergedWorktree(t *testing.T) (cfg *config.Config, repoPath, wtPath str
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	cache := prcache.New()
+	cache := prcache.LoadFrom(filepath.Join(tmpDir, ".wt", "prs.json"))
 	cache.Set(prcache.CacheKey(repoPath, "feature"), &forge.PRInfo{Number: 1, State: forge.PRStateMerged, Fetched: true})
-	if err := cache.SaveTo(filepath.Join(tmpDir, ".wt", "prs.json")); err != nil {
+	if err := cache.Save(); err != nil {
 		t.Fatalf("failed to save PR cache: %v", err)
 	}
 

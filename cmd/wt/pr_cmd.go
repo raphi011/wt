@@ -607,7 +607,7 @@ Merges the PR, deletes its source branch, and removes the worktree (unless --kee
 						out.Printf("Removed worktree: %s\n", cwd)
 						// Remove from cache since worktree no longer exists
 						cache.Delete(cacheKey)
-						if err := cache.SaveIfDirty(); err != nil {
+						if err := cache.Save(); err != nil {
 							l.Printf("Warning: failed to save cache: %v\n", err)
 						}
 					}

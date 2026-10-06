@@ -18,9 +18,10 @@ func CacheKey(repoPath, branch string) string {
 
 // Cache stores PR info keyed by repoPath:branch
 type Cache struct {
-	PRs   map[string]*forge.PRInfo `json:"prs"`
-	path  string
-	dirty bool
+	PRs  map[string]*forge.PRInfo `json:"prs"`
+	path string
+	// changes made since the cache was loaded or last saved, in order
+	changes []func(*Cache)
 }
 
 // New returns an empty, initialized cache.
@@ -45,23 +46,45 @@ func LoadFrom(path string) *Cache {
 	return &cache
 }
 
-// SaveTo saves the PR cache to the given path atomically.
-func (c *Cache) SaveTo(path string) error {
-	return fs.SaveJSON(path, c)
-}
-
-// Save saves the PR cache atomically to the path it was loaded from
+// Save applies the changes made since the cache was loaded or last saved to
+// the file it was loaded from. The changes are replayed onto the current file
+// contents under a file lock, so concurrent saves only overwrite each other
+// per key. A corrupted file is treated as empty. Does nothing if there are no
+// changes.
 func (c *Cache) Save() error {
+	if len(c.changes) == 0 {
+		return nil
+	}
 	if c.path == "" {
 		return errors.New("PR cache has no path: load it with LoadFrom")
 	}
-	return c.SaveTo(c.path)
+
+	err := fs.UpdateJSONLenient(c.path, func(saved *Cache) error {
+		if saved.PRs == nil {
+			saved.PRs = make(map[string]*forge.PRInfo)
+		}
+		for _, change := range c.changes {
+			change(saved)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	c.changes = nil
+	return nil
+}
+
+// apply makes a change to the cache and records it for Save
+func (c *Cache) apply(change func(*Cache)) {
+	change(c)
+	c.changes = append(c.changes, change)
 }
 
 // Set stores PR info for a cache key
 func (c *Cache) Set(key string, pr *forge.PRInfo) {
-	c.PRs[key] = pr
-	c.dirty = true
+	c.apply(func(c *Cache) { c.PRs[key] = pr })
 }
 
 // Get returns PR info for a cache key, or nil if not found
@@ -71,25 +94,10 @@ func (c *Cache) Get(key string) *forge.PRInfo {
 
 // Delete removes PR info for a cache key
 func (c *Cache) Delete(key string) {
-	delete(c.PRs, key)
-	c.dirty = true
+	c.apply(func(c *Cache) { delete(c.PRs, key) })
 }
 
 // Reset clears all cached data
 func (c *Cache) Reset() {
-	c.PRs = make(map[string]*forge.PRInfo)
-	c.dirty = true
-}
-
-// SaveIfDirty saves the cache to disk only if it has been modified.
-// Resets the dirty flag after a successful save.
-func (c *Cache) SaveIfDirty() error {
-	if !c.dirty {
-		return nil
-	}
-	if err := c.Save(); err != nil {
-		return err
-	}
-	c.dirty = false
-	return nil
+	c.apply(func(c *Cache) { c.PRs = make(map[string]*forge.PRInfo) })
 }
