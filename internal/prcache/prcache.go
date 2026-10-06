@@ -1,11 +1,10 @@
-// Package prcache provides PR status caching stored in ~/.wt/prs.json.
+// Package prcache provides PR status caching stored in prs.json in the wt dir.
 // PRs are stored independently of worktree entries, keyed by repoPath:branch,
 // allowing PR info to be cached before worktrees are created.
 package prcache
 
 import (
-	"os"
-	"path/filepath"
+	"errors"
 
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/fs"
@@ -20,6 +19,7 @@ func CacheKey(repoPath, branch string) string {
 // Cache stores PR info keyed by repoPath:branch
 type Cache struct {
 	PRs   map[string]*forge.PRInfo `json:"prs"`
+	path  string
 	dirty bool
 }
 
@@ -28,32 +28,21 @@ func New() *Cache {
 	return &Cache{PRs: make(map[string]*forge.PRInfo)}
 }
 
-// Path returns the path to the PR cache file
-func Path() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".wt", "prs.json")
-}
-
 // LoadFrom loads the PR cache from the given path. Returns an empty cache if
-// the file is missing or corrupted.
+// the file is missing or corrupted. Save writes back to the same path.
 func LoadFrom(path string) *Cache {
 	var cache Cache
 	if err := fs.LoadJSON(path, &cache); err != nil {
-		return New()
+		cache = Cache{}
 	}
 
 	// Initialize nil map
 	if cache.PRs == nil {
 		cache.PRs = make(map[string]*forge.PRInfo)
 	}
+	cache.path = path
 
 	return &cache
-}
-
-// Load loads the PR cache from disk. Returns an empty cache if
-// the file is missing or corrupted.
-func Load() *Cache {
-	return LoadFrom(Path())
 }
 
 // SaveTo saves the PR cache to the given path atomically.
@@ -61,9 +50,12 @@ func (c *Cache) SaveTo(path string) error {
 	return fs.SaveJSON(path, c)
 }
 
-// Save saves the PR cache to disk atomically
+// Save saves the PR cache atomically to the path it was loaded from
 func (c *Cache) Save() error {
-	return c.SaveTo(Path())
+	if c.path == "" {
+		return errors.New("PR cache has no path: load it with LoadFrom")
+	}
+	return c.SaveTo(c.path)
 }
 
 // Set stores PR info for a cache key

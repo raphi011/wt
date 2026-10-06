@@ -434,6 +434,39 @@ func TestGetWtDir(t *testing.T) {
 	})
 }
 
+func TestGetPRCachePath(t *testing.T) {
+	t.Parallel()
+
+	t.Run("follows registry dir", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{RegistryPath: "/custom/repos.json"}
+		got, err := cfg.GetPRCachePath()
+		if err != nil {
+			t.Fatalf("GetPRCachePath returned error: %v", err)
+		}
+		if got != "/custom/prs.json" {
+			t.Errorf("GetPRCachePath = %q, want %q", got, "/custom/prs.json")
+		}
+	})
+
+	t.Run("default", func(t *testing.T) {
+		t.Parallel()
+		cfg := &Config{}
+		got, err := cfg.GetPRCachePath()
+		if err != nil {
+			t.Fatalf("GetPRCachePath returned error: %v", err)
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			t.Fatalf("os.UserHomeDir returned error: %v", err)
+		}
+		want := filepath.Join(home, ".wt", "prs.json")
+		if got != want {
+			t.Errorf("GetPRCachePath = %q, want %q", got, want)
+		}
+	})
+}
+
 func TestGetHistoryPath(t *testing.T) {
 	t.Parallel()
 

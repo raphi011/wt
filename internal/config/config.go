@@ -193,6 +193,15 @@ func (c *Config) GetHistoryPath() (string, error) {
 	return filepath.Join(home, ".wt", "history.json"), nil
 }
 
+// GetPRCachePath returns the effective PR cache file path (prs.json in the wt dir).
+func (c *Config) GetPRCachePath() (string, error) {
+	dir, err := c.GetWtDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine PR cache path: %w", err)
+	}
+	return filepath.Join(dir, "prs.json"), nil
+}
+
 // ShouldSetUpstream returns true if upstream tracking should be set (default: false)
 func (c *CheckoutConfig) ShouldSetUpstream() bool {
 	if c.SetUpstream == nil {

@@ -22,6 +22,15 @@ type prFetchItem struct {
 	cacheKey       string // key for prCache (repoName:folderName)
 }
 
+// loadPRCache loads the PR cache from the configured wt dir.
+func loadPRCache(cfg *config.Config) (*prcache.Cache, error) {
+	path, err := cfg.GetPRCachePath()
+	if err != nil {
+		return nil, err
+	}
+	return prcache.LoadFrom(path), nil
+}
+
 // refreshPRs fetches PR status for the given worktrees in parallel with a
 // progress bar. It updates prCache in-place and returns the branches that failed.
 func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.Cache, hosts map[string]string, forgeConfig *config.ForgeConfig) (failedBranches []string) {

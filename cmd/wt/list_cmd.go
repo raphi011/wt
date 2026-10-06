@@ -11,7 +11,6 @@ import (
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
-	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/static"
 )
@@ -87,7 +86,10 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 			}
 
 			// Load PR cache
-			prCache := prcache.Load()
+			prCache, err := loadPRCache(cfg)
+			if err != nil {
+				return err
+			}
 
 			// Refresh PR status if requested
 			if refresh {

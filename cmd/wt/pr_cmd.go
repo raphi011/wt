@@ -355,7 +355,10 @@ Use --interactive to select an open PR from registered repositories.`,
 			}
 
 			// Cache PR info for the new worktree
-			cache := prcache.Load()
+			cache, err := loadPRCache(effCfg)
+			if err != nil {
+				return err
+			}
 			prInfo, err := f.GetPRForBranch(ctx, originURL, branch)
 			if err != nil {
 				l.Debug("failed to fetch PR info", "branch", branch, "error", err)
@@ -562,7 +565,10 @@ Merges the PR, deletes its source branch, and removes the worktree (unless --kee
 			}
 
 			// Load PR cache for updates
-			cache := prcache.Load()
+			cache, err := loadPRCache(res.effCfg)
+			if err != nil {
+				return err
+			}
 			cacheKey := prcache.CacheKey(res.repo.Path, res.branch)
 
 			cwd := config.WorkDirFromContext(ctx)
