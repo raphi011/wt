@@ -8,6 +8,7 @@ import (
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
 )
@@ -211,10 +212,11 @@ func resolveNoteTargets(ctx context.Context, cfg *config.Config, workDir string,
 
 	// No scope - search all repos for matching worktree
 	var targets []noteTarget
-	for i := range reg.Repos {
-		repo := &reg.Repos[i]
+	l := log.FromContext(ctx)
+	for _, repo := range filterOrphanedRepos(l, reg.Repos) {
 		wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 		if err != nil {
+			l.Printf("Warning: %s: %v\n", repo.Name, err)
 			continue
 		}
 		for _, wt := range wts {

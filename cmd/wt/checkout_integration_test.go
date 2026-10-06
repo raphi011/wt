@@ -4009,3 +4009,51 @@ func TestCheckout_AutoStash_NestedWorktree(t *testing.T) {
 		t.Fatalf("new worktree should be a valid git worktree: %v\n%s", err, out)
 	}
 }
+
+// TestCheckout_ScopedGitError tests that a git failure while looking for an
+// existing worktree aborts the checkout.
+//
+// Scenario: User runs `wt checkout broken:feature` where `git worktree list` fails in the repo
+// Expected: The git error is returned and no worktree creation is attempted
+func TestCheckout_ScopedGitError(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	brokenPath := setupBrokenRepoDir(t, tmpDir, "broken")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "broken", Path: brokenPath},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"broken:feature"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to list worktrees") {
+		t.Errorf("expected the worktree list error, got: %v", err)
+	}
+}

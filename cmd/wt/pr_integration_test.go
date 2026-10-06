@@ -933,7 +933,10 @@ func TestPrCheckout_AlreadyCheckedOut(t *testing.T) {
 	}, repoPath)
 
 	// Step 1: Verify findWorktreeForBranch detects the existing worktree
-	foundPath, found := findWorktreeForBranch(ctx, repoPath, "feature")
+	foundPath, found, err := findWorktreeForBranch(ctx, repoPath, "feature")
+	if err != nil {
+		t.Fatalf("findWorktreeForBranch failed: %v", err)
+	}
 	if !found {
 		t.Fatal("expected to find existing worktree for branch 'feature'")
 	}

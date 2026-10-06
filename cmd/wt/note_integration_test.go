@@ -408,3 +408,40 @@ func TestNoteSet_LabelScope(t *testing.T) {
 		}
 	}
 }
+
+// TestNote_UnscopedGitErrorWarns tests that a git failure during an unscoped
+// note target search is reported as a warning.
+//
+// Scenario: User runs `wt note get feature` where `git worktree list` fails in one registered repo
+// Expected: The target from the working repo is returned and a warning names the failing repo
+func TestNote_UnscopedGitErrorWarns(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+	brokenPath := setupBrokenRepoDir(t, tmpDir, "broken")
+	createTestWorktree(t, repoPath, "feature")
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+			{Name: "broken", Path: brokenPath},
+		},
+	}
+
+	cfg := &config.Config{}
+	ctx, logs := testContextWithLog(t, cfg, tmpDir)
+
+	targets, err := resolveNoteTargets(ctx, cfg, tmpDir, reg, []string{"feature"})
+	if err != nil {
+		t.Fatalf("resolveNoteTargets failed: %v", err)
+	}
+	if len(targets) != 1 || targets[0].RepoPath != repoPath {
+		t.Errorf("expected target in %s, got %+v", repoPath, targets)
+	}
+	if !strings.Contains(logs.String(), "Warning: broken: failed to list worktrees") {
+		t.Errorf("expected warning for failing repo, got log: %q", logs.String())
+	}
+}

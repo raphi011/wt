@@ -328,13 +328,20 @@ Use --interactive to select an open PR from registered repositories.`,
 				l.Printf("Warning: fetch failed: %v\n", err)
 			}
 
+			if !justClonedRegular {
+				existingPath, found, err = findWorktreeForBranch(ctx, repoPath, branch)
+				if err != nil {
+					return err
+				}
+			}
+
 			if justClonedRegular {
 				// Regular clone: checkout PR branch in the working tree directly
 				if err := git.RunGitCommand(ctx, repoPath, "checkout", branch); err != nil {
 					return fmt.Errorf("checkout branch: %w", err)
 				}
 				wtPath = repoPath
-			} else if existingPath, found = findWorktreeForBranch(ctx, repoPath, branch); found {
+			} else if found {
 				// Worktree already exists for this branch — open it instead of creating
 				wtPath = existingPath
 			} else {

@@ -1,6 +1,6 @@
 # Test Documentation
 
-Generated: 2026-10-04
+Generated: 2026-10-06
 
 ## Summary
 
@@ -13,6 +13,7 @@ Generated: 2026-10-04
 | [configinit](#configinit) | 1 |
 | [configshow](#configshow) | 2 |
 | [diff](#diff) | 12 |
+| [findorregistercurrentrepo](#findorregistercurrentrepo) | 2 |
 | [forge](#forge) | 9 |
 | [hook](#hook) | 9 |
 | [init](#init) | 4 |
@@ -21,20 +22,21 @@ Generated: 2026-10-04
 | [preservefiles](#preservefiles) | 1 |
 | [prmerge](#prmerge) | 3 |
 | [prview](#prview) | 2 |
-| [repoadd](#repoadd) | 7 |
-| [repoclone](#repoclone) | 11 |
-| [repoconvertbare](#repoconvertbare) | 17 |
+| [repoadd](#repoadd) | 8 |
+| [repoclone](#repoclone) | 13 |
+| [repoconvertbare](#repoconvertbare) | 18 |
 | [repoconvertregular](#repoconvertregular) | 4 |
 | [repolist](#repolist) | 5 |
 | [reporemove](#reporemove) | 5 |
+| [resolveworktreetargets](#resolveworktreetargets) | 4 |
 | [wt cd](#wt-cd) | 9 |
-| [wt checkout](#wt-checkout) | 62 |
+| [wt checkout](#wt-checkout) | 66 |
 | [wt exec](#wt-exec) | 11 |
-| [wt label](#wt-label) | 13 |
+| [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 12 |
-| [wt note](#wt-note) | 8 |
-| [wt prune](#wt-prune) | 35 |
-| **Total** | **267** |
+| [wt note](#wt-note) | 10 |
+| [wt prune](#wt-prune) | 42 |
+| **Total** | **292** |
 
 ## completebasebranches
 
@@ -94,6 +96,13 @@ Generated: 2026-10-04
 | `TestDiff_InvalidBaseRef` | Tests error when --base ref doesn't exist. |
 | `TestDiff_BaseAndWorkingMutuallyExclusive` | Tests that --base and --working cannot be combined. |
 | `TestDiff_ToolFlag` | Tests the --tool flag for pager override. |
+
+## findorregistercurrentrepo
+
+| Test | Description |
+|------|-------------|
+| `TestFindOrRegisterCurrentRepo_RegisteredMeanwhile` | Tests auto-registration |
+| `TestFindOrRegisterCurrentRepo_AutoRegisters` | Tests auto-registration of an |
 
 ## forge
 
@@ -189,6 +198,7 @@ Generated: 2026-10-04
 | `TestRepoAdd_DuplicatePath` | Tests that adding the same path twice fails. |
 | `TestRepoAdd_NotAGitRepo` | Tests that adding a non-git directory fails. |
 | `TestRepoAdd_MultiplePaths` | Tests adding multiple repos at once. |
+| `TestRepoAdd_Concurrent` | Tests that concurrent adds don't lose each other's repos. |
 | `TestRepoAdd_SkipsNonGitDirs` | Tests that non-git directories are skipped. |
 
 ## repoclone
@@ -200,6 +210,8 @@ Generated: 2026-10-04
 | `TestRepoClone_MasterDefaultBranch` | Tests cloning a repo with master as default branch. |
 | `TestRepoClone_WithLabels` | Tests cloning with labels. |
 | `TestRepoClone_WithCustomName` | Tests cloning with a custom display name. |
+| `TestRepoClone_NameConflict` | Tests cloning with a name that is already registered. |
+| `TestRepoClone_RegistryUpdateFails` | Tests cloning when the registry can't be updated. |
 | `TestRepoClone_DestinationExists` | Tests that cloning to an existing path fails. |
 | `TestRepoClone_AutoName` | Tests cloning without destination extracts name from URL. |
 | `TestRepoClone_ShortFormWithoutDefaultOrg` | Tests that short-form without org fails. |
@@ -212,6 +224,7 @@ Generated: 2026-10-04
 | Test | Description |
 |------|-------------|
 | `TestRepoConvertBare_BasicMigration` | Tests basic migration from regular repo to bare-in-.git. |
+| `TestRepoConvertBare_RegistryUpdateFails` | Tests migration when the registry can't be updated. |
 | `TestRepoConvertBare_WithCustomName` | Tests migration with custom display name. |
 | `TestRepoConvertBare_WithLabels` | Tests migration with labels. |
 | `TestRepoConvertBare_WithWorktreeFormat` | Tests migration with worktree format. |
@@ -257,6 +270,15 @@ Generated: 2026-10-04
 | `TestRepoRemove_OutputShowsCorrectName` | Tests that the output message shows the |
 | `TestRepoRemove_DeleteForce` | Tests removing a repo with --delete --force flags. |
 | `TestRepoRemove_ByPath` | Tests removing a repo by its full path instead of name. |
+
+## resolveworktreetargets
+
+| Test | Description |
+|------|-------------|
+| `TestResolveWorktreeTargets_ScopedGitError` | Tests that a git failure in a |
+| `TestResolveWorktreeTargets_LabelPartialMatch` | Tests that a label target |
+| `TestResolveWorktreeTargets_LabelGitErrorWarns` | Tests that a git failure in |
+| `TestResolveWorktreeTargets_UnscopedGitErrorWarns` | Tests that a git failure |
 
 ## wt cd
 
@@ -338,6 +360,10 @@ Generated: 2026-10-04
 | `TestCheckout_HooksRunAlphabetically` | Tests that hooks run in alphabetical order by name. |
 | `TestCheckout_BaseBranch_LocalOnlyFallback` | Tests that --base falls back to |
 | `TestCheckout_BaseBranch_PrefersRemoteOverLocal` | Tests that --base uses the |
+| `TestCheckout_AutoStash_FailedCheckoutKeepsChanges` | Tests that a failed checkout |
+| `TestCheckout_AutoStash_PopConflictKeepsStash` | Tests that a failed stash apply |
+| `TestCheckout_AutoStash_NestedWorktree` | Tests autostash when the new worktree is |
+| `TestCheckout_ScopedGitError` | Tests that a git failure while looking for an |
 
 ## wt exec
 
@@ -372,6 +398,8 @@ Generated: 2026-10-04
 | `TestLabel_Add_CurrentRepo` | Tests adding a label when no scope is provided. |
 | `TestLabel_Remove_NotInGitRepo` | Tests error when removing a label from outside a git repo. |
 | `TestLabel_Clear_CurrentRepo` | Tests clearing labels when no scope is provided. |
+| `TestLabel_Add_Concurrent` | Tests that concurrent label changes don't lose each other. |
+| `TestLabel_RegistryUpdateFails` | Tests label changes when the registry can't be updated. |
 
 ## wt list
 
@@ -401,7 +429,9 @@ Generated: 2026-10-04
 | `TestNoteSet_ExplicitRepoBranch` | Tests setting a note via repo:branch target. |
 | `TestNoteGet_ExplicitBranch` | Tests getting a note via repo:branch target. |
 | `TestNote_BranchNotFound` | Tests error when target branch doesn't exist. |
+| `TestNote_NotInGitRepo` | Tests error when no target is given outside a git repo. |
 | `TestNoteSet_LabelScope` | Tests setting a note on all repos matching a label. |
+| `TestNote_UnscopedGitErrorWarns` | Tests that a git failure during an unscoped |
 
 ## wt prune
 
@@ -442,4 +472,11 @@ Generated: 2026-10-04
 | `TestPrune_LocallyMergedBranch_RequiresForce` | Tests that a branch merged via |
 | `TestPrune_UnmergedBranch_RequiresForce` | Tests that unmerged branches require |
 | `TestPrune_MixedTargets_RequiresForce` | Tests that mixed merged/unmerged |
+| `TestPrune_UsesPRCacheFromConfiguredDir` | Tests that prune reads and writes the |
+| `TestPrune_DirtyMergedWorktree_SkippedWithoutForce` | Tests that auto-prune keeps |
+| `TestPrune_DirtyMergedWorktree_RemovedWithForce` | Tests that -f overrides the |
+| `TestPrune_DirtyMergedWorktree_DryRunShowsSkip` | Tests that dry-run reports the |
+| `TestPrune_DirtyStaleWorktree_SkippedWithoutForce` | Tests that --stale keeps |
+| `TestPrune_Target_DirtyMergedWorktree_RequiresForce` | Tests that targeted prune |
+| `TestPrune_RemovesHistoryEntry` | Tests that pruning a worktree removes it from |
 
