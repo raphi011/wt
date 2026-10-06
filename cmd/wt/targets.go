@@ -143,8 +143,11 @@ type WorktreeTarget struct {
 
 // resolveWorktreeTargets parses [scope:]branch args and returns worktree paths.
 // scope can be a repo name or label. If no scope, searches all repos.
-// Returns error if any target is not found.
+// Returns error if any target is not found, or if git fails in a repo targeted by name.
+// When searching several repos (label or no scope), git failures and repos
+// without a matching worktree are logged and skipped.
 func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets []string) ([]WorktreeTarget, error) {
+	l := log.FromContext(ctx)
 	var results []WorktreeTarget
 
 	for _, target := range targets {
@@ -156,11 +159,17 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 		if len(parsed.Repos) > 0 {
 			// Scoped target - find worktree in specified repo(s)
 			found := false
+			var missing []string
 			for _, repo := range parsed.Repos {
 				wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 				if err != nil {
+					if !parsed.IsLabel {
+						return nil, fmt.Errorf("%s: %w", repo.Name, err)
+					}
+					l.Printf("Warning: %s: %v\n", repo.Name, err)
 					continue
 				}
+				foundInRepo := false
 				for _, wt := range wts {
 					if wt.Branch == parsed.Branch {
 						results = append(results, WorktreeTarget{
@@ -169,9 +178,14 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 							Branch:   parsed.Branch,
 							Path:     wt.Path,
 						})
-						found = true
+						foundInRepo = true
 						break
 					}
+				}
+				if foundInRepo {
+					found = true
+				} else {
+					missing = append(missing, repo.Name)
 				}
 			}
 			if !found {
@@ -180,14 +194,16 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 				}
 				return nil, fmt.Errorf("worktree not found: %s", target)
 			}
+			if len(missing) > 0 {
+				l.Printf("Skipped (no worktree for %s): %s\n", parsed.Branch, strings.Join(missing, ", "))
+			}
 		} else {
 			// No scope - search all repos
-			l := log.FromContext(ctx)
 			var matches []WorktreeTarget
 			for _, repo := range filterOrphanedRepos(l, reg.Repos) {
 				wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
 				if err != nil {
-					l.Debug("skipping repo", "repo", repo.Name, "error", err)
+					l.Printf("Warning: %s: %v\n", repo.Name, err)
 					continue
 				}
 				for _, wt := range wts {

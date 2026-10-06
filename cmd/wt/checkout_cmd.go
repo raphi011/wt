@@ -392,19 +392,18 @@ func openExistingWorktree(ctx context.Context, repo registry.Repo, branch, wtPat
 
 // findWorktreeForBranch checks if the given branch already has a worktree in the repo.
 // Returns the worktree path and true if found, or ("", false) otherwise.
-func findWorktreeForBranch(ctx context.Context, repoPath, branch string) (string, bool) {
+// Returns an error if the repo's worktrees cannot be listed.
+func findWorktreeForBranch(ctx context.Context, repoPath, branch string) (string, bool, error) {
 	wts, err := git.ListWorktreesFromRepo(ctx, repoPath)
 	if err != nil {
-		l := log.FromContext(ctx)
-		l.Debug("failed to list worktrees", "repo", repoPath, "error", err)
-		return "", false
+		return "", false, err
 	}
 	for _, wt := range wts {
 		if wt.Branch == branch {
-			return wt.Path, true
+			return wt.Path, true, nil
 		}
 	}
-	return "", false
+	return "", false, nil
 }
 
 // resolveCheckoutRepos determines which repos need a new worktree created.
@@ -450,7 +449,10 @@ func resolveScopedExisting(
 ) ([]registry.Repo, error) {
 	var remaining []registry.Repo
 	for _, repo := range repos {
-		wtPath, found := findWorktreeForBranch(ctx, repo.Path, branch)
+		wtPath, found, err := findWorktreeForBranch(ctx, repo.Path, branch)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", repo.Name, err)
+		}
 		if !found {
 			remaining = append(remaining, repo)
 			continue
@@ -470,7 +472,11 @@ func resolveUnscopedInRepo(
 	fetch bool,
 	hf hookFlags,
 ) ([]registry.Repo, error) {
-	if wtPath, found := findWorktreeForBranch(ctx, repo.Path, branch); found {
+	wtPath, found, err := findWorktreeForBranch(ctx, repo.Path, branch)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", repo.Name, err)
+	}
+	if found {
 		return nil, openExistingWorktree(ctx, repo, branch, wtPath, hf)
 	}
 
@@ -499,7 +505,12 @@ func resolveUnscopedAcrossRepos(
 	var repos []registry.Repo
 	var opened bool
 	for _, repo := range filterOrphanedRepos(l, reg.Repos) {
-		if wtPath, found := findWorktreeForBranch(ctx, repo.Path, branch); found {
+		wtPath, found, err := findWorktreeForBranch(ctx, repo.Path, branch)
+		if err != nil {
+			l.Printf("Warning: %s: %v\n", repo.Name, err)
+			continue
+		}
+		if found {
 			if err := openExistingWorktree(ctx, repo, branch, wtPath, hf); err != nil {
 				return nil, err
 			}
