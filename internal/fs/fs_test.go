@@ -345,6 +345,77 @@ func TestUpdateJSON_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestUpdateJSONLenient_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	type data struct {
+		A int `json:"a"`
+		B int `json:"b"`
+	}
+
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{"syntax error", "not json"},
+		{"empty file", ""},
+		// "a" decodes before "b" fails
+		{"type mismatch", `{"a": 1, "b": "x"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			path := filepath.Join(t.TempDir(), "test.json")
+			if err := os.WriteFile(path, []byte(tt.content), 0o600); err != nil {
+				t.Fatalf("failed to write file: %v", err)
+			}
+
+			err := UpdateJSONLenient(path, func(d *data) error {
+				if *d != (data{}) {
+					t.Errorf("fn should receive the zero value, got %+v", *d)
+				}
+				d.B = 2
+				return nil
+			})
+			if err != nil {
+				t.Fatalf("UpdateJSONLenient failed: %v", err)
+			}
+
+			var got data
+			if err := LoadJSON(path, &got); err != nil {
+				t.Fatalf("LoadJSON failed: %v", err)
+			}
+			if got != (data{B: 2}) {
+				t.Errorf("expected {A:0 B:2}, got %+v", got)
+			}
+		})
+	}
+}
+
+func TestUpdateJSONLenient_ReadError(t *testing.T) {
+	t.Parallel()
+
+	// A directory at the file path can't be read
+	path := filepath.Join(t.TempDir(), "test.json")
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	called := false
+	err := UpdateJSONLenient(path, func(m *map[string]int) error {
+		called = true
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected error when the file can't be read, got nil")
+	}
+	if called {
+		t.Error("fn should not run when the file cannot be read")
+	}
+}
+
 func TestSaveJSON_RenameError(t *testing.T) {
 	t.Parallel()
 

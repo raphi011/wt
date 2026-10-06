@@ -42,6 +42,17 @@ func lock(path string) (unlock func() error, err error) {
 //
 // fn must only modify the value in memory: the lock is held while it runs.
 func UpdateJSON[T any](path string, fn func(*T) error) error {
+	return updateJSON(path, false, fn)
+}
+
+// UpdateJSONLenient is UpdateJSON for files that are safe to lose, such as
+// caches: if the contents can't be decoded, fn receives the zero value and
+// the file is overwritten instead of the update failing.
+func UpdateJSONLenient[T any](path string, fn func(*T) error) error {
+	return updateJSON(path, true, fn)
+}
+
+func updateJSON[T any](path string, lenient bool, fn func(*T) error) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -53,7 +64,13 @@ func UpdateJSON[T any](path string, fn func(*T) error) error {
 
 	var data T
 	if err := LoadJSON(path, &data); err != nil && !os.IsNotExist(err) {
-		return errors.Join(err, unlock())
+		// Reading the file fails with a PathError, anything else is a decode error
+		var readErr *os.PathError
+		if !lenient || errors.As(err, &readErr) {
+			return errors.Join(err, unlock())
+		}
+		// Decoding may have filled data partially
+		data = *new(T)
 	}
 
 	if err := fn(&data); err != nil {

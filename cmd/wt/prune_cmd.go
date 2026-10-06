@@ -286,7 +286,7 @@ never removed without -f.`,
 			}
 
 			// Save PR cache once at the end
-			if err := prCache.SaveIfDirty(); err != nil {
+			if err := prCache.Save(); err != nil {
 				l.Printf("Warning: failed to save cache: %v\n", err)
 			}
 
@@ -424,7 +424,7 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 	}
 
 	// Save PR cache (entries may have been deleted during removal)
-	if err := prCache.SaveIfDirty(); err != nil {
+	if err := prCache.Save(); err != nil {
 		l.Printf("Warning: failed to save cache: %v\n", err)
 	}
 

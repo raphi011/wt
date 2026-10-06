@@ -1,8 +1,10 @@
 package prcache
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -194,11 +196,8 @@ func TestSaveWithoutPath(t *testing.T) {
 	c := New()
 	c.Set("/repo:main", &forge.PRInfo{Number: 1, State: "OPEN"})
 
-	if err := c.SaveIfDirty(); err == nil {
-		t.Fatal("SaveIfDirty on a cache without a path should fail")
-	}
-	if !c.dirty {
-		t.Error("dirty should stay true after a failed save")
+	if err := c.Save(); err == nil {
+		t.Fatal("Save on a cache without a path should fail")
 	}
 }
 
@@ -233,36 +232,16 @@ func TestLoadSave(t *testing.T) {
 	}
 }
 
-func TestDirtyFlag(t *testing.T) {
+func TestSave_NoChanges(t *testing.T) {
 	t.Parallel()
 
-	c := New()
+	path := filepath.Join(t.TempDir(), "prs.json")
 
-	// New cache is not dirty — SaveIfDirty should be a no-op
-	if err := c.SaveIfDirty(); err != nil {
-		t.Fatalf("SaveIfDirty on clean cache: %v", err)
+	if err := LoadFrom(path).Save(); err != nil {
+		t.Fatalf("Save without changes: %v", err)
 	}
-
-	// After Set, cache is dirty
-	c.Set("key", &forge.PRInfo{Number: 1})
-	if !c.dirty {
-		t.Error("dirty should be true after Set")
-	}
-
-	c.dirty = false
-
-	// After Delete, dirty again
-	c.Delete("key")
-	if !c.dirty {
-		t.Error("dirty should be true after Delete")
-	}
-
-	c.dirty = false
-
-	// After Reset, dirty again
-	c.Reset()
-	if !c.dirty {
-		t.Error("dirty should be true after Reset")
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("Save without changes should not write the file, stat error: %v", err)
 	}
 }
 
@@ -274,10 +253,10 @@ func TestLoadFrom(t *testing.T) {
 		tmpDir := t.TempDir()
 		path := filepath.Join(tmpDir, "prs.json")
 
-		original := New()
+		original := LoadFrom(path)
 		original.Set("/repo:main", &forge.PRInfo{Number: 42, State: "OPEN", Fetched: true})
-		if err := original.SaveTo(path); err != nil {
-			t.Fatalf("SaveTo failed: %v", err)
+		if err := original.Save(); err != nil {
+			t.Fatalf("Save failed: %v", err)
 		}
 
 		loaded := LoadFrom(path)
@@ -347,13 +326,13 @@ func TestLoadFrom(t *testing.T) {
 		}
 	})
 
-	t.Run("round-trip SaveTo then LoadFrom", func(t *testing.T) {
+	t.Run("round-trip Save then LoadFrom", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
 		path := filepath.Join(tmpDir, "rt.json")
 
 		now := time.Now().Truncate(time.Second)
-		original := New()
+		original := LoadFrom(path)
 		original.Set("/repo:feat", &forge.PRInfo{
 			Number:   99,
 			State:    "MERGED",
@@ -362,8 +341,8 @@ func TestLoadFrom(t *testing.T) {
 			Fetched:  true,
 		})
 
-		if err := original.SaveTo(path); err != nil {
-			t.Fatalf("SaveTo failed: %v", err)
+		if err := original.Save(); err != nil {
+			t.Fatalf("Save failed: %v", err)
 		}
 
 		loaded := LoadFrom(path)
@@ -386,7 +365,7 @@ func TestLoadFrom(t *testing.T) {
 	})
 }
 
-func TestSaveIfDirtyWhenDirty(t *testing.T) {
+func TestSave_WritesChanges(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), ".wt", "prs.json")
@@ -394,16 +373,8 @@ func TestSaveIfDirtyWhenDirty(t *testing.T) {
 	c := LoadFrom(path)
 	c.Set("/repo:main", &forge.PRInfo{Number: 1, State: "OPEN"})
 
-	if !c.dirty {
-		t.Fatal("expected dirty=true after Set")
-	}
-
-	if err := c.SaveIfDirty(); err != nil {
-		t.Fatalf("SaveIfDirty failed: %v", err)
-	}
-
-	if c.dirty {
-		t.Error("dirty should be false after successful SaveIfDirty")
+	if err := c.Save(); err != nil {
+		t.Fatalf("Save failed: %v", err)
 	}
 
 	// Verify the file was actually written
@@ -413,5 +384,175 @@ func TestSaveIfDirtyWhenDirty(t *testing.T) {
 	}
 	if loaded.PRs["/repo:main"] == nil {
 		t.Error("saved cache should contain /repo:main entry")
+	}
+}
+
+func TestSave_Concurrent(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "prs.json")
+
+	// Every writer loads before any of them saves, as concurrent wt processes do
+	const writers = 20
+	caches := make([]*Cache, writers)
+	for i := range writers {
+		caches[i] = LoadFrom(path)
+		caches[i].Set(fmt.Sprintf("/repo:branch-%d", i), &forge.PRInfo{Number: i, Fetched: true})
+	}
+
+	errs := make(chan error, writers)
+	var wg sync.WaitGroup
+	for _, c := range caches {
+		wg.Go(func() {
+			errs <- c.Save()
+		})
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Errorf("Save failed: %v", err)
+		}
+	}
+
+	if got := len(LoadFrom(path).PRs); got != writers {
+		t.Errorf("expected %d PRs, got %d", writers, got)
+	}
+}
+
+func TestSave_KeepsKeysSavedByOthers(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "prs.json")
+
+	seed := LoadFrom(path)
+	seed.Set("/repo:stale", &forge.PRInfo{Number: 1})
+	seed.Set("/repo:kept", &forge.PRInfo{Number: 2})
+	if err := seed.Save(); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	c := LoadFrom(path)
+
+	other := LoadFrom(path)
+	other.Set("/repo:other", &forge.PRInfo{Number: 3})
+	if err := other.Save(); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	c.Delete("/repo:stale")
+	c.Set("/repo:new", &forge.PRInfo{Number: 4})
+	if err := c.Save(); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	saved := LoadFrom(path)
+	if saved.Get("/repo:stale") != nil {
+		t.Error("deleted key should be gone")
+	}
+	for _, key := range []string{"/repo:kept", "/repo:other", "/repo:new"} {
+		if saved.Get(key) == nil {
+			t.Errorf("missing %s", key)
+		}
+	}
+}
+
+func TestSave_ResetClearsKeysSavedByOthers(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "prs.json")
+
+	c := LoadFrom(path)
+
+	other := LoadFrom(path)
+	other.Set("/repo:other", &forge.PRInfo{Number: 1})
+	if err := other.Save(); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	c.Set("/repo:before-reset", &forge.PRInfo{Number: 2})
+	c.Reset()
+	c.Set("/repo:after-reset", &forge.PRInfo{Number: 3})
+	if err := c.Save(); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	saved := LoadFrom(path)
+	if len(saved.PRs) != 1 || saved.Get("/repo:after-reset") == nil {
+		t.Errorf("expected only /repo:after-reset, got %v", saved.PRs)
+	}
+}
+
+func TestSave_ChangesSavedOnce(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "prs.json")
+
+	c := LoadFrom(path)
+	c.Set("/repo:main", &forge.PRInfo{Number: 1})
+	if err := c.Save(); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	other := LoadFrom(path)
+	other.Delete("/repo:main")
+	if err := other.Save(); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	// The Set was already saved, a second Save must not bring the key back
+	if err := c.Save(); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+	if LoadFrom(path).Get("/repo:main") != nil {
+		t.Error("second Save replayed an already saved change")
+	}
+}
+
+func TestSave_CorruptFile(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "prs.json")
+	if err := os.WriteFile(path, []byte("{not valid json"), 0o600); err != nil {
+		t.Fatalf("setup: write failed: %v", err)
+	}
+
+	c := LoadFrom(path)
+	c.Set("/repo:main", &forge.PRInfo{Number: 1})
+	if err := c.Save(); err != nil {
+		t.Fatalf("Save over a corrupted file failed: %v", err)
+	}
+
+	saved := LoadFrom(path)
+	if len(saved.PRs) != 1 || saved.Get("/repo:main") == nil {
+		t.Errorf("expected only /repo:main, got %v", saved.PRs)
+	}
+}
+
+func TestSave_FailureKeepsChanges(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "prs.json")
+
+	// A directory at the lock path can't be opened for writing
+	if err := os.Mkdir(path+".lock", 0o755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	c := LoadFrom(path)
+	c.Set("/repo:main", &forge.PRInfo{Number: 1})
+	if err := c.Save(); err == nil {
+		t.Fatal("expected error when the lock can't be taken, got nil")
+	}
+
+	if err := os.Remove(path + ".lock"); err != nil {
+		t.Fatalf("failed to remove directory: %v", err)
+	}
+	if err := c.Save(); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+	if LoadFrom(path).Get("/repo:main") == nil {
+		t.Error("changes from the failed save should be saved by the retry")
 	}
 }
