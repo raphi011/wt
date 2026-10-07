@@ -286,7 +286,6 @@ A worktree with uncommitted changes (modified, staged or untracked files) is nev
 
 If the PR cache contains corrupt JSON, commands warn and preserve the file.
 Run `wt prune --reset-cache --dry-run` to clear it while previewing removals; `wt list -R` can display fresh PR status without overwriting the corrupt cache.
-||||||| parent of 0d8b891 (docs: split README, add generated command reference)
 
 ### Working Across Multiple Repos
 
