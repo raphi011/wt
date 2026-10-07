@@ -22,7 +22,6 @@ import (
 	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
-	"github.com/raphi011/wt/internal/worktree"
 )
 
 func newPrCmd() *cobra.Command {
@@ -108,6 +107,7 @@ func newPrCheckoutCmd() *cobra.Command {
 		interactive bool
 		note        string
 		hf          hookFlags
+		noPreserve  bool
 	)
 
 	cmd := &cobra.Command{
@@ -309,56 +309,18 @@ Use --interactive to select an open PR from registered repositories.`,
 
 			l.Debug("pr checkout", "branch", branch, "repo", repoPath)
 
-			// Get worktree format
-			format := repo.GetEffectiveWorktreeFormat(effCfg.Checkout.WorktreeFormat)
-			wtPath := worktree.ResolvePath(repoPath, repo.Name, branch, format)
-
-			// Detect repo type
-			repoType, err := git.DetectRepoType(ctx, repoPath)
-			if err != nil {
-				return err
-			}
-			gitDir := git.GetGitDir(ctx, repoPath, repoType)
-
-			var found bool
-			var existingPath string
-
-			// Fetch the branch
-			if err := git.FetchBranch(ctx, gitDir, branch); err != nil {
-				l.Printf("Warning: fetch failed: %v\n", err)
-			}
-
-			if !justClonedRegular {
-				existingPath, found, err = findWorktreeForBranch(ctx, repoPath, branch)
-				if err != nil {
-					return err
-				}
-			}
-
 			if justClonedRegular {
-				// Regular clone: checkout PR branch in the working tree directly
+				// Regular clone: check the PR branch out in the clone itself;
+				// ensureWorktree then opens the clone as the branch's worktree
+				if err := git.FetchBranch(ctx, repoPath, branch); err != nil {
+					l.Printf("Warning: fetch failed: %v\n", err)
+				}
 				if err := git.RunGitCommand(ctx, repoPath, "checkout", branch); err != nil {
 					return fmt.Errorf("checkout branch: %w", err)
 				}
-				wtPath = repoPath
-			} else if found {
-				// Worktree already exists for this branch — open it instead of creating
-				wtPath = existingPath
-			} else {
-				// Bare clone or existing repo: create worktree
-				if err := git.CreateWorktree(ctx, gitDir, wtPath, branch); err != nil {
-					return fmt.Errorf("create worktree: %w", err)
-				}
 			}
 
-			// Set upstream - branch was fetched so remote exists
-			if effCfg.Checkout.ShouldSetUpstream() {
-				if err := git.SetUpstreamBranch(ctx, gitDir, branch, branch); err != nil {
-					l.Debug("failed to set upstream", "error", err)
-				}
-			}
-
-			// Cache PR info for the new worktree
+			// Cache PR info for the worktree
 			cache, err := loadPRCache(effCfg)
 			if err != nil {
 				return err
@@ -373,41 +335,24 @@ Use --interactive to select an open PR from registered repositories.`,
 				}
 			}
 
-			// Set note if provided
-			if note != "" {
-				if err := git.SetBranchNote(ctx, gitDir, branch, note); err != nil {
-					l.Printf("Warning: failed to set note: %v\n", err)
-				}
-			}
-
-			// Determine output message
-			var outputMsg string
-			if justClonedRegular {
-				outputMsg = fmt.Sprintf("Checked out PR branch: %s (%s)\n", repoPath, branch)
-			} else if found {
-				outputMsg = fmt.Sprintf("Opened worktree: %s (%s)\n", wtPath, branch)
-			} else {
-				outputMsg = fmt.Sprintf("Created worktree: %s (%s)\n", wtPath, branch)
-			}
-
-			// Run hooks around output and history recording
 			if err := hf.parseArgs(); err != nil {
 				return err
 			}
-			hp, err := buildHookParams(effCfg, repo, wtPath, branch, hooks.CommandCheckout, hooks.ActionPR, hf)
-			if err != nil {
-				return err
-			}
-			hp.PRNumber = new(prNumber)
-			if repoPath := forge.ExtractRepoPath(originURL); strings.Contains(repoPath, "/") {
-				hp.PRRepo = repoPath
+			pr := &prIntent{Number: prNumber}
+			if forgeRepo := forge.ExtractRepoPath(originURL); strings.Contains(forgeRepo, "/") {
+				pr.Repo = forgeRepo
 			}
 
-			return withHooks(ctx, hp, func() error {
-				l.Printf("%s", outputMsg)
-				recordHistory(ctx, effCfg, wtPath, repo.Name, branch)
-				return nil
+			// Always fetch: the PR branch may not exist locally yet
+			_, err = ensureWorktree(ctx, repo, branch, checkoutOpts{
+				Fetch:         true,
+				FetchExplicit: true,
+				NoPreserve:    noPreserve,
+				Note:          note,
+				Hooks:         hf,
+				PR:            pr,
 			})
+			return err
 		},
 	}
 
@@ -418,6 +363,7 @@ Use --interactive to select an open PR from registered repositories.`,
 	cmd.Flags().StringVar(&cloneMode, "clone-mode", "", "Clone mode: bare or regular (default: config)")
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
 	registerHookFlags(cmd, &hf)
+	cmd.Flags().BoolVar(&noPreserve, "no-preserve", false, "Skip file preservation")
 	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("clone-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"bare", "regular"}, cobra.ShellCompDirectiveNoFileComp
 	}))

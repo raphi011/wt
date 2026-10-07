@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/registry"
@@ -41,6 +42,7 @@ func setupEnsureWorktreeRepo(t *testing.T) (cfg *config.Config, repo registry.Re
 			Hooks: map[string]config.Hook{
 				"on-create": {Command: "touch " + filepath.Join(tmpDir, "create-hook-ran"), On: []string{"checkout:create"}},
 				"on-open":   {Command: "touch " + filepath.Join(tmpDir, "open-hook-ran"), On: []string{"checkout:open"}},
+				"on-pr":     {Command: "touch " + filepath.Join(tmpDir, "pr-hook-ran"), On: []string{"checkout:pr"}},
 			},
 		},
 	}
@@ -50,9 +52,11 @@ func setupEnsureWorktreeRepo(t *testing.T) (cfg *config.Config, repo registry.Re
 // TestEnsureWorktree tests the worktree sequence shared by the checkout commands.
 //
 // Scenario: A worktree is ensured for a branch without a worktree, for a
-// branch that already has one, and for a new branch
+// branch that already has one, and for a new branch; with a note and as a
+// PR branch
 // Expected: The worktree exists afterwards and is reported as created or
-// opened; history is recorded and the hook of the matching subtype runs
+// opened; history is recorded, the note is set and the hook of the matching
+// subtype runs
 func TestEnsureWorktree(t *testing.T) {
 	t.Parallel()
 
@@ -69,6 +73,10 @@ func TestEnsureWorktree(t *testing.T) {
 		{name: "branch without worktree", branch: "feature", wantCreated: true, wantHook: "open-hook-ran", wantNoHook: "create-hook-ran", wantBranchAt: "test-repo-feature"},
 		{name: "branch with worktree", branch: "feature", existingWt: true, wantHook: "open-hook-ran", wantNoHook: "create-hook-ran"},
 		{name: "new branch", branch: "brand-new", opts: checkoutOpts{NewBranch: true}, wantCreated: true, wantHook: "create-hook-ran", wantNoHook: "open-hook-ran", wantBranchAt: "test-repo-brand-new"},
+		{name: "note, branch without worktree", branch: "feature", opts: checkoutOpts{Note: "wip"}, wantCreated: true, wantHook: "open-hook-ran", wantNoHook: "create-hook-ran", wantBranchAt: "test-repo-feature"},
+		{name: "note, branch with worktree", branch: "feature", existingWt: true, opts: checkoutOpts{Note: "wip"}, wantHook: "open-hook-ran", wantNoHook: "create-hook-ran"},
+		{name: "PR branch without worktree", branch: "feature", opts: checkoutOpts{PR: &prIntent{Number: 7}}, wantCreated: true, wantHook: "pr-hook-ran", wantNoHook: "open-hook-ran", wantBranchAt: "test-repo-feature"},
+		{name: "PR branch with worktree", branch: "feature", existingWt: true, opts: checkoutOpts{PR: &prIntent{Number: 7}}, wantHook: "pr-hook-ran", wantNoHook: "open-hook-ran"},
 	}
 
 	for _, tt := range tests {
@@ -102,6 +110,13 @@ func TestEnsureWorktree(t *testing.T) {
 			}
 			if hist.FindByPath(wantPath) == nil {
 				t.Error("worktree should be recorded in history")
+			}
+			note, err := git.GetBranchNote(ctx, repo.Path, tt.branch)
+			if err != nil {
+				t.Fatalf("failed to read note: %v", err)
+			}
+			if note != tt.opts.Note {
+				t.Errorf("note = %q, want %q", note, tt.opts.Note)
 			}
 			if _, err := os.Stat(filepath.Join(tmpDir, tt.wantHook)); err != nil {
 				t.Errorf("hook marker %s should exist: %v", tt.wantHook, err)

@@ -533,7 +533,7 @@ strategy = "squash"  # squash, rebase, or merge (rebase is not supported on GitL
 
 ### Preserve Settings
 
-Symlink files from the repo root into new worktrees created with `wt checkout`. Useful for keeping local configuration (`.env`, `.envrc`, etc.) in sync across worktrees — edits in any worktree are instantly visible in all others.
+Symlink files from the repo root into new worktrees created with `wt checkout` or `wt pr checkout`. Useful for keeping local configuration (`.env`, `.envrc`, etc.) in sync across worktrees — edits in any worktree are instantly visible in all others.
 
 ```toml
 [preserve]
@@ -542,7 +542,7 @@ paths = [".env", ".envrc"]
 
 - **paths** — relative paths from the repo root to symlink (e.g., `".env"`, `"config/.env"`)
 
-Paths that don't exist in the repo root are silently skipped. Existing files in the target worktree are never overwritten. Use `--no-preserve` on `wt checkout` to skip.
+Paths that don't exist in the repo root are silently skipped. Existing files in the target worktree are never overwritten. Use `--no-preserve` on `wt checkout` or `wt pr checkout` to skip.
 
 ### Self-Hosted Instances
 

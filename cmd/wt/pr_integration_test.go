@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/registry"
 )
@@ -889,92 +890,135 @@ func TestPrCheckout_CloneFlagWithExistingMatch(t *testing.T) {
 	}
 }
 
-// TestPrCheckout_AlreadyCheckedOut tests that the pr checkout code path correctly
-// detects an existing worktree, outputs "Opened worktree" instead of
-// "Created worktree", and does not destroy the worktree.
+// TestPrCheckout_AlreadyCheckedOut tests that pr checkout opens the worktree
+// of a PR branch that is already checked out.
 //
-// We cannot run the full pr checkout command (requires a forge/remote), so we
-// exercise the detection + output message logic that pr_cmd.go uses inline.
-//
-// Scenario: Branch "feature" already has a worktree checked out
-// Expected: findWorktreeForBranch detects it, output says "Opened worktree"
+// Scenario: User runs `wt pr checkout 1 --forge github` with set_upstream on,
+// the PR branch "feature" already has a worktree
+// Expected: The worktree is opened, no second worktree is created and no upstream is set
 func TestPrCheckout_AlreadyCheckedOut(t *testing.T) {
-	t.Parallel()
+	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
+	fakeGHMergedPR(t)
 
-	tmpDir := resolvePath(t, t.TempDir())
-	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
+	cfg, repoPath, tmpDir := setupPrCheckoutRepo(t)
+	cfg.Checkout.SetUpstream = new(true)
+	wtPath := createTestWorktree(t, repoPath, "feature")
 
-	// Create a worktree for the branch first
-	wtPath := filepath.Join(repoPath, ".worktrees", "feature")
-	gitWorktreeAdd := exec.Command("git", "worktree", "add", wtPath, "feature")
-	gitWorktreeAdd.Dir = repoPath
-	if out, err := gitWorktreeAdd.CombinedOutput(); err != nil {
-		t.Fatalf("failed to create worktree: %v\n%s", err, out)
+	ctx, logs := testContextWithLog(t, cfg, repoPath)
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"1", "--forge", "github"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("pr checkout command failed: %v", err)
 	}
 
+	want := fmt.Sprintf("Opened worktree: %s (feature)\n", wtPath)
+	if !strings.Contains(logs.String(), want) {
+		t.Errorf("stderr should contain %q, got: %q", want, logs.String())
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "test-repo-feature")); err == nil {
+		t.Error("no second worktree should be created")
+	}
+	if upstream := git.GetUpstreamBranch(ctx, repoPath, "feature"); upstream != "" {
+		t.Errorf("opening a worktree should not set an upstream, got %q", upstream)
+	}
+}
+
+// TestPrCheckout_PreservesFiles tests that pr checkout preserves files like checkout does.
+//
+// Scenario: preserve.paths lists ".env", user runs `wt pr checkout 1 --forge github`
+// with and without --no-preserve
+// Expected: ".env" is linked into the new worktree unless --no-preserve is passed
+func TestPrCheckout_PreservesFiles(t *testing.T) {
+	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
+	fakeGHMergedPR(t)
+
+	for _, noPreserve := range []bool{false, true} {
+		t.Run(fmt.Sprintf("no-preserve=%v", noPreserve), func(t *testing.T) {
+			cfg, repoPath, tmpDir := setupPrCheckoutRepo(t)
+			cfg.Preserve = config.PreserveConfig{Paths: []string{".env"}}
+			if err := os.WriteFile(filepath.Join(repoPath, ".env"), []byte("SECRET=abc\n"), 0644); err != nil {
+				t.Fatalf("failed to write .env: %v", err)
+			}
+
+			args := []string{"1", "--forge", "github"}
+			if noPreserve {
+				args = append(args, "--no-preserve")
+			}
+			ctx := testContextWithConfig(t, cfg, repoPath)
+			cmd := newPrCheckoutCmd()
+			cmd.SetContext(ctx)
+			cmd.SetArgs(args)
+
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("pr checkout command failed: %v", err)
+			}
+
+			_, err := os.Lstat(filepath.Join(tmpDir, "test-repo-feature", ".env"))
+			if preserved := err == nil; preserved == noPreserve {
+				t.Errorf(".env preserved = %v with --no-preserve = %v", preserved, noPreserve)
+			}
+		})
+	}
+}
+
+// TestPrCheckout_CloneRegular tests pr checkout into a fresh regular clone.
+//
+// Scenario: User runs `wt pr checkout --clone --clone-mode regular test/test-repo 1 --forge github`
+// Expected: The repo is cloned and registered, the PR branch is checked out
+// in the clone itself and reported as an opened worktree
+func TestPrCheckout_CloneRegular(t *testing.T) {
+	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
+	fakeGHMergedPR(t)
+
+	tmpDir := resolvePath(t, t.TempDir())
+	sourcePath, originPath := setupTestRepoWithOrigin(t, tmpDir, "source")
+	if out, err := runGitCommand(sourcePath, "push", "origin", "main:feature"); err != nil {
+		t.Fatalf("failed to push feature branch: %v\n%s", err, out)
+	}
+	t.Setenv("WT_TEST_CLONE_SOURCE", originPath)
+
+	workDir := filepath.Join(tmpDir, "work")
+	if err := os.MkdirAll(workDir, 0755); err != nil {
+		t.Fatalf("failed to create work dir: %v", err)
+	}
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
 	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
 		t.Fatalf("failed to create registry directory: %v", err)
 	}
-
-	reg := &registry.Registry{
-		Repos: []registry.Repo{
-			{Name: "myrepo", Path: repoPath},
-		},
-	}
-	if err := saveRegistry(reg, regFile); err != nil {
+	if err := saveRegistry(&registry.Registry{}, regFile); err != nil {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	ctx := testContextWithConfig(t, &config.Config{
-		RegistryPath: regFile,
-		Checkout: config.CheckoutConfig{
-			WorktreeFormat: ".worktrees/{branch}",
-		},
-	}, repoPath)
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx, logs := testContextWithLog(t, cfg, workDir)
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--clone", "--clone-mode", "regular", "test/test-repo", "1", "--forge", "github"})
 
-	// Step 1: Verify findWorktreeForBranch detects the existing worktree
-	foundPath, found, err := findWorktreeForBranch(ctx, repoPath, "feature")
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("pr checkout command failed: %v", err)
+	}
+
+	clonePath := filepath.Join(workDir, "test-repo")
+	branch, err := runGitCommand(clonePath, "branch", "--show-current")
 	if err != nil {
-		t.Fatalf("findWorktreeForBranch failed: %v", err)
+		t.Fatalf("failed to read current branch: %v", err)
 	}
-	if !found {
-		t.Fatal("expected to find existing worktree for branch 'feature'")
+	if strings.TrimSpace(branch) != "feature" {
+		t.Errorf("clone should be on the PR branch, got %q", branch)
 	}
-	if foundPath != wtPath {
-		t.Errorf("expected worktree path %s, got %s", wtPath, foundPath)
+	want := fmt.Sprintf("Opened worktree: %s (feature)\n", clonePath)
+	if !strings.Contains(logs.String(), want) {
+		t.Errorf("stderr should contain %q, got: %q", want, logs.String())
 	}
-
-	// Step 2: Verify the output message selection logic from pr_cmd.go.
-	// When found=true and justClonedRegular=false, the code builds:
-	//   outputMsg = fmt.Sprintf("Opened worktree: %s (%s)\n", wtPath, branch)
-	// Reproduce that logic here to verify it selects "Opened worktree".
-	justClonedRegular := false
-	branch := "feature"
-
-	var outputMsg string
-	if justClonedRegular {
-		outputMsg = fmt.Sprintf("Checked out PR branch: %s (%s)\n", repoPath, branch)
-	} else if found {
-		outputMsg = fmt.Sprintf("Opened worktree: %s (%s)\n", foundPath, branch)
-	} else {
-		outputMsg = fmt.Sprintf("Created worktree: %s (%s)\n", wtPath, branch)
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
 	}
-
-	if !strings.Contains(outputMsg, "Opened worktree") {
-		t.Errorf("expected 'Opened worktree' in output, got %q", outputMsg)
-	}
-	if strings.Contains(outputMsg, "Created worktree") {
-		t.Errorf("output should not contain 'Created worktree', got %q", outputMsg)
-	}
-	expectedMsg := fmt.Sprintf("Opened worktree: %s (feature)\n", wtPath)
-	if outputMsg != expectedMsg {
-		t.Errorf("expected output %q, got %q", expectedMsg, outputMsg)
-	}
-
-	// Step 3: Worktree should still exist (not removed or modified)
-	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
-		t.Fatalf("worktree should still exist at %s", wtPath)
+	if _, err := reg.FindByName("test-repo"); err != nil {
+		t.Errorf("clone should be registered: %v", err)
 	}
 }
 
