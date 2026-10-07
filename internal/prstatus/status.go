@@ -136,11 +136,7 @@ schedule:
 			if err != nil {
 				l.Debug("forge check failed", "origin", wt.OriginURL, "err", err)
 			} else {
-				branch := wt.UpstreamBranch
-				if branch == "" {
-					branch = wt.Branch
-				}
-				info, err = f.GetPRForBranch(ctx, wt.OriginURL, branch)
+				info, err = f.GetPRForBranch(ctx, wt.OriginURL, Branch(wt))
 				if err != nil {
 					l.Debug("PR fetch failed", "branch", wt.Branch, "err", err)
 				}
