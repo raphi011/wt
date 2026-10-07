@@ -41,13 +41,13 @@ Generated: 2026-10-07
 | [resolveworktreetargets](#resolveworktreetargets) | 5 |
 | [unscopedrepos](#unscopedrepos) | 1 |
 | [wt cd](#wt-cd) | 13 |
-| [wt checkout](#wt-checkout) | 79 |
+| [wt checkout](#wt-checkout) | 80 |
 | [wt exec](#wt-exec) | 15 |
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 14 |
 | [wt note](#wt-note) | 13 |
-| [wt prune](#wt-prune) | 50 |
-| **Total** | **359** |
+| [wt prune](#wt-prune) | 51 |
+| **Total** | **361** |
 
 ## completebasebranches
 
@@ -480,6 +480,7 @@ Generated: 2026-10-07
 | `TestCheckout_UnscopedInRepo_UsesCurrentRepo` | Tests that an unscoped branch |
 | `TestCheckout_Global_SearchesAllRepos` | Tests that -g searches all repos from inside a repo. |
 | `TestCheckout_UnscopedOutsideRepo_AmbiguousWorktrees` | Tests that an unscoped |
+| `TestCheckout_AutoFetchOverrides` | Tests config precedence using a newer remote commit. |
 
 ## wt exec
 
@@ -562,6 +563,7 @@ Generated: 2026-10-07
 
 | Test | Description |
 |------|-------------|
+| `TestPrune_DeleteBranchOverrides` | Tests precedence in both targeted and automatic pruning. |
 | `TestPrune_NoWorktrees` | Tests pruning when no worktrees exist. |
 | `TestPrune_WithWorktree` | Tests pruning a worktree. |
 | `TestPrune_DryRun` | Tests dry-run mode. |

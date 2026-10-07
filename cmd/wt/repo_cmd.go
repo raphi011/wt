@@ -543,8 +543,8 @@ If destination is not specified, clones into <repo-name> in the current director
 				if worktreeBranch != "" {
 					// No fetch right after the clone, and no checkout hooks
 					if _, err := ensureWorktree(ctx, repo, worktreeBranch, checkoutOpts{
-						FetchExplicit: true,
-						Hooks:         hookFlags{NoHook: true},
+						Fetch: new(false),
+						Hooks: hookFlags{NoHook: true},
 					}); err != nil {
 						l.Printf("Warning: failed to create initial worktree: %v\n", err)
 					}

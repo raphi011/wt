@@ -75,6 +75,12 @@ never removed without -f.`,
 			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
 			out := output.FromContext(ctx)
+			var deleteBranchesOverride *bool
+			if cmd.Flags().Changed("delete-branches") {
+				deleteBranchesOverride = new(deleteBranches)
+			} else if cmd.Flags().Changed("no-delete-branches") {
+				deleteBranchesOverride = new(false)
+			}
 
 			// Load registry
 			reg, err := registry.Load(cfg.RegistryPath)
@@ -90,20 +96,11 @@ never removed without -f.`,
 				if interactive {
 					return fmt.Errorf("--interactive cannot be combined with branch targets")
 				}
-				deleteBranchesExplicit := cmd.Flags().Changed("delete-branches") || cmd.Flags().Changed("no-delete-branches")
-				// Determine if we should delete local branches
-				shouldDeleteBranches := cfg.Prune.DeleteLocalBranches
-				if cmd.Flags().Changed("delete-branches") {
-					shouldDeleteBranches = deleteBranches
-				} else if cmd.Flags().Changed("no-delete-branches") {
-					shouldDeleteBranches = false
-				}
 				return runPruneTargets(ctx, reg, args, global, force, dryRun, pruneOpts{
-					DeleteBranches:         shouldDeleteBranches,
-					DeleteBranchesExplicit: deleteBranchesExplicit,
-					Hooks:                  hf,
-					RefreshPR:              refresh,
-					ResetCache:             resetCache,
+					DeleteBranches: deleteBranchesOverride,
+					Hooks:          hf,
+					RefreshPR:      refresh,
+					ResetCache:     resetCache,
 				})
 			}
 
@@ -227,21 +224,11 @@ never removed without -f.`,
 				toSkip = append(toSkip, dirty...)
 			}
 
-			deleteBranchesExplicit := cmd.Flags().Changed("delete-branches") || cmd.Flags().Changed("no-delete-branches")
-			// Determine if we should delete local branches (default from global config)
-			shouldDeleteBranches := cfg.Prune.DeleteLocalBranches
-			if cmd.Flags().Changed("delete-branches") {
-				shouldDeleteBranches = deleteBranches
-			} else if cmd.Flags().Changed("no-delete-branches") {
-				shouldDeleteBranches = false
-			}
-
 			removed, failed := pruneWorktrees(ctx, toRemove, pruneOpts{
-				DryRun:                 dryRun,
-				DeleteBranches:         shouldDeleteBranches,
-				DeleteBranchesExplicit: deleteBranchesExplicit,
-				Hooks:                  hf,
-				PRStatus:               status,
+				DryRun:         dryRun,
+				DeleteBranches: deleteBranchesOverride,
+				Hooks:          hf,
+				PRStatus:       status,
 			})
 
 			// Print summary: a dry-run preview is data (stdout), the result of
@@ -294,13 +281,12 @@ never removed without -f.`,
 
 // pruneOpts holds options for pruneWorktrees to avoid a long positional parameter list.
 type pruneOpts struct {
-	DryRun                 bool
-	DeleteBranches         bool
-	DeleteBranchesExplicit bool // true when --delete-branches or --no-delete-branches was passed
-	Hooks                  hookFlags
-	PRStatus               *prstatus.Result
-	RefreshPR              bool // targeted prune: fetch PR status before checking prunability
-	ResetCache             bool // targeted prune: clear the PR cache first
+	DryRun         bool
+	DeleteBranches *bool // nil inherits config; non-nil overrides it
+	Hooks          hookFlags
+	PRStatus       *prstatus.Result
+	RefreshPR      bool // targeted prune: fetch PR status before checking prunability
+	ResetCache     bool // targeted prune: clear the PR cache first
 }
 
 // removalReason says why a worktree may be removed without --force.
@@ -466,7 +452,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 
 	for _, wt := range toRemove {
 		// Resolve per-repo config for hooks and delete_local_branches
-		effCfg := resolveEffectiveConfig(ctx, wt.RepoPath)
+		effCfg := resolveConfig(ctx, wt.RepoPath, config.Overrides{DeleteLocalBranches: opts.DeleteBranches})
 
 		hp, err := hookOperation(effCfg, registry.Repo{Name: wt.RepoName, Path: wt.RepoPath}, wt.Path, wt.Branch, hooks.CommandPrune, "", opts.Hooks)
 		if err != nil {
@@ -479,13 +465,8 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 
 		wtRemoved := false
 		err = hp.Run(ctx, func() error {
-			// Delete local branch if enabled (per-repo config unless CLI flag was explicit)
-			shouldDelete := opts.DeleteBranches
-			if !opts.DeleteBranchesExplicit {
-				shouldDelete = effCfg.Prune.DeleteLocalBranches
-			}
 			// Force: the caller checked for uncommitted changes, or the user passed --force
-			err := removeWorktree(ctx, wt, teardownOpts{Force: true, DeleteBranch: shouldDelete, PRStatus: opts.PRStatus, PR: opts.PRStatus.For(wt)})
+			err := removeWorktree(ctx, wt, teardownOpts{Force: true, DeleteBranch: effCfg.Prune.DeleteLocalBranches, PRStatus: opts.PRStatus, PR: opts.PRStatus.For(wt)})
 			if err != nil {
 				return fmt.Errorf("failed to remove %s: %w", wt.Path, err)
 			}

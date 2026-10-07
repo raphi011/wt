@@ -58,7 +58,10 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
-			fetchExplicit := cmd.Flags().Changed("fetch")
+			var fetchOverride *bool
+			if cmd.Flags().Changed("fetch") {
+				fetchOverride = new(fetch)
+			}
 			baseExplicit := cmd.Flags().Changed("base")
 
 			var target string
@@ -107,13 +110,10 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			}
 
 			// Resolve fetch for repo routing (global config); per-repo config is applied in ensureWorktree
-			fetchResolved := fetch
-			if !fetchExplicit {
-				fetchResolved = cfg.Checkout.AutoFetch
-			}
+			routingCfg := config.ResolverFromContext(ctx).ResolveGlobal(config.Overrides{AutoFetch: fetchOverride})
 
 			// Determine repos to operate on
-			repos, err := resolveCheckoutRepos(ctx, l, reg, parsed, newBranch, fetchResolved, global)
+			repos, err := resolveCheckoutRepos(ctx, l, reg, parsed, newBranch, routingCfg.Checkout.AutoFetch, global)
 			if err != nil {
 				return err
 			}
@@ -121,14 +121,13 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			l.Debug("checkout", "branch", parsed.Branch, "repos", len(repos), "new", newBranch)
 
 			coOpts := checkoutOpts{
-				NewBranch:     newBranch,
-				Base:          base,
-				Fetch:         fetch,
-				FetchExplicit: fetchExplicit,
-				AutoStash:     autoStash,
-				NoPreserve:    noPreserve,
-				Note:          note,
-				Hooks:         hf,
+				NewBranch:  newBranch,
+				Base:       base,
+				Fetch:      fetchOverride,
+				AutoStash:  autoStash,
+				NoPreserve: noPreserve,
+				Note:       note,
+				Hooks:      hf,
 			}
 			// A label target can fail in some repos and still continue with the rest
 			var errs []error
@@ -162,15 +161,14 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 
 // checkoutOpts holds all options for creating or opening a worktree checkout.
 type checkoutOpts struct {
-	NewBranch     bool
-	Base          string
-	Fetch         bool
-	FetchExplicit bool // true when --fetch was explicitly passed on CLI
-	AutoStash     bool
-	NoPreserve    bool
-	Note          string
-	Hooks         hookFlags
-	PR            *prIntent // set by pr checkout: the branch is the source branch of a PR
+	NewBranch  bool
+	Base       string
+	Fetch      *bool // nil inherits config; non-nil overrides it
+	AutoStash  bool
+	NoPreserve bool
+	Note       string
+	Hooks      hookFlags
+	PR         *prIntent // set by pr checkout: the branch is the source branch of a PR
 }
 
 // prIntent identifies the PR a worktree is checked out for. Hooks run with
@@ -193,7 +191,7 @@ type worktreeResult struct {
 func ensureWorktree(ctx context.Context, repo registry.Repo, branch string, opts checkoutOpts) (worktreeResult, error) {
 	l := log.FromContext(ctx)
 
-	cfg := resolveEffectiveConfig(ctx, repo.Path)
+	cfg := resolveConfig(ctx, repo.Path, config.Overrides{AutoFetch: opts.Fetch})
 
 	var res worktreeResult
 	if !opts.NewBranch {
@@ -274,17 +272,11 @@ func ensureWorktree(ctx context.Context, repo registry.Repo, branch string, opts
 func createWorktree(ctx context.Context, repo registry.Repo, gitDir, wtPath string, cfg *config.Config, branch string, opts checkoutOpts) error {
 	l := log.FromContext(ctx)
 
-	// Override fetch with per-repo config if not explicitly set by CLI flag
-	fetch := opts.Fetch
-	if !opts.FetchExplicit {
-		fetch = cfg.Checkout.AutoFetch
-	}
-
 	l.Debug("creating worktree", "path", wtPath, "branch", branch)
 
 	repoHasCommits := git.RefExists(ctx, gitDir, "HEAD")
 
-	fetchForCheckout(ctx, gitDir, cfg, branch, opts, fetch, repoHasCommits)
+	fetchForCheckout(ctx, gitDir, cfg, branch, opts, cfg.Checkout.AutoFetch, repoHasCommits)
 
 	if err := createWorktreeForBranch(ctx, gitDir, wtPath, branch, opts, repoHasCommits, cfg.Checkout.BaseRef); err != nil {
 		return err

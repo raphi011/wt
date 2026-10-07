@@ -16,12 +16,18 @@ import (
 // resolveEffectiveConfig returns the effective config for a repo path,
 // falling back to global config if local config can't be loaded.
 func resolveEffectiveConfig(ctx context.Context, repoPath string) *config.Config {
+	return resolveConfig(ctx, repoPath, config.Overrides{})
+}
+
+// resolveConfig includes operation overrides, preserving them when a local
+// config error requires falling back to global config.
+func resolveConfig(ctx context.Context, repoPath string, overrides config.Overrides) *config.Config {
 	l := log.FromContext(ctx)
 	resolver := config.ResolverFromContext(ctx)
-	effCfg, err := resolver.ConfigForRepo(repoPath)
+	effCfg, err := resolver.ResolveForRepo(repoPath, overrides)
 	if err != nil {
 		l.Printf("Warning: failed to load local config for %s: %v\n", repoPath, err)
-		return config.FromContext(ctx)
+		return resolver.ResolveGlobal(overrides)
 	}
 	return effCfg
 }
