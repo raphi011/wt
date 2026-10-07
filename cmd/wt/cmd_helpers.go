@@ -19,7 +19,7 @@ import (
 
 // hookFlags holds the raw CLI-level hook configuration flags.
 // This triplet is passed through many functions unchanged before being
-// hydrated into hookParams by buildHookParams.
+// hydrated into a hooks.Operation by hookOperation.
 type hookFlags struct {
 	HookNames []string          // --hook flag values
 	NoHook    bool              // --no-hook flag
@@ -28,7 +28,7 @@ type hookFlags struct {
 }
 
 // parseArgs parses RawArgs into Env, reading stdin for KEY=- values.
-// Must be called once per command invocation before buildHookParams:
+// Must be called once per command invocation before hookOperation:
 // stdin is drained by the first read.
 func (hf *hookFlags) parseArgs() error {
 	env, err := hooks.ParseEnvWithStdin(hf.RawArgs)
@@ -39,102 +39,26 @@ func (hf *hookFlags) parseArgs() error {
 	return nil
 }
 
-// hookParams holds everything needed to run hooks around a command.
-type hookParams struct {
-	HooksCfg  config.HooksConfig
-	ConfigDir string // ~/.wt/ config dir
-	WtPath    string // worktree path (used as workDir for hook execution)
-	// BeforeWorkDir overrides the workDir of before-hooks, for commands that
-	// create the worktree. Empty = WtPath.
-	BeforeWorkDir string
-	// AfterWorkDir overrides the workDir of after-hooks, for commands that
-	// remove the worktree. Empty = WtPath.
-	AfterWorkDir string
-	RepoPath     string
-	RepoName     string
-	Branch       string
-	Trigger      hooks.CommandType
-	Action       string
-	PRNumber     *int
-	PRRepo       string
-	HookNames    []string
-	NoHook       bool
-	Env          map[string]string
-}
-
-// withHooks runs before-hooks, then fn, then after-hooks.
-// If before-hooks fail, fn is not called and the error is returned.
-// After-hook failures are logged as warnings.
-func withHooks(ctx context.Context, p hookParams, fn func() error) error {
-	hookCtx := hooks.Context{
-		WorktreeDir: p.WtPath,
-		RepoDir:     p.RepoPath,
-		Branch:      p.Branch,
-		Repo:        p.RepoName,
-		Trigger:     string(p.Trigger),
-		Action:      p.Action,
-		ConfigDir:   p.ConfigDir,
-		PRNumber:    p.PRNumber,
-		PRRepo:      p.PRRepo,
-		Env:         p.Env,
-	}
-
-	// Before hooks (can abort)
-	beforeMatches, err := hooks.SelectHooks(p.HooksCfg, p.HookNames, p.NoHook, hooks.HookSelector{Command: p.Trigger, Action: p.Action, Phase: hooks.PhaseBefore})
-	if err != nil {
-		return err
-	}
-	hookCtx.Phase = hooks.PhaseBefore
-	beforeWorkDir := p.WtPath
-	if p.BeforeWorkDir != "" {
-		beforeWorkDir = p.BeforeWorkDir
-	}
-	if err := hooks.RunBeforeHooks(ctx, beforeMatches, hookCtx, beforeWorkDir); err != nil {
-		return fmt.Errorf("before-hook aborted %s: %w", p.Trigger, err)
-	}
-
-	// Core logic
-	if err := fn(); err != nil {
-		return err
-	}
-
-	// After hooks (non-fatal)
-	afterMatches, err := hooks.SelectHooks(p.HooksCfg, p.HookNames, p.NoHook, hooks.HookSelector{Command: p.Trigger, Action: p.Action, Phase: hooks.PhaseAfter})
-	if err != nil {
-		return err
-	}
-	if len(afterMatches) > 0 {
-		hookCtx.Phase = hooks.PhaseAfter
-		afterWorkDir := p.WtPath
-		if p.AfterWorkDir != "" {
-			afterWorkDir = p.AfterWorkDir
-		}
-		hooks.RunForEach(ctx, afterMatches, hookCtx, afterWorkDir)
-	}
-
-	return nil
-}
-
-// buildHookParams creates a hookParams from config and hook flags.
+// hookOperation creates the hooks.Operation of a command acting on a worktree.
 // hf.parseArgs must have been called. Returns error if config dir resolution fails.
-func buildHookParams(cfg *config.Config, repo registry.Repo, wtPath, branch string, trigger hooks.CommandType, action string, hf hookFlags) (hookParams, error) {
+func hookOperation(cfg *config.Config, repo registry.Repo, wtPath, branch string, trigger hooks.CommandType, action string, hf hookFlags) (hooks.Operation, error) {
 	configDir, err := cfg.GetWtDir()
 	if err != nil {
-		return hookParams{}, fmt.Errorf("config dir: %w", err)
+		return hooks.Operation{}, fmt.Errorf("config dir: %w", err)
 	}
 
-	return hookParams{
-		HooksCfg:  cfg.Hooks,
-		ConfigDir: configDir,
-		WtPath:    wtPath,
-		RepoPath:  repo.Path,
-		RepoName:  repo.Name,
-		Branch:    branch,
-		Trigger:   trigger,
-		Action:    action,
-		HookNames: hf.HookNames,
-		NoHook:    hf.NoHook,
-		Env:       hf.Env,
+	return hooks.Operation{
+		Hooks:       cfg.Hooks,
+		ConfigDir:   configDir,
+		Trigger:     trigger,
+		Action:      action,
+		RepoDir:     repo.Path,
+		Repo:        repo.Name,
+		WorktreeDir: wtPath,
+		Branch:      branch,
+		HookNames:   hf.HookNames,
+		NoHook:      hf.NoHook,
+		Env:         hf.Env,
 	}, nil
 }
 

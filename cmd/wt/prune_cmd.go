@@ -515,7 +515,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		// Resolve per-repo config for hooks and delete_local_branches
 		effCfg := resolveEffectiveConfig(ctx, wt.RepoPath)
 
-		hp, err := buildHookParams(effCfg, registry.Repo{Name: wt.RepoName, Path: wt.RepoPath}, wt.Path, wt.Branch, hooks.CommandPrune, "", opts.Hooks)
+		hp, err := hookOperation(effCfg, registry.Repo{Name: wt.RepoName, Path: wt.RepoPath}, wt.Path, wt.Branch, hooks.CommandPrune, "", opts.Hooks)
 		if err != nil {
 			l.Printf("Skipping %s: %v\n", wt.Branch, err)
 			failed = append(failed, wt)
@@ -525,7 +525,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		hp.AfterWorkDir = wt.RepoPath
 
 		wtRemoved := false
-		err = withHooks(ctx, hp, func() error {
+		err = hp.Run(ctx, func() error {
 			// Delete local branch if enabled (per-repo config unless CLI flag was explicit)
 			shouldDelete := opts.DeleteBranches
 			if !opts.DeleteBranchesExplicit {

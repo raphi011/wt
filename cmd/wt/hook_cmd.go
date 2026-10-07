@@ -118,23 +118,12 @@ func runHookInRepo(ctx context.Context, repo registry.Repo, hookName string, env
 		return fmt.Errorf("get current branch: %w", err)
 	}
 
-	configDir, err := effCfg.GetWtDir()
+	op, err := hookOperation(effCfg, repo, workDir, branch, hooks.CommandRun, hooks.ActionManual, hookFlags{Env: env})
 	if err != nil {
-		return fmt.Errorf("config dir: %w", err)
+		return err
 	}
-
-	hookCtx := hooks.Context{
-		WorktreeDir: workDir,
-		RepoDir:     repo.Path,
-		Branch:      branch,
-		Repo:        repo.Name,
-		Trigger:     string(hooks.CommandRun),
-		Action:      hooks.ActionManual,
-		Phase:       hooks.PhaseAfter,
-		ConfigDir:   configDir,
-		Env:         env,
-		DryRun:      dryRun,
-	}
+	hookCtx := op.Context(hooks.PhaseAfter)
+	hookCtx.DryRun = dryRun
 
 	if err := hooks.RunSingle(ctx, hookName, &hook, hookCtx); err != nil {
 		return fmt.Errorf("hook %s: %w", hookName, err)
@@ -159,24 +148,13 @@ func runHookInTargets(ctx context.Context, reg *registry.Registry, hookName stri
 			continue
 		}
 
-		configDir, err := effCfg.GetWtDir()
+		op, err := hookOperation(effCfg, registry.Repo{Name: wt.RepoName, Path: wt.RepoPath}, wt.Path, wt.Branch, hooks.CommandRun, hooks.ActionManual, hookFlags{Env: env})
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%s:%s: config dir: %w", wt.RepoName, wt.Branch, err))
+			errs = append(errs, fmt.Errorf("%s:%s: %w", wt.RepoName, wt.Branch, err))
 			continue
 		}
-
-		hookCtx := hooks.Context{
-			WorktreeDir: wt.Path,
-			RepoDir:     wt.RepoPath,
-			Branch:      wt.Branch,
-			Repo:        wt.RepoName,
-			Trigger:     string(hooks.CommandRun),
-			Action:      hooks.ActionManual,
-			Phase:       hooks.PhaseAfter,
-			ConfigDir:   configDir,
-			Env:         env,
-			DryRun:      dryRun,
-		}
+		hookCtx := op.Context(hooks.PhaseAfter)
+		hookCtx.DryRun = dryRun
 		if err := hooks.RunSingle(ctx, hookName, &hook, hookCtx); err != nil {
 			errs = append(errs, fmt.Errorf("%s:%s: hook %s: %w", wt.RepoName, wt.Branch, hookName, err))
 		}
