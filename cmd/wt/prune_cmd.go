@@ -54,6 +54,8 @@ Use --interactive to select worktrees to prune.
 Target specific worktrees using [scope:]branch arguments where scope can be
 a repo name or label. Worktrees with a merged PR can be pruned without -f.
 Use -f to prune worktrees whose PR is not yet confirmed merged.
+Use -R to fetch the PR status of the targets first.
+--stale and --interactive cannot be combined with targets.
 
 Worktrees with uncommitted changes (modified, staged or untracked files) are
 never removed without -f.`,
@@ -64,6 +66,7 @@ never removed without -f.`,
   wt prune -f                      # Also remove worktrees with uncommitted changes
   wt prune -i                      # Interactive mode
   wt prune feature                 # Remove merged feature worktree
+  wt prune feature -R              # Refresh PR status, remove if merged
   wt prune feature -f              # Remove unmerged feature worktree
   wt prune feature -f -g           # Remove feature worktree (all repos)
   wt prune myrepo:feature -f       # Remove specific unmerged worktree
@@ -83,6 +86,12 @@ never removed without -f.`,
 
 			// If specific targets provided, handle targeted removal
 			if len(args) > 0 {
+				if stale {
+					return fmt.Errorf("--stale cannot be combined with branch targets")
+				}
+				if interactive {
+					return fmt.Errorf("--interactive cannot be combined with branch targets")
+				}
 				deleteBranchesExplicit := cmd.Flags().Changed("delete-branches") || cmd.Flags().Changed("no-delete-branches")
 				// Determine if we should delete local branches
 				shouldDeleteBranches := cfg.Prune.DeleteLocalBranches
@@ -95,6 +104,8 @@ never removed without -f.`,
 					DeleteBranches:         shouldDeleteBranches,
 					DeleteBranchesExplicit: deleteBranchesExplicit,
 					Hooks:                  hf,
+					RefreshPR:              refresh,
+					ResetCache:             resetCache,
 				})
 			}
 
@@ -318,6 +329,8 @@ type pruneOpts struct {
 	DeleteBranchesExplicit bool // true when --delete-branches or --no-delete-branches was passed
 	Hooks                  hookFlags
 	PRCache                *prcache.Cache
+	RefreshPR              bool // targeted prune: fetch PR status before checking prunability
+	ResetCache             bool // targeted prune: clear the PR cache first
 }
 
 // isStaleWorktree returns true if the worktree's last commit is older than staleDays.
@@ -361,21 +374,51 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 		return err
 	}
 
-	// Convert to git.Worktree
-	var toRemove []git.Worktree
+	// Load full worktree data for the targets (origin and upstream are needed to refresh PR status)
+	targetPaths := make(map[string]bool, len(wtTargets))
+	seenRepos := make(map[string]bool)
+	var refs []git.RepoRef
 	for _, t := range wtTargets {
-		toRemove = append(toRemove, git.Worktree{
-			Path:     t.Path,
-			Branch:   t.Branch,
-			RepoName: t.RepoName,
-			RepoPath: t.RepoPath,
-		})
+		targetPaths[t.Path] = true
+		if !seenRepos[t.RepoPath] {
+			seenRepos[t.RepoPath] = true
+			refs = append(refs, git.RepoRef{Name: t.RepoName, Path: t.RepoPath})
+		}
+	}
+	loaded, warnings := git.LoadWorktreesForRepos(ctx, refs)
+	if len(warnings) > 0 {
+		return fmt.Errorf("%s: %w", warnings[0].RepoName, warnings[0].Err)
+	}
+	var toRemove []git.Worktree
+	for _, wt := range loaded {
+		if targetPaths[wt.Path] {
+			toRemove = append(toRemove, wt)
+		}
 	}
 
 	// Enrich with merge info to determine if force is needed
-	prCache, err := loadPRCache(config.FromContext(ctx))
+	cfg := config.FromContext(ctx)
+	prCache, err := loadPRCache(cfg)
 	if err != nil {
 		return err
+	}
+
+	if opts.ResetCache {
+		prCache.Reset()
+		l.Println("Cache reset: PR info cleared")
+	}
+
+	if opts.RefreshPR {
+		if failed := refreshPRs(ctx, toRemove, prCache, cfg.Hosts, &cfg.Forge); len(failed) > 0 {
+			l.Printf("Warning: failed to fetch PR status for: %v\n", failed)
+		}
+	}
+
+	// Save now: the checks below may return before any worktree is removed
+	if opts.ResetCache || opts.RefreshPR {
+		if err := prCache.Save(); err != nil {
+			l.Printf("Warning: failed to save cache: %v\n", err)
+		}
 	}
 
 	// Enrich with PR state from cache
@@ -390,7 +433,11 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 			}
 		}
 		if len(unprunable) > 0 {
-			return fmt.Errorf("cannot prune unmerged worktrees without -f/--force: %s\nHint: run with -R/--refresh-pr to fetch latest PR status, or use -f to force removal", strings.Join(unprunable, ", "))
+			hint := "use -f to force removal"
+			if !opts.RefreshPR {
+				hint = "run with -R/--refresh-pr to fetch latest PR status, or " + hint
+			}
+			return fmt.Errorf("cannot prune unmerged worktrees without -f/--force: %s\nHint: %s", strings.Join(unprunable, ", "), hint)
 		}
 
 		if _, dirty := splitDirtyWorktrees(ctx, toRemove); len(dirty) > 0 {
@@ -520,11 +567,13 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		beforeMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.Hooks.HookNames, opts.Hooks.NoHook, hooks.HookSelector{Command: hooks.CommandPrune, Phase: hooks.PhaseBefore})
 		if err != nil {
 			l.Printf("Warning: failed to select before hooks for %s: %v\n", wt.RepoName, err)
+			failed = append(failed, wt)
 			continue
 		}
 		if len(beforeMatches) > 0 {
 			if err := hooks.RunBeforeHooks(ctx, beforeMatches, pruneHookCtx(wt, hooks.PhaseBefore), wt.Path); err != nil {
 				l.Printf("Skipping %s: before-hook aborted: %v\n", wt.Branch, err)
+				failed = append(failed, wt)
 				continue
 			}
 		}

@@ -1391,8 +1391,8 @@ func TestPrune_AfterHookRuns(t *testing.T) {
 
 // TestPrune_BeforeHookAborts tests that a failing before:prune hook prevents removal.
 //
-// Scenario: User has a before:prune hook that exits 1
-// Expected: Worktree is NOT removed
+// Scenario: User has a before:prune hook that exits 1, runs `wt prune feature -f`
+// Expected: Command returns an error and the worktree is NOT removed
 func TestPrune_BeforeHookAborts(t *testing.T) {
 	t.Parallel()
 
@@ -1433,15 +1433,50 @@ func TestPrune_BeforeHookAborts(t *testing.T) {
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"feature", "-f"})
 
-	// Prune should succeed (before-hook abort is logged, not fatal for the command)
-	// but the worktree should still exist because the abort skips that worktree
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("prune command failed: %v", err)
+	// A requested target that was not removed is a failure
+	if err := cmd.Execute(); err == nil {
+		t.Error("prune should fail when a before-hook aborts a requested target")
 	}
 
 	// Worktree should still exist — before hook aborted its removal
 	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
 		t.Error("worktree should still exist after before-hook abort")
+	}
+}
+
+// TestPrune_BeforeHookAborts_AutoPruneCountsSkipped tests that auto-prune counts
+// a worktree kept by a before:prune hook as skipped.
+//
+// Scenario: Worktree has a merged PR, before:prune hook exits 1, user runs `wt prune`
+// Expected: Worktree is kept and the summary counts it as skipped
+func TestPrune_BeforeHookAborts_AutoPruneCountsSkipped(t *testing.T) {
+	t.Parallel()
+
+	cfg, repoPath, wtPath := setupMergedWorktree(t)
+	cfg.Hooks = config.HooksConfig{
+		Hooks: map[string]config.Hook{
+			"guard": {
+				Command: "exit 1",
+				On:      []string{"before:prune"},
+			},
+		},
+	}
+
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Error("worktree should still exist after before-hook abort")
+	}
+	// Main worktree (not merged) + the aborted one
+	if !strings.Contains(out.String(), "Removed 0 worktree(s), skipped 2") {
+		t.Errorf("summary should count the aborted worktree as skipped, got: %q", out.String())
 	}
 }
 
@@ -2334,5 +2369,124 @@ func TestPrune_RemovesHistoryEntry(t *testing.T) {
 	}
 	if hist.FindByPath(repoPath) == nil {
 		t.Error("history entry of the main repo should be kept")
+	}
+}
+
+// fakeGHMergedPR puts a fake `gh` first in PATH that reports a merged PR for
+// every branch. No network or real auth is used.
+func fakeGHMergedPR(t *testing.T) {
+	t.Helper()
+
+	dir := t.TempDir()
+	script := `#!/bin/sh
+case "$*" in
+ 'auth status'*) exit 0 ;;
+ 'pr list'*) printf '[{"number":1,"state":"MERGED","isDraft":false,"url":"https://github.com/test/test-repo/pull/1","author":{"login":"test"},"comments":[],"reviewDecision":""}]\n' ;;
+ *) exit 1 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(script), 0755); err != nil {
+		t.Fatalf("failed to write fake gh: %v", err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// TestPrune_Target_RefreshPR tests that -R fetches PR status for targeted worktrees.
+//
+// Scenario: Branch has a merged PR that is not cached, user runs `wt prune feature -R`
+// Expected: PR status is fetched and the worktree is removed without -f
+func TestPrune_Target_RefreshPR(t *testing.T) {
+	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
+	fakeGHMergedPR(t)
+
+	cfg, repoPath, wtPath := setupMergedWorktree(t)
+	if err := os.Remove(filepath.Join(filepath.Dir(cfg.RegistryPath), "prs.json")); err != nil {
+		t.Fatalf("failed to remove PR cache: %v", err)
+	}
+	// PR status is only fetched for branches with an upstream
+	for _, args := range [][]string{
+		{"config", "branch.feature.remote", "origin"},
+		{"config", "branch.feature.merge", "refs/heads/feature"},
+	} {
+		if out, err := runGitCommand(repoPath, args...); err != nil {
+			t.Fatalf("failed to run git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-R"}) // No -f flag
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune -R should fetch the merged PR and prune without -f: %v", err)
+	}
+	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+		t.Error("worktree should be removed")
+	}
+}
+
+// TestPrune_Target_ResetCache tests that --reset-cache clears the PR cache
+// before targeted worktrees are checked.
+//
+// Scenario: PR cache marks the branch as merged, user runs `wt prune feature --reset-cache`
+// Expected: Cache is cleared, so the worktree is no longer prunable without -f
+func TestPrune_Target_ResetCache(t *testing.T) {
+	t.Parallel()
+
+	cfg, repoPath, wtPath := setupMergedWorktree(t)
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "--reset-cache"}) // No -f flag
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("prune should require -f after the cache was reset")
+	}
+	if !strings.Contains(err.Error(), "test-repo:feature") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := os.Stat(wtPath); err != nil {
+		t.Errorf("worktree should be kept: %v", err)
+	}
+
+	cachePath := filepath.Join(filepath.Dir(cfg.RegistryPath), "prs.json")
+	if pr := prcache.LoadFrom(cachePath).Get(prcache.CacheKey(repoPath, "feature")); pr != nil {
+		t.Error("cache entry should be cleared from the PR cache file")
+	}
+}
+
+// TestPrune_Target_RejectsStaleAndInteractive tests that flags which only apply
+// to auto-prune are rejected together with targets.
+//
+// Scenario: User runs `wt prune feature --stale` or `wt prune feature -i`
+// Expected: Error naming the flag, worktree is kept
+func TestPrune_Target_RejectsStaleAndInteractive(t *testing.T) {
+	t.Parallel()
+
+	for _, flag := range []string{"--stale", "--interactive"} {
+		t.Run(flag, func(t *testing.T) {
+			t.Parallel()
+
+			cfg, repoPath, wtPath := setupMergedWorktree(t)
+
+			ctx := testContextWithConfig(t, cfg, repoPath)
+			cmd := newPruneCmd()
+			cmd.SetContext(ctx)
+			cmd.SetArgs([]string{"feature", flag})
+
+			err := cmd.Execute()
+			if err == nil {
+				t.Fatalf("prune should reject %s with a target", flag)
+			}
+			if !strings.Contains(err.Error(), flag) {
+				t.Fatalf("error should name %s, got: %v", flag, err)
+			}
+			if _, err := os.Stat(wtPath); err != nil {
+				t.Errorf("worktree should be kept: %v", err)
+			}
+		})
 	}
 }
