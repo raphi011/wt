@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -96,6 +97,11 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				return err
 			}
 
+			// Reject before resolving: resolution already opens existing worktrees
+			if autoStash && len(parsed.Repos) > 1 {
+				return fmt.Errorf("--autostash cannot be used with label targets (affects multiple repos)")
+			}
+
 			// Resolve fetch for repo routing (global config); per-repo config is applied in checkoutInRepo
 			fetchResolved := fetch
 			if !fetchExplicit {
@@ -103,16 +109,13 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			}
 
 			// Determine repos to operate on
+			// A label target can fail in some repos and still return the rest
 			repos, err := resolveCheckoutRepos(ctx, l, reg, parsed, newBranch, fetchResolved, hf)
-			if err != nil {
+			if err != nil && len(repos) == 0 {
 				return err
 			}
 
 			l.Debug("checkout", "branch", parsed.Branch, "repos", len(repos), "new", newBranch)
-
-			if autoStash && len(repos) > 1 {
-				return fmt.Errorf("--autostash cannot be used with label targets (affects multiple repos)")
-			}
 
 			coOpts := checkoutOpts{
 				NewBranch:     newBranch,
@@ -124,13 +127,14 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				Note:          note,
 				Hooks:         hf,
 			}
+			errs := []error{err}
 			for _, repo := range repos {
 				if err := checkoutInRepo(ctx, repo, parsed.Branch, coOpts); err != nil {
-					return fmt.Errorf("%s: %w", repo.Name, err)
+					errs = append(errs, fmt.Errorf("%s: %w", repo.Name, err))
 				}
 			}
 
-			return nil
+			return errors.Join(errs...)
 		},
 	}
 
@@ -447,6 +451,8 @@ func resolveCheckoutRepos(
 
 // resolveScopedExisting handles scoped targets for existing branches.
 // Opens worktrees that already exist and returns repos that still need creation.
+// A failing repo does not stop the others: the remaining repos are returned
+// together with the collected errors.
 func resolveScopedExisting(
 	ctx context.Context,
 	repos []registry.Repo,
@@ -454,20 +460,22 @@ func resolveScopedExisting(
 	hf hookFlags,
 ) ([]registry.Repo, error) {
 	var remaining []registry.Repo
+	var errs []error
 	for _, repo := range repos {
 		wtPath, found, err := findWorktreeForBranch(ctx, repo.Path, branch)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", repo.Name, err)
+			errs = append(errs, fmt.Errorf("%s: %w", repo.Name, err))
+			continue
 		}
 		if !found {
 			remaining = append(remaining, repo)
 			continue
 		}
 		if err := openExistingWorktree(ctx, repo, branch, wtPath, hf); err != nil {
-			return nil, err
+			errs = append(errs, fmt.Errorf("%s: %w", repo.Name, err))
 		}
 	}
-	return remaining, nil
+	return remaining, errors.Join(errs...)
 }
 
 // resolveUnscopedInRepo resolves an existing branch checkout within the current repo.

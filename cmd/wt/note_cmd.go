@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -66,14 +67,16 @@ func newNoteSetCmd() *cobra.Command {
 			}
 
 			// Set note on each target
+			var errs []error
 			for _, t := range targets {
 				if err := git.SetBranchNote(ctx, t.RepoPath, t.Branch, text); err != nil {
-					return err
+					errs = append(errs, fmt.Errorf("%s:%s: %w", t.RepoName, t.Branch, err))
+					continue
 				}
 				fmt.Printf("Note set on %s:%s\n", t.RepoName, t.Branch)
 			}
 
-			return nil
+			return errors.Join(errs...)
 		},
 	}
 
@@ -152,14 +155,16 @@ func newNoteClearCmd() *cobra.Command {
 			}
 
 			// Clear note from each target
+			var errs []error
 			for _, t := range targets {
 				if err := git.ClearBranchNote(ctx, t.RepoPath, t.Branch); err != nil {
-					return err
+					errs = append(errs, fmt.Errorf("%s:%s: %w", t.RepoName, t.Branch, err))
+					continue
 				}
 				fmt.Printf("Note cleared on %s:%s\n", t.RepoName, t.Branch)
 			}
 
-			return nil
+			return errors.Join(errs...)
 		},
 	}
 

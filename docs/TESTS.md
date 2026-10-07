@@ -30,13 +30,13 @@ Generated: 2026-10-07
 | [reporemove](#reporemove) | 6 |
 | [resolveworktreetargets](#resolveworktreetargets) | 4 |
 | [wt cd](#wt-cd) | 10 |
-| [wt checkout](#wt-checkout) | 68 |
+| [wt checkout](#wt-checkout) | 71 |
 | [wt exec](#wt-exec) | 14 |
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 13 |
-| [wt note](#wt-note) | 10 |
+| [wt note](#wt-note) | 12 |
 | [wt prune](#wt-prune) | 47 |
-| **Total** | **311** |
+| **Total** | **316** |
 
 ## completebasebranches
 
@@ -374,6 +374,9 @@ Generated: 2026-10-07
 | `TestCheckout_AutoStash_PopConflictKeepsStash` | Tests that a failed stash apply |
 | `TestCheckout_AutoStash_NestedWorktree` | Tests autostash when the new worktree is |
 | `TestCheckout_ScopedGitError` | Tests that a git failure while looking for an |
+| `TestCheckout_LabelContinuesAfterRepoFailure` | Tests that a label checkout continues past a failing repo. |
+| `TestCheckout_LabelExistingBranchContinuesAfterRepoFailure` | Tests that a label checkout of an existing branch continues past a failing repo. |
+| `TestCheckout_AutoStash_LabelTargetExistingWorktree` | Tests that --autostash is rejected |
 
 ## wt exec
 
@@ -446,6 +449,8 @@ Generated: 2026-10-07
 | `TestNote_NotInGitRepo` | Tests error when no target is given outside a git repo. |
 | `TestNoteSet_LabelScope` | Tests setting a note on all repos matching a label. |
 | `TestNote_UnscopedGitErrorWarns` | Tests that a git failure during an unscoped |
+| `TestNoteSet_LabelContinuesAfterRepoFailure` | Tests that a label note set continues past a failing repo. |
+| `TestNoteClear_LabelContinuesAfterRepoFailure` | Tests that a label note clear continues past a failing repo. |
 
 ## wt prune
 
