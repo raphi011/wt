@@ -35,8 +35,8 @@ Generated: 2026-10-07
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 12 |
 | [wt note](#wt-note) | 10 |
-| [wt prune](#wt-prune) | 42 |
-| **Total** | **293** |
+| [wt prune](#wt-prune) | 46 |
+| **Total** | **297** |
 
 ## completebasebranches
 
@@ -464,6 +464,7 @@ Generated: 2026-10-07
 | `TestPrune_LocalConfigOverridesDeleteBranches` | Tests that a per-repo .wt.toml |
 | `TestPrune_AfterHookRuns` | Tests that a prune hook with on=["prune"] fires after pruning. |
 | `TestPrune_BeforeHookAborts` | Tests that a failing before:prune hook prevents removal. |
+| `TestPrune_BeforeHookAborts_AutoPruneCountsSkipped` | Tests that auto-prune counts |
 | `TestPrune_BeforeHookCWD` | Tests that before:prune hooks run in the worktree directory. |
 | `TestPrune_AfterHookCWD` | Tests that after:prune hooks run in the repo root directory. |
 | `TestPrune_AllTriggerMatchesPrune` | Tests that on=["all"] matches prune. |
@@ -480,4 +481,7 @@ Generated: 2026-10-07
 | `TestPrune_DirtyStaleWorktree_SkippedWithoutForce` | Tests that --stale keeps |
 | `TestPrune_Target_DirtyMergedWorktree_RequiresForce` | Tests that targeted prune |
 | `TestPrune_RemovesHistoryEntry` | Tests that pruning a worktree removes it from |
+| `TestPrune_Target_RefreshPR` | Tests that -R fetches PR status for targeted worktrees. |
+| `TestPrune_Target_ResetCache` | Tests that --reset-cache clears the PR cache |
+| `TestPrune_Target_RejectsStaleAndInteractive` | Tests that flags which only apply |
 
