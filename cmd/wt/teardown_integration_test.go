@@ -11,6 +11,7 @@ import (
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/prcache"
+	"github.com/raphi011/wt/internal/prstatus"
 )
 
 // TestRemoveWorktree tests the teardown shared by prune and pr merge.
@@ -52,11 +53,16 @@ func TestRemoveWorktree(t *testing.T) {
 			if cache.Get(cacheKey) == nil {
 				t.Fatal("expected a PR cache entry before teardown")
 			}
-			tt.opts.PRCache = cache
 
 			ctx := testContextWithConfig(t, cfg, repoPath)
-			wt := git.Worktree{Path: wtPath, RepoPath: repoPath, Branch: "feature", PRState: tt.prState}
-			err := removeWorktree(ctx, wt, tt.opts)
+			wt := git.Worktree{Path: wtPath, RepoPath: repoPath, Branch: "feature"}
+			status, err := prstatus.Load(ctx, []git.Worktree{wt}, cfg, prstatus.Options{})
+			if err != nil {
+				t.Fatalf("load PR status: %v", err)
+			}
+			tt.opts.PRStatus = status
+			tt.opts.PR = forge.PRInfo{State: tt.prState}
+			err = removeWorktree(ctx, wt, tt.opts)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("removeWorktree error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -64,7 +70,7 @@ func TestRemoveWorktree(t *testing.T) {
 			if _, err := os.Stat(wtPath); os.IsNotExist(err) != tt.wantRemoved {
 				t.Errorf("worktree removed = %v, want %v", os.IsNotExist(err), tt.wantRemoved)
 			}
-			if cached := cache.Get(cacheKey) != nil; cached == tt.wantRemoved {
+			if cached := prcache.LoadFrom(filepath.Join(filepath.Dir(cfg.RegistryPath), "prs.json")).Get(cacheKey) != nil; cached == tt.wantRemoved {
 				t.Errorf("PR cache entry present = %v, want %v", cached, !tt.wantRemoved)
 			}
 			_, err = runGitCommand(repoPath, "rev-parse", "--verify", "--quiet", "refs/heads/feature")

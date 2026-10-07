@@ -23,10 +23,6 @@ type Worktree struct {
 	UpstreamBranch string    `json:"-"`
 	HasUpstream    bool      `json:"-"`
 	CommitDate     time.Time `json:"commit_date"`
-	PRNumber       int       `json:"pr_number,omitempty"`
-	PRState        string    `json:"pr_state,omitempty"`
-	PRURL          string    `json:"pr_url,omitempty"`
-	PRDraft        bool      `json:"pr_draft,omitempty"`
 }
 
 // CreateWorktreeResult contains the result of creating a worktree

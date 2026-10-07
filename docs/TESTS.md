@@ -42,10 +42,10 @@ Generated: 2026-10-07
 | [wt checkout](#wt-checkout) | 79 |
 | [wt exec](#wt-exec) | 15 |
 | [wt label](#wt-label) | 15 |
-| [wt list](#wt-list) | 13 |
+| [wt list](#wt-list) | 14 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 50 |
-| **Total** | **352** |
+| **Total** | **353** |
 
 ## completebasebranches
 
@@ -507,6 +507,7 @@ Generated: 2026-10-07
 
 | Test | Description |
 |------|-------------|
+| `TestList_JSONPreservesCachedPRFields` | Verifies PR and worktree JSON compatibility. |
 | `TestList_EmptyRepo` | Tests listing worktrees when none exist. |
 | `TestList_WithWorktrees` | Tests listing existing worktrees. |
 | `TestList_ByRepoName` | Tests listing worktrees for a specific repo. |

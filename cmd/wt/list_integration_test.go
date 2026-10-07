@@ -3,14 +3,81 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/forge"
+	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
 )
+
+// TestList_JSONPreservesCachedPRFields verifies PR and worktree JSON compatibility.
+//
+// Scenario: User runs `wt list --json` with a cached draft PR and a branch without a PR.
+// Expected: PR keys retain their values, normal worktree keys remain, and absent PR keys are omitted.
+func TestList_JSONPreservesCachedPRFields(t *testing.T) {
+	t.Parallel()
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	wtPath := createTestWorktree(t, repoPath, "feature")
+	cfg := &config.Config{RegistryPath: filepath.Join(tmpDir, "repos.json")}
+	reg := &registry.Registry{Repos: []registry.Repo{{Name: "test-repo", Path: repoPath}}}
+	if err := saveRegistry(reg, cfg.RegistryPath); err != nil {
+		t.Fatalf("save registry: %v", err)
+	}
+	cache := prcache.LoadFrom(filepath.Join(tmpDir, "prs.json"))
+	cache.Set(prcache.CacheKey(repoPath, "feature"), &forge.PRInfo{
+		Number: 207, State: forge.PRStateOpen, URL: "https://github.com/test/test-repo/pull/207", IsDraft: true, Fetched: true,
+	})
+	if err := cache.Save(); err != nil {
+		t.Fatalf("seed PR cache: %v", err)
+	}
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--json", "--sort", "branch"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list JSON: %v", err)
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal([]byte(out.String()), &rows); err != nil {
+		t.Fatalf("decode list output: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("JSON rows = %d, want 2", len(rows))
+	}
+	for _, row := range rows {
+		for _, key := range []string{"path", "branch", "commit", "commit_age", "repo", "commit_date"} {
+			if _, ok := row[key]; !ok {
+				t.Errorf("branch %v missing worktree key %q", row["branch"], key)
+			}
+		}
+		if row["repo"] != "test-repo" || row["commit"] == "" {
+			t.Errorf("normal worktree fields changed: %v", row)
+		}
+		switch row["branch"] {
+		case "feature":
+			want := map[string]any{"path": wtPath, "pr_number": float64(207), "pr_state": forge.PRStateOpen, "pr_url": "https://github.com/test/test-repo/pull/207", "pr_draft": true}
+			for key, value := range want {
+				if row[key] != value {
+					t.Errorf("feature %s = %v, want %v", key, row[key], value)
+				}
+			}
+		case "main":
+			for _, key := range []string{"pr_number", "pr_state", "pr_url", "pr_draft"} {
+				if value, ok := row[key]; ok {
+					t.Errorf("branch without PR emitted %s = %v", key, value)
+				}
+			}
+		default:
+			t.Errorf("unexpected branch %v", row["branch"])
+		}
+	}
+}
 
 // TestList_EmptyRepo tests listing worktrees when none exist.
 //

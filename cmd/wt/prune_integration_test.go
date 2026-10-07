@@ -14,6 +14,7 @@ import (
 	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/prcache"
+	"github.com/raphi011/wt/internal/prstatus"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -892,21 +893,32 @@ func TestPrune_ForceDeleteBranch_MergedPRState(t *testing.T) {
 	// branch has commits not reachable from main, so git branch -d would refuse.
 	addCommit(t, wtPath, "feature-only.txt", "feature-only commit")
 
-	cfg := &config.Config{}
+	cfg := &config.Config{RegistryPath: filepath.Join(tmpDir, "repos.json")}
 	ctx := testContextWithConfig(t, cfg, repoPath)
 
-	// Construct git.Worktree with PRState = MERGED (as if forge confirmed merge)
+	// Supply the forge-confirmed merged PR separately from git metadata.
 	toRemove := []git.Worktree{
 		{
 			Path:     wtPath,
 			Branch:   "feature",
 			RepoName: "test-repo",
 			RepoPath: repoPath,
-			PRState:  forge.PRStateMerged,
 		},
 	}
 
+	status, err := prstatus.Load(ctx, toRemove, cfg, prstatus.Options{})
+	if err != nil {
+		t.Fatalf("load PR status: %v", err)
+	}
+	if err := status.Record(toRemove[0], &forge.PRInfo{State: forge.PRStateMerged, Fetched: true}); err != nil {
+		t.Fatalf("record merged PR: %v", err)
+	}
+	status, err = prstatus.Load(ctx, toRemove, cfg, prstatus.Options{})
+	if err != nil {
+		t.Fatalf("load seeded PR status: %v", err)
+	}
 	removed, failed := pruneWorktrees(ctx, toRemove, pruneOpts{
+		PRStatus:               status,
 		DeleteBranches:         true,
 		DeleteBranchesExplicit: true,
 	})
@@ -1082,11 +1094,21 @@ func TestPrune_StaleFlag_MergedAlwaysPruned(t *testing.T) {
 			Branch:   "merged-branch",
 			RepoName: "test-repo",
 			RepoPath: repoPath,
-			PRState:  forge.PRStateMerged,
 		},
 	}
 
-	removed, failed := pruneWorktrees(ctx, toRemove, pruneOpts{})
+	status, err := prstatus.Load(ctx, toRemove, cfg, prstatus.Options{})
+	if err != nil {
+		t.Fatalf("load PR status: %v", err)
+	}
+	if err := status.Record(toRemove[0], &forge.PRInfo{State: forge.PRStateMerged, Fetched: true}); err != nil {
+		t.Fatalf("record merged PR: %v", err)
+	}
+	status, err = prstatus.Load(ctx, toRemove, cfg, prstatus.Options{})
+	if err != nil {
+		t.Fatalf("load seeded PR status: %v", err)
+	}
+	removed, failed := pruneWorktrees(ctx, toRemove, pruneOpts{PRStatus: status})
 
 	if len(failed) > 0 {
 		t.Fatalf("expected no failures, got %d", len(failed))

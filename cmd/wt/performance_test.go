@@ -15,6 +15,7 @@ import (
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/prcache"
+	"github.com/raphi011/wt/internal/prstatus"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/spf13/cobra"
 )
@@ -123,8 +124,9 @@ func TestPerformanceMeasurements(t *testing.T) {
 						t.Fatalf("checkout contents: %v", got)
 					}
 				case "refresh":
-					if failed := refreshPRs(ctx, wts, prcache.New(), nil, &config.ForgeConfig{Rules: []config.ForgeRule{{Pattern: "org/*", User: "fixture"}}}); len(failed) != 0 {
-						t.Fatalf("refresh failed: %v", failed)
+					result, err := prstatus.Load(ctx, wts, &config.Config{RegistryPath: regPath, Forge: config.ForgeConfig{Rules: []config.ForgeRule{{Pattern: "org/*", User: "fixture"}}}}, prstatus.Options{Refresh: true, Reset: true})
+					if err != nil || len(result.FailedBranches) != 0 || result.SaveError != nil {
+						t.Fatalf("refresh result=%+v error=%v", result, err)
 					}
 				}
 				times = append(times, time.Since(start))
@@ -153,7 +155,11 @@ func TestRefreshSessionSubprocessCounts(t *testing.T) {
 	t.Setenv("WT_PERF_VERIFY_TOKEN", "1")
 	events := filepath.Join(t.TempDir(), "events")
 	t.Setenv("WT_PERF_EVENTS", events)
-	cfg := &config.ForgeConfig{Rules: []config.ForgeRule{{Pattern: "alice/*", User: "alice"}, {Pattern: "bob/*", User: "bob"}}}
+	cfg := &config.Config{RegistryPath: filepath.Join(t.TempDir(), "repos.json"), Hosts: map[string]string{"lab.example": "gitlab"}, Forge: config.ForgeConfig{Rules: []config.ForgeRule{{Pattern: "alice/*", User: "alice"}, {Pattern: "bob/*", User: "bob"}}}}
+	cachePath, err := cfg.GetPRCachePath()
+	if err != nil {
+		t.Fatal(err)
+	}
 	var wts []git.Worktree
 	for i, url := range []string{
 		"https://github.com/alice/a.git", "git@github.com-personal:alice/b.git",
@@ -165,10 +171,21 @@ func TestRefreshSessionSubprocessCounts(t *testing.T) {
 			wts = append(wts, git.Worktree{RepoPath: fmt.Sprintf("/repo/%d", i), Branch: fmt.Sprintf("local-%d", j), UpstreamBranch: fmt.Sprintf("remote-%d", j), OriginURL: url, HasUpstream: true})
 		}
 	}
-	cache := prcache.New()
+	cache := prcache.LoadFrom(cachePath)
 	cache.Set(prcache.CacheKey(wts[0].RepoPath, wts[0].Branch), &forge.PRInfo{Fetched: true, State: forge.PRStateMerged})
 	wts = append(wts, git.Worktree{Branch: "no-origin", HasUpstream: true}, git.Worktree{Branch: "no-upstream", OriginURL: wts[0].OriginURL})
-	failed := refreshPRs(context.Background(), wts, cache, map[string]string{"lab.example": "gitlab"}, cfg)
+	if err := cache.Save(); err != nil {
+		t.Fatal(err)
+	}
+	result, err := prstatus.Load(context.Background(), wts, cfg, prstatus.Options{Refresh: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed := result.FailedBranches
+	cache = prcache.LoadFrom(cachePath)
+	if result.SaveError != nil {
+		t.Fatal(result.SaveError)
+	}
 	if len(failed) != 0 {
 		t.Fatalf("failed: %v", failed)
 	}
@@ -198,8 +215,15 @@ func TestRefreshSessionSubprocessCounts(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("WT_PERF_FAIL", "auth")
-	cache = prcache.New()
-	failed = refreshPRs(context.Background(), wts, cache, map[string]string{"lab.example": "gitlab"}, cfg)
+	result, err = prstatus.Load(context.Background(), wts, cfg, prstatus.Options{Refresh: true, Reset: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SaveError != nil {
+		t.Fatal(result.SaveError)
+	}
+	failed = result.FailedBranches
+	cache = prcache.LoadFrom(cachePath)
 	data = readCalls(t, calls)
 	if len(failed) != 21 || len(cache.PRs) != 0 || strings.Count(data, "auth status") != 5 || strings.Contains(data, "pr list") || strings.Contains(data, "mr list") {
 		t.Fatalf("failure caching: failed=%d cache=%d calls=%s", len(failed), len(cache.PRs), data)
@@ -208,8 +232,15 @@ func TestRefreshSessionSubprocessCounts(t *testing.T) {
 		t.Fatal("failures are not sorted")
 	}
 	t.Setenv("WT_PERF_FAIL", "query")
-	cache = prcache.New()
-	failed = refreshPRs(context.Background(), wts, cache, map[string]string{"lab.example": "gitlab"}, cfg)
+	result, err = prstatus.Load(context.Background(), wts, cfg, prstatus.Options{Refresh: true, Reset: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SaveError != nil {
+		t.Fatal(result.SaveError)
+	}
+	failed = result.FailedBranches
+	cache = prcache.LoadFrom(cachePath)
 	if len(failed) != 7 || len(cache.PRs) != 14 {
 		t.Fatalf("partial query failure: failed=%d cache=%d", len(failed), len(cache.PRs))
 	}
@@ -299,7 +330,9 @@ func TestLabelCompletionBoundedAndStable(t *testing.T) {
 	if len(got) != 0 || readCalls(t, calls) != "" {
 		t.Fatal("cancelled completion scheduled work")
 	}
-	refreshPRs(cancelled, []git.Worktree{{RepoPath: "/repo", Branch: "main", OriginURL: "https://github.com/org/repo", HasUpstream: true}}, prcache.New(), nil, nil)
+	if _, err := prstatus.Load(cancelled, []git.Worktree{{RepoPath: "/repo", Branch: "main", OriginURL: "https://github.com/org/repo", HasUpstream: true}}, &config.Config{RegistryPath: filepath.Join(t.TempDir(), "repos.json")}, prstatus.Options{Refresh: true}); err != nil {
+		t.Fatal(err)
+	}
 	if readCalls(t, calls) != "" {
 		t.Fatal("cancelled refresh scheduled work")
 	}
@@ -308,9 +341,18 @@ func TestLabelCompletionBoundedAndStable(t *testing.T) {
 func TestRefreshMissingTool(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	wts := []git.Worktree{{RepoPath: "/repo", Branch: "main", OriginURL: "https://github.com/org/repo", HasUpstream: true}, {RepoPath: "/lab", Branch: "feature", OriginURL: "https://gitlab.com/org/repo", HasUpstream: true}}
-	cache := prcache.New()
-	if failed := refreshPRs(context.Background(), wts, cache, nil, nil); !slices.Equal(failed, []string{"feature", "main"}) || len(cache.PRs) != 0 {
-		t.Fatalf("failed=%v cache=%v", failed, cache.PRs)
+	cfg := &config.Config{RegistryPath: filepath.Join(t.TempDir(), "repos.json")}
+	result, err := prstatus.Load(context.Background(), wts, cfg, prstatus.Options{Refresh: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cachePath, err := cfg.GetPRCachePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache := prcache.LoadFrom(cachePath)
+	if !slices.Equal(result.FailedBranches, []string{"feature", "main"}) || len(cache.PRs) != 0 {
+		t.Fatalf("failed=%v cache=%v", result.FailedBranches, cache.PRs)
 	}
 }
 
@@ -331,6 +373,8 @@ func TestPerformanceCancellationStopsScheduling(t *testing.T) {
 				wts = append(wts, git.Worktree{RepoPath: path, Branch: "main", OriginURL: "https://github.com/org/repo", HasUpstream: true})
 			}
 			done := make(chan struct{})
+			loadErrors := make(chan error, 1)
+			refreshConfig := &config.Config{RegistryPath: filepath.Join(t.TempDir(), "repos.json")}
 			go func() {
 				defer close(done)
 				switch mode {
@@ -339,7 +383,8 @@ func TestPerformanceCancellationStopsScheduling(t *testing.T) {
 				case "branches":
 					git.ListAvailableBranchesForRepos(ctx, refs)
 				case "refresh":
-					refreshPRs(ctx, wts, prcache.New(), nil, nil)
+					_, err := prstatus.Load(ctx, wts, refreshConfig, prstatus.Options{Refresh: true})
+					loadErrors <- err
 				}
 			}()
 			deadline := time.Now().Add(3 * time.Second)
@@ -359,6 +404,11 @@ func TestPerformanceCancellationStopsScheduling(t *testing.T) {
 			cancel()
 			select {
 			case <-done:
+				if mode == "refresh" {
+					if err := <-loadErrors; err != nil {
+						t.Fatal(err)
+					}
+				}
 			case <-time.After(3 * time.Second):
 				t.Fatal("cancellation did not stop loading")
 			}
@@ -382,8 +432,9 @@ func TestRefreshUpstreamReadsScaleWithRepos(t *testing.T) {
 	if len(warnings) != 0 || len(wts) != 30 {
 		t.Fatalf("worktrees=%d warnings=%v", len(wts), warnings)
 	}
-	if failed := refreshPRs(ctx, wts, prcache.New(), nil, nil); len(failed) != 0 {
-		t.Fatalf("failed: %v", failed)
+	result, err := prstatus.Load(ctx, wts, &config.Config{RegistryPath: filepath.Join(t.TempDir(), "repos.json")}, prstatus.Options{Refresh: true})
+	if err != nil || len(result.FailedBranches) != 0 || result.SaveError != nil {
+		t.Fatalf("refresh result=%+v error=%v", result, err)
 	}
 	data := readCalls(t, calls)
 	for fragment, want := range map[string]int{"git config --get-regexp": 10, "git config branch.": 0, "--head remote-main": 10, "--head remote-one": 10, "--head remote-two": 10, "auth status": 1, "gh pr list": 30} {

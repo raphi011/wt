@@ -13,6 +13,7 @@ import (
 	"charm.land/lipgloss/v2/table"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/ui/styles"
 )
@@ -23,12 +24,12 @@ var WorktreeTableHeaders = []string{"REPO", "BRANCH", "COMMIT", "AGE", "PR", "NO
 // WorktreeTableRow formats a git.Worktree as a table row matching WorktreeTableHeaders.
 // staleDays controls stale highlighting: if > 0 and the commit is older than staleDays,
 // the AGE cell is rendered with WarningStyle. Set to 0 to disable.
-func WorktreeTableRow(wt git.Worktree, staleDays int, hyperlinks bool) []string {
+func WorktreeTableRow(wt git.Worktree, status forge.PRInfo, staleDays int, hyperlinks bool) []string {
 	commit := wt.CommitHash
 	if len(commit) > 7 {
 		commit = commit[:7]
 	}
-	pr := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.PRDraft, wt.PRURL, hyperlinks)
+	pr := styles.FormatPRRef(status.Number, status.State, status.IsDraft, status.URL, hyperlinks)
 
 	age := wt.CommitAge
 	if staleDays > 0 && !wt.CommitDate.IsZero() &&

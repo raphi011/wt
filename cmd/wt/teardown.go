@@ -8,14 +8,15 @@ import (
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/log"
-	"github.com/raphi011/wt/internal/prcache"
+	"github.com/raphi011/wt/internal/prstatus"
 )
 
 // teardownOpts controls removeWorktree.
 type teardownOpts struct {
-	Force        bool           // pass --force to git worktree remove
-	DeleteBranch bool           // delete the local branch after the worktree is removed
-	PRCache      *prcache.Cache // the worktree's entry is deleted, the caller saves; nil to skip
+	Force        bool             // pass --force to git worktree remove
+	DeleteBranch bool             // delete the local branch after the worktree is removed
+	PRStatus     *prstatus.Result // the cache entry is deleted and persisted; nil to skip
+	PR           forge.PRInfo     // status used to decide whether branch deletion can be forced
 }
 
 // removeWorktree removes a worktree, its PR cache entry and, with
@@ -28,15 +29,17 @@ func removeWorktree(ctx context.Context, wt git.Worktree, opts teardownOpts) err
 		return err
 	}
 
-	if opts.PRCache != nil {
-		opts.PRCache.Delete(prcache.CacheKey(wt.RepoPath, wt.Branch))
+	if opts.PRStatus != nil {
+		if err := opts.PRStatus.Forget(wt); err != nil {
+			l.Printf("Warning: failed to save PR cache after removal: %v\n", err)
+		}
 	}
 
 	if opts.DeleteBranch {
 		// Force delete if forge confirmed merge (handles squash merges),
 		// safe delete (-d) otherwise (including locally-merged branches,
 		// where git's own ancestry check in -d provides a safety net).
-		forceDelete := wt.PRState == forge.PRStateMerged
+		forceDelete := opts.PR.State == forge.PRStateMerged
 		if err := git.DeleteLocalBranch(ctx, wt.RepoPath, wt.Branch, forceDelete); err != nil {
 			l.Printf("Warning: failed to delete branch %s: %v\n", wt.Branch, err)
 		} else {

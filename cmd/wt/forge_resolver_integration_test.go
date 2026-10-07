@@ -14,7 +14,7 @@ import (
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/forge/forgetest"
 	"github.com/raphi011/wt/internal/git"
-	"github.com/raphi011/wt/internal/prcache"
+	"github.com/raphi011/wt/internal/prstatus"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -151,14 +151,17 @@ func TestRefreshPRs_InjectedResolver(t *testing.T) {
 		{RepoPath: repoPath, Branch: "local-feature", OriginURL: originURL, HasUpstream: true, UpstreamBranch: "remote-feature"},
 		{RepoPath: repoPath, Branch: "second", OriginURL: originURL, HasUpstream: true},
 	}
-	cache := prcache.New()
-
-	if failed := refreshPRs(ctx, worktrees, cache, cfg.Hosts, &cfg.Forge); len(failed) != 0 {
-		t.Fatalf("PR refresh failed for branches: %v", failed)
+	result, err := prstatus.Load(ctx, worktrees, cfg, prstatus.Options{Refresh: true})
+	if err != nil {
+		t.Fatalf("load PR status: %v", err)
 	}
-	for branch, number := range map[string]int{"local-feature": 207, "second": 208} {
-		pr := cache.Get(prcache.CacheKey(repoPath, branch))
-		if pr == nil || pr.Number != number || !pr.Fetched {
+	if len(result.FailedBranches) != 0 || result.SaveError != nil {
+		t.Fatalf("PR refresh failed: branches=%v save=%v", result.FailedBranches, result.SaveError)
+	}
+	for i, number := range []int{207, 208} {
+		branch := worktrees[i].Branch
+		pr := result.For(worktrees[i])
+		if pr.Number != number || !pr.Fetched {
 			t.Errorf("cached PR for %q = %+v, want fetched PR %d", branch, pr, number)
 		}
 	}

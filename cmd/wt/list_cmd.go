@@ -79,24 +79,9 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 				l.Printf("Warning: %s: %v\n", w.RepoName, w.Err)
 			}
 
-			// Load PR cache
-			prCache, err := loadPRCache(cfg)
+			status, err := loadWorktreePRStatus(ctx, allWorktrees, refresh, false)
 			if err != nil {
 				return err
-			}
-
-			// Refresh PR status if requested
-			if refresh {
-				if failed := refreshPRs(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge); len(failed) > 0 {
-					l.Printf("Warning: failed to fetch PR status for: %v\n", failed)
-				}
-			}
-
-			populatePRFields(allWorktrees, prCache)
-
-			// Save PR cache if modified
-			if err := prCache.Save(); err != nil {
-				l.Printf("Warning: failed to save PR cache: %v\n", err)
 			}
 
 			// Apply config default when --sort not explicitly set
@@ -130,7 +115,15 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 			if jsonOutput {
 				enc := json.NewEncoder(out.Writer())
 				enc.SetIndent("", "  ")
-				return enc.Encode(allWorktrees)
+				var rows []worktreeJSON
+				if allWorktrees != nil {
+					rows = make([]worktreeJSON, 0, len(allWorktrees))
+				}
+				for _, wt := range allWorktrees {
+					pr := status.For(wt)
+					rows = append(rows, worktreeJSON{Worktree: wt, PRNumber: pr.Number, PRState: pr.State, PRURL: pr.URL, PRDraft: pr.IsDraft})
+				}
+				return enc.Encode(rows)
 			}
 
 			// Table output
@@ -143,7 +136,7 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 			var rows [][]string
 			hyperlinks := out.HyperlinksSupported()
 			for _, wt := range allWorktrees {
-				rows = append(rows, static.WorktreeTableRow(wt, cfg.Prune.StaleDays, hyperlinks))
+				rows = append(rows, static.WorktreeTableRow(wt, status.For(wt), cfg.Prune.StaleDays, hyperlinks))
 			}
 
 			out.Print(static.RenderTableAtWidth(static.WorktreeTableHeaders, rows, out.TerminalWidth()))
@@ -164,4 +157,13 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 	}))
 
 	return cmd
+}
+
+// worktreeJSON preserves list's public PR keys while git data stays forge-independent.
+type worktreeJSON struct {
+	git.Worktree
+	PRNumber int    `json:"pr_number,omitempty"`
+	PRState  string `json:"pr_state,omitempty"`
+	PRURL    string `json:"pr_url,omitempty"`
+	PRDraft  bool   `json:"pr_draft,omitempty"`
 }

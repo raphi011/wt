@@ -16,7 +16,7 @@ import (
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
-	"github.com/raphi011/wt/internal/prcache"
+	"github.com/raphi011/wt/internal/prstatus"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/static"
 	"github.com/raphi011/wt/internal/ui/styles"
@@ -131,26 +131,10 @@ never removed without -f.`,
 				return nil
 			}
 
-			// Load PR cache
-			prCache, err := loadPRCache(cfg)
+			status, err := loadWorktreePRStatus(ctx, allWorktrees, refresh, resetCache)
 			if err != nil {
 				return err
 			}
-
-			// Reset cache if requested
-			if resetCache {
-				prCache.Reset()
-				l.Println("Cache reset: PR info cleared")
-			}
-
-			// Refresh PR status if requested
-			if refresh {
-				if failed := refreshPRs(ctx, allWorktrees, prCache, cfg.Hosts, &cfg.Forge); len(failed) > 0 {
-					l.Printf("Warning: failed to fetch PR status for: %v\n", failed)
-				}
-			}
-
-			populatePRFields(allWorktrees, prCache)
 
 			// Sort by repo name
 			slices.SortFunc(allWorktrees, func(a, b git.Worktree) int {
@@ -173,7 +157,7 @@ never removed without -f.`,
 			now := time.Now()
 			reasons := make([]removalReason, len(allWorktrees))
 			for i, wt := range allWorktrees {
-				reasons[i] = removalReasonFor(wt, staleDays, now)
+				reasons[i] = removalReasonFor(wt, status.For(wt), staleDays, now)
 				if reasons[i] != removalNone {
 					toRemove = append(toRemove, wt)
 				} else {
@@ -185,7 +169,8 @@ never removed without -f.`,
 			if interactive {
 				wizardInfos := make([]flows.PruneWorktreeInfo, 0, len(allWorktrees))
 				for i, wt := range allWorktrees {
-					reason := styles.FormatPRState(wt.PRState, wt.PRDraft)
+					pr := status.For(wt)
+					reason := styles.FormatPRState(pr.State, pr.IsDraft)
 					if reasons[i] == removalStale {
 						reason = styles.FormatStaleReason(wt.CommitAge)
 					}
@@ -198,6 +183,7 @@ never removed without -f.`,
 						IsStale:    reasons[i] == removalStale,
 						IsDirty:    isWorktreeDirty(ctx, wt),
 						Worktree:   wt,
+						PR:         pr,
 					})
 				}
 
@@ -255,7 +241,7 @@ never removed without -f.`,
 				DeleteBranches:         shouldDeleteBranches,
 				DeleteBranchesExplicit: deleteBranchesExplicit,
 				Hooks:                  hf,
-				PRCache:                prCache,
+				PRStatus:               status,
 			})
 
 			// Print summary: a dry-run preview is data (stdout), the result of
@@ -281,14 +267,9 @@ never removed without -f.`,
 				var rows [][]string
 				hyperlinks := out.HyperlinksSupported()
 				for _, wt := range removed {
-					rows = append(rows, static.WorktreeTableRow(wt, cfg.Prune.StaleDays, hyperlinks))
+					rows = append(rows, static.WorktreeTableRow(wt, status.For(wt), cfg.Prune.StaleDays, hyperlinks))
 				}
 				out.Print(static.RenderTableAtWidth(static.WorktreeTableHeaders, rows, out.TerminalWidth()))
-			}
-
-			// Save PR cache once at the end
-			if err := prCache.Save(); err != nil {
-				l.Printf("Warning: failed to save cache: %v\n", err)
 			}
 
 			return nil
@@ -317,7 +298,7 @@ type pruneOpts struct {
 	DeleteBranches         bool
 	DeleteBranchesExplicit bool // true when --delete-branches or --no-delete-branches was passed
 	Hooks                  hookFlags
-	PRCache                *prcache.Cache
+	PRStatus               *prstatus.Result
 	RefreshPR              bool // targeted prune: fetch PR status before checking prunability
 	ResetCache             bool // targeted prune: clear the PR cache first
 }
@@ -334,11 +315,11 @@ const (
 // removalReasonFor decides whether wt may be removed without --force.
 // The stale rule is off with staleDays <= 0. Worktrees with an open PR are
 // never stale: active work is always protected.
-func removalReasonFor(wt git.Worktree, staleDays int, now time.Time) removalReason {
-	if wt.PRState == forge.PRStateMerged {
+func removalReasonFor(wt git.Worktree, pr forge.PRInfo, staleDays int, now time.Time) removalReason {
+	if pr.State == forge.PRStateMerged {
 		return removalMerged
 	}
-	if staleDays <= 0 || wt.CommitDate.IsZero() || wt.PRState == forge.PRStateOpen {
+	if staleDays <= 0 || wt.CommitDate.IsZero() || pr.State == forge.PRStateOpen {
 		return removalNone
 	}
 	if now.Sub(wt.CommitDate) > time.Duration(staleDays)*24*time.Hour {
@@ -382,40 +363,17 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 		}
 	}
 
-	// Enrich with merge info to determine if force is needed
-	cfg := config.FromContext(ctx)
-	prCache, err := loadPRCache(cfg)
+	status, err := loadWorktreePRStatus(ctx, toRemove, opts.RefreshPR, opts.ResetCache)
 	if err != nil {
 		return err
 	}
-
-	if opts.ResetCache {
-		prCache.Reset()
-		l.Println("Cache reset: PR info cleared")
-	}
-
-	if opts.RefreshPR {
-		if failed := refreshPRs(ctx, toRemove, prCache, cfg.Hosts, &cfg.Forge); len(failed) > 0 {
-			l.Printf("Warning: failed to fetch PR status for: %v\n", failed)
-		}
-	}
-
-	// Save now: the checks below may return before any worktree is removed
-	if opts.ResetCache || opts.RefreshPR {
-		if err := prCache.Save(); err != nil {
-			l.Printf("Warning: failed to save cache: %v\n", err)
-		}
-	}
-
-	// Enrich with PR state from cache
-	populatePRFields(toRemove, prCache)
 
 	// Require force only when at least one target is not prunable
 	if !force {
 		now := time.Now()
 		var unprunable []string
 		for _, wt := range toRemove {
-			if removalReasonFor(wt, 0, now) == removalNone {
+			if removalReasonFor(wt, status.For(wt), 0, now) == removalNone {
 				unprunable = append(unprunable, wt.RepoName+":"+wt.Branch)
 			}
 		}
@@ -444,7 +402,7 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 		return nil
 	}
 
-	opts.PRCache = prCache
+	opts.PRStatus = status
 	removed, failed := pruneWorktrees(ctx, toRemove, opts)
 
 	for _, wt := range removed {
@@ -452,11 +410,6 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 	}
 	for _, wt := range failed {
 		l.Printf("Failed to remove: %s:%s (%s)\n", wt.RepoName, wt.Branch, wt.Path)
-	}
-
-	// Save PR cache (entries may have been deleted during removal)
-	if err := prCache.Save(); err != nil {
-		l.Printf("Warning: failed to save cache: %v\n", err)
 	}
 
 	if len(failed) > 0 {
@@ -532,7 +485,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 				shouldDelete = effCfg.Prune.DeleteLocalBranches
 			}
 			// Force: the caller checked for uncommitted changes, or the user passed --force
-			err := removeWorktree(ctx, wt, teardownOpts{Force: true, DeleteBranch: shouldDelete, PRCache: opts.PRCache})
+			err := removeWorktree(ctx, wt, teardownOpts{Force: true, DeleteBranch: shouldDelete, PRStatus: opts.PRStatus, PR: opts.PRStatus.For(wt)})
 			if err != nil {
 				return fmt.Errorf("failed to remove %s: %w", wt.Path, err)
 			}
