@@ -24,8 +24,8 @@ Generated: 2026-10-07
 | [prcheckoutwizardparams](#prcheckoutwizardparams) | 1 |
 | [prcreate](#prcreate) | 3 |
 | [preservefiles](#preservefiles) | 1 |
-| [prmerge](#prmerge) | 7 |
-| [prview](#prview) | 2 |
+| [prmerge](#prmerge) | 8 |
+| [prview](#prview) | 3 |
 | [refreshprs](#refreshprs) | 1 |
 | [removeworktree](#removeworktree) | 1 |
 | [repoadd](#repoadd) | 8 |
@@ -45,7 +45,7 @@ Generated: 2026-10-07
 | [wt list](#wt-list) | 14 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 50 |
-| **Total** | **353** |
+| **Total** | **355** |
 
 ## completebasebranches
 
@@ -220,6 +220,7 @@ Generated: 2026-10-07
 
 | Test | Description |
 |------|-------------|
+| `TestPrMerge_UsesUpstreamBranch` | Selects the PR source branch while preserving local identity. |
 | `TestPrMerge_NotInGitRepo` | Tests error when running pr merge outside a git repo. |
 | `TestPrMerge_RepoNotFound` | Tests error when specified repo doesn't exist. |
 | `TestPrMerge_HookNoHookMutuallyExclusive` | Tests that --hook and --no-hook cannot both be used. |
@@ -232,6 +233,7 @@ Generated: 2026-10-07
 
 | Test | Description |
 |------|-------------|
+| `TestPrView_UsesUpstreamBranch` | Displays the PR for the configured source branch. |
 | `TestPrView_NotInGitRepo` | Tests error when running pr view outside a git repo. |
 | `TestPrView_RepoNotFound` | Tests error when specified repo doesn't exist. |
 

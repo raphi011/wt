@@ -53,6 +53,13 @@ type repoForgeResult struct {
 	branch    string // current branch
 }
 
+func (r *repoForgeResult) prBranch(ctx context.Context) string {
+	return prstatus.Branch(git.Worktree{
+		Branch:         r.branch,
+		UpstreamBranch: git.GetUpstreamBranch(ctx, r.repo.Path, r.branch),
+	})
+}
+
 // resolveRepoForge loads registry, resolves repo from optional arg or cwd,
 // resolves effective config, gets origin URL, detects/checks forge,
 // and resolves the current branch.
@@ -506,9 +513,10 @@ With prune.delete_local_branches, the local branch is deleted with the worktree.
 			l.Debug("pr merge", "branch", res.branch, "strategy", strategy)
 
 			// Get PR for branch
-			pr, err := res.forge.GetPRForBranch(ctx, res.originURL, res.branch)
+			prBranch := res.prBranch(ctx)
+			pr, err := res.forge.GetPRForBranch(ctx, res.originURL, prBranch)
 			if err != nil {
-				return fmt.Errorf("no PR found for branch %s: %w", res.branch, err)
+				return fmt.Errorf("no PR found for branch %s: %w", prBranch, err)
 			}
 
 			// Load PR cache for updates
@@ -608,9 +616,10 @@ func newPrViewCmd() *cobra.Command {
 			l.Debug("pr view", "branch", res.branch)
 
 			// Get PR for branch
-			pr, err := res.forge.GetPRForBranch(ctx, res.originURL, res.branch)
+			prBranch := res.prBranch(ctx)
+			pr, err := res.forge.GetPRForBranch(ctx, res.originURL, prBranch)
 			if err != nil {
-				return fmt.Errorf("no PR found for branch %s", res.branch)
+				return fmt.Errorf("no PR found for branch %s", prBranch)
 			}
 
 			if web {
