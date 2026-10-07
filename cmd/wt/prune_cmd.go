@@ -13,7 +13,6 @@ import (
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
-	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
@@ -251,10 +250,7 @@ never removed without -f.`,
 				shouldDeleteBranches = false
 			}
 
-			// Remove worktrees using shared helper
-			// For auto-prune (merged PRs), force=true is implicit
 			removed, failed := pruneWorktrees(ctx, toRemove, pruneOpts{
-				Force:                  true,
 				DryRun:                 dryRun,
 				DeleteBranches:         shouldDeleteBranches,
 				DeleteBranchesExplicit: deleteBranchesExplicit,
@@ -317,7 +313,6 @@ never removed without -f.`,
 
 // pruneOpts holds options for pruneWorktrees to avoid a long positional parameter list.
 type pruneOpts struct {
-	Force                  bool
 	DryRun                 bool
 	DeleteBranches         bool
 	DeleteBranchesExplicit bool // true when --delete-branches or --no-delete-branches was passed
@@ -449,9 +444,6 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 		return nil
 	}
 
-	// Force=true for git worktree remove: we already validated merge status above,
-	// or the user explicitly passed --force.
-	opts.Force = true
 	opts.PRCache = prCache
 	removed, failed := pruneWorktrees(ctx, toRemove, opts)
 
@@ -513,12 +505,6 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 	}
 
 	l := log.FromContext(ctx)
-	cfg := config.FromContext(ctx)
-
-	histPath, err := cfg.GetHistoryPath()
-	if err != nil {
-		l.Printf("Warning: failed to determine history path: %v\n", err)
-	}
 
 	if err := opts.Hooks.parseArgs(); err != nil {
 		l.Printf("Warning: failed to parse hook env, skipping hooks: %v\n", err)
@@ -540,34 +526,18 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 
 		wtRemoved := false
 		err = withHooks(ctx, hp, func() error {
-			if err := git.RemoveWorktree(ctx, wt, opts.Force); err != nil {
-				return fmt.Errorf("failed to remove %s: %w", wt.Path, err)
-			}
-			wtRemoved = true
-
-			// Remove from PR cache
-			if opts.PRCache != nil {
-				opts.PRCache.Delete(prcache.CacheKey(wt.RepoPath, wt.Branch))
-			}
-
-			removed = append(removed, wt)
-
 			// Delete local branch if enabled (per-repo config unless CLI flag was explicit)
 			shouldDelete := opts.DeleteBranches
 			if !opts.DeleteBranchesExplicit {
 				shouldDelete = effCfg.Prune.DeleteLocalBranches
 			}
-			if shouldDelete {
-				// Force delete if forge confirmed merge (handles squash merges),
-				// safe delete (-d) otherwise (including locally-merged branches,
-				// where git's own ancestry check in -d provides a safety net).
-				forceDelete := wt.PRState == forge.PRStateMerged
-				if err := git.DeleteLocalBranch(ctx, wt.RepoPath, wt.Branch, forceDelete); err != nil {
-					l.Printf("Warning: failed to delete branch %s: %v\n", wt.Branch, err)
-				} else {
-					l.Debug("deleted branch", "branch", wt.Branch)
-				}
+			// Force: the caller checked for uncommitted changes, or the user passed --force
+			err := removeWorktree(ctx, wt, teardownOpts{Force: true, DeleteBranch: shouldDelete, PRCache: opts.PRCache})
+			if err != nil {
+				return fmt.Errorf("failed to remove %s: %w", wt.Path, err)
 			}
+			wtRemoved = true
+			removed = append(removed, wt)
 			return nil
 		})
 		switch {
@@ -581,29 +551,7 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		}
 	}
 
-	// Remove pruned worktrees from history
-	if histPath != "" && len(removed) > 0 {
-		err := history.Update(histPath, func(h *history.History) error {
-			for _, wt := range removed {
-				h.RemoveByPath(wt.Path)
-			}
-			return nil
-		})
-		if err != nil {
-			l.Printf("Warning: failed to save history after prune: %v\n", err)
-		}
-	}
-
-	// Prune stale references
-	processedRepos := make(map[string]bool)
-	for _, wt := range removed {
-		if !processedRepos[wt.RepoPath] {
-			if err := git.PruneWorktrees(ctx, wt.RepoPath); err != nil {
-				l.Printf("Warning: failed to prune stale references in %s: %v\n", wt.RepoPath, err)
-			}
-			processedRepos[wt.RepoPath] = true
-		}
-	}
+	forgetWorktrees(ctx, removed)
 
 	return removed, failed
 }

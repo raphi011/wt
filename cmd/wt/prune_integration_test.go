@@ -907,7 +907,6 @@ func TestPrune_ForceDeleteBranch_MergedPRState(t *testing.T) {
 	}
 
 	removed, failed := pruneWorktrees(ctx, toRemove, pruneOpts{
-		Force:                  true,
 		DeleteBranches:         true,
 		DeleteBranchesExplicit: true,
 	})
@@ -1087,9 +1086,7 @@ func TestPrune_StaleFlag_MergedAlwaysPruned(t *testing.T) {
 		},
 	}
 
-	removed, failed := pruneWorktrees(ctx, toRemove, pruneOpts{
-		Force: true,
-	})
+	removed, failed := pruneWorktrees(ctx, toRemove, pruneOpts{})
 
 	if len(failed) > 0 {
 		t.Fatalf("expected no failures, got %d", len(failed))

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -1134,5 +1135,81 @@ func TestPrMerge_InvalidArg(t *testing.T) {
 	}
 	if _, err := os.Stat(wtPath); err != nil {
 		t.Errorf("worktree should be kept: %v", err)
+	}
+}
+
+// TestPrMerge_RemovesHistoryEntry tests that pr merge forgets the removed worktree.
+//
+// Scenario: User runs `wt pr merge` in a worktree whose PR is already merged
+// Expected: The worktree is removed and its history entry is dropped
+func TestPrMerge_RemovesHistoryEntry(t *testing.T) {
+	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
+	fakeGHMergedPR(t)
+
+	cfg, repoPath, wtPath := setupMergedWorktree(t)
+	cfg.HistoryPath = filepath.Join(t.TempDir(), "history.json")
+
+	if err := history.RecordAccess(wtPath, "test-repo", "feature", cfg.HistoryPath); err != nil {
+		t.Fatalf("failed to record history: %v", err)
+	}
+	if err := history.RecordAccess(repoPath, "test-repo", "main", cfg.HistoryPath); err != nil {
+		t.Fatalf("failed to record history: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, cfg, wtPath)
+	cmd := newPrMergeCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("pr merge command failed: %v", err)
+	}
+
+	if _, err := os.Stat(wtPath); err == nil {
+		t.Error("worktree should be removed after pr merge")
+	}
+	hist, err := history.Load(cfg.HistoryPath)
+	if err != nil {
+		t.Fatalf("failed to load history: %v", err)
+	}
+	if hist.FindByPath(wtPath) != nil {
+		t.Error("removed worktree should be removed from history")
+	}
+	if hist.FindByPath(repoPath) == nil {
+		t.Error("history entry of the main repo should be kept")
+	}
+}
+
+// TestPrMerge_DeleteLocalBranch tests that pr merge follows prune.delete_local_branches.
+//
+// Scenario: User runs `wt pr merge` in a worktree whose PR is already merged,
+// with delete_local_branches on and off
+// Expected: The local branch is deleted only when delete_local_branches is on
+func TestPrMerge_DeleteLocalBranch(t *testing.T) {
+	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
+	fakeGHMergedPR(t)
+
+	for _, deleteBranches := range []bool{true, false} {
+		t.Run(fmt.Sprintf("delete_local_branches=%v", deleteBranches), func(t *testing.T) {
+			cfg, repoPath, wtPath := setupMergedWorktree(t)
+			cfg.Prune.DeleteLocalBranches = deleteBranches
+
+			ctx := testContextWithConfig(t, cfg, wtPath)
+			cmd := newPrMergeCmd()
+			cmd.SetContext(ctx)
+			cmd.SetArgs([]string{})
+
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("pr merge command failed: %v", err)
+			}
+
+			if _, err := os.Stat(wtPath); err == nil {
+				t.Error("worktree should be removed after pr merge")
+			}
+			_, err := runGitCommand(repoPath, "rev-parse", "--verify", "--quiet", "refs/heads/feature")
+			if exists := err == nil; exists == deleteBranches {
+				t.Errorf("branch exists = %v with delete_local_branches = %v", exists, deleteBranches)
+			}
+		})
 	}
 }

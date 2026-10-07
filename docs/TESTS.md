@@ -16,13 +16,15 @@ Generated: 2026-10-07
 | [currentrepo](#currentrepo) | 3 |
 | [diff](#diff) | 13 |
 | [forge](#forge) | 9 |
+| [forgetworktrees](#forgetworktrees) | 1 |
 | [hook](#hook) | 10 |
 | [init](#init) | 4 |
 | [prcheckout](#prcheckout) | 15 |
 | [prcreate](#prcreate) | 3 |
 | [preservefiles](#preservefiles) | 1 |
-| [prmerge](#prmerge) | 5 |
+| [prmerge](#prmerge) | 7 |
 | [prview](#prview) | 2 |
+| [removeworktree](#removeworktree) | 1 |
 | [repoadd](#repoadd) | 8 |
 | [repoclone](#repoclone) | 13 |
 | [repoconvertbare](#repoconvertbare) | 18 |
@@ -38,7 +40,7 @@ Generated: 2026-10-07
 | [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 50 |
-| **Total** | **334** |
+| **Total** | **338** |
 
 ## completebasebranches
 
@@ -130,6 +132,12 @@ Generated: 2026-10-07
 | `TestForge_CloneBareRepo_InvalidSpec` | Verifies error handling for invalid repo specs |
 | `TestForge_PRWorkflow` | Verifies the full PR lifecycle: create, view, get branch, merge. |
 
+## forgetworktrees
+
+| Test | Description |
+|------|-------------|
+| `TestForgetWorktrees` | Tests the cleanup after worktrees were removed. |
+
 ## hook
 
 | Test | Description |
@@ -197,6 +205,8 @@ Generated: 2026-10-07
 | `TestPrMerge_HookNoHookMutuallyExclusive` | Tests that --hook and --no-hook cannot both be used. |
 | `TestPrMerge_HookWithArg` | Tests that --arg values reach hooks run by pr merge. |
 | `TestPrMerge_InvalidArg` | Tests that pr merge reports a malformed --arg. |
+| `TestPrMerge_RemovesHistoryEntry` | Tests that pr merge forgets the removed worktree. |
+| `TestPrMerge_DeleteLocalBranch` | Tests that pr merge follows prune.delete_local_branches. |
 
 ## prview
 
@@ -204,6 +214,12 @@ Generated: 2026-10-07
 |------|-------------|
 | `TestPrView_NotInGitRepo` | Tests error when running pr view outside a git repo. |
 | `TestPrView_RepoNotFound` | Tests error when specified repo doesn't exist. |
+
+## removeworktree
+
+| Test | Description |
+|------|-------------|
+| `TestRemoveWorktree` | Tests the teardown shared by prune and pr merge. |
 
 ## repoadd
 
