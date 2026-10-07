@@ -445,3 +445,104 @@ func TestNote_UnscopedGitErrorWarns(t *testing.T) {
 		t.Errorf("expected warning for failing repo, got log: %q", logs.String())
 	}
 }
+
+// TestNoteSet_LabelContinuesAfterRepoFailure tests that a label note set continues past a failing repo.
+//
+// Scenario: User runs `wt note set "WIP" backend:feature` where git fails in the first backend repo
+// Expected: Note is set in the other repo and the error names the failed repo
+func TestNoteSet_LabelContinuesAfterRepoFailure(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	brokenPath := setupBrokenRepoDir(t, tmpDir, "broken")
+	repoPath := setupTestRepo(t, tmpDir, "svc-b")
+	createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "broken", Path: brokenPath, Labels: []string{"backend"}},
+			{Name: "svc-b", Path: repoPath, Labels: []string{"backend"}},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newNoteCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"set", "WIP", "backend:feature"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when note set fails in one repo")
+	}
+	if !strings.Contains(err.Error(), "broken:feature") {
+		t.Errorf("expected error to name broken:feature, got: %v", err)
+	}
+
+	note, err := runGitCommand(repoPath, "config", "branch.feature.description")
+	if err != nil {
+		t.Fatalf("failed to read git config: %v", err)
+	}
+	if strings.TrimSpace(note) != "WIP" {
+		t.Errorf("expected note 'WIP' in svc-b, got %q", strings.TrimSpace(note))
+	}
+}
+
+// TestNoteClear_LabelContinuesAfterRepoFailure tests that a label note clear continues past a failing repo.
+//
+// Scenario: User runs `wt note clear backend:feature` where git fails in the first backend repo
+// Expected: Note is cleared in the other repo and the error names the failed repo
+func TestNoteClear_LabelContinuesAfterRepoFailure(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	brokenPath := setupBrokenRepoDir(t, tmpDir, "broken")
+	repoPath := setupTestRepo(t, tmpDir, "svc-b")
+	createTestWorktree(t, repoPath, "feature")
+	if _, err := runGitCommand(repoPath, "config", "branch.feature.description", "WIP"); err != nil {
+		t.Fatalf("failed to set note: %v", err)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "broken", Path: brokenPath, Labels: []string{"backend"}},
+			{Name: "svc-b", Path: repoPath, Labels: []string{"backend"}},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newNoteCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"clear", "backend:feature"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when note clear fails in one repo")
+	}
+	if !strings.Contains(err.Error(), "broken:feature") {
+		t.Errorf("expected error to name broken:feature, got: %v", err)
+	}
+
+	if note, err := runGitCommand(repoPath, "config", "branch.feature.description"); err == nil {
+		t.Errorf("expected note to be cleared in svc-b, got %q", strings.TrimSpace(note))
+	}
+}

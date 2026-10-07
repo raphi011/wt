@@ -4404,3 +4404,127 @@ func TestCheckout_ScopedGitError(t *testing.T) {
 		t.Errorf("expected the worktree list error, got: %v", err)
 	}
 }
+
+// TestCheckout_LabelContinuesAfterRepoFailure tests that a label checkout continues past a failing repo.
+//
+// Scenario: User runs `wt checkout -b backend:feature` where the branch already exists in the first backend repo
+// Expected: Worktree is created in the other repo and the error names the failed repo
+func TestCheckout_LabelContinuesAfterRepoFailure(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repo1Path := setupTestRepoWithBranches(t, tmpDir, "api-server", []string{"feature"})
+	repo2Path := setupTestRepo(t, tmpDir, "auth-server")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "api-server", Path: repo1Path, Labels: []string{"backend"}, WorktreeFormat: "../{repo}-{branch}"},
+			{Name: "auth-server", Path: repo2Path, Labels: []string{"backend"}, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+	}
+
+	workingDir := filepath.Join(tmpDir, "work")
+	if err := os.MkdirAll(workingDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, cfg, workingDir)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "backend:feature"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when checkout fails in one repo")
+	}
+	if !strings.Contains(err.Error(), "api-server") {
+		t.Errorf("expected error to name api-server, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "auth-server") {
+		t.Errorf("expected error not to name auth-server, got: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(tmpDir, "api-server-feature")); err == nil {
+		t.Error("expected no worktree for api-server")
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "auth-server-feature")); os.IsNotExist(err) {
+		t.Error("expected worktree for auth-server to be created")
+	}
+}
+
+// TestCheckout_LabelExistingBranchContinuesAfterRepoFailure tests that a label checkout of an existing branch continues past a failing repo.
+//
+// Scenario: User runs `wt checkout backend:feature` where git fails in the first backend repo
+// Expected: Worktree is created in the other repo and the error names the failed repo
+func TestCheckout_LabelExistingBranchContinuesAfterRepoFailure(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	brokenPath := setupBrokenRepoDir(t, tmpDir, "broken")
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "auth-server", []string{"feature"})
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "broken", Path: brokenPath, Labels: []string{"backend"}, WorktreeFormat: "../{repo}-{branch}"},
+			{Name: "auth-server", Path: repoPath, Labels: []string{"backend"}, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+	}
+
+	workingDir := filepath.Join(tmpDir, "work")
+	if err := os.MkdirAll(workingDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, cfg, workingDir)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"backend:feature"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when checkout fails in one repo")
+	}
+	if !strings.Contains(err.Error(), "broken") {
+		t.Errorf("expected error to name broken, got: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(tmpDir, "auth-server-feature")); os.IsNotExist(err) {
+		t.Error("expected worktree for auth-server to be created")
+	}
+}
