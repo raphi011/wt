@@ -23,8 +23,11 @@
 //
 // # Usage
 //
-//	f := forge.Detect(originURL, hostMap, forgeConfig)
-//	pr, err := f.GetPRForBranch(originURL, branch)
+// Commands obtain a [Resolver] from context so tests can substitute an adapter
+// with [WithResolver]. An empty forge name selects automatic detection.
+//
+//	f := forge.ResolverFromContext(ctx)(originURL, "", hostMap, forgeConfig)
+//	pr, err := f.GetPRForBranch(ctx, originURL, branch)
 //
 // # Platform Differences
 //

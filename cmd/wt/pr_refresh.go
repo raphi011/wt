@@ -65,7 +65,7 @@ func refreshPRs(ctx context.Context, worktrees []git.Worktree, prCache *prcache.
 	pb.Start()
 	defer pb.Stop()
 
-	session := forge.NewSession(hosts, forgeConfig)
+	session := forge.NewSession(forge.ResolverFromContext(ctx), hosts, forgeConfig)
 	var prMutex sync.Mutex
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, forge.MaxConcurrentFetches)

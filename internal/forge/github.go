@@ -21,6 +21,22 @@ type GitHub struct {
 	token       string
 }
 
+func (g *GitHub) sessionUser(repoURL string) string {
+	return g.getUserForRepo(ExtractRepoPath(repoURL))
+}
+
+func (g *GitHub) prepareSession(ctx context.Context, host, user string) error {
+	g.host = host
+	if user != "" {
+		token, err := g.getToken(ctx, user)
+		if err != nil {
+			return err
+		}
+		g.token = token
+	}
+	return nil
+}
+
 // Name returns "github"
 func (g *GitHub) Name() string {
 	return "github"

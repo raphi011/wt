@@ -474,7 +474,7 @@ If destination is not specified, clones into <repo-name> in the current director
 
 				// Determine forge type from config rules
 				forgeName := cfg.Forge.GetForgeTypeForRepo(orgRepo)
-				f := forge.ByNameWithConfig(forgeName, &cfg.Forge)
+				f := forge.ResolverFromContext(ctx)(orgRepo, forgeName, cfg.Hosts, &cfg.Forge)
 
 				// Check forge CLI is available
 				if err := f.Check(ctx); err != nil {

@@ -23,6 +23,13 @@ type GitLab struct {
 	host        string
 }
 
+func (g *GitLab) sessionUser(string) string { return "" }
+
+func (g *GitLab) prepareSession(_ context.Context, host, _ string) error {
+	g.host = host
+	return nil
+}
+
 // Name returns "gitlab"
 func (g *GitLab) Name() string {
 	return "gitlab"
