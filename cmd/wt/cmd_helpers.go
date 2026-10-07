@@ -15,6 +15,7 @@ import (
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/registry"
+	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
 
 // hookFlags holds the raw CLI-level hook configuration flags.
@@ -60,6 +61,20 @@ func hookOperation(cfg *config.Config, repo registry.Repo, wtPath, branch string
 		NoHook:      hf.NoHook,
 		Env:         hf.Env,
 	}, nil
+}
+
+// wizardHooks lists the configured hooks for a checkout wizard. Hooks that
+// run by default for a checkout with one of the actions are pre-selected.
+func wizardHooks(cfg config.HooksConfig, actions ...string) []flows.HookInfo {
+	var infos []flows.HookInfo
+	for name, hook := range cfg.Hooks {
+		infos = append(infos, flows.HookInfo{
+			Name:        name,
+			Description: hook.Description,
+			IsDefault:   hooks.RunsByDefault(hook, hooks.CommandCheckout, actions...),
+		})
+	}
+	return infos
 }
 
 // recordHistory records a worktree access to the history file.

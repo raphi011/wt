@@ -39,7 +39,7 @@ type BranchFetcher func(ctx context.Context, repoPath string) (BranchFetchResult
 type HookInfo struct {
 	Name        string
 	Description string
-	IsDefault   bool // Has on=["checkout"]
+	IsDefault   bool // Runs by default for the checkout
 }
 
 // addHookStep adds a hook selection step to the wizard if hooks are available

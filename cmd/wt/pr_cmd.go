@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -717,10 +716,7 @@ func prCheckoutWizardParams(ctx context.Context, reg *registry.Registry, repoArg
 		}
 	}
 	cfg := config.FromContext(ctx)
-	for name, hook := range cfg.Hooks.Hooks {
-		isDefault := slices.Contains(hook.On, "checkout")
-		params.AvailableHooks = append(params.AvailableHooks, flows.HookInfo{Name: name, Description: hook.Description, IsDefault: isDefault})
-	}
+	params.AvailableHooks = wizardHooks(cfg.Hooks, hooks.ActionPR)
 	params.FetchPRs = func(ctx context.Context, repoPath string) ([]forge.OpenPR, error) {
 		effCfg := resolveEffectiveConfig(ctx, repoPath)
 		originURL, err := git.GetOriginURL(ctx, repoPath)

@@ -518,6 +518,8 @@ worktree_format = ".worktrees/{branch}"
 #
 # Hooks with "on" run automatically for matching commands.
 # Hooks without "on" only run when explicitly called with --hook=name or wt hook.
+# With --hook=name only the named hooks run, in the phase their "on" names for
+# the command (after the command, if it names none).
 #
 # Trigger syntax: [before:|after:]trigger[:subtype]
 #   Triggers: checkout, prune, merge, all

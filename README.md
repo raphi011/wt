@@ -485,6 +485,8 @@ on = ["checkout", "merge"]     # Multiple triggers
 
 Hooks without `on` only run when invoked explicitly via `wt hook <name>` or `--hook <name>`.
 
+With `--hook <name>` only the named hooks run. A named hook runs in the phase its `on` names for the command (`before:checkout` runs before a checkout and can abort it); without a matching `on` it runs after the command.
+
 **Placeholders** — substituted in the hook `command` before execution:
 
 | Placeholder | Description |

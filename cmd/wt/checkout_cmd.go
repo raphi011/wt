@@ -687,24 +687,13 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 		}, nil
 	}
 
-	// Build available hooks
-	var availableHooks []flows.HookInfo
-	for name, hook := range cfg.Hooks.Hooks {
-		isDefault := slices.Contains(hook.On, "checkout")
-		availableHooks = append(availableHooks, flows.HookInfo{
-			Name:        name,
-			Description: hook.Description,
-			IsDefault:   isDefault,
-		})
-	}
-
 	params := flows.CheckoutWizardParams{
 		Context:          ctx,
 		AvailableRepos:   repoPaths,
 		RepoNames:        repoNames,
 		PreSelectedRepos: preSelectedRepos,
 		FetchBranches:    fetchBranches,
-		AvailableHooks:   availableHooks,
+		AvailableHooks:   wizardHooks(cfg.Hooks, hooks.ActionCreate, hooks.ActionOpen),
 		HooksFromCLI:     len(cliHooks) > 0 || cliNoHook,
 		BaseFromCLI:      baseFromCLI,
 	}

@@ -36,13 +36,13 @@ Generated: 2026-10-07
 | [resolveworktreetargets](#resolveworktreetargets) | 5 |
 | [unscopedrepos](#unscopedrepos) | 1 |
 | [wt cd](#wt-cd) | 13 |
-| [wt checkout](#wt-checkout) | 77 |
+| [wt checkout](#wt-checkout) | 78 |
 | [wt exec](#wt-exec) | 15 |
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 50 |
-| **Total** | **347** |
+| **Total** | **348** |
 
 ## completebasebranches
 
@@ -386,6 +386,7 @@ Generated: 2026-10-07
 | `TestCheckout_AutoStash` | Tests that --autostash stashes and applies changes. |
 | `TestCheckout_Note` | Tests that --note sets a note on the branch. |
 | `TestCheckout_Hook` | Tests that --hook runs a specific hook after checkout. |
+| `TestCheckout_NamedBeforeHookAborts` | Tests that a before-hook named with --hook |
 | `TestCheckout_NoHook` | Tests that --no-hook skips default hooks. |
 | `TestCheckout_HookWithArg` | Tests that --arg passes variables to hooks. |
 | `TestCheckout_HookWithStdinArg_Label` | Tests that a stdin hook variable reaches every repo of a label. |

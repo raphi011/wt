@@ -76,34 +76,56 @@ type HookSelector struct {
 }
 
 // SelectHooks determines which hooks to run based on config and CLI flags.
-// Returns all matching hooks. If hookNames are specified, those hooks run.
-// Otherwise, all hooks with matching "on" conditions run.
+// Returns all matching hooks. If hookNames are specified, only those hooks run,
+// each in the phase its "on" condition names for this command (after, if it
+// names none). Otherwise, all hooks with matching "on" conditions run.
 // Returns nil slice if no hooks should run, error if any specified hook doesn't exist.
 func SelectHooks(cfg config.HooksConfig, hookNames []string, noHook bool, sel HookSelector) ([]HookMatch, error) {
 	if noHook {
 		return nil, nil
 	}
 
-	// If explicit hooks specified, use them directly (ignores "on" condition).
-	// Only return explicit hooks in the "after" phase to avoid running them twice
-	// (once in before-hooks and once in after-hooks).
+	// If explicit hooks specified, only those run. Every name is checked in
+	// both phases, so an unknown name fails before the command runs.
 	if len(hookNames) > 0 {
-		if sel.Phase == PhaseBefore {
-			return nil, nil
-		}
 		var matches []HookMatch
 		for _, hookName := range hookNames {
 			hook, exists := cfg.Hooks[hookName]
 			if !exists {
 				return nil, fmt.Errorf("unknown hook %q", hookName)
 			}
-			matches = append(matches, HookMatch{Hook: &hook, Name: hookName})
+			if namedHookRunsIn(hook, sel) {
+				matches = append(matches, HookMatch{Hook: &hook, Name: hookName})
+			}
 		}
 		return matches, nil
 	}
 
 	// Find all hooks with matching "on" conditions
 	return findMatchingHooks(cfg, sel.Command, sel.Action, string(sel.Phase)), nil
+}
+
+// namedHookRunsIn returns true if an explicitly named hook runs in the phase of sel.
+// A hook whose "on" does not match the command at all runs in the after phase.
+func namedHookRunsIn(hook config.Hook, sel HookSelector) bool {
+	before := hookMatchesCommand(hook, sel.Command, sel.Action, string(PhaseBefore))
+	if sel.Phase == PhaseBefore {
+		return before
+	}
+	return !before || hookMatchesCommand(hook, sel.Command, sel.Action, string(PhaseAfter))
+}
+
+// RunsByDefault returns true if the hook runs without --hook for the command
+// with one of the given actions, in either phase.
+func RunsByDefault(hook config.Hook, cmdType CommandType, actions ...string) bool {
+	for _, action := range actions {
+		for _, phase := range []PhaseType{PhaseBefore, PhaseAfter} {
+			if hookMatchesCommand(hook, cmdType, action, string(phase)) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // findMatchingHooks returns all hooks that have the command type in their "on" list.

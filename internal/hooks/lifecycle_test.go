@@ -254,6 +254,77 @@ func TestOperationRun_ExplicitHooks(t *testing.T) {
 	}
 }
 
+func TestOperationRun_ExplicitBeforeHook(t *testing.T) {
+	t.Parallel()
+
+	d := newLifecycleDirs(t)
+	var buf bytes.Buffer
+	op := Operation{
+		Hooks: config.HooksConfig{Hooks: map[string]config.Hook{
+			"guard": {Command: d.record("guard"), On: []string{"before:checkout"}},
+			"setup": {Command: d.record("setup"), On: []string{"checkout"}},
+		}},
+		Trigger:     CommandCheckout,
+		WorktreeDir: d.Worktree,
+		// The order a wizard or --hook lists the hooks in does not decide the phase.
+		HookNames: []string{"setup", "guard"},
+	}
+
+	if err := op.Run(logCtx(&buf), d.recordFn(t)); err != nil {
+		t.Fatalf("Run() = %v, want nil", err)
+	}
+
+	want := []string{"guard " + d.Worktree, "fn", "setup " + d.Worktree}
+	if got := d.lines(t); !slices.Equal(got, want) {
+		t.Errorf("log = %q, want %q", got, want)
+	}
+}
+
+func TestOperationRun_ExplicitBeforeHookAborts(t *testing.T) {
+	t.Parallel()
+
+	d := newLifecycleDirs(t)
+	var buf bytes.Buffer
+	op := Operation{
+		Hooks: config.HooksConfig{Hooks: map[string]config.Hook{
+			"guard": {Command: "sh -c 'exit 1'", On: []string{"before:checkout"}},
+		}},
+		Trigger:     CommandCheckout,
+		WorktreeDir: d.Worktree,
+		HookNames:   []string{"guard"},
+	}
+
+	if err := op.Run(logCtx(&buf), d.recordFn(t)); err == nil {
+		t.Fatal("Run() = nil, want error")
+	}
+	if got := d.lines(t); got != nil {
+		t.Errorf("log = %q, want fn not to run after a failed before-hook", got)
+	}
+}
+
+func TestOperationRun_UnknownHookName(t *testing.T) {
+	t.Parallel()
+
+	d := newLifecycleDirs(t)
+	var buf bytes.Buffer
+	op := Operation{
+		Hooks: config.HooksConfig{Hooks: map[string]config.Hook{
+			"setup": {Command: d.record("setup"), On: []string{"checkout"}},
+		}},
+		Trigger:     CommandCheckout,
+		WorktreeDir: d.Worktree,
+		HookNames:   []string{"typo"},
+	}
+
+	err := op.Run(logCtx(&buf), d.recordFn(t))
+	if err == nil || !strings.Contains(err.Error(), `unknown hook "typo"`) {
+		t.Fatalf("Run() = %v, want unknown hook error", err)
+	}
+	if got := d.lines(t); got != nil {
+		t.Errorf("log = %q, want fn not to run for an unknown hook name", got)
+	}
+}
+
 func TestOperationRun_NoHook(t *testing.T) {
 	t.Parallel()
 
