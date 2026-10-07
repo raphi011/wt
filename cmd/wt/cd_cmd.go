@@ -67,7 +67,7 @@ repo's worktrees. Use -g to show all repos.`,
 
 			switch {
 			case interactive:
-				targetPath, repoName, branchName, err = runCdInteractive(ctx, reg, histPath, global)
+				targetPath, repoName, branchName, err = runCdInteractive(ctx, reg, histPath, global, flows.CdInteractive)
 			case len(args) == 0:
 				targetPath, repoName, branchName, err = runCdRecent(ctx, cfg, histPath)
 			default:
@@ -115,7 +115,14 @@ repo's worktrees. Use -g to show all repos.`,
 
 // runCdInteractive shows a fuzzy-searchable worktree list and returns the selected path.
 // When global is false, only worktrees from the current repo are shown.
-func runCdInteractive(ctx context.Context, reg *registry.Registry, histPath string, global bool) (path, repoName, branch string, err error) {
+// Returns errCancelled when the picker is cancelled.
+func runCdInteractive(
+	ctx context.Context,
+	reg *registry.Registry,
+	histPath string,
+	global bool,
+	pick func(flows.CdWizardParams) (flows.CdOptions, error),
+) (path, repoName, branch string, err error) {
 	l := log.FromContext(ctx)
 
 	hist, err := history.Load(histPath)
@@ -169,14 +176,14 @@ func runCdInteractive(ctx context.Context, reg *registry.Registry, histPath stri
 
 	sortCdWorktrees(allWorktrees)
 
-	result, err := flows.CdInteractive(flows.CdWizardParams{
+	result, err := pick(flows.CdWizardParams{
 		Worktrees: allWorktrees,
 	})
 	if err != nil {
 		return "", "", "", err
 	}
 	if result.Cancelled {
-		os.Exit(1)
+		return "", "", "", errCancelled
 	}
 
 	return result.SelectedPath, result.RepoName, result.Branch, nil

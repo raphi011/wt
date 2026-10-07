@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 )
 
@@ -13,7 +14,7 @@ var (
 )
 
 func main() {
-	Execute()
+	os.Exit(Execute())
 }
 
 // versionString returns the version string.

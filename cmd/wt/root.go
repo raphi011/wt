@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -70,7 +71,8 @@ and streamline your development workflow.`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
-func Execute() {
+// It returns the process exit code.
+func Execute() int {
 	// Load config
 	loadedCfg, err := config.Load()
 	if err != nil {
@@ -85,7 +87,7 @@ func Execute() {
 	workDir, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "wt: failed to get working directory: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	// Create context with signal handling
@@ -104,11 +106,14 @@ func Execute() {
 	rootCmd.SetContext(ctx)
 
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "Run 'wt -h' for help")
-		os.Exit(commandExitCode(err))
+		if !errors.Is(err, errCancelled) {
+			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr)
+			fmt.Fprintln(os.Stderr, "Run 'wt -h' for help")
+		}
+		return commandExitCode(err)
 	}
+	return 0
 }
 
 func init() {
