@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -27,7 +28,11 @@ Target worktrees using [scope:]branch arguments before --:
   - repo:branch: finds exact worktree in specified repo
   - label:branch: runs in all repos with that label
 
-With no targets, runs in the current worktree.`,
+With no targets, runs in the current worktree.
+
+All targets are attempted even if a command fails. Failures return a non-zero
+exit status: the command's exit code for a single worktree, or 1 for multiple
+worktrees. Commands that cannot start also return 1.`,
 		Example: `  wt exec -- git status                  # In current worktree
   wt exec main -- git status             # In main worktree of every repo
   wt exec wt:main -- git status          # In main worktree of wt repo
@@ -87,7 +92,9 @@ With no targets, runs in the current worktree.`,
 
 			l.Debug("exec", "command", cmdArgs[0], "worktrees", len(resolved))
 
-			// Execute command in each worktree
+			// Execute command in each worktree, collecting failures without stopping.
+			var failures []error
+			exitCode := 1
 			for _, wt := range resolved {
 				label := wt.RepoName
 				if label == "" {
@@ -102,11 +109,22 @@ With no targets, runs in the current worktree.`,
 				execCmd.Stdin = os.Stdin
 
 				if err := execCmd.Run(); err != nil {
-					l.Printf("Error in %s: %v\n", label, err)
+					failedTarget := wt.Path
+					if wt.RepoName != "" && wt.Branch != "" {
+						failedTarget = wt.RepoName + ":" + wt.Branch
+					}
+					failures = append(failures, fmt.Errorf("command failed in %s: %w", failedTarget, err))
+					var exitErr *exec.ExitError
+					if len(resolved) == 1 && errors.As(err, &exitErr) && exitErr.ExitCode() > 0 {
+						exitCode = exitErr.ExitCode()
+					}
 				}
 				fmt.Println()
 			}
 
+			if len(failures) > 0 {
+				return &commandExitError{err: errors.Join(failures...), code: exitCode}
+			}
 			return nil
 		},
 	}
