@@ -20,14 +20,14 @@ Generated: 2026-10-07
 | [forgetworktrees](#forgetworktrees) | 1 |
 | [hook](#hook) | 10 |
 | [init](#init) | 4 |
-| [prcheckout](#prcheckout) | 17 |
+| [prcheckout](#prcheckout) | 18 |
 | [prcreate](#prcreate) | 3 |
 | [preservefiles](#preservefiles) | 1 |
 | [prmerge](#prmerge) | 7 |
 | [prview](#prview) | 2 |
 | [removeworktree](#removeworktree) | 1 |
 | [repoadd](#repoadd) | 8 |
-| [repoclone](#repoclone) | 13 |
+| [repoclone](#repoclone) | 15 |
 | [repoconvertbare](#repoconvertbare) | 18 |
 | [repoconvertregular](#repoconvertregular) | 4 |
 | [repolist](#repolist) | 5 |
@@ -42,7 +42,7 @@ Generated: 2026-10-07
 | [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 50 |
-| **Total** | **342** |
+| **Total** | **345** |
 
 ## completebasebranches
 
@@ -189,6 +189,7 @@ Generated: 2026-10-07
 | `TestPrCheckout_AlreadyCheckedOut` | Tests that pr checkout opens the worktree |
 | `TestPrCheckout_PreservesFiles` | Tests that pr checkout preserves files like checkout does. |
 | `TestPrCheckout_CloneRegular` | Tests pr checkout into a fresh regular clone. |
+| `TestPrCheckout_CloneNameConflict` | Tests pr checkout --clone when the repo name is taken. |
 | `TestPrCheckout_HookWithArg` | Tests that --arg values reach hooks run by pr checkout. |
 | `TestPrCheckout_InvalidArg` | Tests that pr checkout reports a malformed --arg. |
 
@@ -252,6 +253,8 @@ Generated: 2026-10-07
 | `TestRepoClone_DefaultRegularClone` | Tests that cloning without --clone-mode uses regular clone (default). |
 | `TestRepoClone_MasterDefaultBranch` | Tests cloning a repo with master as default branch. |
 | `TestRepoClone_WithLabels` | Tests cloning with labels. |
+| `TestRepoClone_DefaultLabels` | Tests that default_labels and --label are combined. |
+| `TestRepoClone_BareNoCheckoutHook` | Tests that the initial worktree runs no checkout hook. |
 | `TestRepoClone_WithCustomName` | Tests cloning with a custom display name. |
 | `TestRepoClone_NameConflict` | Tests cloning with a name that is already registered. |
 | `TestRepoClone_RegistryUpdateFails` | Tests cloning when the registry can't be updated. |

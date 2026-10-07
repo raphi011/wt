@@ -1022,6 +1022,59 @@ func TestPrCheckout_CloneRegular(t *testing.T) {
 	}
 }
 
+// TestPrCheckout_CloneNameConflict tests pr checkout --clone when the repo name is taken.
+//
+// Scenario: User runs `wt pr checkout --clone test/test-repo 1 --forge github`
+// while another repo is registered as test-repo
+// Expected: Command fails, the clone is removed and the registry is unchanged
+func TestPrCheckout_CloneNameConflict(t *testing.T) {
+	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
+	fakeGHMergedPR(t)
+
+	tmpDir := resolvePath(t, t.TempDir())
+	sourcePath, originPath := setupTestRepoWithOrigin(t, tmpDir, "source")
+	t.Setenv("WT_TEST_CLONE_SOURCE", originPath)
+
+	workDir := filepath.Join(tmpDir, "work")
+	if err := os.MkdirAll(workDir, 0755); err != nil {
+		t.Fatalf("failed to create work dir: %v", err)
+	}
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: sourcePath},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, workDir)
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--clone", "--clone-mode", "regular", "test/test-repo", "1", "--forge", "github"})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected error when name is already registered")
+	}
+
+	if _, err := os.Stat(filepath.Join(workDir, "test-repo")); !os.IsNotExist(err) {
+		t.Errorf("clone should be removed after failed registration, stat error: %v", err)
+	}
+
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+	if len(reg.Repos) != 1 {
+		t.Errorf("expected 1 repo, got %d", len(reg.Repos))
+	}
+}
+
 // setupPrCheckoutRepo creates a registered repo whose local origin has a
 // "feature" branch, so pr checkout can fetch the PR branch without network.
 // Returns the config, the repo path and the temp dir the worktree is created in.

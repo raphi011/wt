@@ -254,11 +254,10 @@ Use --interactive to select an open PR from registered repositories.`,
 
 					// Register in registry
 					repo = registry.Repo{
-						Path:   repoPath,
-						Name:   repoName,
-						Labels: cfg.DefaultLabels,
+						Path: repoPath,
+						Name: repoName,
 					}
-					if err := registerRepo(cfg, repo); err != nil {
+					if err := registerClone(cfg, &repo); err != nil {
 						return err
 					}
 
