@@ -165,9 +165,9 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 
 	// Completions
 	cmd.ValidArgsFunction = completeScopeArgs
-	cmd.RegisterFlagCompletionFunc("sort", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("sort", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"date", "repo", "branch"}, cobra.ShellCompDirectiveNoFileComp
-	})
+	}))
 
 	return cmd
 }

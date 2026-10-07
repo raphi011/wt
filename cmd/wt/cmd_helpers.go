@@ -143,8 +143,8 @@ func registerHookFlags(cmd *cobra.Command, hf *hookFlags) {
 	cmd.Flags().BoolVar(&hf.NoHook, "no-hook", false, "Skip hooks")
 	cmd.Flags().StringSliceVarP(&hf.RawArgs, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
 	cmd.MarkFlagsMutuallyExclusive("hook", "no-hook")
-	cmd.RegisterFlagCompletionFunc("hook", completeHooks)
-	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("hook", completeHooks))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions))
 }
 
 // errMultipleRepoMatches is returned when multiple registered repos have

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -156,9 +157,9 @@ Use positional args to filter by label(s).`,
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	// Completions
-	cmd.RegisterFlagCompletionFunc("sort", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("sort", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"name", "label"}, cobra.ShellCompDirectiveNoFileComp
-	})
+	}))
 
 	return cmd
 }
@@ -275,9 +276,9 @@ be managed with other wt commands. Non-git directories are silently skipped.`,
 	cmd.Flags().StringSliceVarP(&labels, "label", "l", nil, "Labels for grouping (repeatable)")
 
 	// Completions
-	cmd.RegisterFlagCompletionFunc("label", completeLabels)
-	cmd.RegisterFlagCompletionFunc("name", cobra.NoFileCompletions)
-	cmd.RegisterFlagCompletionFunc("worktree-format", cobra.NoFileCompletions)
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("label", completeLabels))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("name", cobra.NoFileCompletions))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("worktree-format", cobra.NoFileCompletions))
 
 	return cmd
 }
@@ -329,8 +330,8 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 					return err
 				}
 				if result.Cancelled || !result.Confirmed {
-					fmt.Fprintln(cmd.OutOrStdout(), "Cancelled")
-					return nil
+					_, err = fmt.Fprintln(cmd.OutOrStdout(), "Cancelled")
+					return err
 				}
 			}
 
@@ -347,11 +348,13 @@ By default, files are kept on disk. Use --delete to also remove files.`,
 				if err := os.RemoveAll(repo.Path); err != nil {
 					return fmt.Errorf("delete repo: %w", err)
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Deleted: %s\n", repo.Path)
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Deleted: %s\n", repo.Path); err != nil {
+					return err
+				}
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Unregistered: %s (%s)\n", repo.Name, filepath.Base(repo.Path))
-			return nil
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Unregistered: %s (%s)\n", repo.Name, filepath.Base(repo.Path))
+			return err
 		},
 	}
 
@@ -514,8 +517,7 @@ If destination is not specified, clones into <repo-name> in the current director
 			}); err != nil {
 				if addErr != nil {
 					// Clean up on failure
-					os.RemoveAll(absPath)
-					return fmt.Errorf("register repo: %w", err)
+					return errors.Join(fmt.Errorf("register repo: %w", err), os.RemoveAll(absPath))
 				}
 				return err
 			}
@@ -573,13 +575,13 @@ If destination is not specified, clones into <repo-name> in the current director
 	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Create initial worktree for branch (bare mode only)")
 	cmd.Flags().StringVar(&cloneMode, "clone-mode", "", "Clone mode: bare or regular (default: config)")
 
-	cmd.RegisterFlagCompletionFunc("clone-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("clone-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"bare", "regular"}, cobra.ShellCompDirectiveNoFileComp
-	})
-	cmd.RegisterFlagCompletionFunc("label", completeLabels)
-	cmd.RegisterFlagCompletionFunc("name", cobra.NoFileCompletions)
-	cmd.RegisterFlagCompletionFunc("worktree-format", cobra.NoFileCompletions)
-	cmd.RegisterFlagCompletionFunc("branch", cobra.NoFileCompletions)
+	}))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("label", completeLabels))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("name", cobra.NoFileCompletions))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("worktree-format", cobra.NoFileCompletions))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("branch", cobra.NoFileCompletions))
 
 	return cmd
 }
@@ -738,18 +740,18 @@ The conversion:
 	}
 
 	cmd.Flags().StringVar(&cloneMode, "clone-mode", "", "Target mode: bare or regular (required)")
-	cmd.MarkFlagRequired("clone-mode")
+	cobra.CheckErr(cmd.MarkFlagRequired("clone-mode"))
 	cmd.Flags().StringVarP(&name, "name", "n", "", "Display name (default: directory name)")
 	cmd.Flags().StringSliceVarP(&labels, "label", "l", nil, "Labels for grouping (repeatable)")
 	cmd.Flags().StringVarP(&worktreeFormat, "worktree-format", "w", "", "Worktree format override")
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Preview conversion without making changes")
 
-	cmd.RegisterFlagCompletionFunc("clone-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("clone-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"bare", "regular"}, cobra.ShellCompDirectiveNoFileComp
-	})
-	cmd.RegisterFlagCompletionFunc("label", completeLabels)
-	cmd.RegisterFlagCompletionFunc("name", cobra.NoFileCompletions)
-	cmd.RegisterFlagCompletionFunc("worktree-format", cobra.NoFileCompletions)
+	}))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("label", completeLabels))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("name", cobra.NoFileCompletions))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("worktree-format", cobra.NoFileCompletions))
 
 	// Path argument should complete directories only
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

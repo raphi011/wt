@@ -31,7 +31,9 @@ func TestCheckout_ExistingBranch(t *testing.T) {
 
 	// Setup registry file
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	// Register the repo
 	reg := &registry.Registry{
@@ -86,7 +88,9 @@ func TestCheckout_NewBranch(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -139,7 +143,9 @@ func TestCheckout_ByRepoName(t *testing.T) {
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -159,7 +165,9 @@ func TestCheckout_ByRepoName(t *testing.T) {
 
 	// Work from a different directory
 	otherDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(otherDir, 0755)
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx := testContextWithConfig(t, cfg, otherDir)
 	cmd := newCheckoutCmd()
@@ -192,7 +200,9 @@ func TestCheckout_ByLabel(t *testing.T) {
 	repo2Path := setupTestRepo(t, tmpDir, "web-client")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -213,7 +223,9 @@ func TestCheckout_ByLabel(t *testing.T) {
 	}
 
 	workingDir := filepath.Join(tmpDir, "work")
-	os.MkdirAll(workingDir, 0755)
+	if err := os.MkdirAll(workingDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx := testContextWithConfig(t, cfg, workingDir)
 	cmd := newCheckoutCmd()
@@ -250,7 +262,9 @@ func TestCheckout_SlashBranchName(t *testing.T) {
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature/auth"})
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -294,7 +308,9 @@ func TestCheckout_NotInRepo(t *testing.T) {
 	tmpDir = resolvePath(t, tmpDir)
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	// Empty registry
 	reg := &registry.Registry{Repos: []registry.Repo{}}
@@ -308,7 +324,9 @@ func TestCheckout_NotInRepo(t *testing.T) {
 
 	// Work from a non-repo directory
 	notARepoDir := filepath.Join(tmpDir, "not-a-repo")
-	os.MkdirAll(notARepoDir, 0755)
+	if err := os.MkdirAll(notARepoDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx := testContextWithConfig(t, cfg, notARepoDir)
 	cmd := newCheckoutCmd()
@@ -333,7 +351,9 @@ func TestCheckout_NewBranchPushesAndSetsUpstream(t *testing.T) {
 	repoPath, _ := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -391,7 +411,9 @@ func TestCheckout_ExistingBranchWithRemoteSetsUpstream(t *testing.T) {
 	pushBranchToOrigin(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -439,10 +461,14 @@ func TestCheckout_LocalOnlyBranchNoUpstream(t *testing.T) {
 	repoPath, _ := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
 
 	// Create a local branch without pushing
-	runGitCommand(repoPath, "branch", "local-only")
+	if out, err := runGitCommand(repoPath, "branch", "local-only"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -490,7 +516,9 @@ func TestCheckout_SetUpstreamDisabled(t *testing.T) {
 	repoPath, _ := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -540,10 +568,14 @@ func TestCheckout_NoOriginNoUpstream(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	// Remove the origin remote
-	runGitCommand(repoPath, "remote", "remove", "origin")
+	if out, err := runGitCommand(repoPath, "remote", "remove", "origin"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -597,7 +629,9 @@ func TestCheckout_AlreadyCheckedOut_ScopedTarget(t *testing.T) {
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "myrepo", []string{"feature"})
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -617,7 +651,9 @@ func TestCheckout_AlreadyCheckedOut_ScopedTarget(t *testing.T) {
 
 	// Work from a different directory (not inside repo)
 	workDir := filepath.Join(tmpDir, "work")
-	os.MkdirAll(workDir, 0755)
+	if err := os.MkdirAll(workDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 	ctx := testContextWithConfig(t, cfg, workDir)
 
 	// First checkout with scoped target should succeed
@@ -664,7 +700,9 @@ func TestCheckout_AlreadyCheckedOut(t *testing.T) {
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -727,7 +765,9 @@ func TestCheckout_AlreadyCheckedOut_RunsHooks(t *testing.T) {
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -800,7 +840,9 @@ func TestCheckout_AlreadyCheckedOut_NoHook(t *testing.T) {
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -873,7 +915,9 @@ func TestCheckout_AlreadyCheckedOut_RecordsHistory(t *testing.T) {
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -945,13 +989,21 @@ func TestCheckout_BaseBranch(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	// Create a develop branch with a unique commit
-	runGitCommand(repoPath, "branch", "develop")
-	runGitCommand(repoPath, "checkout", "develop")
+	if out, err := runGitCommand(repoPath, "branch", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(repoPath, "checkout", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 	addCommit(t, repoPath, "develop.txt", "Develop commit")
-	runGitCommand(repoPath, "checkout", "main")
+	if out, err := runGitCommand(repoPath, "checkout", "main"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1006,14 +1058,24 @@ func TestCheckout_Fetch(t *testing.T) {
 	// Add a commit to origin that the local repo doesn't have
 	// We need to clone the origin again to make changes
 	clonePath := filepath.Join(tmpDir, "origin-clone")
-	runGitCommand(tmpDir, "clone", originPath, clonePath)
-	runGitCommand(clonePath, "config", "user.email", "test@test.com")
-	runGitCommand(clonePath, "config", "user.name", "Test User")
+	if out, err := runGitCommand(tmpDir, "clone", originPath, clonePath); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(clonePath, "config", "user.email", "test@test.com"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(clonePath, "config", "user.name", "Test User"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 	addCommit(t, clonePath, "origin-only.txt", "Origin commit")
-	runGitCommand(clonePath, "push", "origin", "main")
+	if out, err := runGitCommand(clonePath, "push", "origin", "main"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1066,13 +1128,25 @@ func TestCheckout_FetchExistingBranch(t *testing.T) {
 
 	// Clone origin to push a new branch with unique content
 	clonePath := filepath.Join(tmpDir, "origin-clone")
-	runGitCommand(tmpDir, "clone", originPath, clonePath)
-	runGitCommand(clonePath, "config", "user.email", "test@test.com")
-	runGitCommand(clonePath, "config", "user.name", "Test User")
-	runGitCommand(clonePath, "config", "commit.gpgsign", "false")
-	runGitCommand(clonePath, "checkout", "-b", "feature")
+	if out, err := runGitCommand(tmpDir, "clone", originPath, clonePath); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(clonePath, "config", "user.email", "test@test.com"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(clonePath, "config", "user.name", "Test User"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(clonePath, "config", "commit.gpgsign", "false"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(clonePath, "checkout", "-b", "feature"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 	addCommit(t, clonePath, "feature-file.txt", "Feature commit")
-	runGitCommand(clonePath, "push", "origin", "feature")
+	if out, err := runGitCommand(clonePath, "push", "origin", "feature"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	// Verify the local repo does NOT have the feature branch
 	out, _ := runGitCommand(repoPath, "branch", "--list", "feature")
@@ -1081,7 +1155,9 @@ func TestCheckout_FetchExistingBranch(t *testing.T) {
 	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1134,16 +1210,30 @@ func TestCheckout_FetchWithBase(t *testing.T) {
 
 	// Clone origin to create a develop branch with unique content
 	clonePath := filepath.Join(tmpDir, "origin-clone")
-	runGitCommand(tmpDir, "clone", originPath, clonePath)
-	runGitCommand(clonePath, "config", "user.email", "test@test.com")
-	runGitCommand(clonePath, "config", "user.name", "Test User")
-	runGitCommand(clonePath, "config", "commit.gpgsign", "false")
-	runGitCommand(clonePath, "checkout", "-b", "develop")
+	if out, err := runGitCommand(tmpDir, "clone", originPath, clonePath); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(clonePath, "config", "user.email", "test@test.com"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(clonePath, "config", "user.name", "Test User"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(clonePath, "config", "commit.gpgsign", "false"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(clonePath, "checkout", "-b", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 	addCommit(t, clonePath, "develop-file.txt", "Develop commit")
-	runGitCommand(clonePath, "push", "origin", "develop")
+	if out, err := runGitCommand(clonePath, "push", "origin", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1199,10 +1289,14 @@ func TestCheckout_AutoStash(t *testing.T) {
 	if err := os.WriteFile(changedFile, []byte("uncommitted changes\n"), 0644); err != nil {
 		t.Fatalf("failed to write file: %v", err)
 	}
-	runGitCommand(repoPath, "add", "uncommitted.txt")
+	if out, err := runGitCommand(repoPath, "add", "uncommitted.txt"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1263,7 +1357,9 @@ func TestCheckout_Note(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1320,7 +1416,9 @@ func TestCheckout_Hook(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1382,7 +1480,9 @@ func TestCheckout_NoHook(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1445,7 +1545,9 @@ func TestCheckout_HookWithArg(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1511,7 +1613,9 @@ func TestCheckout_DefaultHookRuns(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1636,11 +1740,15 @@ func TestCheckout_NewBranchEmptyRepo(t *testing.T) {
 
 	// Add an origin remote (so GetDefaultBranch/GetRepoName work)
 	gitDir := filepath.Join(repoPath, ".git")
-	runGitCommand(gitDir, "remote", "add", "origin", "https://github.com/test/empty-repo.git")
+	if out, err := runGitCommand(gitDir, "remote", "add", "origin", "https://github.com/test/empty-repo.git"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	// Setup registry
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1659,7 +1767,9 @@ func TestCheckout_NewBranchEmptyRepo(t *testing.T) {
 	}
 
 	workDir := filepath.Join(tmpDir, "work")
-	os.MkdirAll(workDir, 0755)
+	if err := os.MkdirAll(workDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx := testContextWithConfig(t, cfg, workDir)
 	cmd := newCheckoutCmd()
@@ -1704,10 +1814,14 @@ func TestCheckout_NewBranchEmptyRepoWithFetch(t *testing.T) {
 	repoPath := setupBareInGitRepo(t, tmpDir, "empty-repo-fetch")
 
 	gitDir := filepath.Join(repoPath, ".git")
-	runGitCommand(gitDir, "remote", "add", "origin", "https://github.com/test/empty-repo.git")
+	if out, err := runGitCommand(gitDir, "remote", "add", "origin", "https://github.com/test/empty-repo.git"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1726,7 +1840,9 @@ func TestCheckout_NewBranchEmptyRepoWithFetch(t *testing.T) {
 	}
 
 	workDir := filepath.Join(tmpDir, "work")
-	os.MkdirAll(workDir, 0755)
+	if err := os.MkdirAll(workDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx := testContextWithConfig(t, cfg, workDir)
 	cmd := newCheckoutCmd()
@@ -1761,10 +1877,14 @@ func TestCheckout_NewBranchEmptyRepoLocalBaseRef(t *testing.T) {
 	repoPath := setupBareInGitRepo(t, tmpDir, "empty-repo-local")
 
 	gitDir := filepath.Join(repoPath, ".git")
-	runGitCommand(gitDir, "remote", "add", "origin", "https://github.com/test/empty-repo.git")
+	if out, err := runGitCommand(gitDir, "remote", "add", "origin", "https://github.com/test/empty-repo.git"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1784,7 +1904,9 @@ func TestCheckout_NewBranchEmptyRepoLocalBaseRef(t *testing.T) {
 	}
 
 	workDir := filepath.Join(tmpDir, "work")
-	os.MkdirAll(workDir, 0755)
+	if err := os.MkdirAll(workDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx := testContextWithConfig(t, cfg, workDir)
 	cmd := newCheckoutCmd()
@@ -1819,7 +1941,9 @@ func TestCheckout_NewBranchInvalidBaseRef(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "valid-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1838,7 +1962,9 @@ func TestCheckout_NewBranchInvalidBaseRef(t *testing.T) {
 	}
 
 	workDir := filepath.Join(tmpDir, "work")
-	os.MkdirAll(workDir, 0755)
+	if err := os.MkdirAll(workDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx := testContextWithConfig(t, cfg, workDir)
 	cmd := newCheckoutCmd()
@@ -1931,19 +2057,33 @@ func TestCheckout_ExplicitUpstreamRemoteRef(t *testing.T) {
 
 	// Create a second remote (upstream) with different content
 	upstreamPath := filepath.Join(tmpDir, "upstream-repo")
-	runGitCommand(tmpDir, "clone", "--bare", originPath, upstreamPath)
+	if out, err := runGitCommand(tmpDir, "clone", "--bare", originPath, upstreamPath); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	// Clone upstream to add a unique commit
 	upstreamClone := filepath.Join(tmpDir, "upstream-clone")
-	runGitCommand(tmpDir, "clone", upstreamPath, upstreamClone)
-	runGitCommand(upstreamClone, "config", "user.email", "test@test.com")
-	runGitCommand(upstreamClone, "config", "user.name", "Test User")
-	runGitCommand(upstreamClone, "checkout", "-b", "develop")
+	if out, err := runGitCommand(tmpDir, "clone", upstreamPath, upstreamClone); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(upstreamClone, "config", "user.email", "test@test.com"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(upstreamClone, "config", "user.name", "Test User"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(upstreamClone, "checkout", "-b", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 	addCommit(t, upstreamClone, "upstream-only.txt", "Upstream commit")
-	runGitCommand(upstreamClone, "push", "origin", "develop")
+	if out, err := runGitCommand(upstreamClone, "push", "origin", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	// Add upstream as remote to main repo
-	runGitCommand(repoPath, "remote", "add", "upstream", upstreamPath)
+	if out, err := runGitCommand(repoPath, "remote", "add", "upstream", upstreamPath); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
 	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
@@ -2000,9 +2140,13 @@ func TestCheckout_LocalBaseRefWithFetchWarning(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	// Create a local develop branch
-	runGitCommand(repoPath, "checkout", "-b", "develop")
+	if out, err := runGitCommand(repoPath, "checkout", "-b", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 	addCommit(t, repoPath, "local-develop.txt", "Local develop commit")
-	runGitCommand(repoPath, "checkout", "main")
+	if out, err := runGitCommand(repoPath, "checkout", "main"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
 	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
@@ -2062,15 +2206,27 @@ func TestCheckout_ExplicitOriginRemoteRef(t *testing.T) {
 
 	// Create and push develop to origin with unique content
 	clonePath := filepath.Join(tmpDir, "origin-clone")
-	runGitCommand(tmpDir, "clone", originPath, clonePath)
-	runGitCommand(clonePath, "config", "user.email", "test@test.com")
-	runGitCommand(clonePath, "config", "user.name", "Test User")
-	runGitCommand(clonePath, "checkout", "-b", "develop")
+	if out, err := runGitCommand(tmpDir, "clone", originPath, clonePath); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(clonePath, "config", "user.email", "test@test.com"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(clonePath, "config", "user.name", "Test User"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(clonePath, "checkout", "-b", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 	addCommit(t, clonePath, "origin-develop.txt", "Origin develop commit")
-	runGitCommand(clonePath, "push", "origin", "develop")
+	if out, err := runGitCommand(clonePath, "push", "origin", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	// Fetch in main repo so origin/develop exists
-	runGitCommand(repoPath, "fetch", "origin", "develop")
+	if out, err := runGitCommand(repoPath, "fetch", "origin", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
 	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
@@ -2137,7 +2293,9 @@ func TestCheckout_PreserveFiles(t *testing.T) {
 	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -2237,7 +2395,9 @@ func TestCheckout_PreserveNoOverwrite(t *testing.T) {
 	ctx := testContext(t)
 
 	// Create the worktree directory with an existing .env
-	os.MkdirAll(wtPath, 0755)
+	if err := os.MkdirAll(wtPath, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(wtPath, ".env"), []byte("EXISTING=keep\n"), 0644); err != nil {
 		t.Fatalf("failed to write existing .env: %v", err)
 	}
@@ -2283,7 +2443,9 @@ func TestCheckout_NoPreserveFlag(t *testing.T) {
 	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -2471,7 +2633,9 @@ func TestCheckout_AutoStash_StagedAndModified(t *testing.T) {
 	if err := os.WriteFile(stagedFile, []byte("staged content\n"), 0644); err != nil {
 		t.Fatalf("failed to write staged file: %v", err)
 	}
-	runGitCommand(repoPath, "add", "staged.txt")
+	if out, err := runGitCommand(repoPath, "add", "staged.txt"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	// Modify an existing tracked file (README.md from setupTestRepo)
 	readmePath := filepath.Join(repoPath, "README.md")
@@ -2988,7 +3152,9 @@ func TestCheckout_NewBranchViaSymlink(t *testing.T) {
 
 	// Register repo at its real (canonical) path
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -3044,7 +3210,9 @@ func TestCheckout_BeforeHookAborts(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -3097,7 +3265,9 @@ func TestCheckout_BeforeHookAllows(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -3160,7 +3330,9 @@ func TestCheckout_SubtypeCreate(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -3215,7 +3387,9 @@ func TestCheckout_SubtypeOpen(t *testing.T) {
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"existing"})
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -3269,7 +3443,9 @@ func TestCheckout_SubtypeCreateSkipsOpen(t *testing.T) {
 	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"existing"})
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -3323,7 +3499,9 @@ func TestCheckout_SubtypeOpenSkipsCreate(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -3378,7 +3556,9 @@ func TestCheckout_AllTriggerMatchesCheckout(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -3433,7 +3613,9 @@ func TestCheckout_ActionPhasePlaceholders(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -3493,7 +3675,9 @@ func TestCheckout_MultipleHooksMatch(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -3556,7 +3740,9 @@ func TestCheckout_HookWorkingDirectory(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -3618,7 +3804,9 @@ func TestCheckout_HooksRunAlphabetically(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -3689,13 +3877,21 @@ func TestCheckout_BaseBranch_LocalOnlyFallback(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	// Create a develop branch with a unique commit (local only, no remote tracking)
-	runGitCommand(repoPath, "branch", "develop")
-	runGitCommand(repoPath, "checkout", "develop")
+	if out, err := runGitCommand(repoPath, "branch", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(repoPath, "checkout", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 	addCommit(t, repoPath, "develop.txt", "Develop commit")
-	runGitCommand(repoPath, "checkout", "main")
+	if out, err := runGitCommand(repoPath, "checkout", "main"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -3750,20 +3946,32 @@ func TestCheckout_BaseBranch_PrefersRemoteOverLocal(t *testing.T) {
 	repoPath, _ := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
 
 	// Create develop branch with a commit and push to origin
-	runGitCommand(repoPath, "checkout", "-b", "develop")
+	if out, err := runGitCommand(repoPath, "checkout", "-b", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 	addCommit(t, repoPath, "develop-base.txt", "Base develop commit")
-	runGitCommand(repoPath, "push", "-u", "origin", "develop")
+	if out, err := runGitCommand(repoPath, "push", "-u", "origin", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	// Add a remote-only commit: push, then reset local branch back
 	addCommit(t, repoPath, "remote-only.txt", "Remote-only commit")
-	runGitCommand(repoPath, "push", "origin", "develop")
-	runGitCommand(repoPath, "reset", "--hard", "HEAD~1")
+	if out, err := runGitCommand(repoPath, "push", "origin", "develop"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
+	if out, err := runGitCommand(repoPath, "reset", "--hard", "HEAD~1"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	// Back to main for checkout
-	runGitCommand(repoPath, "checkout", "main")
+	if out, err := runGitCommand(repoPath, "checkout", "main"); err != nil {
+		t.Fatalf("git command failed: %v\n%s", err, out)
+	}
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{

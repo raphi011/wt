@@ -49,8 +49,16 @@ func TestHyperlinksUseActualDestination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
-	defer writer.Close()
+	defer func() {
+		if err := reader.Close(); err != nil {
+			t.Errorf("cleanup failed: %v", err)
+		}
+	}()
+	defer func() {
+		if err := writer.Close(); err != nil {
+			t.Errorf("cleanup failed: %v", err)
+		}
+	}()
 	if FromContext(WithPrinter(context.Background(), writer)).HyperlinksSupported() {
 		t.Fatal("pipe enabled links")
 	}

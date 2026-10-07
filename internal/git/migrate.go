@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -182,37 +183,33 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 	}
 
 	// Cleanup on error
-	cleanup := func() {
-		os.RemoveAll(tempGitDir)
+	cleanup := func() error {
+		return os.RemoveAll(tempGitDir)
 	}
 
 	// Phase 2: Move .git contents to temp directory
 	oldGitDir := filepath.Join(repoPath, ".git")
 	entries, err := os.ReadDir(oldGitDir)
 	if err != nil {
-		cleanup()
-		return nil, fmt.Errorf("read .git directory: %w", err)
+		return nil, errors.Join(fmt.Errorf("read .git directory: %w", err), cleanup())
 	}
 
 	for _, entry := range entries {
 		oldPath := filepath.Join(oldGitDir, entry.Name())
 		newPath := filepath.Join(tempGitDir, entry.Name())
 		if err := os.Rename(oldPath, newPath); err != nil {
-			cleanup()
-			return nil, fmt.Errorf("move %s: %w", entry.Name(), err)
+			return nil, errors.Join(fmt.Errorf("move %s: %w", entry.Name(), err), cleanup())
 		}
 	}
 
 	// Remove empty old .git directory
 	if err := os.Remove(oldGitDir); err != nil {
-		cleanup()
-		return nil, fmt.Errorf("remove old .git directory: %w", err)
+		return nil, errors.Join(fmt.Errorf("remove old .git directory: %w", err), cleanup())
 	}
 
 	// Rename temp to .git
 	if err := os.Rename(tempGitDir, oldGitDir); err != nil {
-		cleanup()
-		return nil, fmt.Errorf("rename temp git dir: %w", err)
+		return nil, errors.Join(fmt.Errorf("rename temp git dir: %w", err), cleanup())
 	}
 
 	// Phase 3: Configure as bare

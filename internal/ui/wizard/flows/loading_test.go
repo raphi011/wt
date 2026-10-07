@@ -139,7 +139,7 @@ func TestBranchLoadingDefaultsEmptyCreationAndCache(t *testing.T) {
 	w.Update(wizardKey(tea.KeyLeft, tea.ModAlt)) // branch -> repos
 	repos := w.GetStep("repos").(*steps.FilterableListStep)
 	repos.SetSelected([]int{0})
-	_, cmd = w.Update(wizardKey(tea.KeyEnter, 0))
+	w.Update(wizardKey(tea.KeyEnter, 0))
 	// Returning to the same repository retains input and selection.
 	if calls != 1 {
 		t.Fatal("same repository fetched again")

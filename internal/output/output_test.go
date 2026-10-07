@@ -103,8 +103,16 @@ func TestTerminalWidthUsesDataDestination(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
-	defer writer.Close()
+	defer func() {
+		if err := reader.Close(); err != nil {
+			t.Errorf("cleanup failed: %v", err)
+		}
+	}()
+	defer func() {
+		if err := writer.Close(); err != nil {
+			t.Errorf("cleanup failed: %v", err)
+		}
+	}()
 	if got := FromContext(WithPrinter(context.Background(), writer)).TerminalWidth(); got != 0 {
 		t.Fatalf("pipe width = %d, want unconstrained", got)
 	}

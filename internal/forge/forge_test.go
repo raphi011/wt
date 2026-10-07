@@ -333,3 +333,78 @@ func TestGitHub_getUserForRepo(t *testing.T) {
 		})
 	}
 }
+
+func TestParsePRCreateOutput(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		output     string
+		wantNumber int
+		wantURL    string
+		wantErr    bool
+	}{
+		{"url", "https://github.com/org/repo/pull/123\n", 123, "https://github.com/org/repo/pull/123", false},
+		{"empty", "\n", 0, "", true},
+		{"no number", "https://github.com/org/repo/pull/", 0, "", true},
+		{"not a url", "something went wrong", 0, "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := parsePRCreateOutput(tt.output)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("parsePRCreateOutput(%q) = %+v, want error", tt.output, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parsePRCreateOutput(%q) failed: %v", tt.output, err)
+			}
+			if got.Number != tt.wantNumber || got.URL != tt.wantURL {
+				t.Errorf("parsePRCreateOutput(%q) = %+v, want #%d %s", tt.output, got, tt.wantNumber, tt.wantURL)
+			}
+		})
+	}
+}
+
+func TestParseMRCreateOutput(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		output     string
+		wantNumber int
+		wantURL    string
+		wantErr    bool
+	}{
+		{"url", "Creating merge request\nhttps://gitlab.com/org/repo/-/merge_requests/123\n", 123, "https://gitlab.com/org/repo/-/merge_requests/123", false},
+		{"reference only", "!45 Add feature (topic)\n", 45, "", false},
+		{"reference then url", "!45 Add feature (topic)\nhttps://gitlab.com/org/repo/-/merge_requests/45\n", 45, "https://gitlab.com/org/repo/-/merge_requests/45", false},
+		{"url without number, reference before", "!45 Add feature\nhttps://gitlab.com/org/repo\n", 45, "https://gitlab.com/org/repo", false},
+		{"url without number", "https://gitlab.com/org/repo/-/merge_requests/\n", 0, "", true},
+		{"unexpected", "something went wrong", 0, "", true},
+		{"empty", "", 0, "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := parseMRCreateOutput(tt.output)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("parseMRCreateOutput(%q) = %+v, want error", tt.output, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseMRCreateOutput(%q) failed: %v", tt.output, err)
+			}
+			if got.Number != tt.wantNumber || got.URL != tt.wantURL {
+				t.Errorf("parseMRCreateOutput(%q) = %+v, want !%d %s", tt.output, got, tt.wantNumber, tt.wantURL)
+			}
+		})
+	}
+}

@@ -230,7 +230,7 @@ annotations (global vs local). Otherwise shows global config only.`,
 
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().StringVar(&repoName, "repo", "", "Show config for specific repo")
-	cmd.RegisterFlagCompletionFunc("repo", completeRepoNames)
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("repo", completeRepoNames))
 
 	return cmd
 }
@@ -488,7 +488,7 @@ When inside a repo (or with --repo), shows merged hooks with source annotations.
 			}
 
 			if len(effCfg.Hooks.Hooks) == 0 {
-				fmt.Fprintln(out.Writer(), "No hooks configured")
+				out.Println("No hooks configured")
 				return nil
 			}
 
@@ -507,15 +507,15 @@ When inside a repo (or with --repo), shows merged hooks with source annotations.
 					}
 				}
 
-				fmt.Fprintf(out.Writer(), "%s: [%s]\n", name, hookSrc)
-				fmt.Fprintf(out.Writer(), "  command: %s\n", hook.Command)
+				out.Printf("%s: [%s]\n", name, hookSrc)
+				out.Printf("  command: %s\n", hook.Command)
 				if hook.Description != "" {
-					fmt.Fprintf(out.Writer(), "  description: %s\n", hook.Description)
+					out.Printf("  description: %s\n", hook.Description)
 				}
 				if len(hook.On) > 0 {
-					fmt.Fprintf(out.Writer(), "  on: %v\n", hook.On)
+					out.Printf("  on: %v\n", hook.On)
 				}
-				fmt.Fprintln(out.Writer())
+				out.Println()
 			}
 
 			return nil
@@ -524,7 +524,7 @@ When inside a repo (or with --repo), shows merged hooks with source annotations.
 
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().StringVar(&repoName, "repo", "", "Show hooks for specific repo")
-	cmd.RegisterFlagCompletionFunc("repo", completeRepoNames)
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("repo", completeRepoNames))
 
 	return cmd
 }
