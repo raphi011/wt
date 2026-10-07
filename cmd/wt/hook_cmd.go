@@ -84,7 +84,7 @@ and placeholders.`,
 
 			// If no target, run in current worktree
 			if target == "" {
-				repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
+				repo, err := currentRepo(ctx, reg, autoRegister)
 				if err != nil {
 					return err
 				}

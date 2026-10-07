@@ -63,7 +63,7 @@ With no arguments, diffs the current worktree.`,
 			var wtPath string
 
 			if len(args) == 0 {
-				repoPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
+				repoPath := currentRepoPath(ctx)
 				if repoPath == "" {
 					return fmt.Errorf("not in a git repository")
 				}

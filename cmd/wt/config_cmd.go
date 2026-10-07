@@ -13,7 +13,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
-	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
@@ -129,7 +128,7 @@ func initLocalConfig(cmd *cobra.Command, force, stdout bool) error {
 		return fmt.Errorf("load registry: %w", err)
 	}
 
-	repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
+	repo, err := currentRepo(ctx, reg, autoRegister)
 	if err != nil {
 		return fmt.Errorf("not in a registered repo: %w", err)
 	}
@@ -173,8 +172,7 @@ func resolveConfigWithSources(ctx context.Context, repoName string) (*config.Con
 		}
 		repoPath = repo.Path
 	} else {
-		workDir := config.WorkDirFromContext(ctx)
-		repoPath = git.GetCurrentRepoMainPathFrom(ctx, workDir)
+		repoPath = currentRepoPath(ctx)
 	}
 
 	if repoPath == "" {

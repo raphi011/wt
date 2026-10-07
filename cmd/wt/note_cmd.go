@@ -65,7 +65,7 @@ func newNoteSetCmd() *cobra.Command {
 			}
 
 			// Resolve target(s)
-			targets, err := resolveNoteTargets(ctx, cfg, workDir, reg, args[1:], global)
+			targets, err := resolveNoteTargets(ctx, workDir, reg, args[1:], global)
 			if err != nil {
 				return err
 			}
@@ -110,7 +110,7 @@ func newNoteGetCmd() *cobra.Command {
 			}
 
 			// Resolve target(s)
-			targets, err := resolveNoteTargets(ctx, cfg, workDir, reg, args, global)
+			targets, err := resolveNoteTargets(ctx, workDir, reg, args, global)
 			if err != nil {
 				return err
 			}
@@ -162,7 +162,7 @@ func newNoteClearCmd() *cobra.Command {
 			}
 
 			// Resolve target(s)
-			targets, err := resolveNoteTargets(ctx, cfg, workDir, reg, args, global)
+			targets, err := resolveNoteTargets(ctx, workDir, reg, args, global)
 			if err != nil {
 				return err
 			}
@@ -196,10 +196,10 @@ type noteTarget struct {
 // resolveNoteTargets resolves targets for note commands.
 // If no args, uses current worktree's branch.
 // Otherwise parses [scope:]branch format.
-func resolveNoteTargets(ctx context.Context, cfg *config.Config, workDir string, reg *registry.Registry, args []string, global bool) ([]noteTarget, error) {
+func resolveNoteTargets(ctx context.Context, workDir string, reg *registry.Registry, args []string, global bool) ([]noteTarget, error) {
 	if len(args) == 0 {
 		// No target - use current worktree's branch
-		repo, branch, err := getCurrentRepoBranch(ctx, cfg, workDir, reg)
+		repo, branch, err := getCurrentRepoBranch(ctx, workDir, reg)
 		if err != nil {
 			return nil, err
 		}
@@ -247,8 +247,8 @@ func resolveNoteTargets(ctx context.Context, cfg *config.Config, workDir string,
 }
 
 // getCurrentRepoBranch gets the repo and current branch from current directory
-func getCurrentRepoBranch(ctx context.Context, cfg *config.Config, workDir string, reg *registry.Registry) (registry.Repo, string, error) {
-	repo, err := findOrRegisterCurrentRepo(ctx, reg, cfg)
+func getCurrentRepoBranch(ctx context.Context, workDir string, reg *registry.Registry) (registry.Repo, string, error) {
+	repo, err := currentRepo(ctx, reg, autoRegister)
 	if err != nil {
 		return registry.Repo{}, "", err
 	}

@@ -21,7 +21,7 @@ import (
 func repoPathFromArgs(ctx context.Context, cfg *config.Config, args []string) string {
 	reg, err := registry.Load(cfg.RegistryPath)
 	if err != nil {
-		return git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx))
+		return currentRepoPath(ctx)
 	}
 
 	for _, arg := range args {
@@ -40,7 +40,7 @@ func repoPathFromArgs(ctx context.Context, cfg *config.Config, args []string) st
 	}
 
 	// Fall back to current directory
-	return git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx))
+	return currentRepoPath(ctx)
 }
 
 // completeBranches provides branch name completion.
@@ -157,46 +157,28 @@ func completeScopedWorktreeArg(cmd *cobra.Command, args []string, toComplete str
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		// Try repo name first
-		repo, err := reg.FindByName(scopeName)
-		if err == nil {
-			worktrees, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-			if err != nil {
-				return nil, cobra.ShellCompDirectiveNoFileComp
-			}
-
-			var matches []string
-			for _, wt := range worktrees {
-				if strings.HasPrefix(wt.Branch, branchPrefix) {
-					matches = append(matches, scopeName+":"+wt.Branch)
-				}
-			}
-			return matches, cobra.ShellCompDirectiveNoFileComp
+		// Repo name first, then label
+		repos, err := resolveScopedRepos(reg, scopeName)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-
-		// Try label
-		labelRepos := reg.FindByLabel(scopeName)
-		if len(labelRepos) > 0 {
-			worktrees, _ := git.ListWorktreesForRepos(ctx, completionRepoRefs(labelRepos))
-			var branches []string
-			for _, wt := range worktrees {
-				branches = append(branches, wt.Branch)
-			}
-			matches := scopedBranchMatches(scopeName, branchPrefix, branches)
-			return matches, cobra.ShellCompDirectiveNoFileComp
+		worktrees, _ := git.ListWorktreesForRepos(ctx, reposToRefs(repos))
+		var branches []string
+		for _, wt := range worktrees {
+			branches = append(branches, wt.Branch)
 		}
-
-		return nil, cobra.ShellCompDirectiveNoFileComp
+		matches := scopedBranchMatches(scopeName, branchPrefix, branches)
+		return matches, cobra.ShellCompDirectiveNoFileComp
 	}
 
 	var matches []string
 
 	// Check if we're inside a git repo
-	currentRepoPath := git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx))
+	currentPath := currentRepoPath(ctx)
 
-	if currentRepoPath != "" {
+	if currentPath != "" {
 		// Inside a repo - show branches from current repo first (no prefix)
-		worktrees, err := git.ListWorktreesFromRepo(ctx, currentRepoPath)
+		worktrees, err := git.ListWorktreesFromRepo(ctx, currentPath)
 		if err == nil {
 			for _, wt := range worktrees {
 				if strings.HasPrefix(wt.Branch, toComplete) {
@@ -328,34 +310,15 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
 
-			// Try repo name first
-			repo, err := reg.FindByName(scopeName)
-			if err == nil {
-				// Suggest local branches, excluding checked-out ones
-				branches, err := git.ListLocalBranches(ctx, repo.Path)
-				if err != nil {
-					return nil, cobra.ShellCompDirectiveNoFileComp
-				}
-				wtBranches := git.GetWorktreeBranches(ctx, repo.Path)
-
-				var matches []string
-				for _, b := range branches {
-					if strings.HasPrefix(b, branchPrefix) && !wtBranches[b] {
-						matches = append(matches, scopeName+":"+b)
-					}
-				}
-				return matches, cobra.ShellCompDirectiveNoFileComp
+			// Repo name first, then label
+			repos, err := resolveScopedRepos(reg, scopeName)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
-
-			// Try label
-			labelRepos := reg.FindByLabel(scopeName)
-			if len(labelRepos) > 0 {
-				branches, _ := git.ListAvailableBranchesForRepos(ctx, completionRepoRefs(labelRepos))
-				matches := scopedBranchMatches(scopeName, branchPrefix, branches)
-				return matches, cobra.ShellCompDirectiveNoFileComp
-			}
-
-			return nil, cobra.ShellCompDirectiveNoFileComp
+			// Suggest local branches, excluding checked-out ones
+			branches, _ := git.ListAvailableBranchesForRepos(ctx, reposToRefs(repos))
+			matches := scopedBranchMatches(scopeName, branchPrefix, branches)
+			return matches, cobra.ShellCompDirectiveNoFileComp
 		}
 
 		// No colon yet - suggest repo prefixes and optionally branches
@@ -385,12 +348,12 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 
 		// Also suggest existing branches (excluding checked-out ones)
 		// Even with -b, users may want to base new branch names on existing ones
-		currentRepoPath := git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx))
-		if currentRepoPath != "" {
-			wtBranches := git.GetWorktreeBranches(ctx, currentRepoPath)
+		currentPath := currentRepoPath(ctx)
+		if currentPath != "" {
+			wtBranches := git.GetWorktreeBranches(ctx, currentPath)
 
 			// Local branches
-			branches, err := git.ListLocalBranches(ctx, currentRepoPath)
+			branches, err := git.ListLocalBranches(ctx, currentPath)
 			if err == nil {
 				for _, b := range branches {
 					if strings.HasPrefix(b, toComplete) && !wtBranches[b] {
@@ -400,7 +363,7 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 			}
 
 			// Remote branches (exclude those matching checked-out local branches)
-			remoteBranches, err := git.ListRemoteBranches(ctx, currentRepoPath)
+			remoteBranches, err := git.ListRemoteBranches(ctx, currentPath)
 			if err == nil {
 				seen := make(map[string]bool)
 				for _, b := range matches {
@@ -416,14 +379,6 @@ func registerCheckoutCompletions(cmd *cobra.Command) {
 
 		return matches, cobra.ShellCompDirectiveNoFileComp
 	}
-}
-
-func completionRepoRefs(repos []registry.Repo) []git.RepoRef {
-	refs := make([]git.RepoRef, len(repos))
-	for i, r := range repos {
-		refs[i] = git.RepoRef{Name: r.Name, Path: r.Path}
-	}
-	return refs
 }
 
 func scopedBranchMatches(scope, prefix string, branches []string) []string {

@@ -1,9 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"errors"
+	"io"
+	"slices"
 	"testing"
 
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -267,6 +272,104 @@ func TestResolveScopeArgs(t *testing.T) {
 		_, err := resolveScopeArgs(reg, []string{"nonexistent"})
 		if err == nil {
 			t.Fatal("expected error, got nil")
+		}
+	})
+}
+
+func TestResolveWorktreeTargetsIn(t *testing.T) {
+	t.Parallel()
+
+	reg := newTestRegistry()
+	repoA, repoB := reg.Repos[0], reg.Repos[1]
+
+	worktrees := map[string][]git.WorktreeInfo{
+		"/tmp/repo-a": {{Path: "/wt/a-main", Branch: "main"}, {Path: "/wt/a-feature", Branch: "feature"}},
+		"/tmp/repo-b": {{Path: "/wt/b-main", Branch: "main"}, {Path: "/wt/b-feature", Branch: "feature"}},
+		"/tmp/repo-c": {{Path: "/wt/c-main", Branch: "main"}, {Path: "/wt/c-only", Branch: "only-c"}},
+	}
+	inRepoA := func() ([]registry.Repo, bool, error) { return []registry.Repo{repoA}, true, nil }
+	allRepos := func() ([]registry.Repo, bool, error) { return reg.Repos, false, nil }
+
+	tests := []struct {
+		name     string
+		targets  []string
+		opts     targetOpts
+		unscoped func() ([]registry.Repo, bool, error)
+		broken   string // repo path where listing worktrees fails
+		want     []string
+		wantErr  string
+		wantLog  string
+	}{
+		{name: "repo scope", targets: []string{"repo-b:feature"}, want: []string{"/wt/b-feature"}},
+		{name: "repo scope, no worktree", targets: []string{"repo-a:only-c"}, wantErr: "worktree not found: repo-a:only-c"},
+		{name: "repo scope, git fails", targets: []string{"repo-a:feature"}, broken: "/tmp/repo-a", wantErr: "repo-a: boom"},
+		{name: "label scope, single-target is ambiguous", targets: []string{"backend:feature"}, wantErr: `branch "feature" exists in multiple repos: repo-a:feature, repo-b:feature (use repo:branch to pick one)`},
+		{name: "label scope, multi-target fans out", targets: []string{"backend:feature"}, opts: targetOpts{Multi: true}, want: []string{"/wt/a-feature", "/wt/b-feature"}},
+		{name: "label scope, repos without the branch are skipped", targets: []string{"frontend:feature"}, want: []string{"/wt/b-feature"}, wantLog: "Skipped (no worktree for feature): repo-c\n"},
+		{name: "label scope, failing repo is skipped", targets: []string{"backend:feature"}, broken: "/tmp/repo-a", want: []string{"/wt/b-feature"}, wantLog: "Warning: repo-a: boom\n"},
+		{name: "label scope, no worktree", targets: []string{"backend:only-c"}, wantErr: "worktree not found: backend:only-c (label matched 2 repos)"},
+		{name: "unknown scope", targets: []string{"nope:feature"}, wantErr: "no repo or label found: nope"},
+		{name: "unscoped, current repo", targets: []string{"feature"}, unscoped: inRepoA, want: []string{"/wt/a-feature"}},
+		{name: "unscoped, current repo, multi-target stays in it", targets: []string{"feature"}, opts: targetOpts{Multi: true}, unscoped: inRepoA, want: []string{"/wt/a-feature"}},
+		{name: "unscoped, current repo, no worktree", targets: []string{"only-c"}, unscoped: inRepoA, wantErr: "worktree not found in repo-a: only-c (use -g to search all repos, or repo:branch)"},
+		{name: "unscoped, current repo, git fails", targets: []string{"feature"}, unscoped: inRepoA, broken: "/tmp/repo-a", wantErr: "repo-a: boom"},
+		{name: "unscoped, all repos, unique", targets: []string{"only-c"}, unscoped: allRepos, want: []string{"/wt/c-only"}},
+		{name: "unscoped, all repos, no worktree", targets: []string{"nope"}, unscoped: allRepos, wantErr: "worktree not found: nope"},
+		{name: "unscoped, all repos, single-target is ambiguous", targets: []string{"feature"}, opts: targetOpts{Global: true}, unscoped: allRepos, wantErr: `branch "feature" exists in multiple repos: repo-a:feature, repo-b:feature (use repo:branch to pick one)`},
+		{name: "unscoped, all repos, multi-target needs -g", targets: []string{"feature"}, opts: targetOpts{Multi: true}, unscoped: allRepos, wantErr: `branch "feature" exists in multiple repos: repo-a:feature, repo-b:feature (use -g to target all of them, or repo:branch to pick one)`},
+		{name: "unscoped, all repos, -g multi-target fans out", targets: []string{"feature"}, opts: targetOpts{Global: true, Multi: true}, unscoped: allRepos, want: []string{"/wt/a-feature", "/wt/b-feature"}},
+		{name: "unscoped, all repos, failing repo is skipped", targets: []string{"feature"}, unscoped: allRepos, broken: "/tmp/repo-a", want: []string{"/wt/b-feature"}, wantLog: "Warning: repo-a: boom\n"},
+		{name: "unscoped, current repo lookup fails", targets: []string{"feature"}, unscoped: func() ([]registry.Repo, bool, error) { return nil, false, errors.New("update registry: denied") }, wantErr: "update registry: denied"},
+		{name: "several targets, same worktree once", targets: []string{"repo-a:feature", "backend:feature", "main"}, opts: targetOpts{Multi: true}, unscoped: inRepoA, want: []string{"/wt/a-feature", "/wt/b-feature", "/wt/a-main"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := targetEnv{
+				unscopedRepos: func() ([]registry.Repo, bool, error) {
+					if tt.unscoped == nil {
+						t.Fatal("scoped target must not look up the current repo")
+					}
+					return tt.unscoped()
+				},
+				worktrees: func(repoPath string) ([]git.WorktreeInfo, error) {
+					if repoPath == tt.broken {
+						return nil, errors.New("boom")
+					}
+					return worktrees[repoPath], nil
+				},
+			}
+			var logs bytes.Buffer
+			got, err := resolveWorktreeTargetsIn(log.New(&logs, false, false), reg, tt.targets, tt.opts, env)
+
+			if assertError(t, err, tt.wantErr) {
+				return
+			}
+			var paths []string
+			for _, wt := range got {
+				paths = append(paths, wt.Path)
+			}
+			if !slices.Equal(paths, tt.want) {
+				t.Errorf("resolved %v, want %v", paths, tt.want)
+			}
+			if logs.String() != tt.wantLog {
+				t.Errorf("log = %q, want %q", logs.String(), tt.wantLog)
+			}
+		})
+	}
+
+	t.Run("target carries repo and branch", func(t *testing.T) {
+		t.Parallel()
+		env := targetEnv{worktrees: func(repoPath string) ([]git.WorktreeInfo, error) { return worktrees[repoPath], nil }}
+		got, err := resolveWorktreeTargetsIn(log.New(io.Discard, false, false), reg, []string{"repo-b:feature"}, targetOpts{}, env)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := WorktreeTarget{RepoName: repoB.Name, RepoPath: repoB.Path, Branch: "feature", Path: "/wt/b-feature"}
+		if len(got) != 1 || got[0] != want {
+			t.Errorf("got %+v, want %+v", got, want)
 		}
 	})
 }

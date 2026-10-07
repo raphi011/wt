@@ -248,7 +248,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, opts
 // checkAutoStash verifies that --autostash is run from a worktree of the target repo.
 func checkAutoStash(ctx context.Context, repo registry.Repo) error {
 	workDir := config.WorkDirFromContext(ctx)
-	mainPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
+	mainPath := currentRepoPath(ctx)
 	if mainPath == "" {
 		return fmt.Errorf("--autostash: cannot determine repo from working directory %s (are you in a git repository?)", workDir)
 	}
@@ -441,7 +441,7 @@ func resolveCheckoutRepos(
 	}
 
 	if newBranch {
-		repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
+		repo, err := currentRepo(ctx, reg, autoRegister)
 		if err != nil {
 			return nil, fmt.Errorf("not in a repo, use scope:branch to specify target: %w", err)
 		}
@@ -449,13 +449,14 @@ func resolveCheckoutRepos(
 	}
 
 	// Existing branch without scope: current repo, or all repos with -g or outside a repo
-	if !global {
-		repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
-		if err == nil {
-			return resolveUnscopedInRepo(ctx, repo, parsed.Branch, fetch, hf)
-		}
+	repos, current, err := unscopedRepos(ctx, reg, global)
+	if err != nil {
+		return nil, err
 	}
-	return resolveUnscopedAcrossRepos(ctx, l, reg, parsed.Branch, hf)
+	if current {
+		return resolveUnscopedInRepo(ctx, repos[0], parsed.Branch, fetch, hf)
+	}
+	return resolveUnscopedAcrossRepos(ctx, l, repos, parsed.Branch, hf)
 }
 
 // resolveScopedExisting handles scoped targets for existing branches.
@@ -517,13 +518,13 @@ func resolveUnscopedInRepo(
 	return nil, fmt.Errorf("branch %q not found in repo %s", branch, repo.Name)
 }
 
-// resolveUnscopedAcrossRepos searches all registered repos for an existing branch.
+// resolveUnscopedAcrossRepos searches repos for an existing branch.
 // The branch must have a worktree or local branch in exactly one repo: its
 // worktree is opened, or the repo is returned for creation.
 func resolveUnscopedAcrossRepos(
 	ctx context.Context,
 	l *log.Logger,
-	reg *registry.Registry,
+	repos []registry.Repo,
 	branch string,
 	hf hookFlags,
 ) ([]registry.Repo, error) {
@@ -532,7 +533,7 @@ func resolveUnscopedAcrossRepos(
 		wtPath string // empty: the branch has no worktree yet
 	}
 	var candidates []candidate
-	for _, repo := range filterOrphanedRepos(l, reg.Repos) {
+	for _, repo := range repos {
 		wtPath, found, err := findWorktreeForBranch(ctx, repo.Path, branch)
 		if err != nil {
 			l.Printf("Warning: %s: %v\n", repo.Name, err)
@@ -590,8 +591,7 @@ func getEffectiveHooksForCompletion(ctx context.Context) map[string]config.Hook 
 	}
 
 	// Try to resolve for the current repo
-	workDir := config.WorkDirFromContext(ctx)
-	repoPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
+	repoPath := currentRepoPath(ctx)
 	if repoPath != "" {
 		effCfg, err := resolver.ConfigForRepo(repoPath)
 		if err == nil {
@@ -653,12 +653,12 @@ func runCheckoutWizard(ctx context.Context, reg *registry.Registry, cliHooks []s
 	var preSelectedRepos []int
 
 	// Get current repo path if inside one
-	currentRepoPath := git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx))
+	currentPath := currentRepoPath(ctx)
 
 	for i, repo := range reg.Repos {
 		repoPaths = append(repoPaths, repo.Path)
 		repoNames = append(repoNames, repo.Name)
-		if repo.Path == currentRepoPath {
+		if repo.Path == currentPath {
 			preSelectedRepos = append(preSelectedRepos, i)
 		}
 	}

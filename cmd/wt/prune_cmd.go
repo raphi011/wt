@@ -109,21 +109,11 @@ never removed without -f.`,
 			}
 
 			// Determine target repos for auto-prune
-			var repos []registry.Repo
-			if global {
-				repos = reg.Repos
-			} else {
-				// Try current repo
-				repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
-				if err != nil {
-					// Not in a repo, prune all
-					repos = reg.Repos
-				} else {
-					repos = []registry.Repo{repo}
-				}
+			// Current repo, or all repos outside a repo or with -g
+			repos, _, err := unscopedRepos(ctx, reg, global)
+			if err != nil {
+				return err
 			}
-
-			repos = filterOrphanedRepos(l, repos)
 
 			if len(repos) == 0 {
 				out.Println("No repos found")

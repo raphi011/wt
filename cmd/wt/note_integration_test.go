@@ -434,7 +434,7 @@ func TestNote_UnscopedGitErrorWarns(t *testing.T) {
 	cfg := &config.Config{}
 	ctx, logs := testContextWithLog(t, cfg, tmpDir)
 
-	targets, err := resolveNoteTargets(ctx, cfg, tmpDir, reg, []string{"feature"}, false)
+	targets, err := resolveNoteTargets(ctx, tmpDir, reg, []string{"feature"}, false)
 	if err != nil {
 		t.Fatalf("resolveNoteTargets failed: %v", err)
 	}

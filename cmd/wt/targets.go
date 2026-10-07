@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/raphi011/wt/internal/config"
@@ -33,14 +35,30 @@ func reposToRefs(repos []registry.Repo) []git.RepoRef {
 	return refs
 }
 
-// findOrRegisterCurrentRepo finds the repo for cwd, auto-registering if needed.
-// Returns error if not in a git repository.
-func findOrRegisterCurrentRepo(ctx context.Context, reg *registry.Registry, cfg *config.Config) (registry.Repo, error) {
-	// Get main repo path from working directory (may be set in context for tests)
-	workDir := config.WorkDirFromContext(ctx)
-	repoPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
+// errNotInRepo is returned when the working directory is not inside a git repository.
+var errNotInRepo = errors.New("not in a git repository")
+
+// currentRepoPath returns the main repo path of the working directory,
+// or "" outside a git repository.
+func currentRepoPath(ctx context.Context) string {
+	return git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx))
+}
+
+// unregisteredPolicy says what currentRepo does when the repo of the working
+// directory is not in the registry.
+type unregisteredPolicy int
+
+const (
+	autoRegister      unregisteredPolicy = iota // add it to the registry
+	requireRegistered                           // return an error
+)
+
+// currentRepo returns the repo of the working directory.
+// Returns errNotInRepo outside a git repository.
+func currentRepo(ctx context.Context, reg *registry.Registry, policy unregisteredPolicy) (registry.Repo, error) {
+	repoPath := currentRepoPath(ctx)
 	if repoPath == "" {
-		return registry.Repo{}, fmt.Errorf("not in a git repository")
+		return registry.Repo{}, errNotInRepo
 	}
 
 	// Try to find in registry
@@ -48,8 +66,12 @@ func findOrRegisterCurrentRepo(ctx context.Context, reg *registry.Registry, cfg 
 	if err == nil {
 		return repo, nil
 	}
+	if policy == requireRegistered {
+		return registry.Repo{}, fmt.Errorf("repo not registered: %s", repoPath)
+	}
 
 	// Auto-register
+	cfg := config.FromContext(ctx)
 	newRepo := registry.Repo{
 		Path:   repoPath,
 		Name:   git.GetRepoDisplayName(repoPath),
@@ -71,10 +93,20 @@ func findOrRegisterCurrentRepo(ctx context.Context, reg *registry.Registry, cfg 
 	return reg.FindByPath(repoPath)
 }
 
-// findOrRegisterCurrentRepoFromContext is a convenience wrapper that gets cfg from context.
-func findOrRegisterCurrentRepoFromContext(ctx context.Context, reg *registry.Registry) (registry.Repo, error) {
-	cfg := config.FromContext(ctx)
-	return findOrRegisterCurrentRepo(ctx, reg, cfg)
+// unscopedRepos returns the repos a command acts on when no scope is given:
+// the current repo, or all repos outside a repo or with global (-g).
+// current reports whether the result is the current repo only.
+func unscopedRepos(ctx context.Context, reg *registry.Registry, global bool) (repos []registry.Repo, current bool, err error) {
+	if !global {
+		repo, err := currentRepo(ctx, reg, autoRegister)
+		if err == nil {
+			return []registry.Repo{repo}, true, nil
+		}
+		if !errors.Is(err, errNotInRepo) {
+			return nil, false, err
+		}
+	}
+	return filterOrphanedRepos(log.FromContext(ctx), reg.Repos), false, nil
 }
 
 // parseBranchTarget parses "repo:branch" or "branch" format.
@@ -147,6 +179,15 @@ type targetOpts struct {
 	Multi  bool // the command acts on every match; otherwise several matches are an error
 }
 
+// targetEnv is what worktree target resolution reads besides the registry.
+type targetEnv struct {
+	// unscopedRepos returns the repos an unscoped branch is searched in and
+	// whether that is the current repo only.
+	unscopedRepos func() (repos []registry.Repo, current bool, err error)
+	// worktrees lists the worktrees of a repo.
+	worktrees func(repoPath string) ([]git.WorktreeInfo, error)
+}
+
 // resolveWorktreeTargets parses [scope:]branch args and returns worktree paths.
 // scope can be a repo name or label. An unscoped branch means the current
 // repo; outside a repo, or with opts.Global, all repos are searched.
@@ -156,7 +197,19 @@ type targetOpts struct {
 // When searching several repos (label or all repos), git failures and repos
 // without a matching worktree are logged and skipped.
 func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets []string, opts targetOpts) ([]WorktreeTarget, error) {
-	l := log.FromContext(ctx)
+	return resolveWorktreeTargetsIn(log.FromContext(ctx), reg, targets, opts, targetEnv{
+		unscopedRepos: func() ([]registry.Repo, bool, error) {
+			return unscopedRepos(ctx, reg, opts.Global)
+		},
+		worktrees: func(repoPath string) ([]git.WorktreeInfo, error) {
+			return git.ListWorktreesFromRepo(ctx, repoPath)
+		},
+	})
+}
+
+// resolveWorktreeTargetsIn is resolveWorktreeTargets with the git and
+// working directory lookups passed in.
+func resolveWorktreeTargetsIn(l *log.Logger, reg *registry.Registry, targets []string, opts targetOpts, env targetEnv) ([]WorktreeTarget, error) {
 	var results []WorktreeTarget
 
 	for _, target := range targets {
@@ -167,33 +220,9 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 
 		if len(parsed.Repos) > 0 {
 			// Scoped target - find worktree in specified repo(s)
-			var matches []WorktreeTarget
-			var missing []string
-			for _, repo := range parsed.Repos {
-				wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-				if err != nil {
-					if !parsed.IsLabel {
-						return nil, fmt.Errorf("%s: %w", repo.Name, err)
-					}
-					l.Printf("Warning: %s: %v\n", repo.Name, err)
-					continue
-				}
-				foundInRepo := false
-				for _, wt := range wts {
-					if wt.Branch == parsed.Branch {
-						matches = append(matches, WorktreeTarget{
-							RepoName: repo.Name,
-							RepoPath: repo.Path,
-							Branch:   parsed.Branch,
-							Path:     wt.Path,
-						})
-						foundInRepo = true
-						break
-					}
-				}
-				if !foundInRepo {
-					missing = append(missing, repo.Name)
-				}
+			matches, missing, err := findBranchWorktrees(l, env, parsed.Repos, parsed.Branch, !parsed.IsLabel)
+			if err != nil {
+				return nil, err
 			}
 			if len(matches) == 0 {
 				if parsed.IsLabel {
@@ -209,7 +238,7 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 			}
 			results = append(results, matches...)
 		} else {
-			matches, err := resolveUnscopedWorktrees(ctx, reg, parsed.Branch, opts)
+			matches, err := resolveUnscopedWorktrees(l, env, parsed.Branch, opts)
 			if err != nil {
 				return nil, err
 			}
@@ -230,48 +259,49 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 	return unique, nil
 }
 
-// resolveUnscopedWorktrees finds the worktrees of a branch given without a scope.
-// Inside a repo only that repo is searched, unless opts.Global is set.
-func resolveUnscopedWorktrees(ctx context.Context, reg *registry.Registry, branch string, opts targetOpts) ([]WorktreeTarget, error) {
-	l := log.FromContext(ctx)
-
-	inRepo := !opts.Global && git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx)) != ""
-	if inRepo {
-		repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
+// findBranchWorktrees returns the worktree of branch in each of repos and the
+// names of the repos that have none. A git failure is returned if strict,
+// otherwise it is logged and the repo skipped.
+func findBranchWorktrees(l *log.Logger, env targetEnv, repos []registry.Repo, branch string, strict bool) (matches []WorktreeTarget, missing []string, err error) {
+	for _, repo := range repos {
+		wts, err := env.worktrees(repo.Path)
 		if err != nil {
-			return nil, err
-		}
-		wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", repo.Name, err)
-		}
-		for _, wt := range wts {
-			if wt.Branch == branch {
-				return []WorktreeTarget{{RepoName: repo.Name, RepoPath: repo.Path, Branch: branch, Path: wt.Path}}, nil
+			if strict {
+				return nil, nil, fmt.Errorf("%s: %w", repo.Name, err)
 			}
-		}
-		return nil, fmt.Errorf("worktree not found in %s: %s (use -g to search all repos, or repo:branch)", repo.Name, branch)
-	}
-
-	var matches []WorktreeTarget
-	for _, repo := range filterOrphanedRepos(l, reg.Repos) {
-		wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-		if err != nil {
 			l.Printf("Warning: %s: %v\n", repo.Name, err)
 			continue
 		}
-		for _, wt := range wts {
-			if wt.Branch == branch {
-				matches = append(matches, WorktreeTarget{
-					RepoName: repo.Name,
-					RepoPath: repo.Path,
-					Branch:   branch,
-					Path:     wt.Path,
-				})
-			}
+		i := slices.IndexFunc(wts, func(wt git.WorktreeInfo) bool { return wt.Branch == branch })
+		if i < 0 {
+			missing = append(missing, repo.Name)
+			continue
 		}
+		matches = append(matches, WorktreeTarget{
+			RepoName: repo.Name,
+			RepoPath: repo.Path,
+			Branch:   branch,
+			Path:     wts[i].Path,
+		})
+	}
+	return matches, missing, nil
+}
+
+// resolveUnscopedWorktrees finds the worktrees of a branch given without a scope.
+// Inside a repo only that repo is searched, unless opts.Global is set.
+func resolveUnscopedWorktrees(l *log.Logger, env targetEnv, branch string, opts targetOpts) ([]WorktreeTarget, error) {
+	repos, current, err := env.unscopedRepos()
+	if err != nil {
+		return nil, err
+	}
+	matches, _, err := findBranchWorktrees(l, env, repos, branch, current)
+	if err != nil {
+		return nil, err
 	}
 	if len(matches) == 0 {
+		if current {
+			return nil, fmt.Errorf("worktree not found in %s: %s (use -g to search all repos, or repo:branch)", repos[0].Name, branch)
+		}
 		return nil, fmt.Errorf("worktree not found: %s", branch)
 	}
 	if len(matches) > 1 {
@@ -337,15 +367,12 @@ func resolveScopeArgsOrCurrent(ctx context.Context, reg *registry.Registry, scop
 	}
 
 	// Fall back to current repo
-	workDir := config.WorkDirFromContext(ctx)
-	repoPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
-	if repoPath == "" {
-		return nil, fmt.Errorf("not in a git repository (specify repo or label)")
+	repo, err := currentRepo(ctx, reg, requireRegistered)
+	if errors.Is(err, errNotInRepo) {
+		return nil, fmt.Errorf("%w (specify repo or label)", err)
 	}
-
-	repo, err := reg.FindByPath(repoPath)
 	if err != nil {
-		return nil, fmt.Errorf("repo not registered: %s", repoPath)
+		return nil, err
 	}
 
 	return []registry.Repo{repo}, nil
