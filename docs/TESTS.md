@@ -11,7 +11,7 @@ Generated: 2026-10-07
 | [completion](#completion) | 3 |
 | [confighooks](#confighooks) | 4 |
 | [configinit](#configinit) | 1 |
-| [configshow](#configshow) | 2 |
+| [configshow](#configshow) | 4 |
 | [diff](#diff) | 12 |
 | [findorregistercurrentrepo](#findorregistercurrentrepo) | 2 |
 | [forge](#forge) | 9 |
@@ -29,14 +29,14 @@ Generated: 2026-10-07
 | [repolist](#repolist) | 5 |
 | [reporemove](#reporemove) | 6 |
 | [resolveworktreetargets](#resolveworktreetargets) | 4 |
-| [wt cd](#wt-cd) | 9 |
+| [wt cd](#wt-cd) | 10 |
 | [wt checkout](#wt-checkout) | 68 |
-| [wt exec](#wt-exec) | 11 |
+| [wt exec](#wt-exec) | 12 |
 | [wt label](#wt-label) | 15 |
-| [wt list](#wt-list) | 12 |
+| [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 10 |
-| [wt prune](#wt-prune) | 46 |
-| **Total** | **303** |
+| [wt prune](#wt-prune) | 47 |
+| **Total** | **309** |
 
 ## completebasebranches
 
@@ -79,6 +79,8 @@ Generated: 2026-10-07
 |------|-------------|
 | `TestConfigShow_Basic` | Tests basic config display. |
 | `TestConfigShow_JSON` | Tests JSON output of config show. |
+| `TestConfigShow_WithLocalConfig` | Tests config show --json when a local .wt.toml overrides values. |
+| `TestConfigShow_RepoFlag` | Tests `config show --json --repo <name>` with a registered repo. |
 
 ## diff
 
@@ -298,6 +300,7 @@ Generated: 2026-10-07
 | `TestCd_NoArgs_WithHistory` | Tests returning the most recent worktree. |
 | `TestCd_RecordsHistory` | Tests that cd writes to history after resolving a worktree. |
 | `TestCd_NoArgs_StaleHistory` | Tests that stale history entries are cleaned up. |
+| `TestCd_LabelScope` | Tests resolving a worktree via label:branch. |
 
 ## wt checkout
 
@@ -387,6 +390,7 @@ Generated: 2026-10-07
 | `TestExec_FailingCommand` | Tests that a non-zero exit command is handled gracefully. |
 | `TestExec_RepoNotFound` | Tests error when targeting a non-existent repo. |
 | `TestExec_ByRepoScope` | TestExec_ByLabelScope tests running a command in worktrees matched by label scope. |
+| `TestExec_LabelScope` | Tests running a command in worktrees matched by a label scope. |
 
 ## wt label
 
@@ -424,6 +428,7 @@ Generated: 2026-10-07
 | `TestList_SortByRepo` | Tests sorting worktrees by repo name. |
 | `TestList_Global` | Tests the --global flag shows all repos. |
 | `TestList_GlobalFromNonRepo` | Tests --global from outside any git repo. |
+| `TestList_DefaultSortFromConfig` | Tests that default_sort in config is used when --sort is not set. |
 
 ## wt note
 
@@ -490,4 +495,5 @@ Generated: 2026-10-07
 | `TestPrune_Target_RefreshPR` | Tests that -R fetches PR status for targeted worktrees. |
 | `TestPrune_Target_ResetCache` | Tests that --reset-cache clears the PR cache |
 | `TestPrune_Target_RejectsStaleAndInteractive` | Tests that flags which only apply |
+| `TestPrune_LabelScopedTarget` | Tests pruning worktrees via label:branch format. |
 

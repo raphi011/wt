@@ -442,3 +442,49 @@ func TestCd_NoArgs_StaleHistory(t *testing.T) {
 		t.Errorf("expected path %q, got %q", wtPath, got)
 	}
 }
+
+// TestCd_LabelScope tests resolving a worktree via label:branch.
+//
+// Scenario: Two repos both have a "feature" worktree; one repo has label "team-a".
+// User runs `wt cd team-a:feature`.
+// Expected: Returns the path from the repo with label "team-a", not the other repo.
+func TestCd_LabelScope(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repo1Path := setupTestRepo(t, tmpDir, "repo1")
+	repo2Path := setupTestRepo(t, tmpDir, "repo2")
+	wtPath1 := createTestWorktree(t, repo1Path, "feature")
+	createTestWorktree(t, repo2Path, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: repo1Path, Labels: []string{"team-a"}},
+			{Name: "repo2", Path: repo2Path},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repo1Path)
+
+	cmd := newCdCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"team-a:feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cd command failed: %v", err)
+	}
+
+	got := strings.TrimSpace(out.String())
+	if got != wtPath1 {
+		t.Errorf("expected path from repo with label 'team-a' %q, got %q", wtPath1, got)
+	}
+}

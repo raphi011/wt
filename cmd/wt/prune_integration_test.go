@@ -2492,3 +2492,63 @@ func TestPrune_Target_RejectsStaleAndInteractive(t *testing.T) {
 		})
 	}
 }
+
+// TestPrune_LabelScopedTarget tests pruning worktrees via label:branch format.
+//
+// Scenario: Two repos exist; only one has the label "team-a". User runs
+// `wt prune team-a:feature -f` from an unrelated directory.
+// Expected: Only the repo with label "team-a" has its worktree removed.
+func TestPrune_LabelScopedTarget(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repo1Path := setupTestRepoWithBranches(t, tmpDir, "repo1", []string{"feature"})
+	repo2Path := setupTestRepoWithBranches(t, tmpDir, "repo2", []string{"feature"})
+
+	wt1Path := createTestWorktree(t, repo1Path, "feature")
+	wt2Path := createTestWorktree(t, repo2Path, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: repo1Path, Labels: []string{"team-a"}},
+			{Name: "repo2", Path: repo2Path},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	// Run from a non-repo directory so scope resolution must rely on the label
+	otherDir := filepath.Join(tmpDir, "not-a-repo")
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create non-repo dir: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, cfg, otherDir)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"team-a:feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	// repo1 (labelled "team-a") should have its worktree removed
+	if _, err := os.Stat(wt1Path); err == nil {
+		t.Error("repo1 worktree (team-a) should be removed after label-scoped prune")
+	}
+
+	// repo2 (no label) should be untouched
+	if _, err := os.Stat(wt2Path); os.IsNotExist(err) {
+		t.Error("repo2 worktree should NOT be removed (label 'team-a' does not match)")
+	}
+}

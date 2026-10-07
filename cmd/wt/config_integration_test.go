@@ -4,10 +4,13 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/registry"
 )
 
 // TestConfigInit_Stdout tests printing default config to stdout.
@@ -213,5 +216,131 @@ func TestConfigHooks_JSON_Empty(t *testing.T) {
 	// Accept null or empty object
 	if output != "null" && output != "{}" {
 		t.Errorf("expected null or {} for empty hooks, got %q", output)
+	}
+}
+
+// TestConfigShow_WithLocalConfig tests config show --json when a local .wt.toml overrides values.
+//
+// Scenario: User is inside a repo that has a local .wt.toml with overrides, runs `wt config show --json`
+// Expected: JSON output includes the local overrides (e.g. forge.default = "gitlab")
+func TestConfigShow_WithLocalConfig(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	// Write a local .wt.toml that overrides forge.default
+	localCfgContent := `[forge]
+default = "gitlab"
+`
+	localCfgPath := filepath.Join(repoPath, config.LocalConfigFileName)
+	if err := os.WriteFile(localCfgPath, []byte(localCfgContent), 0644); err != nil {
+		t.Fatalf("failed to write local config: %v", err)
+	}
+
+	cfg := &config.Config{
+		Forge: config.ForgeConfig{
+			Default: "github",
+		},
+	}
+
+	// workDir is set to the repo path so config show can detect the local config
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+
+	cmd := newConfigCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"show", "--json"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("config show --json with local config failed: %v", err)
+	}
+
+	output := out.String()
+	if output == "" {
+		t.Fatal("expected JSON output, got empty")
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, output)
+	}
+
+	// Verify the local override took effect: Forge.Default should be "gitlab"
+	forge, ok := result["Forge"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected 'Forge' key in JSON output, got: %v", result)
+	}
+	if forge["Default"] != "gitlab" {
+		t.Errorf("expected Forge.Default = 'gitlab' (from local override), got %q", forge["Default"])
+	}
+}
+
+// TestConfigShow_RepoFlag tests `config show --json --repo <name>` with a registered repo.
+//
+// Scenario: A repo is registered with a local .wt.toml. User runs `wt config show --json --repo myrepo`.
+// Expected: Valid JSON output contains the merged config (including local overrides).
+func TestConfigShow_RepoFlag(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	// Write a local .wt.toml that overrides checkout.worktree_format
+	localCfgContent := `[checkout]
+worktree_format = "custom/{branch}"
+`
+	localCfgPath := filepath.Join(repoPath, config.LocalConfigFileName)
+	if err := os.WriteFile(localCfgPath, []byte(localCfgContent), 0644); err != nil {
+		t.Fatalf("failed to write local config: %v", err)
+	}
+
+	// Set up registry with the repo
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: ".worktrees/{branch}",
+		},
+	}
+
+	ctx, out := testContextWithConfigAndOutput(t, cfg, tmpDir)
+
+	cmd := newConfigCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"show", "--json", "--repo", "myrepo"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("config show --json --repo myrepo failed: %v", err)
+	}
+
+	output := out.String()
+	if output == "" {
+		t.Fatal("expected JSON output, got empty")
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, output)
+	}
+
+	// Verify the local override was applied: Checkout.WorktreeFormat should be from local config
+	checkout, ok := result["Checkout"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected 'Checkout' key in JSON output, got: %v", result)
+	}
+	if checkout["WorktreeFormat"] != "custom/{branch}" {
+		t.Errorf("expected Checkout.WorktreeFormat = 'custom/{branch}' (from local override), got %q", checkout["WorktreeFormat"])
 	}
 }

@@ -622,3 +622,65 @@ func TestList_GlobalFromNonRepo(t *testing.T) {
 		t.Errorf("expected output to contain 'feature', got %q", output)
 	}
 }
+
+// TestList_DefaultSortFromConfig tests that default_sort in config is used when --sort is not set.
+//
+// Scenario: User sets default_sort = "branch" in config, runs `wt list` without --sort
+// Expected: Worktrees are sorted alphabetically by branch name (from config)
+func TestList_DefaultSortFromConfig(t *testing.T) {
+	t.Parallel()
+	tmpDir := resolvePath(t, t.TempDir())
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"gamma", "alpha", "beta"})
+	createTestWorktree(t, repoPath, "gamma")
+	createTestWorktree(t, repoPath, "alpha")
+	createTestWorktree(t, repoPath, "beta")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	// Set default_sort = "branch" in config; no --sort flag will be passed
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		DefaultSort:  "branch",
+	}
+	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, repoPath)
+
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{}) // No --sort flag — config's default_sort should apply
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
+	}
+
+	output := out.String()
+	// All branches should appear
+	for _, branch := range []string{"alpha", "beta", "gamma"} {
+		if !strings.Contains(output, branch) {
+			t.Errorf("expected output to contain %q, got %q", branch, output)
+		}
+	}
+
+	// Verify alphabetical order: alpha < beta < gamma
+	alphaIdx := strings.Index(output, "alpha")
+	betaIdx := strings.Index(output, "beta")
+	gammaIdx := strings.Index(output, "gamma")
+	if alphaIdx > betaIdx || betaIdx > gammaIdx {
+		t.Errorf("expected alphabetical order (alpha < beta < gamma), got alpha=%d beta=%d gamma=%d",
+			alphaIdx, betaIdx, gammaIdx)
+	}
+}
