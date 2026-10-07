@@ -44,6 +44,9 @@ type hookParams struct {
 	HooksCfg  config.HooksConfig
 	ConfigDir string // ~/.wt/ config dir
 	WtPath    string // worktree path (used as workDir for hook execution)
+	// BeforeWorkDir overrides the workDir of before-hooks, for commands that
+	// create the worktree. Empty = WtPath.
+	BeforeWorkDir string
 	// AfterWorkDir overrides the workDir of after-hooks, for commands that
 	// remove the worktree. Empty = WtPath.
 	AfterWorkDir string
@@ -82,7 +85,11 @@ func withHooks(ctx context.Context, p hookParams, fn func() error) error {
 		return err
 	}
 	hookCtx.Phase = hooks.PhaseBefore
-	if err := hooks.RunBeforeHooks(ctx, beforeMatches, hookCtx, p.WtPath); err != nil {
+	beforeWorkDir := p.WtPath
+	if p.BeforeWorkDir != "" {
+		beforeWorkDir = p.BeforeWorkDir
+	}
+	if err := hooks.RunBeforeHooks(ctx, beforeMatches, hookCtx, beforeWorkDir); err != nil {
 		return fmt.Errorf("before-hook aborted %s: %w", p.Trigger, err)
 	}
 

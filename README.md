@@ -635,14 +635,14 @@ Hooks run with a working directory that depends on the command and phase:
 
 | Command | `before` CWD | `after` CWD |
 |---------|-------------|------------|
-| `checkout` | Worktree directory | Worktree directory |
-| `checkout:pr` (via `wt pr checkout`) | Worktree directory | Worktree directory |
+| `checkout`, worktree is created | Repo root (worktree does not exist yet) | Worktree directory |
+| `checkout`, worktree exists | Worktree directory | Worktree directory |
 | `prune` | Worktree directory (still exists) | Repo root (worktree deleted) |
 | `merge` | Current directory | Repo root |
 
-For checkout hooks, the worktree already exists when before hooks run. A failing before hook aborts the command but does not roll back the worktree.
+The `checkout` rows also apply to `wt pr checkout`. Before hooks of a checkout run before anything is fetched or created, so a failing before hook leaves no worktree behind. `{worktree-dir}` then holds the path the worktree will get.
 
-Since the working directory is already set, `cd '{worktree-dir}'` is unnecessary in checkout hooks. For other commands, use `{worktree-dir}` or `{repo-dir}` placeholders if you need a specific directory.
+Since the working directory is already set, `cd '{worktree-dir}'` is unnecessary in after-checkout hooks. For other commands, use `{worktree-dir}` or `{repo-dir}` placeholders if you need a specific directory.
 
 ### Hook Execution Order
 
