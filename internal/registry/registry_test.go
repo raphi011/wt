@@ -7,7 +7,31 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"github.com/raphi011/wt/internal/statepath"
 )
+
+func TestRegistryPath_Default(t *testing.T) {
+	t.Parallel()
+	want, err := statepath.Registry("")
+	if err != nil {
+		t.Fatalf("derive default registry path: %v", err)
+	}
+	path, err := registryPath()
+	if err != nil {
+		t.Fatalf("resolve default registry path: %v", err)
+	}
+	if path != want {
+		t.Errorf("default registry path = %q, want %q", path, want)
+	}
+	info, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		t.Fatalf("default registry directory does not exist: %v", err)
+	}
+	if !info.IsDir() {
+		t.Error("default registry parent is not a directory")
+	}
+}
 
 func TestRepoHasLabel(t *testing.T) {
 	t.Parallel()
@@ -283,10 +307,10 @@ func TestRegistryLabels(t *testing.T) {
 func TestLoadExplicitPath(t *testing.T) {
 	t.Parallel()
 
-	t.Run("non-existent file returns empty registry", func(t *testing.T) {
+	t.Run("missing parent returns empty registry without creating directories", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
-		path := filepath.Join(tmpDir, "nonexistent.json")
+		path := filepath.Join(tmpDir, "missing", "nonexistent.json")
 
 		reg, err := Load(path)
 		if err != nil {
@@ -294,6 +318,9 @@ func TestLoadExplicitPath(t *testing.T) {
 		}
 		if len(reg.Repos) != 0 {
 			t.Errorf("expected 0 repos, got %d", len(reg.Repos))
+		}
+		if _, err := os.Stat(filepath.Dir(path)); !os.IsNotExist(err) {
+			t.Errorf("explicit registry read created a directory or failed to stat: %v", err)
 		}
 	})
 

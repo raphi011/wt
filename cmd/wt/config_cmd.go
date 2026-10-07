@@ -16,6 +16,7 @@ import (
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
+	"github.com/raphi011/wt/internal/statepath"
 )
 
 func newConfigCmd() *cobra.Command {
@@ -84,11 +85,10 @@ func initGlobalConfig(cmd *cobra.Command, force, stdout bool) error {
 	}
 
 	// Get config path
-	home, err := os.UserHomeDir()
+	configPath, err := statepath.Config("")
 	if err != nil {
 		return err
 	}
-	configPath := filepath.Join(home, ".wt", "config.toml")
 
 	// Check if exists
 	if !force {
@@ -219,11 +219,11 @@ annotations (global vs local). Otherwise shows global config only.`,
 				return enc.Encode(effCfg)
 			}
 
-			globalCfgPath, err := effCfg.GetWtDir()
+			globalCfgPath, err := statepath.Config(effCfg.RegistryPath)
 			if err != nil {
 				return fmt.Errorf("resolve config directory: %w", err)
 			}
-			return renderConfigText(out.Writer(), effCfg, local, filepath.Join(globalCfgPath, "config.toml"), localPath)
+			return renderConfigText(out.Writer(), effCfg, local, globalCfgPath, localPath)
 		},
 	}
 

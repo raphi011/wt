@@ -500,6 +500,45 @@ func TestGetHistoryPath(t *testing.T) {
 	})
 }
 
+func TestPathOverridesKeepHistoryIndependent(t *testing.T) {
+	t.Parallel()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("get home directory: %v", err)
+	}
+	for _, tc := range []struct {
+		name    string
+		history string
+		want    string
+	}{
+		{"registry only", "", filepath.Join(home, ".wt", "history.json")},
+		{"separate history override", "./history/../navigation.json", "./history/../navigation.json"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := filepath.Join(t.TempDir(), "custom")
+			cfg := &Config{RegistryPath: filepath.Join(dir, "registry.json"), HistoryPath: tc.history}
+			for _, path := range []struct {
+				name string
+				get  func() (string, error)
+				want string
+			}{
+				{"directory", cfg.GetWtDir, dir},
+				{"PR cache", cfg.GetPRCachePath, filepath.Join(dir, "prs.json")},
+				{"history", cfg.GetHistoryPath, tc.want},
+			} {
+				got, err := path.get()
+				if err != nil {
+					t.Fatalf("get %s: %v", path.name, err)
+				}
+				if got != path.want {
+					t.Errorf("%s = %q, want %q", path.name, got, path.want)
+				}
+			}
+		})
+	}
+}
+
 func TestShouldSetUpstream(t *testing.T) {
 	t.Parallel()
 
