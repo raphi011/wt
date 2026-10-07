@@ -6,8 +6,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 
+	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -254,6 +256,95 @@ func TestRepoClone_WithLabels(t *testing.T) {
 
 	if !hasBackend || !hasAPI {
 		t.Errorf("expected labels [backend, api], got %v", reg.Repos[0].Labels)
+	}
+}
+
+// TestRepoClone_DefaultLabels tests that default_labels and --label are combined.
+//
+// Scenario: User runs `wt repo clone file:///repo -l extra -l work` with default_labels = ["work"]
+// Expected: Repo is registered with the labels work and extra, without duplicates
+func TestRepoClone_DefaultLabels(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	cfg := testConfig()
+	cfg.RegistryPath = regFile
+	cfg.DefaultLabels = []string{"work"}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newRepoCloneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"file://" + sourceRepo, "labeled-repo", "-l", "extra", "-l", "work"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("clone command failed: %v", err)
+	}
+
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	want := []string{"work", "extra"}
+	if !slices.Equal(reg.Repos[0].Labels, want) {
+		t.Errorf("expected labels %v, got %v", want, reg.Repos[0].Labels)
+	}
+}
+
+// TestRepoClone_BareNoCheckoutHook tests that the initial worktree runs no checkout hook.
+//
+// Scenario: User runs `wt repo clone file:///repo --clone-mode bare` with a hook on checkout
+// Expected: The worktree for the default branch is created, the hook does not run
+func TestRepoClone_BareNoCheckoutHook(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	markerPath := filepath.Join(tmpDir, "hook-ran")
+	cfg := testConfig()
+	cfg.RegistryPath = regFile
+	cfg.Hooks = config.HooksConfig{
+		Hooks: map[string]config.Hook{
+			"test-hook": {
+				Command:     "touch " + markerPath,
+				Description: "Test hook",
+				On:          []string{"checkout"},
+			},
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	cmd := newRepoCloneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"file://" + sourceRepo, "cloned-repo", "--clone-mode", "bare"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("clone command failed: %v", err)
+	}
+
+	worktreePath := filepath.Join(tmpDir, "cloned-repo", ".worktrees", "main")
+	if _, err := os.Stat(worktreePath); err != nil {
+		t.Errorf("worktree for default branch should be created: %v", err)
+	}
+	if _, err := os.Stat(markerPath); !os.IsNotExist(err) {
+		t.Errorf("checkout hook should not run for the initial worktree, stat error: %v", err)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -20,7 +21,6 @@ import (
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/prompt"
 	"github.com/raphi011/wt/internal/ui/static"
-	"github.com/raphi011/wt/internal/worktree"
 )
 
 func newRepoCmd() *cobra.Command {
@@ -510,15 +510,7 @@ If destination is not specified, clones into <repo-name> in the current director
 				Labels:         labels,
 			}
 
-			var addErr error
-			if _, err := registry.Update(cfg.RegistryPath, func(r *registry.Registry) error {
-				addErr = r.Add(repo)
-				return addErr
-			}); err != nil {
-				if addErr != nil {
-					// Clean up on failure
-					return errors.Join(fmt.Errorf("register repo: %w", err), os.RemoveAll(absPath))
-				}
+			if err := registerClone(cfg, &repo); err != nil {
 				return err
 			}
 
@@ -549,19 +541,12 @@ If destination is not specified, clones into <repo-name> in the current director
 
 				// Create worktree if we have a branch
 				if worktreeBranch != "" {
-					format := worktreeFormat
-					if format == "" {
-						format = cfg.Checkout.WorktreeFormat
-					}
-					wtPath := worktree.ResolvePath(absPath, repoName, worktreeBranch, format)
-
-					l.Debug("creating initial worktree", "path", wtPath, "branch", worktreeBranch)
-
-					if err := git.CreateWorktree(ctx, gitDir, wtPath, worktreeBranch); err != nil {
+					// No fetch right after the clone, and no checkout hooks
+					if _, err := ensureWorktree(ctx, repo, worktreeBranch, checkoutOpts{
+						FetchExplicit: true,
+						Hooks:         hookFlags{NoHook: true},
+					}); err != nil {
 						l.Printf("Warning: failed to create initial worktree: %v\n", err)
-					} else {
-						l.Printf("Created worktree: %s (%s)\n", wtPath, worktreeBranch)
-						recordHistory(ctx, cfg, wtPath, repoName, worktreeBranch)
 					}
 				}
 			}
@@ -788,6 +773,31 @@ func registerRepo(cfg *config.Config, repo registry.Repo) error {
 		return nil
 	})
 	return err
+}
+
+// registerClone adds a fresh clone to the registry, with default_labels in
+// front of the repo's own labels. A clone the registry rejects (duplicate name
+// or path) is deleted; it is kept when the registry can't be updated.
+func registerClone(cfg *config.Config, repo *registry.Repo) error {
+	labels := slices.Clone(cfg.DefaultLabels)
+	for _, label := range repo.Labels {
+		if !slices.Contains(labels, label) {
+			labels = append(labels, label)
+		}
+	}
+	repo.Labels = labels
+
+	var addErr error
+	if _, err := registry.Update(cfg.RegistryPath, func(r *registry.Registry) error {
+		addErr = r.Add(*repo)
+		return addErr
+	}); err != nil {
+		if addErr != nil {
+			return errors.Join(fmt.Errorf("register repo: %w", err), os.RemoveAll(repo.Path))
+		}
+		return err
+	}
+	return nil
 }
 
 // registerAndVerify registers the repo (if not already registered) and lists worktrees for verification.
