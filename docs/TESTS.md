@@ -410,6 +410,7 @@ Generated: 2026-10-07
 | `TestCheckout_AutoStash_BareInGitRepo` | Tests that --autostash works with bare-in-.git repos. |
 | `TestCheckout_AutoStash_BareInGitRepo_NoChanges` | Tests that --autostash with a clean |
 | `TestCheckout_AutoStash_NotInTargetRepo` | Tests that --autostash errors when the user |
+| `TestCheckout_AutoStash_NotInTargetRepo_SkipsBeforeHooks` | Tests that a rejected |
 | `TestCheckout_AutoStash_SecondaryWorktree` | Tests that --autostash works when the user |
 | `TestCheckout_AutoStash_Subdirectory` | Tests that --autostash works when the user |
 | `TestCheckout_AutoStash_LabelTarget` | Tests that --autostash errors when used |
