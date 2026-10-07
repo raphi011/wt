@@ -8,8 +8,27 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14.0
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     env:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
       GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
@@ -25,31 +44,34 @@ jobs:
         run: go build -v ./...
 
       - name: Test
-        run: go test -coverpkg=./... -coverprofile=coverage.out ./...
+        run: go test -race -coverpkg=./... -coverprofile=coverage.out ./...
 
       - name: Verify gh CLI
         run: gh --version
 
       - name: Install glab CLI
+        if: runner.os == 'Linux'
         run: |
           curl -fsSL https://gitlab.com/gitlab-org/cli/-/releases/v1.52.0/downloads/glab_1.52.0_linux_amd64.deb -o glab.deb
           sudo dpkg -i glab.deb
 
       - name: Configure glab CLI
-        if: env.GITLAB_TOKEN != ''
+        if: runner.os == 'Linux' && env.GITLAB_TOKEN != ''
         run: |
           glab config set git_protocol https --host gitlab.com
           glab auth status
 
+      # Forge tests need WT_TEST_*_REPO and skip without it. Only Linux sets it,
+      # so the two OS jobs don't run against the shared test repo at the same time.
       - name: Integration Test
         if: env.GH_TOKEN != ''
         env:
-          WT_TEST_GITHUB_REPO: raphi011/wt-test
-          WT_TEST_GITLAB_REPO: raphi011/wt-test
-        run: go test -tags=integration -coverpkg=./... -coverprofile=coverage-integration.out ./...
+          WT_TEST_GITHUB_REPO: ${{ runner.os == 'Linux' && 'raphi011/wt-test' || '' }}
+          WT_TEST_GITLAB_REPO: ${{ runner.os == 'Linux' && 'raphi011/wt-test' || '' }}
+        run: go test -race -tags=integration -coverpkg=./... -coverprofile=coverage-integration.out ./...
 
       - name: Upload coverage to Codecov
-        if: "!cancelled() && (github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request')"
+        if: "!cancelled() && runner.os == 'Linux' && (github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request')"
         uses: codecov/codecov-action@v5
         with:
           files: coverage.out,coverage-integration.out
