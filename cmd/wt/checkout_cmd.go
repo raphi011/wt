@@ -84,6 +84,12 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				}
 			}
 
+			// Parse hook args once: stdin (KEY=-) can only be read once,
+			// but hooks run per repo
+			if err := hf.parseArgs(); err != nil {
+				return err
+			}
+
 			// Parse target
 			parsed, err := parseScopedTarget(reg, target)
 			if err != nil {

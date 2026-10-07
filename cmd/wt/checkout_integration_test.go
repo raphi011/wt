@@ -1600,6 +1600,93 @@ func TestCheckout_HookWithArg(t *testing.T) {
 	}
 }
 
+// TestCheckout_HookWithStdinArg_Label tests that a stdin hook variable reaches every repo of a label.
+//
+// Scenario: User runs `echo hello | wt checkout -b backend:feature -a val=-` with two backend repos
+// Expected: The checkout hook runs in both repos with the piped value
+func TestCheckout_HookWithStdinArg_Label(t *testing.T) {
+	// Not parallel: replaces os.Stdin with a pipe
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	if _, err := w.WriteString("hello"); err != nil {
+		t.Fatalf("failed to write to pipe: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("failed to close pipe writer: %v", err)
+	}
+	origStdin := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() {
+		os.Stdin = origStdin
+		if err := r.Close(); err != nil {
+			t.Errorf("failed to close pipe reader: %v", err)
+		}
+	})
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repo1Path := setupTestRepo(t, tmpDir, "api-server")
+	repo2Path := setupTestRepo(t, tmpDir, "auth-server")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "api-server", Path: repo1Path, Labels: []string{"backend"}, WorktreeFormat: "../{repo}-{branch}"},
+			{Name: "auth-server", Path: repo2Path, Labels: []string{"backend"}, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"show": {
+					Command: "echo {val} > " + filepath.Join(tmpDir, "hook-{repo}.txt"),
+					On:      []string{"checkout"},
+				},
+			},
+		},
+	}
+
+	workingDir := filepath.Join(tmpDir, "work")
+	if err := os.MkdirAll(workingDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, cfg, workingDir)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "backend:feature", "-a", "val=-"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	for _, name := range []string{"api-server", "auth-server"} {
+		content, err := os.ReadFile(filepath.Join(tmpDir, "hook-"+name+".txt"))
+		if err != nil {
+			t.Fatalf("failed to read hook output for %s: %v", name, err)
+		}
+		if strings.TrimSpace(string(content)) != "hello" {
+			t.Errorf("%s: expected hook output 'hello', got %q", name, string(content))
+		}
+	}
+}
+
 // TestCheckout_DefaultHookRuns tests that default hooks run automatically.
 //
 // Scenario: User runs `wt checkout -b feature` with a hook that has on=["checkout"]

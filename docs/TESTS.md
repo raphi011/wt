@@ -30,13 +30,13 @@ Generated: 2026-10-07
 | [reporemove](#reporemove) | 6 |
 | [resolveworktreetargets](#resolveworktreetargets) | 4 |
 | [wt cd](#wt-cd) | 9 |
-| [wt checkout](#wt-checkout) | 66 |
+| [wt checkout](#wt-checkout) | 67 |
 | [wt exec](#wt-exec) | 11 |
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 12 |
 | [wt note](#wt-note) | 10 |
 | [wt prune](#wt-prune) | 46 |
-| **Total** | **297** |
+| **Total** | **298** |
 
 ## completebasebranches
 
@@ -325,6 +325,7 @@ Generated: 2026-10-07
 | `TestCheckout_Hook` | Tests that --hook runs a specific hook after checkout. |
 | `TestCheckout_NoHook` | Tests that --no-hook skips default hooks. |
 | `TestCheckout_HookWithArg` | Tests that --arg passes variables to hooks. |
+| `TestCheckout_HookWithStdinArg_Label` | Tests that a stdin hook variable reaches every repo of a label. |
 | `TestCheckout_DefaultHookRuns` | Tests that default hooks run automatically. |
 | `TestCheckout_RecordsHistory` | Tests that checkout records to history. |
 | `TestCheckout_NewBranchEmptyRepo` | Tests creating a new branch on an empty (no commits) repo. |
