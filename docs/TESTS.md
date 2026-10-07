@@ -15,6 +15,7 @@ Generated: 2026-10-07
 | [configshow](#configshow) | 4 |
 | [currentrepo](#currentrepo) | 3 |
 | [diff](#diff) | 13 |
+| [ensureworktree](#ensureworktree) | 1 |
 | [forge](#forge) | 9 |
 | [forgetworktrees](#forgetworktrees) | 1 |
 | [hook](#hook) | 10 |
@@ -31,6 +32,7 @@ Generated: 2026-10-07
 | [repoconvertregular](#repoconvertregular) | 4 |
 | [repolist](#repolist) | 5 |
 | [reporemove](#reporemove) | 6 |
+| [resolvecheckoutrepos](#resolvecheckoutrepos) | 1 |
 | [resolveworktreetargets](#resolveworktreetargets) | 5 |
 | [unscopedrepos](#unscopedrepos) | 1 |
 | [wt cd](#wt-cd) | 13 |
@@ -40,7 +42,7 @@ Generated: 2026-10-07
 | [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 50 |
-| **Total** | **338** |
+| **Total** | **340** |
 
 ## completebasebranches
 
@@ -117,6 +119,12 @@ Generated: 2026-10-07
 | `TestDiff_BaseAndWorkingMutuallyExclusive` | Tests that --base and --working cannot be combined. |
 | `TestDiff_ToolFlag` | Tests the --tool flag for pager override. |
 | `TestDiff_UnscopedInRepo_UsesCurrentRepo` | Tests that diff resolves an unscoped |
+
+## ensureworktree
+
+| Test | Description |
+|------|-------------|
+| `TestEnsureWorktree` | Tests the worktree sequence shared by the checkout commands. |
 
 ## forge
 
@@ -304,6 +312,12 @@ Generated: 2026-10-07
 | `TestRepoRemove_DeleteForce` | Tests removing a repo with --delete --force flags. |
 | `TestRepoRemove_DeleteForce_WriteError` | Tests that a failing output writer is reported. |
 | `TestRepoRemove_ByPath` | Tests removing a repo by its full path instead of name. |
+
+## resolvecheckoutrepos
+
+| Test | Description |
+|------|-------------|
+| `TestResolveCheckoutRepos_ExistingWorktreeHasNoSideEffects` | Tests that |
 
 ## resolveworktreetargets
 

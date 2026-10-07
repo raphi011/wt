@@ -101,21 +101,20 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				return err
 			}
 
-			// Reject before resolving: resolution already opens existing worktrees
+			// Reject before the first repo is touched
 			if autoStash && len(parsed.Repos) > 1 {
 				return fmt.Errorf("--autostash cannot be used with label targets (affects multiple repos)")
 			}
 
-			// Resolve fetch for repo routing (global config); per-repo config is applied in checkoutInRepo
+			// Resolve fetch for repo routing (global config); per-repo config is applied in ensureWorktree
 			fetchResolved := fetch
 			if !fetchExplicit {
 				fetchResolved = cfg.Checkout.AutoFetch
 			}
 
 			// Determine repos to operate on
-			// A label target can fail in some repos and still return the rest
-			repos, err := resolveCheckoutRepos(ctx, l, reg, parsed, newBranch, fetchResolved, global, hf)
-			if err != nil && len(repos) == 0 {
+			repos, err := resolveCheckoutRepos(ctx, l, reg, parsed, newBranch, fetchResolved, global)
+			if err != nil {
 				return err
 			}
 
@@ -131,9 +130,10 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				Note:          note,
 				Hooks:         hf,
 			}
-			errs := []error{err}
+			// A label target can fail in some repos and still continue with the rest
+			var errs []error
 			for _, repo := range repos {
-				if err := checkoutInRepo(ctx, repo, parsed.Branch, coOpts); err != nil {
+				if _, err := ensureWorktree(ctx, repo, parsed.Branch, coOpts); err != nil {
 					errs = append(errs, fmt.Errorf("%s: %w", repo.Name, err))
 				}
 			}
@@ -172,10 +172,41 @@ type checkoutOpts struct {
 	Hooks         hookFlags
 }
 
-func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, opts checkoutOpts) error {
+// worktreeResult reports what ensureWorktree did.
+type worktreeResult struct {
+	Path    string
+	Created bool // false: the branch already had a worktree, which was opened
+}
+
+// ensureWorktree makes sure the branch has a worktree in the repo: an existing
+// worktree is opened, otherwise one is created. Both run hooks and record
+// history. With opts.NewBranch the branch is created with the worktree.
+func ensureWorktree(ctx context.Context, repo registry.Repo, branch string, opts checkoutOpts) (worktreeResult, error) {
 	l := log.FromContext(ctx)
 
 	cfg := resolveEffectiveConfig(ctx, repo.Path)
+
+	if !opts.NewBranch {
+		wtPath, found, err := findWorktreeForBranch(ctx, repo.Path, branch)
+		if err != nil {
+			return worktreeResult{}, err
+		}
+		if found {
+			hp, err := buildHookParams(cfg, repo, wtPath, branch, hooks.CommandCheckout, hooks.ActionOpen, opts.Hooks)
+			if err != nil {
+				return worktreeResult{}, err
+			}
+			err = withHooks(ctx, hp, func() error {
+				l.Printf("Opened worktree: %s (%s)\n", wtPath, branch)
+				recordHistory(ctx, cfg, wtPath, repo.Name, branch)
+				return nil
+			})
+			if err != nil {
+				return worktreeResult{}, err
+			}
+			return worktreeResult{Path: wtPath}, nil
+		}
+	}
 
 	// Override fetch with per-repo config if not explicitly set by CLI flag
 	fetch := opts.Fetch
@@ -190,7 +221,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, opts
 
 	repoType, err := git.DetectRepoType(ctx, repo.Path)
 	if err != nil {
-		return err
+		return worktreeResult{}, err
 	}
 
 	gitDir := git.GetGitDir(ctx, repo.Path, repoType)
@@ -198,14 +229,14 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, opts
 
 	if opts.AutoStash {
 		if err := checkAutoStash(ctx, repo); err != nil {
-			return err
+			return worktreeResult{}, err
 		}
 	}
 
 	fetchForCheckout(ctx, gitDir, cfg, branch, opts, fetch, repoHasCommits)
 
 	if err := createWorktreeForBranch(ctx, gitDir, wtPath, branch, opts, repoHasCommits, cfg.Checkout.BaseRef); err != nil {
-		return err
+		return worktreeResult{}, err
 	}
 
 	setUpstreamTracking(ctx, gitDir, branch, opts.NewBranch, repoHasCommits, cfg)
@@ -236,13 +267,17 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, opts
 
 	hp, err := buildHookParams(cfg, repo, wtPath, branch, hooks.CommandCheckout, action, opts.Hooks)
 	if err != nil {
-		return err
+		return worktreeResult{}, err
 	}
 
-	return withHooks(ctx, hp, func() error {
+	err = withHooks(ctx, hp, func() error {
 		recordHistory(ctx, cfg, wtPath, repo.Name, branch)
 		return nil
 	})
+	if err != nil {
+		return worktreeResult{}, err
+	}
+	return worktreeResult{Path: wtPath, Created: true}, nil
 }
 
 // checkAutoStash verifies that --autostash is run from a worktree of the target repo.
@@ -388,25 +423,6 @@ func preserveWorktreeFiles(ctx context.Context, repoPath, wtPath string, noPrese
 	}
 }
 
-// openExistingWorktree handles the case where a worktree for the branch already exists.
-// It prints the worktree path to stdout, records history, and runs hooks with action="open",
-// skipping worktree creation.
-func openExistingWorktree(ctx context.Context, repo registry.Repo, branch, wtPath string, hf hookFlags) error {
-	l := log.FromContext(ctx)
-	cfg := resolveEffectiveConfig(ctx, repo.Path)
-
-	hp, err := buildHookParams(cfg, repo, wtPath, branch, hooks.CommandCheckout, hooks.ActionOpen, hf)
-	if err != nil {
-		return err
-	}
-
-	return withHooks(ctx, hp, func() error {
-		l.Printf("Opened worktree: %s (%s)\n", wtPath, branch)
-		recordHistory(ctx, cfg, wtPath, repo.Name, branch)
-		return nil
-	})
-}
-
 // findWorktreeForBranch checks if the given branch already has a worktree in the repo.
 // Returns the worktree path and true if found, or ("", false) otherwise.
 // Returns an error if the repo's worktrees cannot be listed.
@@ -423,21 +439,16 @@ func findWorktreeForBranch(ctx context.Context, repoPath, branch string) (string
 	return "", false, nil
 }
 
-// resolveCheckoutRepos determines which repos need a new worktree created.
-// For repos that already have a worktree for the branch, it opens them directly.
+// resolveCheckoutRepos determines the repos to check the branch out in.
 func resolveCheckoutRepos(
 	ctx context.Context,
 	l *log.Logger,
 	reg *registry.Registry,
 	parsed ScopedTargetResult,
 	newBranch, fetch, global bool,
-	hf hookFlags,
 ) ([]registry.Repo, error) {
 	if len(parsed.Repos) > 0 {
-		if newBranch {
-			return parsed.Repos, nil
-		}
-		return resolveScopedExisting(ctx, parsed.Repos, parsed.Branch, hf)
+		return parsed.Repos, nil
 	}
 
 	if newBranch {
@@ -454,38 +465,9 @@ func resolveCheckoutRepos(
 		return nil, err
 	}
 	if current {
-		return resolveUnscopedInRepo(ctx, repos[0], parsed.Branch, fetch, hf)
+		return resolveUnscopedInRepo(ctx, repos[0], parsed.Branch, fetch)
 	}
-	return resolveUnscopedAcrossRepos(ctx, l, repos, parsed.Branch, hf)
-}
-
-// resolveScopedExisting handles scoped targets for existing branches.
-// Opens worktrees that already exist and returns repos that still need creation.
-// A failing repo does not stop the others: the remaining repos are returned
-// together with the collected errors.
-func resolveScopedExisting(
-	ctx context.Context,
-	repos []registry.Repo,
-	branch string,
-	hf hookFlags,
-) ([]registry.Repo, error) {
-	var remaining []registry.Repo
-	var errs []error
-	for _, repo := range repos {
-		wtPath, found, err := findWorktreeForBranch(ctx, repo.Path, branch)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", repo.Name, err))
-			continue
-		}
-		if !found {
-			remaining = append(remaining, repo)
-			continue
-		}
-		if err := openExistingWorktree(ctx, repo, branch, wtPath, hf); err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", repo.Name, err))
-		}
-	}
-	return remaining, errors.Join(errs...)
+	return resolveUnscopedAcrossRepos(ctx, l, repos, parsed.Branch)
 }
 
 // resolveUnscopedInRepo resolves an existing branch checkout within the current repo.
@@ -494,14 +476,13 @@ func resolveUnscopedInRepo(
 	repo registry.Repo,
 	branch string,
 	fetch bool,
-	hf hookFlags,
 ) ([]registry.Repo, error) {
-	wtPath, found, err := findWorktreeForBranch(ctx, repo.Path, branch)
+	_, found, err := findWorktreeForBranch(ctx, repo.Path, branch)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", repo.Name, err)
 	}
 	if found {
-		return nil, openExistingWorktree(ctx, repo, branch, wtPath, hf)
+		return []registry.Repo{repo}, nil
 	}
 
 	branches, err := git.ListLocalBranches(ctx, repo.Path)
@@ -519,28 +500,23 @@ func resolveUnscopedInRepo(
 }
 
 // resolveUnscopedAcrossRepos searches repos for an existing branch.
-// The branch must have a worktree or local branch in exactly one repo: its
-// worktree is opened, or the repo is returned for creation.
+// The branch must have a worktree or local branch in exactly one repo, which
+// is returned.
 func resolveUnscopedAcrossRepos(
 	ctx context.Context,
 	l *log.Logger,
 	repos []registry.Repo,
 	branch string,
-	hf hookFlags,
 ) ([]registry.Repo, error) {
-	type candidate struct {
-		repo   registry.Repo
-		wtPath string // empty: the branch has no worktree yet
-	}
-	var candidates []candidate
+	var candidates []registry.Repo
 	for _, repo := range repos {
-		wtPath, found, err := findWorktreeForBranch(ctx, repo.Path, branch)
+		_, found, err := findWorktreeForBranch(ctx, repo.Path, branch)
 		if err != nil {
 			l.Printf("Warning: %s: %v\n", repo.Name, err)
 			continue
 		}
 		if found {
-			candidates = append(candidates, candidate{repo: repo, wtPath: wtPath})
+			candidates = append(candidates, repo)
 			continue
 		}
 		branches, err := git.ListLocalBranches(ctx, repo.Path)
@@ -549,7 +525,7 @@ func resolveUnscopedAcrossRepos(
 			continue
 		}
 		if slices.Contains(branches, branch) {
-			candidates = append(candidates, candidate{repo: repo})
+			candidates = append(candidates, repo)
 		}
 	}
 
@@ -559,16 +535,12 @@ func resolveUnscopedAcrossRepos(
 	if len(candidates) > 1 {
 		var names []string
 		for _, c := range candidates {
-			names = append(names, c.repo.Name+":"+branch)
+			names = append(names, c.Name+":"+branch)
 		}
 		return nil, fmt.Errorf("branch %q exists in multiple repos: %s (use repo:branch to pick one)", branch, strings.Join(names, ", "))
 	}
 
-	c := candidates[0]
-	if c.wtPath != "" {
-		return nil, openExistingWorktree(ctx, c.repo, branch, c.wtPath, hf)
-	}
-	return []registry.Repo{c.repo}, nil
+	return candidates, nil
 }
 
 // completeHooks provides completion for hook flags
