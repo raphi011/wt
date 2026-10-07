@@ -3339,7 +3339,7 @@ func TestCheckout_NewBranchViaSymlink(t *testing.T) {
 // TestCheckout_BeforeHookAborts tests that a failing before hook aborts checkout.
 //
 // Scenario: User has a before:checkout hook that exits 1
-// Expected: Checkout returns error, but worktree still exists (created before hooks run)
+// Expected: Checkout returns error, no worktree is created and no note is set
 func TestCheckout_BeforeHookAborts(t *testing.T) {
 	t.Parallel()
 
@@ -3380,7 +3380,7 @@ func TestCheckout_BeforeHookAborts(t *testing.T) {
 	ctx := testContextWithConfig(t, cfg, repoPath)
 	cmd := newCheckoutCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"-b", "feature"})
+	cmd.SetArgs([]string{"-b", "feature", "--note", "my note"})
 
 	err := cmd.Execute()
 	if err == nil {
@@ -3388,6 +3388,141 @@ func TestCheckout_BeforeHookAborts(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "before-hook aborted") {
 		t.Errorf("expected 'before-hook aborted' in error, got: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(tmpDir, "test-repo-feature")); !os.IsNotExist(err) {
+		t.Errorf("worktree should not be created, stat error: %v", err)
+	}
+	if out, err := runGitCommand(repoPath, "config", "branch.feature.description"); err == nil {
+		t.Errorf("note should not be set, got %q", out)
+	}
+}
+
+// TestCheckout_BeforeHookWorkDirCreate tests where a before hook runs when the worktree is created.
+//
+// Scenario: User has a before:checkout hook and runs `wt checkout -b feature`
+// Expected: The hook runs in the repo directory, because the worktree does not exist yet
+func TestCheckout_BeforeHookWorkDirCreate(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	pwdFile := filepath.Join(tmpDir, "before-pwd")
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"guard": {
+					// Fails if the worktree already exists
+					Command: "test ! -e '{worktree-dir}' && pwd -P > '" + pwdFile + "'",
+					On:      []string{"before:checkout"},
+				},
+			},
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	got, err := os.ReadFile(pwdFile)
+	if err != nil {
+		t.Fatalf("before hook did not run: %v", err)
+	}
+	if strings.TrimSpace(string(got)) != repoPath {
+		t.Errorf("before hook ran in %q, want %q", strings.TrimSpace(string(got)), repoPath)
+	}
+	if _, err := os.Stat(wtPath); err != nil {
+		t.Errorf("worktree should be created: %v", err)
+	}
+}
+
+// TestCheckout_BeforeHookWorkDirOpen tests where a before hook runs when the worktree exists.
+//
+// Scenario: User has a before:checkout hook and runs `wt checkout feature` for a branch with a worktree
+// Expected: The hook runs in the worktree directory
+func TestCheckout_BeforeHookWorkDirOpen(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+	wtPath := createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	pwdFile := filepath.Join(tmpDir, "before-pwd")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"guard": {
+					Command: "pwd -P > '" + pwdFile + "'",
+					On:      []string{"before:checkout"},
+				},
+			},
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	got, err := os.ReadFile(pwdFile)
+	if err != nil {
+		t.Fatalf("before hook did not run: %v", err)
+	}
+	if strings.TrimSpace(string(got)) != wtPath {
+		t.Errorf("before hook ran in %q, want %q", strings.TrimSpace(string(got)), wtPath)
 	}
 }
 

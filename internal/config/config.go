@@ -535,6 +535,7 @@ worktree_format = ".worktrees/{branch}"
 # After-hooks: failures are logged as warnings.
 #
 # Hooks run with working directory set to the worktree path.
+# For "checkout" before-hooks, working directory is the main repo if the worktree is created (it does not exist yet).
 # For "prune" after-hooks, working directory is the main repo (worktree is deleted).
 # For "prune" before-hooks, working directory is the worktree (still exists).
 # For "merge" after-hooks, working directory is the main repo.

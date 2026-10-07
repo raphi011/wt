@@ -36,13 +36,13 @@ Generated: 2026-10-07
 | [resolveworktreetargets](#resolveworktreetargets) | 5 |
 | [unscopedrepos](#unscopedrepos) | 1 |
 | [wt cd](#wt-cd) | 13 |
-| [wt checkout](#wt-checkout) | 75 |
+| [wt checkout](#wt-checkout) | 77 |
 | [wt exec](#wt-exec) | 15 |
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 50 |
-| **Total** | **345** |
+| **Total** | **347** |
 
 ## completebasebranches
 
@@ -414,6 +414,8 @@ Generated: 2026-10-07
 | `TestCheckout_AutoStash_LabelTarget` | Tests that --autostash errors when used |
 | `TestCheckout_NewBranchViaSymlink` | Tests that checkout -b works when the working |
 | `TestCheckout_BeforeHookAborts` | Tests that a failing before hook aborts checkout. |
+| `TestCheckout_BeforeHookWorkDirCreate` | Tests where a before hook runs when the worktree is created. |
+| `TestCheckout_BeforeHookWorkDirOpen` | Tests where a before hook runs when the worktree exists. |
 | `TestCheckout_BeforeHookAllows` | Tests that a passing before hook allows checkout. |
 | `TestCheckout_SubtypeCreate` | Tests that checkout:create matches new branch creation. |
 | `TestCheckout_SubtypeOpen` | Tests that checkout:open matches existing branch checkout. |
