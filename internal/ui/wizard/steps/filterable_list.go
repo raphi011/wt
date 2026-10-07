@@ -6,6 +6,7 @@ package steps
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
@@ -845,8 +846,8 @@ func (s *FilterableListStep) findLastEnabled() int {
 	if showCreate {
 		offset = 1
 	}
-	for i := len(s.filtered) - 1; i >= 0; i-- {
-		idx := s.filtered[i].Index
+	for i, v := range slices.Backward(s.filtered) {
+		idx := v.Index
 		if !s.options[idx].Disabled {
 			return i + offset
 		}

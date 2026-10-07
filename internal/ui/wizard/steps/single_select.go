@@ -2,6 +2,7 @@ package steps
 
 import (
 	"fmt"
+	"slices"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -203,8 +204,8 @@ func (s *SingleSelectStep) findFirstEnabled() int {
 }
 
 func (s *SingleSelectStep) findLastEnabled() int {
-	for i := len(s.options) - 1; i >= 0; i-- {
-		if !s.options[i].Disabled {
+	for i, v := range slices.Backward(s.options) {
+		if !v.Disabled {
 			return i
 		}
 	}
