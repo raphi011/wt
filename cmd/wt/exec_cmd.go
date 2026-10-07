@@ -17,6 +17,8 @@ import (
 )
 
 func newExecCmd() *cobra.Command {
+	var global bool
+
 	cmd := &cobra.Command{
 		Use:     "exec [[scope:]branch...] -- <command>",
 		Short:   "Run command in worktree(s)",
@@ -25,7 +27,8 @@ func newExecCmd() *cobra.Command {
 		Long: `Run a command in one or more worktrees.
 
 Target worktrees using [scope:]branch arguments before --:
-  - branch: runs in every registered repo's worktree for that branch
+  - branch: runs in the current repo's worktree for that branch; outside a
+    repo it searches all repos, and with -g it runs in every match
   - repo:branch: finds exact worktree in specified repo
   - label:branch: runs in all repos with that label
 
@@ -35,7 +38,8 @@ All targets are attempted even if a command fails. Failures return a non-zero
 exit status: the command's exit code for a single worktree, or 1 for multiple
 worktrees. Commands that cannot start also return 1.`,
 		Example: `  wt exec -- git status                  # In current worktree
-  wt exec main -- git status             # In main worktree of every repo
+  wt exec main -- git status             # In main worktree of the current repo
+  wt exec -g main -- git status          # In main worktree of every repo
   wt exec wt:main -- git status          # In main worktree of wt repo
   wt exec backend:main -- make test      # In main worktree of backend-labeled repos
   wt exec wt:main myrepo:dev -- make test  # In multiple worktrees`,
@@ -86,7 +90,7 @@ worktrees. Commands that cannot start also return 1.`,
 				}
 				resolved = append(resolved, WorktreeTarget{RepoName: repoName, Path: workDir})
 			} else {
-				resolved, err = resolveWorktreeTargets(ctx, reg, targets)
+				resolved, err = resolveWorktreeTargets(ctx, reg, targets, targetOpts{Global: global, Multi: true})
 				if err != nil {
 					return err
 				}
@@ -130,6 +134,8 @@ worktrees. Commands that cannot start also return 1.`,
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVarP(&global, "global", "g", false, "Search all repos for an unscoped branch")
 
 	// Register completions
 	cmd.ValidArgsFunction = completeExecArg

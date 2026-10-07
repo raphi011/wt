@@ -4644,3 +4644,124 @@ func TestCheckout_ResultGoesToStderr(t *testing.T) {
 		t.Errorf("stdout should be empty, got: %q", out.String())
 	}
 }
+
+// setupTwoReposForCheckout registers repo1 and repo2 with sibling worktrees
+// and returns the config and repo paths.
+func setupTwoReposForCheckout(t *testing.T, tmpDir string, repo1Branches, repo2Branches []string) (cfg *config.Config, repo1Path, repo2Path string) {
+	t.Helper()
+
+	repo1Path = setupTestRepoWithBranches(t, tmpDir, "repo1", repo1Branches)
+	repo2Path = setupTestRepoWithBranches(t, tmpDir, "repo2", repo2Branches)
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: repo1Path, WorktreeFormat: "../{repo}-{branch}"},
+			{Name: "repo2", Path: repo2Path, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg = &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+	}
+	return cfg, repo1Path, repo2Path
+}
+
+// TestCheckout_UnscopedInRepo_UsesCurrentRepo tests that an unscoped branch
+// means the current repo even if other repos have the branch.
+//
+// Scenario: repo1 and repo2 both have branch "feature", user runs `wt checkout feature` inside repo1
+// Expected: Worktree is created for repo1 only
+func TestCheckout_UnscopedInRepo_UsesCurrentRepo(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	cfg, repo1Path, _ := setupTwoReposForCheckout(t, tmpDir, []string{"feature"}, []string{"feature"})
+
+	ctx := testContextWithConfig(t, cfg, repo1Path)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(tmpDir, "repo1-feature")); err != nil {
+		t.Errorf("repo1 worktree should exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, "repo2-feature")); err == nil {
+		t.Error("repo2 worktree should not be created")
+	}
+}
+
+// TestCheckout_Global_SearchesAllRepos tests that -g searches all repos from inside a repo.
+//
+// Scenario: Only repo2 has branch "only-b", user runs `wt checkout -g only-b` inside repo1
+// Expected: Worktree is created for repo2
+func TestCheckout_Global_SearchesAllRepos(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	cfg, repo1Path, _ := setupTwoReposForCheckout(t, tmpDir, nil, []string{"only-b"})
+
+	ctx := testContextWithConfig(t, cfg, repo1Path)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-g", "only-b"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(tmpDir, "repo2-only-b")); err != nil {
+		t.Errorf("repo2 worktree should exist: %v", err)
+	}
+}
+
+// TestCheckout_UnscopedOutsideRepo_AmbiguousWorktrees tests that an unscoped
+// branch with worktrees in several repos is an error outside a repo.
+//
+// Scenario: repo1 and repo2 both have a "feature" worktree, user runs `wt checkout feature` from a non-repo dir
+// Expected: Error naming both repos, no checkout hook runs
+func TestCheckout_UnscopedOutsideRepo_AmbiguousWorktrees(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	cfg, repo1Path, repo2Path := setupTwoReposForCheckout(t, tmpDir, []string{"feature"}, []string{"feature"})
+	createTestWorktree(t, repo1Path, "feature")
+	createTestWorktree(t, repo2Path, "feature")
+
+	hookFile := filepath.Join(tmpDir, "hook-ran")
+	cfg.Hooks = config.HooksConfig{
+		Hooks: map[string]config.Hook{
+			"marker": {Command: "touch " + hookFile, On: []string{"checkout"}},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "exists in multiple repos") {
+		t.Fatalf("checkout should fail as ambiguous, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "repo1:feature") || !strings.Contains(err.Error(), "repo2:feature") {
+		t.Errorf("error should name both repos, got: %v", err)
+	}
+	if _, err := os.Stat(hookFile); err == nil {
+		t.Error("no checkout hook should run for an ambiguous target")
+	}
+}

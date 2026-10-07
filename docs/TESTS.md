@@ -12,10 +12,10 @@ Generated: 2026-10-07
 | [confighooks](#confighooks) | 4 |
 | [configinit](#configinit) | 1 |
 | [configshow](#configshow) | 4 |
-| [diff](#diff) | 12 |
+| [diff](#diff) | 13 |
 | [findorregistercurrentrepo](#findorregistercurrentrepo) | 2 |
 | [forge](#forge) | 9 |
-| [hook](#hook) | 9 |
+| [hook](#hook) | 10 |
 | [init](#init) | 4 |
 | [prcheckout](#prcheckout) | 15 |
 | [prcreate](#prcreate) | 3 |
@@ -28,15 +28,15 @@ Generated: 2026-10-07
 | [repoconvertregular](#repoconvertregular) | 4 |
 | [repolist](#repolist) | 5 |
 | [reporemove](#reporemove) | 6 |
-| [resolveworktreetargets](#resolveworktreetargets) | 4 |
-| [wt cd](#wt-cd) | 11 |
-| [wt checkout](#wt-checkout) | 72 |
-| [wt exec](#wt-exec) | 14 |
+| [resolveworktreetargets](#resolveworktreetargets) | 5 |
+| [wt cd](#wt-cd) | 13 |
+| [wt checkout](#wt-checkout) | 75 |
+| [wt exec](#wt-exec) | 15 |
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 13 |
-| [wt note](#wt-note) | 12 |
+| [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 49 |
-| **Total** | **320** |
+| **Total** | **330** |
 
 ## completebasebranches
 
@@ -98,6 +98,7 @@ Generated: 2026-10-07
 | `TestDiff_InvalidBaseRef` | Tests error when --base ref doesn't exist. |
 | `TestDiff_BaseAndWorkingMutuallyExclusive` | Tests that --base and --working cannot be combined. |
 | `TestDiff_ToolFlag` | Tests the --tool flag for pager override. |
+| `TestDiff_UnscopedInRepo_UsesCurrentRepo` | Tests that diff resolves an unscoped |
 
 ## findorregistercurrentrepo
 
@@ -133,6 +134,7 @@ Generated: 2026-10-07
 | `TestHook_BareBranchTarget` | Tests hook with unscoped branch as target. |
 | `TestHook_UnknownHookWithTarget` | Tests unknown hook error via the target code path. |
 | `TestHook_ActionPhasePlaceholders` | Tests that manual hook gets correct action/phase/trigger values. |
+| `TestHook_UnscopedInRepo_UsesCurrentRepo` | Tests that hook runs for an unscoped |
 
 ## init
 
@@ -286,6 +288,7 @@ Generated: 2026-10-07
 | `TestResolveWorktreeTargets_LabelPartialMatch` | Tests that a label target |
 | `TestResolveWorktreeTargets_LabelGitErrorWarns` | Tests that a git failure in |
 | `TestResolveWorktreeTargets_UnscopedGitErrorWarns` | Tests that a git failure |
+| `TestResolveWorktreeTargets_Rule` | Tests the resolution rule for [scope:]branch |
 
 ## wt cd
 
@@ -302,6 +305,8 @@ Generated: 2026-10-07
 | `TestCd_NoArgs_StaleHistory` | Tests that stale history entries are cleaned up. |
 | `TestCd_LabelScope` | Tests resolving a worktree via label:branch. |
 | `TestCd_Interactive_CancelReturnsSentinel` | Tests that cancelling the interactive picker returns errCancelled. |
+| `TestCd_UnscopedInRepo_UsesCurrentRepo` | Tests that cd resolves an unscoped |
+| `TestCd_Global_Ambiguous` | Tests that cd -g searches all repos and rejects an ambiguous branch. |
 
 ## wt checkout
 
@@ -379,6 +384,9 @@ Generated: 2026-10-07
 | `TestCheckout_LabelExistingBranchContinuesAfterRepoFailure` | Tests that a label checkout of an existing branch continues past a failing repo. |
 | `TestCheckout_AutoStash_LabelTargetExistingWorktree` | Tests that --autostash is rejected |
 | `TestCheckout_ResultGoesToStderr` | Tests that the checkout result is reported as a diagnostic. |
+| `TestCheckout_UnscopedInRepo_UsesCurrentRepo` | Tests that an unscoped branch |
+| `TestCheckout_Global_SearchesAllRepos` | Tests that -g searches all repos from inside a repo. |
+| `TestCheckout_UnscopedOutsideRepo_AmbiguousWorktrees` | Tests that an unscoped |
 
 ## wt exec
 
@@ -398,6 +406,7 @@ Generated: 2026-10-07
 | `TestExec_LabelScope` | Tests running a command in worktrees matched by a label scope. |
 | `TestExec_MultipleTargetsFailure` | Tests that failures do not stop remaining targets. |
 | `TestExec_ExitCodes` | Tests exit status handling for single targets and launch failures. |
+| `TestExec_UnscopedInRepo_UsesCurrentRepo` | Tests that exec runs an unscoped |
 
 ## wt label
 
@@ -453,6 +462,7 @@ Generated: 2026-10-07
 | `TestNote_UnscopedGitErrorWarns` | Tests that a git failure during an unscoped |
 | `TestNoteSet_LabelContinuesAfterRepoFailure` | Tests that a label note set continues past a failing repo. |
 | `TestNoteClear_LabelContinuesAfterRepoFailure` | Tests that a label note clear continues past a failing repo. |
+| `TestNote_UnscopedInRepo_UsesCurrentRepo` | Tests that note set applies an |
 
 ## wt prune
 
@@ -473,7 +483,7 @@ Generated: 2026-10-07
 | `TestPrune_DeleteBranchesFlag_OverridesConfigFalse` | Tests that --delete-branches flag |
 | `TestPrune_UnscopedTarget_OnlyCurrentRepo` | Tests that `wt prune feature -f` (without -g) |
 | `TestPrune_UnscopedTarget_GlobalFlag` | Tests that `wt prune feature -f -g` |
-| `TestPrune_UnscopedTarget_NotInRepo_FallsBackToAll` | Tests that running from a |
+| `TestPrune_UnscopedTarget_NotInRepo_AmbiguousNeedsGlobal` | Tests that running |
 | `TestPrune_ForceDeleteBranch_MergedPRState` | Tests that branches with unmerged commits |
 | `TestPrune_StaleFlag_RemovesOldWorktrees` | Tests that --stale removes worktrees |
 | `TestPrune_StaleFlag_KeepsFreshWorktrees` | Tests that --stale keeps fresh worktrees. |

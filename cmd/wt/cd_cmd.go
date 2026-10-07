@@ -34,7 +34,8 @@ func newCdCmd() *cobra.Command {
 Use with shell command substitution: cd $(wt cd feature-x)
 
 The argument can be:
-  - branch name: searches all repos, errors if ambiguous
+  - branch name: finds the worktree in the current repo; outside a repo,
+    or with -g, searches all repos and errors if ambiguous
   - repo:branch: finds exact worktree in specified repo
   - label:branch: finds worktree in repos with that label, errors if ambiguous
 
@@ -43,7 +44,8 @@ With no arguments, returns the most recently accessed worktree.
 Interactive mode (-i) is repo-aware: inside a repo it shows only that
 repo's worktrees. Use -g to show all repos.`,
 		Example: `  cd $(wt cd)              # cd to most recently accessed worktree
-  cd $(wt cd feature-x)    # cd to feature-x worktree (error if ambiguous)
+  cd $(wt cd feature-x)    # cd to feature-x worktree of the current repo
+  cd $(wt cd -g feature-x) # search all repos (error if ambiguous)
   cd $(wt cd wt:feature-x) # cd to feature-x worktree in wt repo
   cd $(wt cd -i)           # interactive: current repo's worktrees
   cd $(wt cd -i -g)        # interactive: all repos' worktrees
@@ -71,7 +73,7 @@ repo's worktrees. Use -g to show all repos.`,
 			case len(args) == 0:
 				targetPath, repoName, branchName, err = runCdRecent(ctx, cfg, histPath)
 			default:
-				targetPath, repoName, branchName, err = runCdTarget(ctx, reg, args[0])
+				targetPath, repoName, branchName, err = runCdTarget(ctx, reg, args[0], global)
 			}
 			if err != nil {
 				return err
@@ -105,7 +107,7 @@ repo's worktrees. Use -g to show all repos.`,
 
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode with fuzzy search")
 	cmd.Flags().BoolVar(&copyToClipboard, "copy", false, "Copy path to clipboard")
-	cmd.Flags().BoolVarP(&global, "global", "g", false, "Show worktrees from all repos (interactive mode)")
+	cmd.Flags().BoolVarP(&global, "global", "g", false, "Search or show worktrees from all repos")
 
 	// Register completions
 	cmd.ValidArgsFunction = completeCdArg
@@ -244,8 +246,8 @@ func sortCdWorktrees(worktrees []flows.CdWorktreeInfo) {
 }
 
 // runCdTarget resolves a [repo:]branch argument to a worktree path.
-func runCdTarget(ctx context.Context, reg *registry.Registry, arg string) (path, repoName, branch string, err error) {
-	match, err := resolveOneWorktreeTarget(ctx, reg, arg)
+func runCdTarget(ctx context.Context, reg *registry.Registry, arg string, global bool) (path, repoName, branch string, err error) {
+	match, err := resolveOneWorktreeTarget(ctx, reg, arg, global)
 	if err != nil {
 		return "", "", "", err
 	}

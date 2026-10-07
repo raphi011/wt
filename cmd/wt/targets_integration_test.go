@@ -6,10 +6,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/registry"
 )
@@ -160,7 +162,7 @@ func TestResolveWorktreeTargets_ScopedGitError(t *testing.T) {
 
 	ctx := testContextWithConfig(t, &config.Config{}, tmpDir)
 
-	_, err := resolveWorktreeTargets(ctx, reg, []string{"broken:feature"})
+	_, err := resolveWorktreeTargets(ctx, reg, []string{"broken:feature"}, targetOpts{Multi: true})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -196,7 +198,7 @@ func TestResolveWorktreeTargets_LabelPartialMatch(t *testing.T) {
 
 	ctx, logs := testContextWithLog(t, &config.Config{}, tmpDir)
 
-	targets, err := resolveWorktreeTargets(ctx, reg, []string{"team:feature"})
+	targets, err := resolveWorktreeTargets(ctx, reg, []string{"team:feature"}, targetOpts{Multi: true})
 	if err != nil {
 		t.Fatalf("resolveWorktreeTargets failed: %v", err)
 	}
@@ -232,7 +234,7 @@ func TestResolveWorktreeTargets_LabelGitErrorWarns(t *testing.T) {
 
 	ctx, logs := testContextWithLog(t, &config.Config{}, tmpDir)
 
-	targets, err := resolveWorktreeTargets(ctx, reg, []string{"team:feature"})
+	targets, err := resolveWorktreeTargets(ctx, reg, []string{"team:feature"}, targetOpts{Multi: true})
 	if err != nil {
 		t.Fatalf("resolveWorktreeTargets failed: %v", err)
 	}
@@ -268,7 +270,7 @@ func TestResolveWorktreeTargets_UnscopedGitErrorWarns(t *testing.T) {
 
 	ctx, logs := testContextWithLog(t, &config.Config{}, tmpDir)
 
-	targets, err := resolveWorktreeTargets(ctx, reg, []string{"feature"})
+	targets, err := resolveWorktreeTargets(ctx, reg, []string{"feature"}, targetOpts{Multi: true})
 	if err != nil {
 		t.Fatalf("resolveWorktreeTargets failed: %v", err)
 	}
@@ -277,5 +279,284 @@ func TestResolveWorktreeTargets_UnscopedGitErrorWarns(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), "Warning: broken: failed to list worktrees") {
 		t.Errorf("expected warning for failing repo, got log: %q", logs.String())
+	}
+}
+
+// TestResolveWorktreeTargets_Rule tests the resolution rule for [scope:]branch
+// targets shared by all commands.
+//
+// Scenario: Repos alpha and beta (both labelled team) each have a worktree
+// "shared"; alpha also has "only-a", beta "only-b"
+// Expected: Unscoped targets resolve in the current repo, or in all repos
+// outside a repo or with -g; several matches need -g on a multi-target command
+func TestResolveWorktreeTargets_Rule(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	alphaPath := setupTestRepoWithBranches(t, tmpDir, "alpha", []string{"shared", "only-a"})
+	betaPath := setupTestRepoWithBranches(t, tmpDir, "beta", []string{"shared", "only-b"})
+	createTestWorktree(t, alphaPath, "shared")
+	createTestWorktree(t, alphaPath, "only-a")
+	createTestWorktree(t, betaPath, "shared")
+	createTestWorktree(t, betaPath, "only-b")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "alpha", Path: alphaPath, Labels: []string{"team"}},
+			{Name: "beta", Path: betaPath, Labels: []string{"team"}},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+	cfg := &config.Config{RegistryPath: regFile}
+
+	tests := []struct {
+		name    string
+		workDir string
+		target  string
+		opts    targetOpts
+		want    []string // repo:branch
+		wantErr string
+	}{
+		{name: "in repo, branch in current repo", workDir: alphaPath, target: "shared", want: []string{"alpha:shared"}},
+		{name: "in repo, multi-target stays in current repo", workDir: alphaPath, target: "shared", opts: targetOpts{Multi: true}, want: []string{"alpha:shared"}},
+		{name: "in repo, branch only in other repo", workDir: alphaPath, target: "only-b", wantErr: "worktree not found in alpha: only-b"},
+		{name: "in repo, -g finds other repo", workDir: alphaPath, target: "only-b", opts: targetOpts{Global: true}, want: []string{"beta:only-b"}},
+		{name: "in repo, -g single-target is ambiguous", workDir: alphaPath, target: "shared", opts: targetOpts{Global: true}, wantErr: "exists in multiple repos"},
+		{name: "in repo, -g multi-target fans out", workDir: alphaPath, target: "shared", opts: targetOpts{Global: true, Multi: true}, want: []string{"alpha:shared", "beta:shared"}},
+		{name: "outside repo, unique branch", workDir: tmpDir, target: "only-a", want: []string{"alpha:only-a"}},
+		{name: "outside repo, single-target is ambiguous", workDir: tmpDir, target: "shared", wantErr: "exists in multiple repos"},
+		{name: "outside repo, multi-target needs -g", workDir: tmpDir, target: "shared", opts: targetOpts{Multi: true}, wantErr: "use -g"},
+		{name: "outside repo, -g multi-target fans out", workDir: tmpDir, target: "shared", opts: targetOpts{Global: true, Multi: true}, want: []string{"alpha:shared", "beta:shared"}},
+		{name: "outside repo, unknown branch", workDir: tmpDir, target: "missing", wantErr: "worktree not found: missing"},
+		{name: "repo scope from another repo", workDir: alphaPath, target: "beta:shared", want: []string{"beta:shared"}},
+		{name: "label scope, multi-target fans out", workDir: alphaPath, target: "team:shared", opts: targetOpts{Multi: true}, want: []string{"alpha:shared", "beta:shared"}},
+		{name: "label scope, single-target is ambiguous", workDir: alphaPath, target: "team:shared", wantErr: "exists in multiple repos"},
+		{name: "label scope, single match", workDir: tmpDir, target: "team:only-b", want: []string{"beta:only-b"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := testContextWithConfig(t, &config.Config{RegistryPath: cfg.RegistryPath}, tt.workDir)
+			got, err := resolveWorktreeTargets(ctx, reg, []string{tt.target}, tt.opts)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error = %v, want it to contain %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolveWorktreeTargets failed: %v", err)
+			}
+			var names []string
+			for _, wt := range got {
+				names = append(names, wt.RepoName+":"+wt.Branch)
+			}
+			if !slices.Equal(names, tt.want) {
+				t.Errorf("resolved %v, want %v", names, tt.want)
+			}
+		})
+	}
+}
+
+// setupSharedFeatureRepos registers repo1 and repo2, each with a "feature" worktree.
+func setupSharedFeatureRepos(t *testing.T) (cfg *config.Config, repo1Path, repo2Path, wt1Path, wt2Path string) {
+	t.Helper()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repo1Path = setupTestRepo(t, tmpDir, "repo1")
+	repo2Path = setupTestRepo(t, tmpDir, "repo2")
+	wt1Path = createTestWorktree(t, repo1Path, "feature")
+	wt2Path = createTestWorktree(t, repo2Path, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo1", Path: repo1Path},
+			{Name: "repo2", Path: repo2Path},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	return &config.Config{RegistryPath: regFile}, repo1Path, repo2Path, wt1Path, wt2Path
+}
+
+// TestCd_UnscopedInRepo_UsesCurrentRepo tests that cd resolves an unscoped
+// branch in the current repo.
+//
+// Scenario: repo1 and repo2 both have a "feature" worktree, user runs `wt cd feature` inside repo1
+// Expected: Prints repo1's worktree path
+func TestCd_UnscopedInRepo_UsesCurrentRepo(t *testing.T) {
+	t.Parallel()
+
+	cfg, repo1Path, _, wt1Path, _ := setupSharedFeatureRepos(t)
+
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repo1Path)
+	cmd := newCdCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("cd command failed: %v", err)
+	}
+	if got := strings.TrimSpace(out.String()); got != wt1Path {
+		t.Errorf("cd printed %q, want %q", got, wt1Path)
+	}
+}
+
+// TestCd_Global_Ambiguous tests that cd -g searches all repos and rejects an ambiguous branch.
+//
+// Scenario: repo1 and repo2 both have a "feature" worktree, user runs `wt cd -g feature` inside repo1
+// Expected: Error naming both repos
+func TestCd_Global_Ambiguous(t *testing.T) {
+	t.Parallel()
+
+	cfg, repo1Path, _, _, _ := setupSharedFeatureRepos(t)
+
+	ctx := testContextWithConfig(t, cfg, repo1Path)
+	cmd := newCdCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-g", "feature"})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "exists in multiple repos: repo1:feature, repo2:feature") {
+		t.Fatalf("cd -g should fail naming both repos, got: %v", err)
+	}
+}
+
+// TestExec_UnscopedInRepo_UsesCurrentRepo tests that exec runs an unscoped
+// target in the current repo only, and in every match with -g.
+//
+// Scenario: repo1 and repo2 both have a "feature" worktree, user runs `wt exec feature -- touch marker` inside repo1, then with -g
+// Expected: marker is created in repo1's worktree only; with -g in both
+func TestExec_UnscopedInRepo_UsesCurrentRepo(t *testing.T) {
+	t.Parallel()
+
+	cfg, repo1Path, _, wt1Path, wt2Path := setupSharedFeatureRepos(t)
+
+	ctx := testContextWithConfig(t, cfg, repo1Path)
+	cmd := newExecCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "--", "touch", "marker"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("exec command failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(wt1Path, "marker")); err != nil {
+		t.Errorf("command should run in repo1's worktree: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(wt2Path, "marker")); err == nil {
+		t.Error("command should not run in repo2's worktree without -g")
+	}
+
+	cmd = newExecCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-g", "feature", "--", "touch", "marker-global"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("exec -g command failed: %v", err)
+	}
+	for _, wtPath := range []string{wt1Path, wt2Path} {
+		if _, err := os.Stat(filepath.Join(wtPath, "marker-global")); err != nil {
+			t.Errorf("command should run in %s with -g: %v", wtPath, err)
+		}
+	}
+}
+
+// TestHook_UnscopedInRepo_UsesCurrentRepo tests that hook runs for an unscoped
+// target in the current repo only.
+//
+// Scenario: repo1 and repo2 both have a "feature" worktree, user runs `wt hook feature marker` inside repo1
+// Expected: The hook runs in repo1's worktree only
+func TestHook_UnscopedInRepo_UsesCurrentRepo(t *testing.T) {
+	t.Parallel()
+
+	cfg, repo1Path, _, wt1Path, wt2Path := setupSharedFeatureRepos(t)
+	cfg.Hooks = config.HooksConfig{
+		Hooks: map[string]config.Hook{
+			"marker": {Command: "touch {worktree-dir}/hook-ran"},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, repo1Path)
+	cmd := newHookCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "marker"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("hook command failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(wt1Path, "hook-ran")); err != nil {
+		t.Errorf("hook should run in repo1's worktree: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(wt2Path, "hook-ran")); err == nil {
+		t.Error("hook should not run in repo2's worktree without -g")
+	}
+}
+
+// TestNote_UnscopedInRepo_UsesCurrentRepo tests that note set applies an
+// unscoped target to the current repo only.
+//
+// Scenario: repo1 and repo2 both have a "feature" worktree, user runs `wt note set WIP feature` inside repo1
+// Expected: The note is set in repo1 only
+func TestNote_UnscopedInRepo_UsesCurrentRepo(t *testing.T) {
+	t.Parallel()
+
+	cfg, repo1Path, repo2Path, _, _ := setupSharedFeatureRepos(t)
+
+	ctx := testContextWithConfig(t, cfg, repo1Path)
+	cmd := newNoteCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"set", "WIP", "feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("note set command failed: %v", err)
+	}
+
+	note, err := git.GetBranchNote(ctx, repo1Path, "feature")
+	if err != nil {
+		t.Fatalf("failed to read note: %v", err)
+	}
+	if note != "WIP" {
+		t.Errorf("repo1 note = %q, want %q", note, "WIP")
+	}
+	note, err = git.GetBranchNote(ctx, repo2Path, "feature")
+	if err != nil {
+		t.Fatalf("failed to read note: %v", err)
+	}
+	if note != "" {
+		t.Errorf("repo2 note should stay empty without -g, got %q", note)
+	}
+}
+
+// TestDiff_UnscopedInRepo_UsesCurrentRepo tests that diff resolves an unscoped
+// branch in the current repo.
+//
+// Scenario: repo1 and repo2 both have a "feature" worktree, user runs `wt diff feature --working` inside repo1
+// Expected: The diff runs without an ambiguity error
+func TestDiff_UnscopedInRepo_UsesCurrentRepo(t *testing.T) {
+	t.Parallel()
+
+	cfg, repo1Path, _, _, _ := setupSharedFeatureRepos(t)
+
+	ctx := testContextWithConfig(t, cfg, repo1Path)
+	cmd := newDiffCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "--working"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("diff command failed: %v", err)
 	}
 }

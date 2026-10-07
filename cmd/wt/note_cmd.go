@@ -27,7 +27,8 @@ Notes are stored in git config and displayed in list output.
 Target a worktree using [scope:]branch where scope can be a repo name or label.
 If no target is specified, uses the current worktree's branch.`,
 		Example: `  wt note set "WIP"                    # Set note on current branch
-  wt note set "WIP" main               # Set note on main (all repos with main)
+  wt note set "WIP" main               # Set note on main (current repo)
+  wt note set "WIP" main -g            # Set note on main (all repos with main)
   wt note set "WIP" myrepo:main        # Set note on main in myrepo
   wt note set "WIP" backend:feat       # Set note in all backend repos
   wt note get                          # Get note for current branch
@@ -43,6 +44,8 @@ If no target is specified, uses the current worktree's branch.`,
 }
 
 func newNoteSetCmd() *cobra.Command {
+	var global bool
+
 	cmd := &cobra.Command{
 		Use:               "set <text> [[scope:]branch]",
 		Short:             "Set a note on a branch",
@@ -62,7 +65,7 @@ func newNoteSetCmd() *cobra.Command {
 			}
 
 			// Resolve target(s)
-			targets, err := resolveNoteTargets(ctx, cfg, workDir, reg, args[1:])
+			targets, err := resolveNoteTargets(ctx, cfg, workDir, reg, args[1:], global)
 			if err != nil {
 				return err
 			}
@@ -81,10 +84,14 @@ func newNoteSetCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().BoolVarP(&global, "global", "g", false, "Search all repos for an unscoped branch")
+
 	return cmd
 }
 
 func newNoteGetCmd() *cobra.Command {
+	var global bool
+
 	cmd := &cobra.Command{
 		Use:               "get [[scope:]branch]",
 		Short:             "Get the note for a branch",
@@ -103,7 +110,7 @@ func newNoteGetCmd() *cobra.Command {
 			}
 
 			// Resolve target(s)
-			targets, err := resolveNoteTargets(ctx, cfg, workDir, reg, args)
+			targets, err := resolveNoteTargets(ctx, cfg, workDir, reg, args, global)
 			if err != nil {
 				return err
 			}
@@ -129,10 +136,14 @@ func newNoteGetCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().BoolVarP(&global, "global", "g", false, "Search all repos for an unscoped branch")
+
 	return cmd
 }
 
 func newNoteClearCmd() *cobra.Command {
+	var global bool
+
 	cmd := &cobra.Command{
 		Use:               "clear [[scope:]branch]",
 		Short:             "Clear the note from a branch",
@@ -151,7 +162,7 @@ func newNoteClearCmd() *cobra.Command {
 			}
 
 			// Resolve target(s)
-			targets, err := resolveNoteTargets(ctx, cfg, workDir, reg, args)
+			targets, err := resolveNoteTargets(ctx, cfg, workDir, reg, args, global)
 			if err != nil {
 				return err
 			}
@@ -170,6 +181,8 @@ func newNoteClearCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().BoolVarP(&global, "global", "g", false, "Search all repos for an unscoped branch")
+
 	return cmd
 }
 
@@ -183,7 +196,7 @@ type noteTarget struct {
 // resolveNoteTargets resolves targets for note commands.
 // If no args, uses current worktree's branch.
 // Otherwise parses [scope:]branch format.
-func resolveNoteTargets(ctx context.Context, cfg *config.Config, workDir string, reg *registry.Registry, args []string) ([]noteTarget, error) {
+func resolveNoteTargets(ctx context.Context, cfg *config.Config, workDir string, reg *registry.Registry, args []string, global bool) ([]noteTarget, error) {
 	if len(args) == 0 {
 		// No target - use current worktree's branch
 		repo, branch, err := getCurrentRepoBranch(ctx, cfg, workDir, reg)
@@ -217,31 +230,19 @@ func resolveNoteTargets(ctx context.Context, cfg *config.Config, workDir string,
 		return targets, nil
 	}
 
-	// No scope - search all repos for matching worktree
+	// No scope - find the branch's worktree(s)
+	wts, err := resolveWorktreeTargets(ctx, reg, []string{target}, targetOpts{Global: global, Multi: true})
+	if err != nil {
+		return nil, err
+	}
 	var targets []noteTarget
-	l := log.FromContext(ctx)
-	for _, repo := range filterOrphanedRepos(l, reg.Repos) {
-		wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-		if err != nil {
-			l.Printf("Warning: %s: %v\n", repo.Name, err)
-			continue
-		}
-		for _, wt := range wts {
-			if wt.Branch == parsed.Branch {
-				targets = append(targets, noteTarget{
-					RepoName: repo.Name,
-					RepoPath: repo.Path,
-					Branch:   parsed.Branch,
-				})
-				break
-			}
-		}
+	for _, wt := range wts {
+		targets = append(targets, noteTarget{
+			RepoName: wt.RepoName,
+			RepoPath: wt.RepoPath,
+			Branch:   wt.Branch,
+		})
 	}
-
-	if len(targets) == 0 {
-		return nil, fmt.Errorf("worktree not found: %s", parsed.Branch)
-	}
-
 	return targets, nil
 }
 

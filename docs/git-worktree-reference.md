@@ -396,4 +396,4 @@ For 10 worktrees across 2 repos:
 
 - [Git Worktree Documentation](https://git-scm.com/docs/git-worktree)
 - [internal/git/](../internal/git/) - Implementation details
-- [CLAUDE.md](../CLAUDE.md) - Development guidelines
+- [AGENTS.md](../AGENTS.md) - Development guidelines

@@ -288,9 +288,17 @@ wt checkout -b backend:feature-auth
 wt checkout -b backend-api:feature-auth
 
 # Run command across worktrees
-wt exec main -- git status              # In all repos' main worktree
+wt exec main -- git status              # In the current repo's main worktree
+wt exec -g main -- git status           # In all repos' main worktree
 wt exec backend-api:main -- make test   # In specific repo's worktree
 ```
+
+A branch without a `repo:` or `label:` scope resolves the same way in every command:
+
+- Inside a repo it means the current repo.
+- Outside a repo, or with `-g`, all repos are searched.
+- `wt cd`, `wt checkout` and `wt diff` act on one worktree and fail if the branch is in several repos.
+- `wt exec`, `wt hook`, `wt note` and `wt prune` act on every match, but only with `-g` or a label scope.
 
 ### Quick Navigation
 
@@ -300,8 +308,11 @@ wt exec backend-api:main -- make test   # In specific repo's worktree
 # Jump to most recently accessed worktree
 wt cd
 
-# Jump to worktree by branch name
+# Jump to worktree by branch name (current repo)
 wt cd feature-auth
+
+# Search all repos for the branch
+wt cd -g feature-auth
 
 # Jump to worktree in specific repo (if branch exists in multiple repos)
 wt cd backend-api:feature-auth
