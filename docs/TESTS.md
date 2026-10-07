@@ -8,12 +8,13 @@ Generated: 2026-10-07
 |---------|-------|
 | [completebasebranches](#completebasebranches) | 1 |
 | [completebranches](#completebranches) | 1 |
+| [completescopedarg](#completescopedarg) | 1 |
 | [completion](#completion) | 3 |
 | [confighooks](#confighooks) | 4 |
 | [configinit](#configinit) | 1 |
 | [configshow](#configshow) | 4 |
+| [currentrepo](#currentrepo) | 3 |
 | [diff](#diff) | 13 |
-| [findorregistercurrentrepo](#findorregistercurrentrepo) | 2 |
 | [forge](#forge) | 9 |
 | [hook](#hook) | 10 |
 | [init](#init) | 4 |
@@ -29,14 +30,15 @@ Generated: 2026-10-07
 | [repolist](#repolist) | 5 |
 | [reporemove](#reporemove) | 6 |
 | [resolveworktreetargets](#resolveworktreetargets) | 5 |
+| [unscopedrepos](#unscopedrepos) | 1 |
 | [wt cd](#wt-cd) | 13 |
 | [wt checkout](#wt-checkout) | 75 |
 | [wt exec](#wt-exec) | 15 |
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 13 |
-| [wt prune](#wt-prune) | 49 |
-| **Total** | **330** |
+| [wt prune](#wt-prune) | 50 |
+| **Total** | **334** |
 
 ## completebasebranches
 
@@ -49,6 +51,12 @@ Generated: 2026-10-07
 | Test | Description |
 |------|-------------|
 | `TestCompleteBranches_WithContext` | Tests that completeBranches uses cmd.Context() |
+
+## completescopedarg
+
+| Test | Description |
+|------|-------------|
+| `TestCompleteScopedArg_RepoAndLabelScope` | Tests scope:branch completion for |
 
 ## completion
 
@@ -82,6 +90,14 @@ Generated: 2026-10-07
 | `TestConfigShow_WithLocalConfig` | Tests config show --json when a local .wt.toml overrides values. |
 | `TestConfigShow_RepoFlag` | Tests `config show --json --repo <name>` with a registered repo. |
 
+## currentrepo
+
+| Test | Description |
+|------|-------------|
+| `TestCurrentRepo_RegisteredMeanwhile` | Tests auto-registration |
+| `TestCurrentRepo_AutoRegisters` | Tests auto-registration of an |
+| `TestCurrentRepo_RequireRegistered` | Tests the current repo lookup for |
+
 ## diff
 
 | Test | Description |
@@ -99,13 +115,6 @@ Generated: 2026-10-07
 | `TestDiff_BaseAndWorkingMutuallyExclusive` | Tests that --base and --working cannot be combined. |
 | `TestDiff_ToolFlag` | Tests the --tool flag for pager override. |
 | `TestDiff_UnscopedInRepo_UsesCurrentRepo` | Tests that diff resolves an unscoped |
-
-## findorregistercurrentrepo
-
-| Test | Description |
-|------|-------------|
-| `TestFindOrRegisterCurrentRepo_RegisteredMeanwhile` | Tests auto-registration |
-| `TestFindOrRegisterCurrentRepo_AutoRegisters` | Tests auto-registration of an |
 
 ## forge
 
@@ -289,6 +298,12 @@ Generated: 2026-10-07
 | `TestResolveWorktreeTargets_LabelGitErrorWarns` | Tests that a git failure in |
 | `TestResolveWorktreeTargets_UnscopedGitErrorWarns` | Tests that a git failure |
 | `TestResolveWorktreeTargets_Rule` | Tests the resolution rule for [scope:]branch |
+
+## unscopedrepos
+
+| Test | Description |
+|------|-------------|
+| `TestUnscopedRepos` | Tests which repos a command without a scope acts on. |
 
 ## wt cd
 
@@ -517,4 +532,5 @@ Generated: 2026-10-07
 | `TestPrune_Target_RejectsStaleAndInteractive` | Tests that flags which only apply |
 | `TestPrune_LabelScopedTarget` | Tests pruning worktrees via label:branch format. |
 | `TestPrune_AutoPrune_SummaryGoesToStderr` | Tests that auto-prune reports its result as a diagnostic. |
+| `TestPrune_AutoPrune_RegisterFailureDoesNotWidenToAllRepos` | Tests auto-prune |
 

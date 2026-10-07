@@ -4,11 +4,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
@@ -16,13 +19,13 @@ import (
 	"github.com/raphi011/wt/internal/registry"
 )
 
-// TestFindOrRegisterCurrentRepo_RegisteredMeanwhile tests auto-registration
+// TestCurrentRepo_RegisteredMeanwhile tests auto-registration
 // when another process registered the repo after the registry was loaded.
 //
 // Scenario: Registry is loaded, another process registers the current repo,
 // then the command auto-registers it
 // Expected: The existing entry is returned and not duplicated
-func TestFindOrRegisterCurrentRepo_RegisteredMeanwhile(t *testing.T) {
+func TestCurrentRepo_RegisteredMeanwhile(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -55,9 +58,9 @@ func TestFindOrRegisterCurrentRepo_RegisteredMeanwhile(t *testing.T) {
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, repoPath)
 
-	repo, err := findOrRegisterCurrentRepo(ctx, reg, cfg)
+	repo, err := currentRepo(ctx, reg, autoRegister)
 	if err != nil {
-		t.Fatalf("findOrRegisterCurrentRepo failed: %v", err)
+		t.Fatalf("currentRepo failed: %v", err)
 	}
 	if !repo.HasLabel("theirs") {
 		t.Errorf("expected the entry registered by the other process, got %+v", repo)
@@ -77,12 +80,12 @@ func TestFindOrRegisterCurrentRepo_RegisteredMeanwhile(t *testing.T) {
 	}
 }
 
-// TestFindOrRegisterCurrentRepo_AutoRegisters tests auto-registration of an
+// TestCurrentRepo_AutoRegisters tests auto-registration of an
 // unregistered repo.
 //
 // Scenario: Command runs inside a git repo that is not in the registry
 // Expected: The repo is registered with the default labels and saved
-func TestFindOrRegisterCurrentRepo_AutoRegisters(t *testing.T) {
+func TestCurrentRepo_AutoRegisters(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -103,9 +106,9 @@ func TestFindOrRegisterCurrentRepo_AutoRegisters(t *testing.T) {
 	cfg := &config.Config{RegistryPath: regFile, DefaultLabels: []string{"auto"}}
 	ctx := testContextWithConfig(t, cfg, repoPath)
 
-	repo, err := findOrRegisterCurrentRepo(ctx, reg, cfg)
+	repo, err := currentRepo(ctx, reg, autoRegister)
 	if err != nil {
-		t.Fatalf("findOrRegisterCurrentRepo failed: %v", err)
+		t.Fatalf("currentRepo failed: %v", err)
 	}
 	if repo.Path != repoPath || !repo.HasLabel("auto") {
 		t.Errorf("unexpected repo: %+v", repo)
@@ -558,5 +561,165 @@ func TestDiff_UnscopedInRepo_UsesCurrentRepo(t *testing.T) {
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("diff command failed: %v", err)
+	}
+}
+
+// TestUnscopedRepos tests which repos a command without a scope acts on.
+//
+// Scenario: Repos alpha and beta are registered, gone is registered but its
+// directory no longer exists
+// Expected: The current repo inside a repo; all existing repos outside a repo
+// or with -g
+func TestUnscopedRepos(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	alphaPath := setupTestRepo(t, tmpDir, "alpha")
+	betaPath := setupTestRepo(t, tmpDir, "beta")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "alpha", Path: alphaPath},
+			{Name: "beta", Path: betaPath},
+			{Name: "gone", Path: filepath.Join(tmpDir, "gone")},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		workDir     string
+		global      bool
+		want        []string
+		wantCurrent bool
+	}{
+		{name: "in repo", workDir: alphaPath, want: []string{"alpha"}, wantCurrent: true},
+		{name: "in repo, -g", workDir: alphaPath, global: true, want: []string{"alpha", "beta"}},
+		{name: "outside repo", workDir: tmpDir, want: []string{"alpha", "beta"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := testContextWithConfig(t, &config.Config{RegistryPath: regFile}, tt.workDir)
+			repos, current, err := unscopedRepos(ctx, reg, tt.global)
+			if err != nil {
+				t.Fatalf("unscopedRepos failed: %v", err)
+			}
+			var names []string
+			for _, r := range repos {
+				names = append(names, r.Name)
+			}
+			if !slices.Equal(names, tt.want) {
+				t.Errorf("repos = %v, want %v", names, tt.want)
+			}
+			if current != tt.wantCurrent {
+				t.Errorf("current = %v, want %v", current, tt.wantCurrent)
+			}
+		})
+	}
+}
+
+// TestCurrentRepo_RequireRegistered tests the current repo lookup for
+// commands that do not auto-register.
+//
+// Scenario: Command runs inside a git repo that is not in the registry
+// Expected: Error naming the repo path, registry is left unchanged
+func TestCurrentRepo_RequireRegistered(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+	reg, err := registry.Load(regFile)
+	if err != nil {
+		t.Fatalf("failed to load registry: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, &config.Config{RegistryPath: regFile}, repoPath)
+
+	_, err = currentRepo(ctx, reg, requireRegistered)
+	if err == nil || err.Error() != "repo not registered: "+repoPath {
+		t.Fatalf("error = %v, want repo not registered", err)
+	}
+	if len(reg.Repos) != 0 {
+		t.Errorf("expected registry unchanged, got %+v", reg.Repos)
+	}
+
+	// Outside a repo
+	ctx = testContextWithConfig(t, &config.Config{RegistryPath: regFile}, tmpDir)
+	if _, err := currentRepo(ctx, reg, requireRegistered); !errors.Is(err, errNotInRepo) {
+		t.Errorf("error = %v, want errNotInRepo", err)
+	}
+}
+
+// TestCompleteScopedArg_RepoAndLabelScope tests scope:branch completion for
+// worktree targets and for checkout.
+//
+// Scenario: Repo alpha (label team) has a worktree "wip" and a branch "todo"
+// without worktree; a repo named "team" does not exist
+// Expected: Worktree commands complete worktree branches, checkout completes
+// branches without a worktree, for the repo scope and for the label scope
+func TestCompleteScopedArg_RepoAndLabelScope(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	alphaPath := setupTestRepoWithBranches(t, tmpDir, "alpha", []string{"wip", "todo"})
+	createTestWorktree(t, alphaPath, "wip")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "alpha", Path: alphaPath, Labels: []string{"team"}},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	ctx := testContextWithConfig(t, &config.Config{RegistryPath: regFile}, tmpDir)
+	cd := &cobra.Command{}
+	cd.SetContext(ctx)
+	checkout := &cobra.Command{}
+	checkout.SetContext(ctx)
+	checkout.Flags().String("base", "", "")
+	registerCheckoutCompletions(checkout)
+
+	tests := []struct {
+		toComplete   string
+		wantWorktree []string
+		wantCheckout []string
+	}{
+		{toComplete: "alpha:w", wantWorktree: []string{"alpha:wip"}},
+		{toComplete: "alpha:t", wantCheckout: []string{"alpha:todo"}},
+		{toComplete: "team:w", wantWorktree: []string{"team:wip"}},
+		{toComplete: "team:t", wantCheckout: []string{"team:todo"}},
+		{toComplete: "nope:"},
+	}
+	for _, tt := range tests {
+		got, _ := completeScopedWorktreeArg(cd, nil, tt.toComplete)
+		slices.Sort(got)
+		if !slices.Equal(got, tt.wantWorktree) {
+			t.Errorf("worktree completion of %q = %v, want %v", tt.toComplete, got, tt.wantWorktree)
+		}
+		got, _ = checkout.ValidArgsFunction(checkout, nil, tt.toComplete)
+		slices.Sort(got)
+		if !slices.Equal(got, tt.wantCheckout) {
+			t.Errorf("checkout completion of %q = %v, want %v", tt.toComplete, got, tt.wantCheckout)
+		}
 	}
 }

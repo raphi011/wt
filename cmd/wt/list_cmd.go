@@ -58,25 +58,19 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 
 			// Determine which repos to list
 			var repos []registry.Repo
-			if global {
-				repos = reg.Repos
-			} else if len(args) > 0 {
+			if !global && len(args) > 0 {
 				repos, err = resolveScopeArgs(reg, args)
 				if err != nil {
 					return err
 				}
+				repos = filterOrphanedRepos(l, repos)
 			} else {
-				// Try current repo
-				repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
+				// Current repo, or all repos outside a repo or with -g
+				repos, _, err = unscopedRepos(ctx, reg, global)
 				if err != nil {
-					// Not in a repo, show all
-					repos = reg.Repos
-				} else {
-					repos = []registry.Repo{repo}
+					return err
 				}
 			}
-
-			repos = filterOrphanedRepos(l, repos)
 
 			l.Debug("listing worktrees", "repos", len(repos))
 

@@ -133,19 +133,11 @@ func runCdInteractive(
 		hist = &history.History{}
 	}
 
-	var repos []registry.Repo
-	if global {
-		repos = reg.Repos
-	} else {
-		repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
-		if err != nil {
-			l.Debug("could not detect current repo, showing all", "error", err)
-			repos = reg.Repos
-		} else {
-			repos = []registry.Repo{repo}
-		}
+	// Current repo, or all repos outside a repo or with -g
+	repos, _, err := unscopedRepos(ctx, reg, global)
+	if err != nil {
+		return "", "", "", err
 	}
-	repos = filterOrphanedRepos(l, repos)
 
 	loaded, warnings := git.ListWorktreesForRepos(ctx, reposToRefs(repos))
 	for _, w := range warnings {

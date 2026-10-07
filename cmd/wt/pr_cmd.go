@@ -73,7 +73,7 @@ func resolveRepoForge(ctx context.Context, repoArg string) (*repoForgeResult, er
 			return nil, fmt.Errorf("repository %q not found", repoArg)
 		}
 	} else {
-		repo, err = findOrRegisterCurrentRepoFromContext(ctx, reg)
+		repo, err = currentRepo(ctx, reg, autoRegister)
 		if err != nil {
 			return nil, err
 		}
@@ -273,7 +273,7 @@ Use --interactive to select an open PR from registered repositories.`,
 				repoPath = repo.Path
 			} else {
 				// Current directory
-				repo, err = findOrRegisterCurrentRepoFromContext(ctx, reg)
+				repo, err = currentRepo(ctx, reg, autoRegister)
 				if err != nil {
 					return err
 				}
@@ -761,7 +761,7 @@ func prCheckoutWizardParams(ctx context.Context, reg *registry.Registry, repoArg
 		return flows.PrCheckoutWizardParams{}, fmt.Errorf("no registered repositories; register one with 'wt repo add'")
 	}
 	params := flows.PrCheckoutWizardParams{Context: ctx, PreSelectedRepo: -1, HooksFromCLI: len(hf.HookNames) > 0 || hf.NoHook}
-	currentRepo := git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx))
+	currentRepo := currentRepoPath(ctx)
 	for i, repo := range repos {
 		params.AvailableRepos = append(params.AvailableRepos, repo.Path)
 		params.RepoNames = append(params.RepoNames, repo.Name)

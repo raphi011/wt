@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
-	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
@@ -79,7 +78,7 @@ worktrees. Commands that cannot start also return 1.`,
 
 			if len(targets) == 0 {
 				// No targets - use current directory
-				repoPath := git.GetCurrentRepoMainPathFrom(ctx, workDir)
+				repoPath := currentRepoPath(ctx)
 				if repoPath == "" {
 					return fmt.Errorf("not in a git repository")
 				}

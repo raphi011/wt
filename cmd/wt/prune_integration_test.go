@@ -2651,3 +2651,52 @@ func TestPrune_AutoPrune_SummaryGoesToStderr(t *testing.T) {
 		t.Errorf("stdout should list the removed worktree, got: %q", out.String())
 	}
 }
+
+// TestPrune_AutoPrune_RegisterFailureDoesNotWidenToAllRepos tests auto-prune
+// inside a repo that cannot be auto-registered.
+//
+// Scenario: User runs `wt prune -d` inside an unregistered repo while the
+// registry cannot be written
+// Expected: The registry error is returned instead of pruning all repos
+func TestPrune_AutoPrune_RegisterFailureDoesNotWidenToAllRepos(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	currentPath := setupTestRepo(t, tmpDir, "current")
+	otherPath := setupTestRepoWithBranches(t, tmpDir, "other", []string{"feature"})
+	createTestWorktree(t, otherPath, "feature")
+
+	regDir := filepath.Join(tmpDir, ".wt")
+	regFile := filepath.Join(regDir, "repos.json")
+	if err := os.MkdirAll(regDir, 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "other", Path: otherPath},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+	if err := os.Chmod(regDir, 0555); err != nil {
+		t.Fatalf("failed to make registry dir read-only: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(regDir, 0755); err != nil {
+			t.Errorf("failed to restore registry dir: %v", err)
+		}
+	})
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, currentPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-d"})
+
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "update registry") {
+		t.Fatalf("error = %v, want the registry update error", err)
+	}
+}

@@ -119,7 +119,7 @@ internal/ui/             - Terminal UI components
 1. Try to match scope as repo name
 2. If no repo match, try to match as label (returns multiple repos)
 
-**Unscoped `branch`** resolves through `resolveWorktreeTargets` in `cmd/wt/targets.go` for every command (`targetOpts{Global, Multi}`):
+**Unscoped `branch`** resolves through `resolveWorktreeTargets` in `cmd/wt/targets.go` for every command (`targetOpts{Global, Multi}`); "current repo, else all repos" is `unscopedRepos` in the same file, also for commands without a target (`list`, `prune`, `cd -i`):
 1. Inside a repo: the current repo
 2. Outside a repo, or with `-g`: all repos
 3. Single-target commands (`cd`, `checkout`, `diff`) error if the branch is in several repos
@@ -144,7 +144,7 @@ internal/ui/             - Terminal UI components
 
 **Never ignore errors** - All errors must be handled explicitly. Never use `_ = someFunc()` or call functions without checking their return error. In tests, use `t.Fatalf` for setup errors. In production code, either return the error or log it with context if it's truly non-fatal.
 
-**Always use `config.WorkDirFromContext(ctx)` for the working directory** - Never call `os.Getwd()` in command implementations. The working directory is captured once in `root.go` and stored in context. Use `config.WorkDirFromContext(ctx)` to retrieve it. For git operations that need a path, use `git.GetCurrentRepoMainPathFrom(ctx, workDir)`. Direct `os.Getwd()` calls break parallel test isolation.
+**Always use `config.WorkDirFromContext(ctx)` for the working directory** - Never call `os.Getwd()` in command implementations. The working directory is captured once in `root.go` and stored in context. Use `config.WorkDirFromContext(ctx)` to retrieve it. For the repo of the working directory, use `currentRepo(ctx, reg, policy)` or `currentRepoPath(ctx)` from `cmd/wt/targets.go`. Direct `os.Getwd()` calls break parallel test isolation.
 
 **Avoid magic strings** - Use named constants for repeated string values (e.g., PR states, merge strategies). Define constants in the package that owns the concept (e.g., `forge.PRStateMerged` for PR states). Never compare against string literals scattered across files.
 
