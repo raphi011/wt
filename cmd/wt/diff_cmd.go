@@ -35,9 +35,10 @@ By default shows what a PR would contain: changes introduced on the branch
 since it diverged from the default branch (e.g. origin/main).
 
 The argument can be:
-  - branch name: finds worktree in current repo, or all repos if ambiguous
+  - branch name: finds the worktree in the current repo; outside a repo,
+    or with -g, searches all repos and errors if ambiguous
   - repo:branch: finds exact worktree in specified repo
-  - label:branch: finds worktree in repos with that label
+  - label:branch: finds worktree in repos with that label, errors if ambiguous
 
 With no arguments, diffs the current worktree.`,
 		Example: `  wt diff                        # Diff current worktree vs origin/main

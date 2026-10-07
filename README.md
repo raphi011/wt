@@ -42,7 +42,9 @@ brew install raphi011/tap/wt
 go install github.com/raphi011/wt/cmd/wt@latest
 ```
 
-Requires `git` in PATH. For GitHub repos: `gh` CLI. For GitLab repos: `glab` CLI.
+Supported on macOS and Linux.
+
+Requires `git` in PATH. PR/MR features need the forge CLI, installed and authenticated: `gh` for GitHub (`gh auth login`), `glab` for GitLab (`glab auth login`).
 
 ## Getting Started
 
@@ -77,6 +79,8 @@ worktree_format = "~/worktrees/{repo}-{branch}"
 worktree_format = "/tmp/worktrees/{repo}-{branch}"
 ```
 
+Slashes in a branch name become dashes in the path: `feat/login` is placed at `.worktrees/feat-login`.
+
 ### 3. Register Repos
 
 ```bash
@@ -87,7 +91,12 @@ wt repo add ~/path/to/myrepo
 wt repo clone git@github.com:org/repo.git
 ```
 
-Repos are cloned as regular repos by default. Use `--clone-mode bare` (or `clone.mode` in config) for a bare-in-`.git` layout with worktrees as siblings; `wt repo convert --clone-mode bare|regular` switches an existing repo.
+There are two repo layouts:
+
+- **regular** (default): a standard clone. The default branch is checked out at the repo root, other branches are worktrees. Pick this if other tools expect a normal clone at the repo path.
+- **bare**: the git data lives in `.git` and the repo root has no working tree. Every branch, including the default one, is a worktree. Pick this if no branch should be special.
+
+Use `--clone-mode bare` (or `clone.mode` in config) to clone bare; `wt repo convert --clone-mode bare|regular` switches an existing repo.
 
 Repos are also auto-registered the first time you run `wt checkout` inside one.
 
@@ -126,13 +135,22 @@ on = ["checkout:pr"]
 command = "claude '{prompt:-help me}'"
 ```
 
-See [Hooks](#hooks) and [Writing Hooks](#writing-hooks) for the full placeholder reference and advanced patterns.
+See [Hooks](docs/hooks.md) for triggers, the full placeholder reference and advanced patterns.
 
 ### 6. List Worktrees
 
 ```bash
-wt list -g
+wt list       # Current repo
+wt list -g    # All registered repos
 ```
+
+```text
+REPO    BRANCH      COMMIT   AGE          PR  NOTE
+myrepo  feat/login  a72d0b5  2 hours ago      Implementing OAuth flow
+myrepo  main        a72d0b5  2 hours ago
+```
+
+The `PR` column shows the cached PR/MR state; `wt list -R` refreshes it from GitHub/GitLab.
 
 You're ready to go! `checkout`, `cd`, `prune` and `pr checkout` also support `-i` for an interactive wizard.
 
@@ -245,7 +263,7 @@ wt prune -R
 # Preview what would be removed
 wt prune -d
 
-# Verbose dry-run: see what's skipped and why
+# Dry-run that also prints the git and forge commands being run
 wt prune -d -v
 
 # Clear cached PR data and re-fetch
@@ -263,6 +281,8 @@ wt prune feature-login -f
 # Remove worktree from specific repo
 wt prune myrepo:feature-login -f
 ```
+
+A worktree with uncommitted changes (modified, staged or untracked files) is never removed without `-f`. A named worktree whose PR is not merged also needs `-f`.
 
 If the PR cache contains corrupt JSON, commands warn and preserve the file.
 Run `wt prune --reset-cache --dry-run` to clear it while previewing removals; `wt list -R` can display fresh PR status without overwriting the corrupt cache.
@@ -385,370 +405,29 @@ wt note set "Ready for review" myrepo:feature
 ## Configuration
 
 Global config: `~/.wt/config.toml`
-Local config: `.wt.toml` (in repo root)
+Local config: `.wt.toml` (in repo root, overrides global settings for that repo)
 
 ```bash
 wt config init               # Create default global config
 wt config init --local       # Create per-repo .wt.toml
-wt config init -s            # Print config to stdout
 wt config show               # Show effective config (merged if in a repo)
-wt config show --repo myrepo # Show effective config for specific repo
 wt config hooks              # List hooks with source annotations
 ```
 
-### Basic Settings
-
-```toml
-# Default sort order for list: "date", "repo", "branch"
-default_sort = "date"
-
-# Labels applied to newly auto-registered repos
-# default_labels = ["work"]
-
-[checkout]
-# Folder naming: {repo}, {branch}
-worktree_format = ".worktrees/{branch}"
-
-# Base ref for new branches: "remote" (default) or "local"
-# - "remote": branches from origin/<base> (ensures latest remote state)
-# - "local": branches from local <base> (useful for offline work)
-base_ref = "remote"
-
-# Auto-fetch from origin before checkout (default: false)
-# Note: with base_ref="local" and an explicit --base, --fetch is skipped (warns) since fetch doesn't affect local refs
-# auto_fetch = false
-
-# Auto-set upstream tracking (default: false)
-# set_upstream = false
-
-[prune]
-# Delete local branches after worktree removal (default: false)
-# delete_local_branches = false
-# Days before a worktree's commit age is highlighted as stale and eligible
-# for `wt prune --stale` (default: 14, 0 = disabled)
-# stale_days = 14
-
-[clone]
-# How `wt repo clone` and `wt pr checkout --clone` clone: "regular" (default) or "bare"
-# mode = "regular"
-```
-
-**Base branch resolution (`--base` flag):**
-
-| `--base` value | `base_ref` config | Branch created from |
-|----------------|-------------------|---------------------|
-| (none) | remote | `origin/<default>` (main/master) |
-| (none) | local | local default branch |
-| `develop` | remote | `origin/develop` |
-| `develop` | local | local `develop` |
-| `origin/develop` | (overridden) | `origin/develop` |
-| `upstream/main` | (overridden) | `upstream/main` |
-
-Explicit remote refs (`origin/branch`, `upstream/branch`) always override `base_ref` config.
-
-**Fetch behavior (`--fetch` / `auto_fetch`):**
-
-| Scenario | Fetch behavior |
-|----------|----------------|
-| `--base origin/develop` | Fetches `develop` from `origin` |
-| `--base upstream/main` | Fetches `main` from `upstream` |
-| `--base develop` + `base_ref=remote` | Fetches `develop` from `origin` |
-| `--base develop` + `base_ref=local` | **Skipped with warning** |
-
-### Hooks
-
-See [Getting Started > Configure Hooks](#5-configure-hooks) for examples. Each hook has a `command`, optional `description`, and optional `on` triggers.
-
-**Triggers** — syntax for the `on` field: `[before:|after:]trigger[:subtype]`
-
-| Trigger | Subtypes | Description |
-|---------|----------|-------------|
-| `checkout` | `create`, `open`, `pr` | Worktree checkout |
-| `prune` | — | Worktree removal |
-| `merge` | — | PR merge |
-| `all` | — | Matches all triggers |
-
-**Timing prefix:**
-
-| Prefix | Default | Description |
-|--------|---------|-------------|
-| *(none)* | `after` | Runs after the operation |
-| `after:` | — | Explicit after (same as no prefix) |
-| `before:` | — | Runs before the operation; non-zero exit aborts |
-
-**Examples:**
-
-```toml
-on = ["checkout"]              # All checkouts (after)
-on = ["checkout:pr"]           # PR checkouts only
-on = ["before:prune"]          # Pre-prune guard (can abort)
-on = ["before:checkout:pr"]    # Before PR checkout only
-on = ["checkout", "merge"]     # Multiple triggers
-```
-
-Hooks without `on` only run when invoked explicitly via `wt hook <name>` or `--hook <name>`.
-
-With `--hook <name>` only the named hooks run. A named hook runs in the phase its `on` names for the command (`before:checkout` runs before a checkout and can abort it); without a matching `on` it runs after the command.
-
-**Placeholders** — substituted in the hook `command` before execution:
-
-| Placeholder | Description |
-|-------------|-------------|
-| `{worktree-dir}` | Absolute path to the worktree |
-| `{repo-dir}` | Absolute path to the main repo (bare root or `.git` parent) |
-| `{branch}` | Branch name |
-| `{repo}` | Repo name (as registered in `wt repo list`) |
-| `{trigger}` | Command that triggered the hook (`checkout`, `prune`, `merge`, `run`) |
-| `{action}` | Checkout subtype: `create`, `open`, `pr`, or `manual` (for `wt hook`) |
-| `{phase}` | Hook timing: `before` or `after` |
-| `{config-dir}` | Absolute path to the wt config directory (`~/.wt/`) |
-| `{pr-number}` | PR/MR number (empty for non-PR checkouts) |
-| `{pr-repo}` | Forge repo path, e.g. `owner/repo` (empty for non-PR checkouts) |
-| `{key}` | Custom variable from `--arg key=value` (empty if unset) |
-| `{key:-default}` | Custom variable with fallback value if unset |
-| `{key:+text}` | Expands to `text` if key is set and non-empty, otherwise empty |
-
-**Args:** Pass `--arg key=value` or `--arg key` (bare boolean, sets to `"true"`)
-
-### Forge Settings
-
-Configure forge detection and multi-account auth for PR operations:
-
-```toml
-[forge]
-default = "github"      # Default forge
-default_org = "my-company"  # Default org (allows: wt repo clone repo)
-
-[[forge.rules]]
-pattern = "company/*"
-type = "gitlab"
-
-[[forge.rules]]
-pattern = "work-org/*"
-type = "github"
-user = "work-account"  # Use specific gh account for matching repos
-```
-
-### Merge Settings
-
-```toml
-[merge]
-strategy = "squash"  # squash, rebase, or merge (rebase is not supported on GitLab)
-```
-
-### Preserve Settings
-
-Symlink files from the repo root into new worktrees created with `wt checkout` or `wt pr checkout`. Useful for keeping local configuration (`.env`, `.envrc`, etc.) in sync across worktrees — edits in any worktree are instantly visible in all others.
-
-```toml
-[preserve]
-paths = [".env", ".envrc"]
-```
-
-- **paths** — relative paths from the repo root to symlink (e.g., `".env"`, `"config/.env"`)
-
-Paths that don't exist in the repo root are silently skipped. Existing files in the target worktree are never overwritten. Use `--no-preserve` on `wt checkout` or `wt pr checkout` to skip.
-
-### Self-Hosted Instances
-
-```toml
-[hosts]
-"github.mycompany.com" = "github"
-"gitlab.internal.corp" = "gitlab"
-```
-
-### Theming
-
-Customize the interactive UI with preset themes or custom colors:
-
-```toml
-[theme]
-# Use a preset theme
-name = "dracula"  # none, default, dracula, nord, gruvbox, catppuccin
-
-# Theme mode: "auto" (detect terminal), "light", or "dark"
-mode = "auto"
-
-# Use nerd font symbols (requires a nerd font installed)
-nerdfont = true
-```
-
-Override individual colors with hex codes or ANSI color numbers:
-
-```toml
-[theme]
-name = "nord"       # Start with a preset
-primary = "#88c0d0" # Override specific colors
-accent = "#b48ead"
-```
-
-Available color keys: `primary`, `accent`, `success`, `error`, `muted`, `normal`, `info`, `warning`.
-
-### Per-Repo Config
-
-Place a `.wt.toml` file in your repo root to override global settings for that repo:
-
-```bash
-wt config init --local       # Creates .wt.toml in current repo root
-```
-
-Local settings merge with global config — unset fields inherit from global. Available overrides:
-
-```toml
-# .wt.toml — per-repo overrides
-
-[checkout]
-worktree_format = "{branch}"  # replaces global
-base_ref = "local"            # replaces global
-auto_fetch = true             # replaces global
-set_upstream = true           # replaces global
-
-[clone]
-mode = "bare"                 # replaces global
-
-[merge]
-strategy = "rebase"           # replaces global
-
-[prune]
-delete_local_branches = true  # replaces global
-
-[forge]
-default = "gitlab"            # replaces global
-
-[preserve]
-paths = [".env.local"]        # appended to global (deduplicated)
-
-# Hooks merge by name — add new hooks or override global ones
-[hooks.setup]
-command = "go mod download"
-on = ["checkout"]
-
-# Disable a global hook for this repo
-[hooks.npm-install]
-enabled = false
-```
-
-**Not overridable** (global-only): `default_sort`, `default_labels`, `prune.stale_days`, `forge.default_org`, `forge.rules`, `hosts`, `theme`.
-
-## Writing Hooks
-
-Hooks are shell commands executed via `sh -c`. Placeholders like `{worktree-dir}` are replaced with raw text before the command runs — no automatic escaping or quoting is applied.
-
-### Hook Working Directory
-
-Hooks run with a working directory that depends on the command and phase:
-
-| Command | `before` CWD | `after` CWD |
-|---------|-------------|------------|
-| `checkout`, worktree is created | Repo root (worktree does not exist yet) | Worktree directory |
-| `checkout`, worktree exists | Worktree directory | Worktree directory |
-| `prune` | Worktree directory (still exists) | Repo root (worktree deleted) |
-| `merge` | Current directory | Repo root |
-
-The `checkout` rows also apply to `wt pr checkout`. Before hooks of a checkout run before anything is fetched or created, so a failing before hook leaves no worktree behind. `{worktree-dir}` then holds the path the worktree will get.
-
-Since the working directory is already set, `cd '{worktree-dir}'` is unnecessary in after-checkout hooks. For other commands, use `{worktree-dir}` or `{repo-dir}` placeholders if you need a specific directory.
-
-### Hook Execution Order
-
-Hooks run in **alphabetical order** by name. Use naming prefixes to control ordering:
-
-```toml
-[hooks.01-install]
-command = "npm install"
-on = ["checkout"]
-
-[hooks.02-lint]
-command = "npm run lint"
-on = ["checkout"]
-
-[hooks.99-open-editor]
-command = "code '{worktree-dir}'"
-on = ["checkout"]
-```
-
-TUI programs (editors, `claude`, interactive CLIs) work as hooks because they inherit the terminal's stdin/stdout/stderr. Place them last alphabetically so non-interactive hooks complete first.
-
-### Quoting Placeholders
-
-Since values are substituted as-is, paths with spaces or special characters will break unquoted placeholders:
-
-```toml
-# Breaks if path contains spaces
-[hooks.unsafe]
-command = "code {worktree-dir}"
-
-# Safe — single quotes protect the value
-[hooks.safe]
-command = "code '{worktree-dir}'"
-```
-
-> **Note:** Single quotes protect against spaces and most special characters, but not against values containing literal single quotes. This is a limitation of raw text substitution.
-
-The same applies to all placeholders (`{repo-dir}`, `{branch}`, `{repo}`, `{trigger}`) and custom `--arg` variables:
-
-```toml
-[hooks.claude]
-command = "claude '{prompt:-help me}'"
-```
-
-### Conditional Placeholders
-
-Use `{key:+text}` to include text only when an arg is set (and non-empty). This is useful for optional flags:
-
-```toml
-[hooks.claude]
-command = "claude {skip:+--dangerously-skip-permissions} -p '{prompt:-help}'"
-```
-
-```bash
-# Without skip — flag omitted
-wt hook claude -a prompt="implement auth"
-# → claude  -p 'implement auth'
-
-# With skip — flag included (bare -a key sets value to "true")
-wt hook claude -a skip -a prompt="implement auth"
-# → claude --dangerously-skip-permissions -p 'implement auth'
-```
-
-### Multiline Hooks
-
-Use TOML triple-quoted strings for multi-step hooks:
-
-```toml
-[hooks.setup]
-command = '''
-npm install
-npm run build
-'''
-on = ["checkout"]
-```
-
-**Important:** Without `set -e`, intermediate failures are silent — only the exit code of the **last** command determines whether the hook succeeds or fails. Use `set -e` to fail fast:
-
-```toml
-[hooks.setup]
-command = '''
-set -e
-npm install
-npm run build
-'''
-on = ["checkout"]
-```
-
-### Piping Content via Stdin
-
-Use `--arg key=-` to pipe stdin into a variable:
-
-```bash
-echo "implement auth" | wt hook claude --arg prompt=-
-```
-
-Multiple keys can read from the same stdin (all keys receive identical content):
-
-```bash
-cat spec.md | wt hook claude --arg prompt=- --arg context=-
-```
+The generated config file documents every setting. Reference:
+
+- [Configuration](docs/configuration.md): checkout, prune, clone, forge, merge, preserve, self-hosted instances, theming, per-repo config
+- [Hooks](docs/hooks.md): triggers, placeholders, working directory, execution order, quoting, stdin
+- [Command reference](docs/commands.md): every command, alias and flag
+
+`wt` keeps its files in `~/.wt/`:
+
+| File | Content |
+|------|---------|
+| `config.toml` | Global configuration |
+| `repos.json` | Registered repos and their labels |
+| `history.json` | Recently accessed worktrees (used by `wt cd`) |
+| `prs.json` | Cached PR/MR status |
 
 ## Shell Integration
 
@@ -782,10 +461,16 @@ wt completion bash > ~/.local/share/bash-completion/completions/wt
 mkdir -p ~/.zfunc
 echo 'fpath=(~/.zfunc $fpath)' >> ~/.zshrc  # add once, before compinit
 wt completion zsh > ~/.zfunc/_wt
-
-# PowerShell - add to $PROFILE
-wt completion powershell | Out-String | Invoke-Expression
 ```
+
+## Troubleshooting
+
+- **`wt cd` prints a path instead of changing directory**: the shell wrapper is not loaded, see [Shell Wrapper](#shell-wrapper).
+- **The `PR` column is empty or `wt prune` removes nothing**: PR status is read from a local cache. Refresh it with `wt list -R` or `wt prune -R`. This needs an authenticated `gh` or `glab` (`gh auth status`, `glab auth status`).
+- **The wrong forge is used** (self-hosted instance, GitLab repo treated as GitHub): map the host or org in the config, see [Self-Hosted Instances](docs/configuration.md#self-hosted-instances) and [Forge Settings](docs/configuration.md#forge-settings).
+- **PR status looks wrong**: `wt prune --reset-cache` clears the cache and fetches again.
+- **A repo is not found by name**: `wt repo list` shows the registered names; register a repo with `wt repo add <path>`.
+- **Something else fails**: add `-v` to any command to see the `git`, `gh` and `glab` commands it runs.
 
 ## Integration with gh-dash
 
@@ -806,5 +491,6 @@ Press `O` to checkout PR → hooks auto-open your editor. The repo must be regis
 ```bash
 just build    # Build ./wt binary
 just test     # Run tests
-just install  # Install to ~/go/bin (+ shell completions)
+just docs     # Regenerate docs/commands.md after changing commands or flags
+just install  # Install to ~/go/bin (+ shell completions + git hooks)
 ```

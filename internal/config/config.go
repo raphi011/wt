@@ -47,7 +47,7 @@ func WorkDirFromContext(ctx context.Context) string {
 // LocalConfigFileName is the name of the per-repo local config file
 const LocalConfigFileName = ".wt.toml"
 
-// Hook defines a post-create hook
+// Hook defines a hook: a shell command run before or after a wt operation
 type Hook struct {
 	Command     string   `toml:"command"`
 	Description string   `toml:"description"`

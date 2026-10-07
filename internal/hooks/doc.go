@@ -48,11 +48,13 @@
 // # Execution Context
 //
 // Hooks run with the working directory set to:
-//   - Worktree path for checkout hooks (both before and after)
-//   - Repo root for pr checkout hooks (both before and after)
+//   - Worktree path for checkout and pr checkout hooks; before hooks of a
+//     checkout that creates the worktree run in the main repo path (the
+//     worktree does not exist yet)
 //   - Worktree path for before:prune hooks (worktree still exists)
 //   - Main repo path for after:prune hooks (worktree is deleted)
-//   - Repo root for merge hooks (both before and after)
+//   - Current directory for before:merge hooks
+//   - Main repo path for after:merge hooks
 //
 // Before hooks abort the current item on failure. For checkout and merge, this
 // stops the command. For prune batches, the individual worktree is skipped but

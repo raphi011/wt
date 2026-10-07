@@ -60,7 +60,7 @@ brews:
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
     directory: Formula
     homepage: "https://github.com/raphi011/wt"
-    description: "Git worktree manager with GitHub PR integration"
+    description: "Git worktree manager with GitHub/GitLab integration"
     license: "MIT"
     dependencies:
       - name: git

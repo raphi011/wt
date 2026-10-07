@@ -31,7 +31,8 @@ func newPrCmd() *cobra.Command {
 		Long:    `Work with pull requests.`,
 		Example: `  wt pr checkout 123                # Checkout PR from current repo
   wt pr checkout myrepo 123         # Checkout PR from local repo
-  wt pr checkout org/repo 123       # Clone repo and checkout PR
+  wt pr checkout org/repo 123       # Checkout PR from registered repo matched by remote
+  wt pr checkout --clone org/repo 123  # Clone repo and checkout PR
   wt pr create --title "Add feature"
   wt pr merge
   wt pr view`,

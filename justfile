@@ -73,3 +73,6 @@ snapshot:
 
 testdoc:
     go run ./tools/testdoc -root . -out docs/TESTS.md -integration
+
+docs:
+    go test ./cmd/wt -run '^TestCommandDocs$' -update-docs
