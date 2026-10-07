@@ -29,14 +29,14 @@ Generated: 2026-10-07
 | [repolist](#repolist) | 5 |
 | [reporemove](#reporemove) | 6 |
 | [resolveworktreetargets](#resolveworktreetargets) | 4 |
-| [wt cd](#wt-cd) | 10 |
+| [wt cd](#wt-cd) | 11 |
 | [wt checkout](#wt-checkout) | 71 |
 | [wt exec](#wt-exec) | 14 |
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 12 |
 | [wt prune](#wt-prune) | 47 |
-| **Total** | **316** |
+| **Total** | **317** |
 
 ## completebasebranches
 
@@ -301,6 +301,7 @@ Generated: 2026-10-07
 | `TestCd_RecordsHistory` | Tests that cd writes to history after resolving a worktree. |
 | `TestCd_NoArgs_StaleHistory` | Tests that stale history entries are cleaned up. |
 | `TestCd_LabelScope` | Tests resolving a worktree via label:branch. |
+| `TestCd_Interactive_CancelReturnsSentinel` | Tests that cancelling the interactive picker returns errCancelled. |
 
 ## wt checkout
 

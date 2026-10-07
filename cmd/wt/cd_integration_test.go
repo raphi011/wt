@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/raphi011/wt/internal/fs"
 	"github.com/raphi011/wt/internal/history"
 	"github.com/raphi011/wt/internal/registry"
+	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
 
 // TestCd_BranchName tests resolving a worktree by branch name.
@@ -486,5 +488,46 @@ func TestCd_LabelScope(t *testing.T) {
 	got := strings.TrimSpace(out.String())
 	if got != wtPath1 {
 		t.Errorf("expected path from repo with label 'team-a' %q, got %q", wtPath1, got)
+	}
+}
+
+// TestCd_Interactive_CancelReturnsSentinel tests that cancelling the interactive picker returns errCancelled.
+//
+// Scenario: User runs `wt cd -i` and cancels the picker
+// Expected: The command returns errCancelled, which maps to exit code 1
+func TestCd_Interactive_CancelReturnsSentinel(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+	createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "myrepo", Path: repoPath},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+
+	cancel := func(flows.CdWizardParams) (flows.CdOptions, error) {
+		return flows.CdOptions{Cancelled: true}, nil
+	}
+
+	_, _, _, err := runCdInteractive(ctx, reg, filepath.Join(tmpDir, "history.json"), false, cancel)
+	if !errors.Is(err, errCancelled) {
+		t.Fatalf("expected errCancelled, got: %v", err)
+	}
+	if code := commandExitCode(err); code != 1 {
+		t.Errorf("expected exit code 1, got %d", code)
 	}
 }
