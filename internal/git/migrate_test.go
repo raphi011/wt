@@ -295,7 +295,7 @@ func TestMigrateToBare_Simple(t *testing.T) {
 
 	// Verify .git is now a bare repo
 	gitDir := filepath.Join(repoPath, ".git")
-	if !isBareRepo(gitDir) {
+	if !isBareRepo(ctx, gitDir) {
 		t.Error(".git should be a bare repo after migration")
 	}
 
@@ -798,7 +798,7 @@ func TestMigrateToRegular_Simple(t *testing.T) {
 
 	// Verify .git is no longer bare
 	gitDir := filepath.Join(result.RepoPath, ".git")
-	if isBareRepo(gitDir) {
+	if isBareRepo(ctx, gitDir) {
 		t.Error(".git should not be bare after conversion")
 	}
 
@@ -1095,7 +1095,7 @@ func TestMigrate_RoundTrip(t *testing.T) {
 	}
 
 	// Verify intermediate state
-	if !isBareRepo(filepath.Join(repoPath, ".git")) {
+	if !isBareRepo(ctx, filepath.Join(repoPath, ".git")) {
 		t.Fatal("expected bare repo after first conversion")
 	}
 	if _, err := os.Stat(filepath.Join(bareResult.MainWorktreePath, "file.txt")); err != nil {
@@ -1120,7 +1120,7 @@ func TestMigrate_RoundTrip(t *testing.T) {
 	}
 
 	// Verify final state
-	if isBareRepo(filepath.Join(repoPath, ".git")) {
+	if isBareRepo(ctx, filepath.Join(repoPath, ".git")) {
 		t.Fatal("expected non-bare repo after round-trip")
 	}
 

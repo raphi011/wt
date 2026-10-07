@@ -314,11 +314,11 @@ Use --interactive to select an open PR from registered repositories.`,
 			wtPath := worktree.ResolvePath(repoPath, repo.Name, branch, format)
 
 			// Detect repo type
-			repoType, err := git.DetectRepoType(repoPath)
+			repoType, err := git.DetectRepoType(ctx, repoPath)
 			if err != nil {
 				return err
 			}
-			gitDir := git.GetGitDir(repoPath, repoType)
+			gitDir := git.GetGitDir(ctx, repoPath, repoType)
 
 			var found bool
 			var existingPath string
