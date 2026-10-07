@@ -9,7 +9,8 @@
 // Hooks can run automatically or manually:
 //
 //   - Automatic: Hooks with "on" config matching the command type run automatically
-//   - Manual: Use --hook=name to run a specific hook, --no-hook to skip all
+//   - Manual: Use --hook=name to run a specific hook, --no-hook to skip all.
+//     A named hook runs in the phase its "on" names for the command, else after it
 //
 // Example config:
 //

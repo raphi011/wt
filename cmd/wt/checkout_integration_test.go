@@ -1467,6 +1467,63 @@ func TestCheckout_Hook(t *testing.T) {
 	}
 }
 
+// TestCheckout_NamedBeforeHookAborts tests that a before-hook named with --hook
+// runs before the checkout and can abort it.
+//
+// Scenario: User runs `wt checkout -b feature --hook guard`, guard has on=["before:checkout"] and fails
+// Expected: Command fails, worktree is not created
+func TestCheckout_NamedBeforeHookAborts(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"guard": {
+					Command: "sh -c 'exit 1'",
+					On:      []string{"before:checkout"},
+				},
+			},
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "--hook", "guard"})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("checkout should fail when the named before-hook fails")
+	}
+
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+		t.Errorf("worktree should not exist at %s", wtPath)
+	}
+}
+
 // TestCheckout_NoHook tests that --no-hook skips default hooks.
 //
 // Scenario: User runs `wt checkout -b feature --no-hook` with a default hook

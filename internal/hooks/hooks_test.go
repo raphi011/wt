@@ -282,31 +282,101 @@ func TestSelectHooks_NoOnCondition(t *testing.T) {
 	}
 }
 
-func TestSelectHooks_ExplicitHooksSkipBeforePhase(t *testing.T) {
+func TestSelectHooks_ExplicitHooksPhase(t *testing.T) {
 	t.Parallel()
 
 	hooksConfig := config.HooksConfig{
 		Hooks: map[string]config.Hook{
-			"guard": {Command: "echo guard", On: []string{"before:checkout"}},
+			"guard":       {Command: "echo guard", On: []string{"before:checkout"}},
+			"setup":       {Command: "echo setup", On: []string{"checkout"}},
+			"both":        {Command: "echo both", On: []string{"before:checkout", "checkout"}},
+			"manual":      {Command: "echo manual"},
+			"prune-guard": {Command: "echo prune-guard", On: []string{"before:prune"}},
+			"pr-guard":    {Command: "echo pr-guard", On: []string{"before:checkout:pr"}},
+			"all-guard":   {Command: "echo all-guard", On: []string{"before:all"}},
 		},
 	}
 
-	// Explicit hooks should NOT run in before phase (to avoid double execution)
-	matches, err := SelectHooks(hooksConfig, []string{"guard"}, false, HookSelector{Command: CommandCheckout, Phase: PhaseBefore})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(matches) != 0 {
-		t.Errorf("expected no hooks in before phase with explicit --hook, got %d", len(matches))
+	tests := []struct {
+		name       string
+		wantBefore bool
+		wantAfter  bool
+	}{
+		{name: "guard", wantBefore: true},
+		{name: "setup", wantAfter: true},
+		{name: "both", wantBefore: true, wantAfter: true},
+		{name: "manual", wantAfter: true},
+		// "on" names another command or subtype: runs after, like a hook without "on"
+		{name: "prune-guard", wantAfter: true},
+		{name: "pr-guard", wantAfter: true},
+		{name: "all-guard", wantBefore: true},
 	}
 
-	// Explicit hooks should run in after phase
-	matches, err = SelectHooks(hooksConfig, []string{"guard"}, false, HookSelector{Command: CommandCheckout, Phase: PhaseAfter})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			for phase, want := range map[PhaseType]bool{PhaseBefore: tt.wantBefore, PhaseAfter: tt.wantAfter} {
+				matches, err := SelectHooks(hooksConfig, []string{tt.name}, false, HookSelector{Command: CommandCheckout, Action: ActionCreate, Phase: phase})
+				if err != nil {
+					t.Fatalf("SelectHooks(%s) error: %v", phase, err)
+				}
+				if got := len(matches) == 1; got != want {
+					t.Errorf("SelectHooks(%s) selected = %v, want %v", phase, got, want)
+				}
+			}
+		})
 	}
-	if len(matches) != 1 {
-		t.Errorf("expected 1 hook in after phase with explicit --hook, got %d", len(matches))
+}
+
+func TestSelectHooks_ExplicitHooksUnknownName(t *testing.T) {
+	t.Parallel()
+
+	hooksConfig := config.HooksConfig{
+		Hooks: map[string]config.Hook{
+			"setup": {Command: "echo setup", On: []string{"checkout"}},
+		},
+	}
+
+	for _, phase := range []PhaseType{PhaseBefore, PhaseAfter} {
+		_, err := SelectHooks(hooksConfig, []string{"setup", "typo"}, false, HookSelector{Command: CommandCheckout, Phase: phase})
+		if err == nil || !strings.Contains(err.Error(), `unknown hook "typo"`) {
+			t.Errorf("SelectHooks(%s) error = %v, want unknown hook", phase, err)
+		}
+	}
+}
+
+func TestRunsByDefault(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		on      []string
+		actions []string
+		want    bool
+	}{
+		{on: nil, actions: []string{ActionCreate, ActionOpen}, want: false},
+		{on: []string{"checkout"}, actions: []string{ActionCreate, ActionOpen}, want: true},
+		{on: []string{"after:checkout"}, actions: []string{ActionCreate, ActionOpen}, want: true},
+		{on: []string{"before:checkout"}, actions: []string{ActionCreate, ActionOpen}, want: true},
+		{on: []string{"checkout:create"}, actions: []string{ActionCreate, ActionOpen}, want: true},
+		{on: []string{"before:checkout:open"}, actions: []string{ActionCreate, ActionOpen}, want: true},
+		{on: []string{"all"}, actions: []string{ActionCreate, ActionOpen}, want: true},
+		{on: []string{"checkout:pr"}, actions: []string{ActionCreate, ActionOpen}, want: false},
+		{on: []string{"prune", "merge"}, actions: []string{ActionCreate, ActionOpen}, want: false},
+		{on: []string{"checkout:pr"}, actions: []string{ActionPR}, want: true},
+		{on: []string{"checkout"}, actions: []string{ActionPR}, want: true},
+		{on: []string{"checkout:create"}, actions: []string{ActionPR}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(strings.Join(tt.on, ",")+"/"+strings.Join(tt.actions, ","), func(t *testing.T) {
+			t.Parallel()
+
+			got := RunsByDefault(config.Hook{Command: "true", On: tt.on}, CommandCheckout, tt.actions...)
+			if got != tt.want {
+				t.Errorf("RunsByDefault(on=%v, %v) = %v, want %v", tt.on, tt.actions, got, tt.want)
+			}
+		})
 	}
 }
 
