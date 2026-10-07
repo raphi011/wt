@@ -17,10 +17,10 @@ Generated: 2026-10-07
 | [forge](#forge) | 9 |
 | [hook](#hook) | 9 |
 | [init](#init) | 4 |
-| [prcheckout](#prcheckout) | 14 |
+| [prcheckout](#prcheckout) | 15 |
 | [prcreate](#prcreate) | 3 |
 | [preservefiles](#preservefiles) | 1 |
-| [prmerge](#prmerge) | 4 |
+| [prmerge](#prmerge) | 5 |
 | [prview](#prview) | 2 |
 | [repoadd](#repoadd) | 8 |
 | [repoclone](#repoclone) | 13 |
@@ -36,7 +36,7 @@ Generated: 2026-10-07
 | [wt list](#wt-list) | 12 |
 | [wt note](#wt-note) | 10 |
 | [wt prune](#wt-prune) | 46 |
-| **Total** | **301** |
+| **Total** | **303** |
 
 ## completebasebranches
 
@@ -159,6 +159,7 @@ Generated: 2026-10-07
 | `TestPrCheckout_CloneFlagWithExistingMatch` | Tests that --clone does not trigger |
 | `TestPrCheckout_AlreadyCheckedOut` | Tests that the pr checkout code path correctly |
 | `TestPrCheckout_HookWithArg` | Tests that --arg values reach hooks run by pr checkout. |
+| `TestPrCheckout_InvalidArg` | Tests that pr checkout reports a malformed --arg. |
 
 ## prcreate
 
@@ -182,6 +183,7 @@ Generated: 2026-10-07
 | `TestPrMerge_RepoNotFound` | Tests error when specified repo doesn't exist. |
 | `TestPrMerge_HookNoHookMutuallyExclusive` | Tests that --hook and --no-hook cannot both be used. |
 | `TestPrMerge_HookWithArg` | Tests that --arg values reach hooks run by pr merge. |
+| `TestPrMerge_InvalidArg` | Tests that pr merge reports a malformed --arg. |
 
 ## prview
 

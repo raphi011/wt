@@ -977,18 +977,15 @@ func TestPrCheckout_AlreadyCheckedOut(t *testing.T) {
 	}
 }
 
-// TestPrCheckout_HookWithArg tests that --arg values reach hooks run by pr checkout.
-//
-// Scenario: User runs `wt pr checkout 1 --forge github -a val=hello`, PR head branch exists on origin
-// Expected: Worktree is created for the PR branch and the checkout hook runs with the variable substituted
-func TestPrCheckout_HookWithArg(t *testing.T) {
-	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
-	fakeGHMergedPR(t)
+// setupPrCheckoutRepo creates a registered repo whose local origin has a
+// "feature" branch, so pr checkout can fetch the PR branch without network.
+// Returns the config, the repo path and the temp dir the worktree is created in.
+func setupPrCheckoutRepo(t *testing.T) (cfg *config.Config, repoPath, tmpDir string) {
+	t.Helper()
 
-	tmpDir := resolvePath(t, t.TempDir())
+	tmpDir = resolvePath(t, t.TempDir())
 
-	// Local origin, so fetching the PR branch needs no network
-	repoPath, _ := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
+	repoPath, _ = setupTestRepoWithOrigin(t, tmpDir, "test-repo")
 	if out, err := runGitCommand(repoPath, "push", "origin", "main:feature"); err != nil {
 		t.Fatalf("failed to push feature branch: %v\n%s", err, out)
 	}
@@ -1007,17 +1004,28 @@ func TestPrCheckout_HookWithArg(t *testing.T) {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	outputPath := filepath.Join(tmpDir, "hook-output.txt")
-
-	cfg := &config.Config{
+	cfg = &config.Config{
 		RegistryPath: regFile,
 		Checkout: config.CheckoutConfig{
 			WorktreeFormat: "../{repo}-{branch}",
 		},
-		Hooks: config.HooksConfig{
-			Hooks: map[string]config.Hook{
-				"show": {Command: "echo {val} > " + outputPath, On: []string{"checkout"}},
-			},
+	}
+	return cfg, repoPath, tmpDir
+}
+
+// TestPrCheckout_HookWithArg tests that --arg values reach hooks run by pr checkout.
+//
+// Scenario: User runs `wt pr checkout 1 --forge github -a val=hello`, PR head branch exists on origin
+// Expected: Worktree is created for the PR branch and the checkout hook runs with the variable substituted
+func TestPrCheckout_HookWithArg(t *testing.T) {
+	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
+	fakeGHMergedPR(t)
+
+	cfg, repoPath, tmpDir := setupPrCheckoutRepo(t)
+	outputPath := filepath.Join(tmpDir, "hook-output.txt")
+	cfg.Hooks = config.HooksConfig{
+		Hooks: map[string]config.Hook{
+			"show": {Command: "echo {val} > " + outputPath, On: []string{"checkout"}},
 		},
 	}
 
@@ -1041,6 +1049,30 @@ func TestPrCheckout_HookWithArg(t *testing.T) {
 	}
 	if strings.TrimSpace(string(content)) != "hello" {
 		t.Errorf("expected hook output 'hello', got %q", string(content))
+	}
+}
+
+// TestPrCheckout_InvalidArg tests that pr checkout reports a malformed --arg.
+//
+// Scenario: User runs `wt pr checkout 1 --forge github -a =value`
+// Expected: Returns error about the empty key
+func TestPrCheckout_InvalidArg(t *testing.T) {
+	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
+	fakeGHMergedPR(t)
+
+	cfg, repoPath, _ := setupPrCheckoutRepo(t)
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"1", "--forge", "github", "-a", "=value"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for malformed --arg")
+	}
+	if !strings.Contains(err.Error(), "key cannot be empty") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 
@@ -1075,5 +1107,32 @@ func TestPrMerge_HookWithArg(t *testing.T) {
 	}
 	if strings.TrimSpace(string(content)) != "hello" {
 		t.Errorf("expected hook output 'hello', got %q", string(content))
+	}
+}
+
+// TestPrMerge_InvalidArg tests that pr merge reports a malformed --arg.
+//
+// Scenario: User runs `wt pr merge --keep -a =value` in a worktree whose PR is already merged
+// Expected: Returns error about the empty key and keeps the worktree
+func TestPrMerge_InvalidArg(t *testing.T) {
+	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
+	fakeGHMergedPR(t)
+
+	cfg, _, wtPath := setupMergedWorktree(t)
+
+	ctx := testContextWithConfig(t, cfg, wtPath)
+	cmd := newPrMergeCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--keep", "-a", "=value"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for malformed --arg")
+	}
+	if !strings.Contains(err.Error(), "key cannot be empty") {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if _, err := os.Stat(wtPath); err != nil {
+		t.Errorf("worktree should be kept: %v", err)
 	}
 }
