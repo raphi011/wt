@@ -712,44 +712,6 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-func TestGetEffectiveWorktreeFormat(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name          string
-		repoFormat    string
-		defaultFormat string
-		want          string
-	}{
-		{
-			name:          "uses repo format when set",
-			repoFormat:    "../{repo}-{branch}",
-			defaultFormat: "{branch}",
-			want:          "../{repo}-{branch}",
-		},
-		{
-			name:          "falls back to default when repo format empty",
-			repoFormat:    "",
-			defaultFormat: "{repo}-{branch}",
-			want:          "{repo}-{branch}",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			repo := &Repo{
-				Name:           "test",
-				Path:           "/test",
-				WorktreeFormat: tt.repoFormat,
-			}
-			if got := repo.GetEffectiveWorktreeFormat(tt.defaultFormat); got != tt.want {
-				t.Errorf("GetEffectiveWorktreeFormat() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestPathExists(t *testing.T) {
 	t.Parallel()
 

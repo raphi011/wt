@@ -7,11 +7,35 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/registry"
 )
+
+// flagOverride returns the flag's value when it was passed on the command
+// line, or nil so the setting is inherited from config.
+func flagOverride[T any](cmd *cobra.Command, name string, value T) *T {
+	if !cmd.Flags().Changed(name) {
+		return nil
+	}
+	return &value
+}
+
+// resolveCloneBare reports whether to clone bare: --clone-mode if given, else
+// global config (a repo that doesn't exist yet has no .wt.toml).
+func resolveCloneBare(ctx context.Context, cloneMode string) (bool, error) {
+	var overrides config.Overrides
+	if cloneMode != "" {
+		if err := config.ValidateCloneMode(cloneMode); err != nil {
+			return false, err
+		}
+		overrides.CloneMode = &cloneMode
+	}
+	return config.ResolverFromContext(ctx).ResolveGlobal(overrides).Clone.IsBare(), nil
+}
 
 // resolveEffectiveConfig returns the effective config for a repo path,
 // falling back to global config if local config can't be loaded.

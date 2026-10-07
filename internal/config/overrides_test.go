@@ -48,6 +48,61 @@ func TestConfigResolver_OverridesPrecedence(t *testing.T) {
 	}
 }
 
+func TestConfigResolver_StringOverridesPrecedence(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		global   string
+		local    string
+		override *string
+		want     string
+	}{
+		{name: "unset"},
+		{name: "global", global: "g", want: "g"},
+		{name: "local overrides global", global: "g", local: "l", want: "l"},
+		{name: "override beats local", global: "g", local: "l", override: new("o"), want: "o"},
+		{name: "override beats global", global: "g", override: new("o"), want: "o"},
+		{name: "empty override beats config", global: "g", local: "l", override: new("")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			if tc.local != "" {
+				// Enum fields are validated on load, so the local file only sets the free-form one
+				content := fmt.Sprintf("[checkout]\nworktree_format = %q\n", tc.local)
+				if err := os.WriteFile(filepath.Join(dir, LocalConfigFileName), []byte(content), 0644); err != nil {
+					t.Fatalf("write local config: %v", err)
+				}
+			}
+			global := &Config{
+				DefaultSort: tc.global,
+				Merge:       MergeConfig{Strategy: tc.global},
+				Clone:       CloneConfig{Mode: tc.global},
+				Checkout:    CheckoutConfig{WorktreeFormat: tc.global},
+			}
+			cfg, err := NewResolver(global).ResolveForRepo(dir, Overrides{MergeStrategy: tc.override, DefaultSort: tc.override, CloneMode: tc.override, WorktreeFormat: tc.override})
+			if err != nil {
+				t.Fatalf("resolve config: %v", err)
+			}
+			if cfg.Checkout.WorktreeFormat != tc.want {
+				t.Errorf("worktree_format = %q, want %q", cfg.Checkout.WorktreeFormat, tc.want)
+			}
+			// Not set in the local file: override, else global
+			wantGlobal := tc.global
+			if tc.override != nil {
+				wantGlobal = *tc.override
+			}
+			if cfg.Merge.Strategy != wantGlobal || cfg.DefaultSort != wantGlobal || cfg.Clone.Mode != wantGlobal {
+				t.Errorf("strategy=%q, default_sort=%q, clone.mode=%q; want all %q", cfg.Merge.Strategy, cfg.DefaultSort, cfg.Clone.Mode, wantGlobal)
+			}
+			if global.Merge.Strategy != tc.global || global.DefaultSort != tc.global || global.Clone.Mode != tc.global || global.Checkout.WorktreeFormat != tc.global {
+				t.Error("overrides mutated the global config")
+			}
+		})
+	}
+}
+
 func TestConfigResolver_OverridesIsolation(t *testing.T) {
 	t.Parallel()
 

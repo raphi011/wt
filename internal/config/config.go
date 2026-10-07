@@ -109,22 +109,6 @@ func (c *CloneConfig) IsBare() bool {
 	return c.Mode == "bare"
 }
 
-// ResolveIsBare resolves the effective clone mode from a CLI flag override
-// and returns whether bare mode should be used. The CLI flag takes precedence
-// over the config value. Returns an error if the resolved mode is invalid.
-func (c *CloneConfig) ResolveIsBare(cliOverride string) (bool, error) {
-	mode := cliOverride
-	if mode == "" {
-		mode = c.Mode
-	}
-	if mode != "" {
-		if err := ValidateCloneMode(mode); err != nil {
-			return false, err
-		}
-	}
-	return mode == "bare", nil
-}
-
 // CheckoutConfig holds checkout-related configuration
 type CheckoutConfig struct {
 	WorktreeFormat string `toml:"worktree_format"` // Template for worktree folder names

@@ -26,12 +26,12 @@ Generated: 2026-10-07
 | [prcommands](#prcommands) | 1 |
 | [prcreate](#prcreate) | 3 |
 | [preservefiles](#preservefiles) | 1 |
-| [prmerge](#prmerge) | 9 |
+| [prmerge](#prmerge) | 10 |
 | [prview](#prview) | 3 |
 | [refreshprs](#refreshprs) | 1 |
 | [removeworktree](#removeworktree) | 1 |
 | [repoadd](#repoadd) | 8 |
-| [repoclone](#repoclone) | 15 |
+| [repoclone](#repoclone) | 16 |
 | [repoconvertbare](#repoconvertbare) | 18 |
 | [repoconvertregular](#repoconvertregular) | 4 |
 | [repolist](#repolist) | 5 |
@@ -41,13 +41,13 @@ Generated: 2026-10-07
 | [resolveworktreetargets](#resolveworktreetargets) | 5 |
 | [unscopedrepos](#unscopedrepos) | 1 |
 | [wt cd](#wt-cd) | 13 |
-| [wt checkout](#wt-checkout) | 80 |
+| [wt checkout](#wt-checkout) | 81 |
 | [wt exec](#wt-exec) | 15 |
 | [wt label](#wt-label) | 15 |
-| [wt list](#wt-list) | 14 |
+| [wt list](#wt-list) | 15 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 51 |
-| **Total** | **361** |
+| **Total** | **365** |
 
 ## completebasebranches
 
@@ -235,6 +235,7 @@ Generated: 2026-10-07
 
 | Test | Description |
 |------|-------------|
+| `TestPrMerge_StrategyOverrides` | Tests merge strategy precedence. |
 | `TestPrMerge_UsesUpstreamBranch` | Selects the PR source branch while preserving local identity. |
 | `TestPrMerge_OpenPRCleanup` | Verifies merging an open PR and its configured cleanup. |
 | `TestPrMerge_NotInGitRepo` | Tests error when running pr merge outside a git repo. |
@@ -297,6 +298,7 @@ Generated: 2026-10-07
 | `TestRepoClone_ShortFormAutoExtractRepoName` | Tests that short-form extracts repo name. |
 | `TestRepoClone_ExplicitBranchSkipsAutoDetect` | Tests that -b flag overrides auto-detection. |
 | `TestRepoClone_EmptyRepoSkipsWorktree` | Tests that empty repos don't create worktrees. |
+| `TestRepoClone_CloneModeOverrides` | Tests clone mode precedence. |
 
 ## repoconvertbare
 
@@ -481,6 +483,7 @@ Generated: 2026-10-07
 | `TestCheckout_Global_SearchesAllRepos` | Tests that -g searches all repos from inside a repo. |
 | `TestCheckout_UnscopedOutsideRepo_AmbiguousWorktrees` | Tests that an unscoped |
 | `TestCheckout_AutoFetchOverrides` | Tests config precedence using a newer remote commit. |
+| `TestCheckout_WorktreeFormatOverrides` | Tests worktree format precedence. |
 
 ## wt exec
 
@@ -540,6 +543,7 @@ Generated: 2026-10-07
 | `TestList_Global` | Tests the --global flag shows all repos. |
 | `TestList_GlobalFromNonRepo` | Tests --global from outside any git repo. |
 | `TestList_DefaultSortFromConfig` | Tests that default_sort in config is used when --sort is not set. |
+| `TestList_SortOverrides` | Tests sort precedence. |
 
 ## wt note
 

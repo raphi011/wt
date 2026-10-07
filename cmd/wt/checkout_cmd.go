@@ -58,10 +58,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
 			l := log.FromContext(ctx)
-			var fetchOverride *bool
-			if cmd.Flags().Changed("fetch") {
-				fetchOverride = new(fetch)
-			}
+			fetchOverride := flagOverride(cmd, "fetch", fetch)
 			baseExplicit := cmd.Flags().Changed("base")
 
 			var target string
@@ -191,7 +188,12 @@ type worktreeResult struct {
 func ensureWorktree(ctx context.Context, repo registry.Repo, branch string, opts checkoutOpts) (worktreeResult, error) {
 	l := log.FromContext(ctx)
 
-	cfg := resolveConfig(ctx, repo.Path, config.Overrides{AutoFetch: opts.Fetch})
+	overrides := config.Overrides{AutoFetch: opts.Fetch}
+	if repo.WorktreeFormat != "" {
+		// Format registered for the repo (repo add/clone -w) overrides config
+		overrides.WorktreeFormat = new(repo.WorktreeFormat)
+	}
+	cfg := resolveConfig(ctx, repo.Path, overrides)
 
 	var res worktreeResult
 	if !opts.NewBranch {
@@ -211,8 +213,7 @@ func ensureWorktree(ctx context.Context, repo registry.Repo, branch string, opts
 	gitDir := git.GetGitDir(ctx, repo.Path, repoType)
 
 	if res.Path == "" {
-		format := repo.GetEffectiveWorktreeFormat(cfg.Checkout.WorktreeFormat)
-		res.Path = worktree.ResolvePath(repo.Path, repo.Name, branch, format)
+		res.Path = worktree.ResolvePath(repo.Path, repo.Name, branch, cfg.Checkout.WorktreeFormat)
 		res.Created = true
 	}
 

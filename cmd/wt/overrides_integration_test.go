@@ -171,6 +171,206 @@ func TestPrune_DeleteBranchOverrides(t *testing.T) {
 	}
 }
 
+// TestPrMerge_StrategyOverrides tests merge strategy precedence.
+//
+// Scenario: User runs `wt pr merge` with global/local merge.strategy and optional --strategy
+// Expected: The forge merges with the flag, else the local, else the global strategy
+func TestPrMerge_StrategyOverrides(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name   string
+		global string
+		local  string
+		args   []string
+		want   string
+	}{
+		{name: "unset"},
+		{name: "global", global: "squash", want: "squash"},
+		{name: "local overrides global", global: "squash", local: "[merge]\nstrategy = \"rebase\"\n", want: "rebase"},
+		{name: "flag overrides local", global: "squash", local: "[merge]\nstrategy = \"rebase\"\n", args: []string{"--strategy", "merge"}, want: "merge"},
+		{name: "flag overrides global", global: "squash", args: []string{"-s", "rebase"}, want: "rebase"},
+		{name: "invalid local flag override", global: "squash", local: "invalid [[[", args: []string{"-s", "rebase"}, want: "rebase"},
+		{name: "invalid local global fallback", global: "squash", local: "invalid [[[", want: "squash"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cfg, repoPath, wtPath := setupMergedWorktree(t)
+			if tc.local != "" {
+				if err := os.WriteFile(filepath.Join(repoPath, config.LocalConfigFileName), []byte(tc.local), 0644); err != nil {
+					t.Fatalf("write local config: %v", err)
+				}
+			}
+			cfg.Merge.Strategy = tc.global
+			ctx, _ := testContextWithConfigAndOutput(t, cfg, wtPath)
+			ctx, fake := withRepoPR(t, ctx, repoPath, forge.PRStateOpen)
+			cmd := newPrMergeCmd()
+			cmd.SetContext(ctx)
+			cmd.SetArgs(append([]string{"--keep"}, tc.args...))
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("pr merge command: %v", err)
+			}
+			merges := fake.Merges()
+			if len(merges) != 1 || merges[0].Strategy != tc.want {
+				t.Errorf("merge calls = %+v, want one merge with strategy %q", merges, tc.want)
+			}
+		})
+	}
+}
+
+// TestList_SortOverrides tests sort precedence.
+//
+// Scenario: User runs `wt list` with default_sort in config and optional --sort
+// Expected: Worktrees are ordered by the flag, else by default_sort
+func TestList_SortOverrides(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name       string
+		global     string
+		args       []string
+		wantByRepo bool
+	}{
+		{name: "config repo", global: "repo", wantByRepo: true},
+		{name: "config branch", global: "branch"},
+		{name: "flag overrides config branch", global: "branch", args: []string{"--sort", "repo"}, wantByRepo: true},
+		{name: "flag overrides config repo", global: "repo", args: []string{"-s", "branch"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tmpDir := resolvePath(t, t.TempDir())
+			// By repo "one" (zzz-last) sorts first; by branch "two" (aaa-first) does
+			onePath := setupTestRepoWithBranches(t, tmpDir, "one", []string{"zzz-last"})
+			createTestWorktree(t, onePath, "zzz-last")
+			twoPath := setupTestRepoWithBranches(t, tmpDir, "two", []string{"aaa-first"})
+			createTestWorktree(t, twoPath, "aaa-first")
+			regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+			if err := saveRegistry(&registry.Registry{Repos: []registry.Repo{{Name: "one", Path: onePath}, {Name: "two", Path: twoPath}}}, regFile); err != nil {
+				t.Fatalf("save registry: %v", err)
+			}
+			otherDir := filepath.Join(tmpDir, "other")
+			if err := os.MkdirAll(otherDir, 0755); err != nil {
+				t.Fatalf("create directory: %v", err)
+			}
+			ctx, out := testContextWithConfigAndOutput(t, &config.Config{RegistryPath: regFile, DefaultSort: tc.global}, otherDir)
+			cmd := newListCmd()
+			cmd.SetContext(ctx)
+			cmd.SetArgs(tc.args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("list command: %v", err)
+			}
+			lastIdx := strings.Index(out.String(), "zzz-last")
+			firstIdx := strings.Index(out.String(), "aaa-first")
+			if lastIdx == -1 || firstIdx == -1 {
+				t.Fatalf("expected both branches in output, got %q", out.String())
+			}
+			if got := lastIdx < firstIdx; got != tc.wantByRepo {
+				t.Errorf("sorted by repo = %t, want %t\n%s", got, tc.wantByRepo, out.String())
+			}
+		})
+	}
+}
+
+// TestRepoClone_CloneModeOverrides tests clone mode precedence.
+//
+// Scenario: User runs `wt repo clone <url>` with clone.mode in config and optional --clone-mode
+// Expected: The clone is bare when the flag, else clone.mode, says so; an invalid flag value is rejected
+func TestRepoClone_CloneModeOverrides(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		global   string
+		args     []string
+		wantBare bool
+		wantErr  bool
+	}{
+		{name: "unset"},
+		{name: "config bare", global: "bare", wantBare: true},
+		{name: "config regular", global: "regular"},
+		{name: "flag overrides config bare", global: "bare", args: []string{"--clone-mode", "regular"}},
+		{name: "flag overrides config regular", global: "regular", args: []string{"--clone-mode", "bare"}, wantBare: true},
+		{name: "invalid flag", global: "bare", args: []string{"--clone-mode", "shallow"}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tmpDir := resolvePath(t, t.TempDir())
+			sourceRepo := setupTestRepo(t, tmpDir, "source-repo")
+			cfg := testConfig()
+			cfg.RegistryPath = filepath.Join(tmpDir, ".wt", "repos.json")
+			cfg.Clone.Mode = tc.global
+			cmd := newRepoCloneCmd()
+			cmd.SetContext(testContextWithConfig(t, cfg, tmpDir))
+			cmd.SetArgs(append([]string{"file://" + sourceRepo, "cloned-repo"}, tc.args...))
+			err := cmd.Execute()
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "clone-mode") {
+					t.Fatalf("clone error = %v, want invalid clone-mode", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("clone command: %v", err)
+			}
+			bare, err := runGitCommand(filepath.Join(tmpDir, "cloned-repo", ".git"), "rev-parse", "--is-bare-repository")
+			if err != nil {
+				t.Fatalf("inspect clone: %v\n%s", err, bare)
+			}
+			if got := strings.TrimSpace(bare) == "true"; got != tc.wantBare {
+				t.Errorf("bare clone = %t, want %t", got, tc.wantBare)
+			}
+		})
+	}
+}
+
+// TestCheckout_WorktreeFormatOverrides tests worktree format precedence.
+//
+// Scenario: User runs `wt checkout -b feature` with worktree_format in the registry, .wt.toml and global config
+// Expected: The worktree is created at the registered format, else the local, else the global one
+func TestCheckout_WorktreeFormatOverrides(t *testing.T) {
+	t.Parallel()
+
+	const localConfig = "[checkout]\nworktree_format = \"../local-{branch}\"\n"
+	for _, tc := range []struct {
+		name       string
+		registered string
+		local      string
+		want       string
+	}{
+		{name: "global", want: "global-feature"},
+		{name: "local overrides global", local: localConfig, want: "local-feature"},
+		{name: "registered overrides local", registered: "../registered-{branch}", local: localConfig, want: "registered-feature"},
+		{name: "registered overrides global", registered: "../registered-{branch}", want: "registered-feature"},
+		{name: "invalid local registered override", registered: "../registered-{branch}", local: "invalid [[[", want: "registered-feature"},
+		{name: "invalid local global fallback", local: "invalid [[[", want: "global-feature"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tmpDir := resolvePath(t, t.TempDir())
+			repoPath := setupTestRepo(t, tmpDir, "test-repo")
+			regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+			if err := saveRegistry(&registry.Registry{Repos: []registry.Repo{{Name: "test-repo", Path: repoPath, WorktreeFormat: tc.registered}}}, regFile); err != nil {
+				t.Fatalf("save registry: %v", err)
+			}
+			if tc.local != "" {
+				if err := os.WriteFile(filepath.Join(repoPath, config.LocalConfigFileName), []byte(tc.local), 0644); err != nil {
+					t.Fatalf("write local config: %v", err)
+				}
+			}
+			cfg := &config.Config{RegistryPath: regFile, Checkout: config.CheckoutConfig{WorktreeFormat: "../global-{branch}"}}
+			cmd := newCheckoutCmd()
+			cmd.SetContext(testContextWithConfig(t, cfg, repoPath))
+			cmd.SetArgs([]string{"-b", "feature"})
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("checkout command: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(tmpDir, tc.want)); err != nil {
+				t.Errorf("worktree at %s: %v", tc.want, err)
+			}
+		})
+	}
+}
+
 func overrideTestRegistry(t *testing.T, tmpDir, repoPath string) string {
 	t.Helper()
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
