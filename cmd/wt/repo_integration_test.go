@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -1272,7 +1273,8 @@ func TestRepoConvertBare_AlreadyRegistered(t *testing.T) {
 		t.Fatalf("failed to save registry: %v", err)
 	}
 
-	ctx, out := testContextWithOutput(t)
+	var logs strings.Builder
+	ctx := log.WithLogger(testContext(t), log.New(&logs, false, false))
 	ctx = config.WithConfig(ctx, cfg)
 	ctx = config.WithWorkDir(ctx, tmpDir)
 	cmd := newRepoConvertCmd()
@@ -1290,7 +1292,7 @@ func TestRepoConvertBare_AlreadyRegistered(t *testing.T) {
 	}
 
 	// Verify output mentions already registered
-	if !strings.Contains(out.String(), "Already registered") {
+	if !strings.Contains(logs.String(), "Already registered") {
 		t.Error("expected 'Already registered' in output")
 	}
 

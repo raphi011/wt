@@ -52,6 +52,7 @@ func newNoteSetCmd() *cobra.Command {
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
 			workDir := config.WorkDirFromContext(ctx)
+			l := log.FromContext(ctx)
 			text := args[0]
 
 			// Load registry
@@ -73,7 +74,7 @@ func newNoteSetCmd() *cobra.Command {
 					errs = append(errs, fmt.Errorf("%s:%s: %w", t.RepoName, t.Branch, err))
 					continue
 				}
-				fmt.Printf("Note set on %s:%s\n", t.RepoName, t.Branch)
+				l.Printf("Note set on %s:%s\n", t.RepoName, t.Branch)
 			}
 
 			return errors.Join(errs...)
@@ -141,6 +142,7 @@ func newNoteClearCmd() *cobra.Command {
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
 			workDir := config.WorkDirFromContext(ctx)
+			l := log.FromContext(ctx)
 
 			// Load registry
 			reg, err := registry.Load(cfg.RegistryPath)
@@ -161,7 +163,7 @@ func newNoteClearCmd() *cobra.Command {
 					errs = append(errs, fmt.Errorf("%s:%s: %w", t.RepoName, t.Branch, err))
 					continue
 				}
-				fmt.Printf("Note cleared on %s:%s\n", t.RepoName, t.Branch)
+				l.Printf("Note cleared on %s:%s\n", t.RepoName, t.Branch)
 			}
 
 			return errors.Join(errs...)

@@ -204,7 +204,7 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, opts
 
 	setUpstreamTracking(ctx, gitDir, branch, opts.NewBranch, repoHasCommits, cfg)
 
-	fmt.Printf("Created worktree: %s (%s)\n", wtPath, branch)
+	l.Printf("Created worktree: %s (%s)\n", wtPath, branch)
 
 	// Stash only after the worktree exists, so a failed checkout leaves the
 	// working tree untouched
@@ -386,6 +386,7 @@ func preserveWorktreeFiles(ctx context.Context, repoPath, wtPath string, noPrese
 // It prints the worktree path to stdout, records history, and runs hooks with action="open",
 // skipping worktree creation.
 func openExistingWorktree(ctx context.Context, repo registry.Repo, branch, wtPath string, hf hookFlags) error {
+	l := log.FromContext(ctx)
 	cfg := resolveEffectiveConfig(ctx, repo.Path)
 
 	hp, err := buildHookParams(cfg, repo, wtPath, branch, hooks.CommandCheckout, hooks.ActionOpen, hf)
@@ -394,7 +395,7 @@ func openExistingWorktree(ctx context.Context, repo registry.Repo, branch, wtPat
 	}
 
 	return withHooks(ctx, hp, func() error {
-		fmt.Printf("Opened worktree: %s (%s)\n", wtPath, branch)
+		l.Printf("Opened worktree: %s (%s)\n", wtPath, branch)
 		recordHistory(ctx, cfg, wtPath, repo.Name, branch)
 		return nil
 	})

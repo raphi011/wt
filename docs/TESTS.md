@@ -30,13 +30,13 @@ Generated: 2026-10-07
 | [reporemove](#reporemove) | 6 |
 | [resolveworktreetargets](#resolveworktreetargets) | 4 |
 | [wt cd](#wt-cd) | 11 |
-| [wt checkout](#wt-checkout) | 71 |
+| [wt checkout](#wt-checkout) | 72 |
 | [wt exec](#wt-exec) | 14 |
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 12 |
-| [wt prune](#wt-prune) | 48 |
-| **Total** | **318** |
+| [wt prune](#wt-prune) | 49 |
+| **Total** | **320** |
 
 ## completebasebranches
 
@@ -378,6 +378,7 @@ Generated: 2026-10-07
 | `TestCheckout_LabelContinuesAfterRepoFailure` | Tests that a label checkout continues past a failing repo. |
 | `TestCheckout_LabelExistingBranchContinuesAfterRepoFailure` | Tests that a label checkout of an existing branch continues past a failing repo. |
 | `TestCheckout_AutoStash_LabelTargetExistingWorktree` | Tests that --autostash is rejected |
+| `TestCheckout_ResultGoesToStderr` | Tests that the checkout result is reported as a diagnostic. |
 
 ## wt exec
 
@@ -505,4 +506,5 @@ Generated: 2026-10-07
 | `TestPrune_Target_ResetCache` | Tests that --reset-cache clears the PR cache |
 | `TestPrune_Target_RejectsStaleAndInteractive` | Tests that flags which only apply |
 | `TestPrune_LabelScopedTarget` | Tests pruning worktrees via label:branch format. |
+| `TestPrune_AutoPrune_SummaryGoesToStderr` | Tests that auto-prune reports its result as a diagnostic. |
 

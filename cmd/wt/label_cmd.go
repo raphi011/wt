@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
 )
@@ -52,6 +53,7 @@ Scopes are resolved as repo name first, then label.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
+			l := log.FromContext(ctx)
 			label := args[0]
 			scopes := args[1:]
 
@@ -79,7 +81,7 @@ Scopes are resolved as repo name first, then label.`,
 			}
 
 			for _, repo := range repos {
-				fmt.Printf("Added label %q to %s\n", label, repo.Name)
+				l.Printf("Added label %q to %s\n", label, repo.Name)
 			}
 
 			return nil
@@ -105,6 +107,7 @@ Scopes are resolved as repo name first, then label.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
+			l := log.FromContext(ctx)
 			label := args[0]
 			scopes := args[1:]
 
@@ -132,7 +135,7 @@ Scopes are resolved as repo name first, then label.`,
 			}
 
 			for _, repo := range repos {
-				fmt.Printf("Removed label %q from %s\n", label, repo.Name)
+				l.Printf("Removed label %q from %s\n", label, repo.Name)
 			}
 
 			return nil
@@ -172,7 +175,7 @@ Scopes are resolved as repo name first, then label.`,
 				// List all labels
 				labels := reg.AllLabels()
 				if len(labels) == 0 {
-					fmt.Println("No labels defined")
+					out.Println("No labels defined")
 					return nil
 				}
 				for _, l := range labels {
@@ -189,10 +192,10 @@ Scopes are resolved as repo name first, then label.`,
 
 			for _, repo := range repos {
 				if len(repos) > 1 {
-					fmt.Printf("%s: ", repo.Name)
+					out.Printf("%s: ", repo.Name)
 				}
 				if len(repo.Labels) == 0 {
-					fmt.Println("(no labels)")
+					out.Println("(no labels)")
 				} else {
 					out.Println(strings.Join(repo.Labels, ", "))
 				}
@@ -223,6 +226,7 @@ Scopes are resolved as repo name first, then label.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
+			l := log.FromContext(ctx)
 
 			// Load registry
 			reg, err := registry.Load(cfg.RegistryPath)
@@ -248,7 +252,7 @@ Scopes are resolved as repo name first, then label.`,
 			}
 
 			for _, repo := range repos {
-				fmt.Printf("Cleared labels from %s\n", repo.Name)
+				l.Printf("Cleared labels from %s\n", repo.Name)
 			}
 
 			return nil

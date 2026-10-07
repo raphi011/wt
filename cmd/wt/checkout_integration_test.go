@@ -4590,3 +4590,57 @@ func TestCheckout_AutoStash_LabelTargetExistingWorktree(t *testing.T) {
 		t.Error("expected no checkout hook to run")
 	}
 }
+
+// TestCheckout_ResultGoesToStderr tests that the checkout result is reported as a diagnostic.
+//
+// Scenario: User runs `wt checkout -b new-feature`
+// Expected: "Created worktree" is written to stderr and stdout stays empty
+func TestCheckout_ResultGoesToStderr(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+	}
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+	var logs strings.Builder
+	ctx = log.WithLogger(ctx, log.New(&logs, false, false))
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "new-feature"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("checkout command failed: %v", err)
+	}
+
+	wtPath := filepath.Join(tmpDir, "test-repo-new-feature")
+	want := "Created worktree: " + wtPath + " (new-feature)"
+	if !strings.Contains(logs.String(), want) {
+		t.Errorf("stderr should contain %q, got: %q", want, logs.String())
+	}
+	if out.String() != "" {
+		t.Errorf("stdout should be empty, got: %q", out.String())
+	}
+}

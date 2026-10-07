@@ -10,17 +10,19 @@ import (
 // TestInit_Bash tests that init bash succeeds and outputs a shell wrapper.
 //
 // Scenario: User runs `wt init bash`
-// Expected: Command succeeds without error
+// Expected: The bash wrapper is printed to stdout
 func TestInit_Bash(t *testing.T) {
 	t.Parallel()
 
-	ctx := testContext(t)
+	ctx, out := testContextWithOutput(t)
 	cmd := newInitCmd()
 
-	// init outputs via fmt.Print to real stdout, so we can only verify no error
 	_, err := executeCommand(ctx, cmd, "bash")
 	if err != nil {
 		t.Fatalf("init bash failed: %v", err)
+	}
+	if out.String() != bashInit {
+		t.Errorf("stdout should be the bash wrapper, got: %q", out.String())
 	}
 }
 

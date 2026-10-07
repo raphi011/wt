@@ -5,8 +5,19 @@ run:
     - integration
 
 linters:
+  enable:
+    - forbidigo
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: ^fmt\.Print(f|ln)?$
+          msg: use output.FromContext(ctx) for data or log.FromContext(ctx) for diagnostics
   exclusions:
     rules:
+      # Only commands have a Printer and Logger in context.
+      - path-except: ^cmd/wt/
+        linters:
+          - forbidigo
       # Logger, Printer and the progress bar write to the terminal and have
       # no way to report a failed write.
       - path: ^internal/(log|output|ui/progress)/

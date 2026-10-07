@@ -213,8 +213,10 @@ func runCheckout(ctx context.Context) error {
 ```
 
 **stdout vs stderr**:
-- stdout: Primary output (data, tables, paths, JSON)
-- stderr: Diagnostics (logs, progress, errors)
+- stdout: Primary output (data, tables, paths, JSON, dry-run previews)
+- stderr: Diagnostics (logs, progress, errors) and action results ("Created worktree", "Removed worktree", "Note set")
+
+Commands never call `fmt.Print*`; the `forbidigo` lint rule enforces this in `cmd/wt`.
 
 This allows piping: `cd $(wt cd --number 1)` works because logs go to stderr.
 

@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/raphi011/wt/internal/output"
 )
 
 func newInitCmd() *cobra.Command {
@@ -22,13 +24,14 @@ cannot change the parent shell's directory). The wrapper intercepts
   eval "$(wt init zsh)"            # add to ~/.zshrc
   wt init fish | source            # add to ~/.config/fish/config.fish`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			out := output.FromContext(cmd.Context())
 			switch args[0] {
 			case "fish":
-				fmt.Print(fishInit)
+				out.Print(fishInit)
 			case "bash":
-				fmt.Print(bashInit)
+				out.Print(bashInit)
 			case "zsh":
-				fmt.Print(zshInit)
+				out.Print(zshInit)
 			default:
 				return fmt.Errorf("unsupported shell: %s (supported: fish, bash, zsh)", args[0])
 			}

@@ -14,6 +14,7 @@ import (
 
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
+	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
 )
@@ -64,7 +65,7 @@ With --local, creates per-repo config at .wt.toml in the current repo root.`,
 			if local {
 				return initLocalConfig(cmd, force, stdout)
 			}
-			return initGlobalConfig(force, stdout)
+			return initGlobalConfig(cmd, force, stdout)
 		},
 	}
 
@@ -75,11 +76,11 @@ With --local, creates per-repo config at .wt.toml in the current repo root.`,
 	return cmd
 }
 
-func initGlobalConfig(force, stdout bool) error {
+func initGlobalConfig(cmd *cobra.Command, force, stdout bool) error {
 	configContent := config.DefaultConfig()
 
 	if stdout {
-		fmt.Print(configContent)
+		output.FromContext(cmd.Context()).Print(configContent)
 		return nil
 	}
 
@@ -107,7 +108,7 @@ func initGlobalConfig(force, stdout bool) error {
 		return err
 	}
 
-	fmt.Printf("Created config file: %s\n", configPath)
+	log.FromContext(cmd.Context()).Printf("Created config file: %s\n", configPath)
 	return nil
 }
 
@@ -115,7 +116,7 @@ func initLocalConfig(cmd *cobra.Command, force, stdout bool) error {
 	configContent := config.DefaultLocalConfig()
 
 	if stdout {
-		fmt.Print(configContent)
+		output.FromContext(cmd.Context()).Print(configContent)
 		return nil
 	}
 
@@ -147,7 +148,7 @@ func initLocalConfig(cmd *cobra.Command, force, stdout bool) error {
 		return err
 	}
 
-	fmt.Printf("Created local config: %s\n", configPath)
+	log.FromContext(ctx).Printf("Created local config: %s\n", configPath)
 	return nil
 }
 

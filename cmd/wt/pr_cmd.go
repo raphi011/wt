@@ -404,7 +404,7 @@ Use --interactive to select an open PR from registered repositories.`,
 			}
 
 			return withHooks(ctx, hp, func() error {
-				fmt.Print(outputMsg)
+				l.Printf("%s", outputMsg)
 				recordHistory(ctx, effCfg, wtPath, repo.Name, branch)
 				return nil
 			})
