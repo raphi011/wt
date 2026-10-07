@@ -31,12 +31,12 @@ Generated: 2026-10-07
 | [resolveworktreetargets](#resolveworktreetargets) | 4 |
 | [wt cd](#wt-cd) | 10 |
 | [wt checkout](#wt-checkout) | 68 |
-| [wt exec](#wt-exec) | 12 |
+| [wt exec](#wt-exec) | 14 |
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 10 |
 | [wt prune](#wt-prune) | 47 |
-| **Total** | **309** |
+| **Total** | **311** |
 
 ## completebasebranches
 
@@ -387,10 +387,12 @@ Generated: 2026-10-07
 | `TestExec_BranchNotFound` | Tests error when target branch doesn't exist. |
 | `TestExec_Deduplication` | Tests that the same target is only executed once. |
 | `TestExec_NotInGitRepo` | Tests error when running exec with no targets from outside a git repo. |
-| `TestExec_FailingCommand` | Tests that a non-zero exit command is handled gracefully. |
+| `TestExec_FailingCommand` | Tests that a non-zero exit command is returned to the caller. |
 | `TestExec_RepoNotFound` | Tests error when targeting a non-existent repo. |
 | `TestExec_ByRepoScope` | TestExec_ByLabelScope tests running a command in worktrees matched by label scope. |
 | `TestExec_LabelScope` | Tests running a command in worktrees matched by a label scope. |
+| `TestExec_MultipleTargetsFailure` | Tests that failures do not stop remaining targets. |
+| `TestExec_ExitCodes` | Tests exit status handling for single targets and launch failures. |
 
 ## wt label
 
