@@ -35,8 +35,8 @@ Generated: 2026-10-07
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 12 |
-| [wt prune](#wt-prune) | 47 |
-| **Total** | **317** |
+| [wt prune](#wt-prune) | 48 |
+| **Total** | **318** |
 
 ## completebasebranches
 
@@ -488,6 +488,7 @@ Generated: 2026-10-07
 | `TestPrune_AfterHookCWD` | Tests that after:prune hooks run in the repo root directory. |
 | `TestPrune_AllTriggerMatchesPrune` | Tests that on=["all"] matches prune. |
 | `TestPrune_Placeholders` | Tests that prune hooks get correct placeholder values. |
+| `TestPrune_RepoPlaceholderUsesRegistryName` | Tests that {repo} in a prune hook is the registered repo name. |
 | `TestPrune_NoHookFlag` | Tests that --no-hook suppresses prune hooks. |
 | `TestPrune_ExplicitHookFlag` | Tests that --hook runs only the named hook. |
 | `TestPrune_LocallyMergedBranch_RequiresForce` | Tests that a branch merged via |

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -534,87 +533,64 @@ func pruneWorktrees(ctx context.Context, toRemove []git.Worktree, opts pruneOpts
 		l.Printf("Warning: failed to determine history path: %v\n", err)
 	}
 
-	hookEnv, err := hooks.ParseEnvWithStdin(opts.Hooks.RawArgs)
-	if err != nil {
+	if err := opts.Hooks.parseArgs(); err != nil {
 		l.Printf("Warning: failed to parse hook env, skipping hooks: %v\n", err)
 		opts.Hooks.NoHook = true
-	}
-
-	configDir, err := cfg.GetWtDir()
-	if err != nil {
-		l.Printf("Warning: failed to determine config dir: %v\n", err)
-	}
-
-	// pruneHookCtx builds a hooks.Context for a worktree in the prune loop.
-	pruneHookCtx := func(wt git.Worktree, phase hooks.PhaseType) hooks.Context {
-		return hooks.Context{
-			WorktreeDir: wt.Path,
-			RepoDir:     wt.RepoPath,
-			Branch:      wt.Branch,
-			Repo:        filepath.Base(wt.RepoPath),
-			Trigger:     string(hooks.CommandPrune),
-			Phase:       phase,
-			ConfigDir:   configDir,
-			Env:         hookEnv,
-		}
 	}
 
 	for _, wt := range toRemove {
 		// Resolve per-repo config for hooks and delete_local_branches
 		effCfg := resolveEffectiveConfig(ctx, wt.RepoPath)
 
-		// Run before-prune hooks (can skip this worktree)
-		beforeMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.Hooks.HookNames, opts.Hooks.NoHook, hooks.HookSelector{Command: hooks.CommandPrune, Phase: hooks.PhaseBefore})
+		hp, err := buildHookParams(effCfg, registry.Repo{Name: wt.RepoName, Path: wt.RepoPath}, wt.Path, wt.Branch, hooks.CommandPrune, "", opts.Hooks)
 		if err != nil {
-			l.Printf("Warning: failed to select before hooks for %s: %v\n", wt.RepoName, err)
+			l.Printf("Skipping %s: %v\n", wt.Branch, err)
 			failed = append(failed, wt)
 			continue
 		}
-		if len(beforeMatches) > 0 {
-			if err := hooks.RunBeforeHooks(ctx, beforeMatches, pruneHookCtx(wt, hooks.PhaseBefore), wt.Path); err != nil {
-				l.Printf("Skipping %s: before-hook aborted: %v\n", wt.Branch, err)
-				failed = append(failed, wt)
-				continue
+		// The worktree is gone by the time after-hooks run
+		hp.AfterWorkDir = wt.RepoPath
+
+		wtRemoved := false
+		err = withHooks(ctx, hp, func() error {
+			if err := git.RemoveWorktree(ctx, wt, opts.Force); err != nil {
+				return fmt.Errorf("failed to remove %s: %w", wt.Path, err)
 			}
-		}
+			wtRemoved = true
 
-		if err := git.RemoveWorktree(ctx, wt, opts.Force); err != nil {
-			l.Printf("Warning: failed to remove %s: %v\n", wt.Path, err)
-			failed = append(failed, wt)
-			continue
-		}
-
-		// Remove from PR cache
-		if opts.PRCache != nil {
-			opts.PRCache.Delete(prcache.CacheKey(wt.RepoPath, wt.Branch))
-		}
-
-		removed = append(removed, wt)
-
-		// Delete local branch if enabled (per-repo config unless CLI flag was explicit)
-		shouldDelete := opts.DeleteBranches
-		if !opts.DeleteBranchesExplicit {
-			shouldDelete = effCfg.Prune.DeleteLocalBranches
-		}
-		if shouldDelete {
-			// Force delete if forge confirmed merge (handles squash merges),
-			// safe delete (-d) otherwise (including locally-merged branches,
-			// where git's own ancestry check in -d provides a safety net).
-			forceDelete := wt.PRState == forge.PRStateMerged
-			if err := git.DeleteLocalBranch(ctx, wt.RepoPath, wt.Branch, forceDelete); err != nil {
-				l.Printf("Warning: failed to delete branch %s: %v\n", wt.Branch, err)
-			} else {
-				l.Debug("deleted branch", "branch", wt.Branch)
+			// Remove from PR cache
+			if opts.PRCache != nil {
+				opts.PRCache.Delete(prcache.CacheKey(wt.RepoPath, wt.Branch))
 			}
-		}
 
-		// Run after hooks per-repo
-		afterMatches, err := hooks.SelectHooks(effCfg.Hooks, opts.Hooks.HookNames, opts.Hooks.NoHook, hooks.HookSelector{Command: hooks.CommandPrune, Phase: hooks.PhaseAfter})
-		if err != nil {
+			removed = append(removed, wt)
+
+			// Delete local branch if enabled (per-repo config unless CLI flag was explicit)
+			shouldDelete := opts.DeleteBranches
+			if !opts.DeleteBranchesExplicit {
+				shouldDelete = effCfg.Prune.DeleteLocalBranches
+			}
+			if shouldDelete {
+				// Force delete if forge confirmed merge (handles squash merges),
+				// safe delete (-d) otherwise (including locally-merged branches,
+				// where git's own ancestry check in -d provides a safety net).
+				forceDelete := wt.PRState == forge.PRStateMerged
+				if err := git.DeleteLocalBranch(ctx, wt.RepoPath, wt.Branch, forceDelete); err != nil {
+					l.Printf("Warning: failed to delete branch %s: %v\n", wt.Branch, err)
+				} else {
+					l.Debug("deleted branch", "branch", wt.Branch)
+				}
+			}
+			return nil
+		})
+		switch {
+		case err == nil:
+		case wtRemoved:
+			// Removal succeeded; only after-hook selection can still fail
 			l.Printf("Warning: failed to select hooks for %s: %v\n", wt.RepoName, err)
-		}
-		if len(afterMatches) > 0 {
-			hooks.RunForEach(ctx, afterMatches, pruneHookCtx(wt, hooks.PhaseAfter), wt.RepoPath)
+		default:
+			l.Printf("Skipping %s: %v\n", wt.Branch, err)
+			failed = append(failed, wt)
 		}
 	}
 
