@@ -197,8 +197,7 @@ func runHook(goCtx context.Context, name string, hook *config.Hook, ctx Context,
 
 	if err := shellCmd.Run(); err != nil {
 		exitCode := 1
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			exitCode = exitErr.ExitCode()
 		}
 		return fmt.Errorf("command failed (exit %d): %s", exitCode, cmd)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -62,13 +63,7 @@ func TestLabel_Add(t *testing.T) {
 		t.Fatalf("failed to find repo: %v", err)
 	}
 
-	hasLabel := false
-	for _, l := range repo.Labels {
-		if l == "backend" {
-			hasLabel = true
-			break
-		}
-	}
+	hasLabel := slices.Contains(repo.Labels, "backend")
 
 	if !hasLabel {
 		t.Errorf("expected repo to have label 'backend', got %v", repo.Labels)
@@ -293,13 +288,7 @@ func TestLabel_Add_ByLabelScope(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to find repo %s: %v", name, err)
 		}
-		hasLabel := false
-		for _, l := range repo.Labels {
-			if l == "newlabel" {
-				hasLabel = true
-				break
-			}
-		}
+		hasLabel := slices.Contains(repo.Labels, "newlabel")
 		if !hasLabel {
 			t.Errorf("expected %s to have label 'newlabel', got %v", name, repo.Labels)
 		}
@@ -592,13 +581,7 @@ func TestLabel_Add_CurrentRepo(t *testing.T) {
 		t.Fatalf("failed to find repo: %v", err)
 	}
 
-	hasLabel := false
-	for _, l := range repo.Labels {
-		if l == "mytag" {
-			hasLabel = true
-			break
-		}
-	}
+	hasLabel := slices.Contains(repo.Labels, "mytag")
 
 	if !hasLabel {
 		t.Errorf("expected repo to have label 'mytag', got %v", repo.Labels)
