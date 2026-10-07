@@ -48,6 +48,23 @@ func (r *ConfigResolver) Global() *Config {
 	return r.global
 }
 
+// ResolveForRepo resolves overrides > local config > global config. Overrides
+// are applied after cache lookup so each operation gets its own config copy.
+// Local loading errors are returned for the caller to handle.
+func (r *ConfigResolver) ResolveForRepo(repoPath string, overrides Overrides) (*Config, error) {
+	cfg, err := r.ConfigForRepo(repoPath)
+	if err != nil {
+		return nil, err
+	}
+	return overrides.apply(cfg), nil
+}
+
+// ResolveGlobal applies operation overrides to a copy of the global config.
+// Use it before a repository is known or when local config cannot be loaded.
+func (r *ConfigResolver) ResolveGlobal(overrides Overrides) *Config {
+	return overrides.apply(r.global)
+}
+
 // WithResolver returns a new context with the ConfigResolver stored in it.
 func WithResolver(ctx context.Context, r *ConfigResolver) context.Context {
 	return context.WithValue(ctx, resolverKey{}, r)

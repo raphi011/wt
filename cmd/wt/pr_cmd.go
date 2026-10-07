@@ -347,12 +347,11 @@ Use --interactive to select an open PR from registered repositories.`,
 
 			// Always fetch: the PR branch may not exist locally yet
 			_, err = ensureWorktree(ctx, repo, branch, checkoutOpts{
-				Fetch:         true,
-				FetchExplicit: true,
-				NoPreserve:    noPreserve,
-				Note:          note,
-				Hooks:         hf,
-				PR:            pr,
+				Fetch:      new(true),
+				NoPreserve: noPreserve,
+				Note:       note,
+				Hooks:      hf,
+				PR:         pr,
 			})
 			return err
 		},

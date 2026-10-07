@@ -918,9 +918,8 @@ func TestPrune_ForceDeleteBranch_MergedPRState(t *testing.T) {
 		t.Fatalf("load seeded PR status: %v", err)
 	}
 	removed, failed := pruneWorktrees(ctx, toRemove, pruneOpts{
-		PRStatus:               status,
-		DeleteBranches:         true,
-		DeleteBranchesExplicit: true,
+		PRStatus:       status,
+		DeleteBranches: new(true),
 	})
 
 	if len(failed) > 0 {
