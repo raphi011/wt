@@ -15,4 +15,5 @@ comment:
 
 ignore:
   - "cmd/wt/*_integration_test.go"
+  - "cmd/wt/integration_test_helpers.go"
   - "cmd/wt/completions.go"

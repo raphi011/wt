@@ -1452,6 +1452,54 @@ func TestRepoRemove_DeleteForce(t *testing.T) {
 	}
 }
 
+// TestRepoRemove_DeleteForce_WriteError tests that a failing output writer is reported.
+//
+// Scenario: User runs `wt repo remove myrepo --delete --force` and stdout cannot be written
+// Expected: Command returns the write error
+func TestRepoRemove_DeleteForce_WriteError(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "delete-test")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "delete-test", Path: repoPath},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx := testContextWithConfig(t, cfg, tmpDir)
+
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("failed to close pipe reader: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close pipe writer: %v", err)
+	}
+
+	cmd := newRepoRemoveCmd()
+	cmd.SetContext(ctx)
+	cmd.SetOut(writer)
+	cmd.SetArgs([]string{"delete-test", "--delete", "--force"})
+
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("repo remove with closed stdout returned no error")
+	}
+}
+
 // TestRepoRemove_ByPath tests removing a repo by its full path instead of name.
 //
 // Scenario: User runs `wt repo remove /full/path/to/repo`

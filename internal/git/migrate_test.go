@@ -1313,3 +1313,22 @@ func TestMigrationOptions_Validate(t *testing.T) {
 		}
 	})
 }
+
+func TestMigrateToBare_UnreadableGitDirCleansUp(t *testing.T) {
+	t.Parallel()
+
+	repoPath := t.TempDir()
+	// A .git file instead of a directory makes reading .git fail
+	if err := os.WriteFile(filepath.Join(repoPath, ".git"), []byte("gitdir: elsewhere\n"), 0644); err != nil {
+		t.Fatalf("failed to write .git file: %v", err)
+	}
+
+	_, err := MigrateToBare(context.Background(), &MigrationPlan{RepoPath: repoPath})
+	if err == nil || !strings.Contains(err.Error(), "read .git directory") {
+		t.Fatalf("MigrateToBare error = %v, want read .git directory failure", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(repoPath, ".git.migrating")); !os.IsNotExist(err) {
+		t.Errorf("temp git dir was not cleaned up: %v", err)
+	}
+}
