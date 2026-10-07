@@ -226,7 +226,7 @@ func ensureWorktree(ctx context.Context, repo registry.Repo, branch string, opts
 		action = hooks.ActionPR
 	}
 
-	hp, err := buildHookParams(cfg, repo, res.Path, branch, hooks.CommandCheckout, action, opts.Hooks)
+	hp, err := hookOperation(cfg, repo, res.Path, branch, hooks.CommandCheckout, action, opts.Hooks)
 	if err != nil {
 		return worktreeResult{}, err
 	}
@@ -240,7 +240,7 @@ func ensureWorktree(ctx context.Context, repo registry.Repo, branch string, opts
 		hp.BeforeWorkDir = repo.Path
 	}
 
-	err = withHooks(ctx, hp, func() error {
+	err = hp.Run(ctx, func() error {
 		if res.Created {
 			if err := createWorktree(ctx, repo, gitDir, res.Path, cfg, branch, opts); err != nil {
 				return err

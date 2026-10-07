@@ -528,14 +528,14 @@ With prune.delete_local_branches, the local branch is deleted with the worktree.
 			if err := hf.parseArgs(); err != nil {
 				return err
 			}
-			hp, err := buildHookParams(res.effCfg, res.repo, cwd, res.branch, hooks.CommandMerge, "", hf)
+			hp, err := hookOperation(res.effCfg, res.repo, cwd, res.branch, hooks.CommandMerge, "", hf)
 			if err != nil {
 				return err
 			}
 			// The worktree is removed during merge, so after-hooks run from the repo root
 			hp.AfterWorkDir = res.repo.Path
 
-			return withHooks(ctx, hp, func() error {
+			return hp.Run(ctx, func() error {
 				switch pr.State {
 				case forge.PRStateMerged:
 					out.Printf("PR #%d is already merged\n", pr.Number)
