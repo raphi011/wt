@@ -2439,6 +2439,7 @@ func TestPrune_RemovesHistoryEntry(t *testing.T) {
 
 // fakeGHMergedPR puts a fake `gh` first in PATH that reports a merged PR for
 // every branch, and "feature" as the head branch of every PR number.
+// `gh repo clone` clones the repo in $WT_TEST_CLONE_SOURCE.
 // No network or real auth is used.
 func fakeGHMergedPR(t *testing.T) {
 	t.Helper()
@@ -2447,6 +2448,7 @@ func fakeGHMergedPR(t *testing.T) {
 	script := `#!/bin/sh
 case "$*" in
  'auth status'*) exit 0 ;;
+ 'repo clone'*) git clone --quiet "$WT_TEST_CLONE_SOURCE" "$4" ;;
  'pr view'*) printf '{"headRefName":"feature","isCrossRepository":false}\n' ;;
  'pr list'*) printf '[{"number":1,"state":"MERGED","isDraft":false,"url":"https://github.com/test/test-repo/pull/1","author":{"login":"test"},"comments":[],"reviewDecision":""}]\n' ;;
  *) exit 1 ;;

@@ -20,7 +20,7 @@ Generated: 2026-10-07
 | [forgetworktrees](#forgetworktrees) | 1 |
 | [hook](#hook) | 10 |
 | [init](#init) | 4 |
-| [prcheckout](#prcheckout) | 15 |
+| [prcheckout](#prcheckout) | 17 |
 | [prcreate](#prcreate) | 3 |
 | [preservefiles](#preservefiles) | 1 |
 | [prmerge](#prmerge) | 7 |
@@ -42,7 +42,7 @@ Generated: 2026-10-07
 | [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 50 |
-| **Total** | **340** |
+| **Total** | **342** |
 
 ## completebasebranches
 
@@ -186,7 +186,9 @@ Generated: 2026-10-07
 | `TestPrCheckout_OrgRepoWithCloneFlag` | Tests that --clone allows cloning |
 | `TestPrCheckout_OrgRepoMatchesByUpstreamRemote` | Tests that org/repo format |
 | `TestPrCheckout_CloneFlagWithExistingMatch` | Tests that --clone does not trigger |
-| `TestPrCheckout_AlreadyCheckedOut` | Tests that the pr checkout code path correctly |
+| `TestPrCheckout_AlreadyCheckedOut` | Tests that pr checkout opens the worktree |
+| `TestPrCheckout_PreservesFiles` | Tests that pr checkout preserves files like checkout does. |
+| `TestPrCheckout_CloneRegular` | Tests pr checkout into a fresh regular clone. |
 | `TestPrCheckout_HookWithArg` | Tests that --arg values reach hooks run by pr checkout. |
 | `TestPrCheckout_InvalidArg` | Tests that pr checkout reports a malformed --arg. |
 

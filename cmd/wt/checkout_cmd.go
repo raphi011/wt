@@ -170,6 +170,14 @@ type checkoutOpts struct {
 	NoPreserve    bool
 	Note          string
 	Hooks         hookFlags
+	PR            *prIntent // set by pr checkout: the branch is the source branch of a PR
+}
+
+// prIntent identifies the PR a worktree is checked out for. Hooks run with
+// action "pr" and get the PR number and repo.
+type prIntent struct {
+	Number int
+	Repo   string // org/repo on the forge, empty if unknown
 }
 
 // worktreeResult reports what ensureWorktree did.
@@ -179,34 +187,78 @@ type worktreeResult struct {
 }
 
 // ensureWorktree makes sure the branch has a worktree in the repo: an existing
-// worktree is opened, otherwise one is created. Both run hooks and record
-// history. With opts.NewBranch the branch is created with the worktree.
+// worktree is opened, otherwise one is created. Both set the note, run hooks
+// and record history. With opts.NewBranch the branch is created with the worktree.
 func ensureWorktree(ctx context.Context, repo registry.Repo, branch string, opts checkoutOpts) (worktreeResult, error) {
 	l := log.FromContext(ctx)
 
 	cfg := resolveEffectiveConfig(ctx, repo.Path)
 
+	var res worktreeResult
 	if !opts.NewBranch {
 		wtPath, found, err := findWorktreeForBranch(ctx, repo.Path, branch)
 		if err != nil {
 			return worktreeResult{}, err
 		}
 		if found {
-			hp, err := buildHookParams(cfg, repo, wtPath, branch, hooks.CommandCheckout, hooks.ActionOpen, opts.Hooks)
-			if err != nil {
-				return worktreeResult{}, err
-			}
-			err = withHooks(ctx, hp, func() error {
-				l.Printf("Opened worktree: %s (%s)\n", wtPath, branch)
-				recordHistory(ctx, cfg, wtPath, repo.Name, branch)
-				return nil
-			})
-			if err != nil {
-				return worktreeResult{}, err
-			}
-			return worktreeResult{Path: wtPath}, nil
+			res.Path = wtPath
 		}
 	}
+
+	repoType, err := git.DetectRepoType(ctx, repo.Path)
+	if err != nil {
+		return worktreeResult{}, err
+	}
+	gitDir := git.GetGitDir(ctx, repo.Path, repoType)
+
+	if res.Path == "" {
+		res.Path, err = createWorktree(ctx, repo, gitDir, cfg, branch, opts)
+		if err != nil {
+			return worktreeResult{}, err
+		}
+		res.Created = true
+	}
+
+	if opts.Note != "" {
+		if err := git.SetBranchNote(ctx, gitDir, branch, opts.Note); err != nil {
+			l.Printf("Warning: failed to set note: %v\n", err)
+		}
+	}
+
+	action := hooks.ActionOpen
+	if opts.NewBranch {
+		action = hooks.ActionCreate
+	}
+	if opts.PR != nil {
+		action = hooks.ActionPR
+	}
+
+	hp, err := buildHookParams(cfg, repo, res.Path, branch, hooks.CommandCheckout, action, opts.Hooks)
+	if err != nil {
+		return worktreeResult{}, err
+	}
+	if opts.PR != nil {
+		hp.PRNumber = new(opts.PR.Number)
+		hp.PRRepo = opts.PR.Repo
+	}
+
+	err = withHooks(ctx, hp, func() error {
+		if !res.Created {
+			l.Printf("Opened worktree: %s (%s)\n", res.Path, branch)
+		}
+		recordHistory(ctx, cfg, res.Path, repo.Name, branch)
+		return nil
+	})
+	if err != nil {
+		return worktreeResult{}, err
+	}
+	return res, nil
+}
+
+// createWorktree creates the worktree of a branch that has none and returns
+// its path. Order matters: fetch, create, upstream, autostash, preserve.
+func createWorktree(ctx context.Context, repo registry.Repo, gitDir string, cfg *config.Config, branch string, opts checkoutOpts) (string, error) {
+	l := log.FromContext(ctx)
 
 	// Override fetch with per-repo config if not explicitly set by CLI flag
 	fetch := opts.Fetch
@@ -219,24 +271,18 @@ func ensureWorktree(ctx context.Context, repo registry.Repo, branch string, opts
 
 	l.Debug("creating worktree", "path", wtPath, "branch", branch)
 
-	repoType, err := git.DetectRepoType(ctx, repo.Path)
-	if err != nil {
-		return worktreeResult{}, err
-	}
-
-	gitDir := git.GetGitDir(ctx, repo.Path, repoType)
 	repoHasCommits := git.RefExists(ctx, gitDir, "HEAD")
 
 	if opts.AutoStash {
 		if err := checkAutoStash(ctx, repo); err != nil {
-			return worktreeResult{}, err
+			return "", err
 		}
 	}
 
 	fetchForCheckout(ctx, gitDir, cfg, branch, opts, fetch, repoHasCommits)
 
 	if err := createWorktreeForBranch(ctx, gitDir, wtPath, branch, opts, repoHasCommits, cfg.Checkout.BaseRef); err != nil {
-		return worktreeResult{}, err
+		return "", err
 	}
 
 	setUpstreamTracking(ctx, gitDir, branch, opts.NewBranch, repoHasCommits, cfg)
@@ -252,32 +298,9 @@ func ensureWorktree(ctx context.Context, repo registry.Repo, branch string, opts
 		}
 	}
 
-	if opts.Note != "" {
-		if err := git.SetBranchNote(ctx, gitDir, branch, opts.Note); err != nil {
-			l.Printf("Warning: failed to set note: %v\n", err)
-		}
-	}
-
 	preserveWorktreeFiles(ctx, repo.Path, wtPath, opts.NoPreserve, cfg.Preserve)
 
-	action := hooks.ActionOpen
-	if opts.NewBranch {
-		action = hooks.ActionCreate
-	}
-
-	hp, err := buildHookParams(cfg, repo, wtPath, branch, hooks.CommandCheckout, action, opts.Hooks)
-	if err != nil {
-		return worktreeResult{}, err
-	}
-
-	err = withHooks(ctx, hp, func() error {
-		recordHistory(ctx, cfg, wtPath, repo.Name, branch)
-		return nil
-	})
-	if err != nil {
-		return worktreeResult{}, err
-	}
-	return worktreeResult{Path: wtPath, Created: true}, nil
+	return wtPath, nil
 }
 
 // checkAutoStash verifies that --autostash is run from a worktree of the target repo.
