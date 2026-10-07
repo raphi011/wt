@@ -21,9 +21,22 @@ import (
 // This triplet is passed through many functions unchanged before being
 // hydrated into hookParams by buildHookParams.
 type hookFlags struct {
-	HookNames []string // --hook flag values
-	NoHook    bool     // --no-hook flag
-	RawArgs   []string // --arg flag values (raw KEY=VALUE strings, not yet parsed)
+	HookNames []string          // --hook flag values
+	NoHook    bool              // --no-hook flag
+	RawArgs   []string          // --arg flag values (raw KEY=VALUE strings, not yet parsed)
+	Env       map[string]string // parsed --arg values, set by parseArgs
+}
+
+// parseArgs parses RawArgs into Env, reading stdin for KEY=- values.
+// Must be called once per command invocation before buildHookParams:
+// stdin is drained by the first read.
+func (hf *hookFlags) parseArgs() error {
+	env, err := hooks.ParseEnvWithStdin(hf.RawArgs)
+	if err != nil {
+		return err
+	}
+	hf.Env = env
+	return nil
 }
 
 // hookParams holds everything needed to run hooks around a command.
@@ -95,14 +108,9 @@ func withHooks(ctx context.Context, p hookParams, fn func() error) error {
 	return nil
 }
 
-// buildHookParams creates a hookParams from config and raw hook flags.
-// Returns error if env parsing or config dir resolution fails.
+// buildHookParams creates a hookParams from config and hook flags.
+// hf.parseArgs must have been called. Returns error if config dir resolution fails.
 func buildHookParams(cfg *config.Config, repo registry.Repo, wtPath, branch string, trigger hooks.CommandType, action string, hf hookFlags) (hookParams, error) {
-	hookEnv, err := hooks.ParseEnvWithStdin(hf.RawArgs)
-	if err != nil {
-		return hookParams{}, err
-	}
-
 	configDir, err := cfg.GetWtDir()
 	if err != nil {
 		return hookParams{}, fmt.Errorf("config dir: %w", err)
@@ -119,7 +127,7 @@ func buildHookParams(cfg *config.Config, repo registry.Repo, wtPath, branch stri
 		Action:    action,
 		HookNames: hf.HookNames,
 		NoHook:    hf.NoHook,
-		Env:       hookEnv,
+		Env:       hf.Env,
 	}, nil
 }
 

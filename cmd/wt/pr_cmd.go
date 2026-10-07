@@ -391,6 +391,9 @@ Use --interactive to select an open PR from registered repositories.`,
 			}
 
 			// Run hooks around output and history recording
+			if err := hf.parseArgs(); err != nil {
+				return err
+			}
 			hp, err := buildHookParams(effCfg, repo, wtPath, branch, hooks.CommandCheckout, hooks.ActionPR, hf)
 			if err != nil {
 				return err
@@ -576,6 +579,9 @@ Merges the PR, deletes its source branch, and removes the worktree (unless --kee
 			cacheKey := prcache.CacheKey(res.repo.Path, res.branch)
 
 			cwd := config.WorkDirFromContext(ctx)
+			if err := hf.parseArgs(); err != nil {
+				return err
+			}
 			hp, err := buildHookParams(res.effCfg, res.repo, cwd, res.branch, hooks.CommandMerge, "", hf)
 			if err != nil {
 				return err
