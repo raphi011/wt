@@ -390,7 +390,7 @@ func TestDetectRepoType(t *testing.T) {
 		t.Parallel()
 		repoPath := setupTestRepo(t)
 
-		repoType, err := DetectRepoType(repoPath)
+		repoType, err := DetectRepoType(context.Background(), repoPath)
 		if err != nil {
 			t.Fatalf("DetectRepoType failed: %v", err)
 		}
@@ -413,7 +413,33 @@ func TestDetectRepoType(t *testing.T) {
 			t.Fatalf("failed to init bare repo: %v", err)
 		}
 
-		repoType, err := DetectRepoType(barePath)
+		repoType, err := DetectRepoType(ctx, barePath)
+		if err != nil {
+			t.Fatalf("DetectRepoType failed: %v", err)
+		}
+		if repoType != RepoTypeBare {
+			t.Errorf("expected RepoTypeBare, got %v", repoType)
+		}
+	})
+
+	t.Run("bare repo with core.bare=yes", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := t.TempDir()
+		resolved, err := filepath.EvalSymlinks(tmpDir)
+		if err != nil {
+			t.Fatalf("failed to resolve symlinks: %v", err)
+		}
+		barePath := filepath.Join(resolved, "bare.git")
+
+		ctx := context.Background()
+		if err := runGit(ctx, "", "init", "--bare", barePath); err != nil {
+			t.Fatalf("failed to init bare repo: %v", err)
+		}
+		if err := runGit(ctx, barePath, "config", "core.bare", "yes"); err != nil {
+			t.Fatalf("failed to set core.bare: %v", err)
+		}
+
+		repoType, err := DetectRepoType(ctx, barePath)
 		if err != nil {
 			t.Fatalf("DetectRepoType failed: %v", err)
 		}
@@ -426,7 +452,7 @@ func TestDetectRepoType(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
 
-		_, err := DetectRepoType(tmpDir)
+		_, err := DetectRepoType(context.Background(), tmpDir)
 		if err == nil {
 			t.Error("expected error for non-git directory")
 		}
@@ -443,7 +469,7 @@ func TestDetectRepoType(t *testing.T) {
 			t.Fatalf("CloneBareWithWorktreeSupport failed: %v", err)
 		}
 
-		repoType, err := DetectRepoType(destPath)
+		repoType, err := DetectRepoType(ctx, destPath)
 		if err != nil {
 			t.Fatalf("DetectRepoType failed: %v", err)
 		}
@@ -463,12 +489,38 @@ func TestDetectRepoType(t *testing.T) {
 			t.Fatalf("failed to create worktree: %v", err)
 		}
 
-		_, err := DetectRepoType(wtPath)
+		_, err := DetectRepoType(ctx, wtPath)
 		if err == nil {
 			t.Error("expected error for worktree path")
 		}
 		if !strings.Contains(err.Error(), "worktree") {
 			t.Errorf("error should mention worktree, got: %v", err)
+		}
+	})
+
+	t.Run("dot-git file pointing to bare repo", func(t *testing.T) {
+		t.Parallel()
+		tmpDir := resolveTempDir(t)
+		ctx := context.Background()
+
+		barePath := filepath.Join(tmpDir, "bare.git")
+		if err := runGit(ctx, "", "init", "--bare", barePath); err != nil {
+			t.Fatalf("failed to init bare repo: %v", err)
+		}
+		repoPath := filepath.Join(tmpDir, "repo")
+		if err := os.Mkdir(repoPath, 0755); err != nil {
+			t.Fatalf("setup: mkdir failed: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(repoPath, ".git"), []byte("gitdir: ../bare.git\n"), 0644); err != nil {
+			t.Fatalf("setup: write failed: %v", err)
+		}
+
+		repoType, err := DetectRepoType(ctx, repoPath)
+		if err != nil {
+			t.Fatalf("DetectRepoType failed: %v", err)
+		}
+		if repoType != RepoTypeBare {
+			t.Errorf("expected RepoTypeBare, got %v", repoType)
 		}
 	})
 
@@ -482,7 +534,7 @@ func TestDetectRepoType(t *testing.T) {
 			t.Fatalf("setup: write failed: %v", err)
 		}
 
-		_, err := DetectRepoType(tmpDir)
+		_, err := DetectRepoType(context.Background(), tmpDir)
 		if err == nil {
 			t.Error("expected error for invalid .git file")
 		}
@@ -499,7 +551,7 @@ func TestGetGitDir(t *testing.T) {
 		t.Parallel()
 		repoPath := setupTestRepo(t)
 
-		gitDir := GetGitDir(repoPath, RepoTypeRegular)
+		gitDir := GetGitDir(context.Background(), repoPath, RepoTypeRegular)
 		want := filepath.Join(repoPath, ".git")
 		if gitDir != want {
 			t.Errorf("GetGitDir = %q, want %q", gitDir, want)
@@ -520,7 +572,7 @@ func TestGetGitDir(t *testing.T) {
 			t.Fatalf("failed to init bare repo: %v", err)
 		}
 
-		gitDir := GetGitDir(barePath, RepoTypeBare)
+		gitDir := GetGitDir(ctx, barePath, RepoTypeBare)
 		if gitDir != barePath {
 			t.Errorf("GetGitDir = %q, want %q", gitDir, barePath)
 		}
@@ -841,7 +893,7 @@ func TestCloneRegular(t *testing.T) {
 		}
 
 		// Verify it's a regular (non-bare) repo
-		repoType, err := DetectRepoType(destPath)
+		repoType, err := DetectRepoType(ctx, destPath)
 		if err != nil {
 			t.Fatalf("DetectRepoType failed: %v", err)
 		}
@@ -890,7 +942,7 @@ func TestCloneBareWithWorktreeSupport(t *testing.T) {
 
 		// Verify .git directory exists and is a bare repo
 		gitDir := filepath.Join(destPath, ".git")
-		if !isBareRepo(gitDir) {
+		if !isBareRepo(ctx, gitDir) {
 			t.Error("expected .git to be a bare repo")
 		}
 

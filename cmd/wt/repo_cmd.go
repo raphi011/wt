@@ -210,7 +210,7 @@ be managed with other wt commands. Non-git directories are silently skipped.`,
 				}
 
 				// Verify it's a git repo - skip if not
-				repoType, err := git.DetectRepoType(absPath)
+				repoType, err := git.DetectRepoType(ctx, absPath)
 				if err != nil {
 					l.Debug("skipping non-git directory", "path", absPath)
 					continue
