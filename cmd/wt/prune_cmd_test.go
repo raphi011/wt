@@ -42,12 +42,13 @@ func TestRemovalReasonFor(t *testing.T) {
 	tests := []struct {
 		name      string
 		wt        git.Worktree
+		pr        forge.PRInfo
 		staleDays int
 		want      removalReason
 	}{
-		{name: "merged PR", wt: git.Worktree{PRState: forge.PRStateMerged}, want: removalMerged},
-		{name: "open PR", wt: git.Worktree{PRState: forge.PRStateOpen}, want: removalNone},
-		{name: "closed PR", wt: git.Worktree{PRState: forge.PRStateClosed}, want: removalNone},
+		{name: "merged PR", pr: forge.PRInfo{State: forge.PRStateMerged}, want: removalMerged},
+		{name: "open PR", pr: forge.PRInfo{State: forge.PRStateOpen}, want: removalNone},
+		{name: "closed PR", pr: forge.PRInfo{State: forge.PRStateClosed}, want: removalNone},
 		{name: "no PR", wt: git.Worktree{}, want: removalNone},
 		{name: "stale", wt: git.Worktree{CommitDate: old}, staleDays: 14, want: removalStale},
 		{name: "fresh", wt: git.Worktree{CommitDate: now.Add(-24 * time.Hour)}, staleDays: 14, want: removalNone},
@@ -56,15 +57,15 @@ func TestRemovalReasonFor(t *testing.T) {
 		{name: "zero commit date", wt: git.Worktree{}, staleDays: 14, want: removalNone},
 		{name: "just past the boundary", wt: git.Worktree{CommitDate: now.Add(-14*24*time.Hour - time.Second)}, staleDays: 14, want: removalStale},
 		{name: "just before the boundary", wt: git.Worktree{CommitDate: now.Add(-14*24*time.Hour + time.Hour)}, staleDays: 14, want: removalNone},
-		{name: "open PR protects from stale", wt: git.Worktree{CommitDate: old, PRState: forge.PRStateOpen}, staleDays: 14, want: removalNone},
-		{name: "closed PR does not protect from stale", wt: git.Worktree{CommitDate: old, PRState: forge.PRStateClosed}, staleDays: 14, want: removalStale},
-		{name: "merged wins over stale", wt: git.Worktree{CommitDate: old, PRState: forge.PRStateMerged}, staleDays: 14, want: removalMerged},
+		{name: "open PR protects from stale", wt: git.Worktree{CommitDate: old}, pr: forge.PRInfo{State: forge.PRStateOpen}, staleDays: 14, want: removalNone},
+		{name: "closed PR does not protect from stale", wt: git.Worktree{CommitDate: old}, pr: forge.PRInfo{State: forge.PRStateClosed}, staleDays: 14, want: removalStale},
+		{name: "merged wins over stale", wt: git.Worktree{CommitDate: old}, pr: forge.PRInfo{State: forge.PRStateMerged}, staleDays: 14, want: removalMerged},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := removalReasonFor(tt.wt, tt.staleDays, now); got != tt.want {
+			if got := removalReasonFor(tt.wt, tt.pr, tt.staleDays, now); got != tt.want {
 				t.Errorf("removalReasonFor() = %v, want %v", got, tt.want)
 			}
 		})

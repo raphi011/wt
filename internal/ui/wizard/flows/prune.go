@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/ui/styles"
 	"github.com/raphi011/wt/internal/ui/wizard/framework"
@@ -18,6 +19,7 @@ type pruneOptionValue struct {
 	IsDirty    bool
 	Reason     string
 	Worktree   git.Worktree
+	PR         forge.PRInfo
 }
 
 // PruneOptions holds the options gathered from interactive mode.
@@ -36,6 +38,7 @@ type PruneWorktreeInfo struct {
 	IsStale    bool   // Whether worktree is stale (old commit, not merged)
 	IsDirty    bool   // Whether worktree has uncommitted changes (removal needs --force)
 	Worktree   git.Worktree
+	PR         forge.PRInfo
 }
 
 // PruneWizardParams contains parameters for the prune wizard.
@@ -68,6 +71,7 @@ func PruneInteractive(params PruneWizardParams) (PruneOptions, error) {
 				IsDirty:    wt.IsDirty,
 				Reason:     wt.Reason,
 				Worktree:   wt.Worktree,
+				PR:         wt.PR,
 			},
 			Description: wt.Reason, // Fallback for default renderer
 			Disabled:    false,     // All can be selected in interactive mode
@@ -140,11 +144,11 @@ func pruneDescriptionRenderer(opt framework.Option, isSelected bool) string {
 	if !ok {
 		return styles.MutedStyle.Render(opt.Description)
 	}
-	wt := val.Worktree
-	status := styles.FormatPRRef(wt.PRNumber, wt.PRState, wt.PRDraft, "", false)
-	if wt.PRNumber == 0 {
-		if stateText := styles.FormatPRState(wt.PRState, wt.PRDraft); stateText != "" {
-			status = styles.PRStateStyle(wt.PRState, wt.PRDraft).Render(stateText)
+	pr := val.PR
+	status := styles.FormatPRRef(pr.Number, pr.State, pr.IsDraft, "", false)
+	if pr.Number == 0 {
+		if stateText := styles.FormatPRState(pr.State, pr.IsDraft); stateText != "" {
+			status = styles.PRStateStyle(pr.State, pr.IsDraft).Render(stateText)
 		}
 	}
 	if status == "" && !val.IsStale {

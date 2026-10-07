@@ -285,7 +285,6 @@ func TestWorktreeStruct(t *testing.T) {
 		Branch:   "feature-branch",
 		RepoPath: "/test/main",
 		RepoName: "test-repo",
-		PRState:  "MERGED",
 	}
 
 	if wt.Path != "/test/path" {
@@ -293,9 +292,6 @@ func TestWorktreeStruct(t *testing.T) {
 	}
 	if wt.Branch != "feature-branch" {
 		t.Errorf("unexpected branch: %s", wt.Branch)
-	}
-	if wt.PRState != "MERGED" {
-		t.Errorf("expected PRState to be MERGED, got %s", wt.PRState)
 	}
 }
 

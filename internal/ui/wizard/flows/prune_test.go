@@ -3,7 +3,6 @@ package flows
 import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raphi011/wt/internal/forge"
-	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/ui/styles"
 	"strings"
 	"testing"
@@ -215,12 +214,12 @@ func TestPruneStateAndActionAreSeparate(t *testing.T) {
 		{forge.PRStateOpen, true, false, false, false, ""},
 		{forge.PRStateClosed, false, true, true, false, "Eligible"},
 	} {
-		wt := git.Worktree{PRNumber: 123, PRState: tc.state, PRDraft: tc.draft, PRURL: "https://example.com/123"}
+		pr := forge.PRInfo{Number: 123, State: tc.state, IsDraft: tc.draft, URL: "https://example.com/123"}
 		reason := styles.FormatPRState(tc.state, tc.draft)
 		if tc.stale {
 			reason = styles.FormatStaleReason("3w")
 		}
-		result := pruneDescriptionRenderer(framework.Option{Value: pruneOptionValue{Worktree: wt, IsPrunable: tc.eligible, IsStale: tc.stale, Reason: reason}}, tc.selected)
+		result := pruneDescriptionRenderer(framework.Option{Value: pruneOptionValue{PR: pr, IsPrunable: tc.eligible, IsStale: tc.stale, Reason: reason}}, tc.selected)
 		state := styles.FormatPRRef(123, tc.state, tc.draft, "", false)
 		if !strings.Contains(result, state) {
 			t.Fatalf("prune recolored PR state: %q want %q", result, state)

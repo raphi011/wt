@@ -18,7 +18,7 @@ import (
 	"github.com/raphi011/wt/internal/hooks"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
-	"github.com/raphi011/wt/internal/prcache"
+	"github.com/raphi011/wt/internal/prstatus"
 	"github.com/raphi011/wt/internal/registry"
 	"github.com/raphi011/wt/internal/ui/wizard/flows"
 )
@@ -315,7 +315,7 @@ Use --interactive to select an open PR from registered repositories.`,
 			}
 
 			// Cache PR info for the worktree
-			cache, err := loadPRCache(effCfg)
+			cache, err := prstatus.Load(ctx, nil, effCfg, prstatus.Options{})
 			if err != nil {
 				return err
 			}
@@ -323,8 +323,7 @@ Use --interactive to select an open PR from registered repositories.`,
 			if err != nil {
 				l.Debug("failed to fetch PR info", "branch", branch, "error", err)
 			} else {
-				cache.Set(prcache.CacheKey(repoPath, branch), prInfo)
-				if err := cache.Save(); err != nil {
+				if err := cache.Record(git.Worktree{RepoPath: repoPath, Branch: branch}, prInfo); err != nil {
 					l.Printf("Warning: failed to save PR cache: %v\n", err)
 				}
 			}
@@ -513,11 +512,10 @@ With prune.delete_local_branches, the local branch is deleted with the worktree.
 			}
 
 			// Load PR cache for updates
-			cache, err := loadPRCache(res.effCfg)
+			cache, err := prstatus.Load(ctx, nil, res.effCfg, prstatus.Options{})
 			if err != nil {
 				return err
 			}
-			cacheKey := prcache.CacheKey(res.repo.Path, res.branch)
 
 			cwd := config.WorkDirFromContext(ctx)
 			if err := hf.parseArgs(); err != nil {
@@ -546,25 +544,21 @@ With prune.delete_local_branches, the local branch is deleted with the worktree.
 
 					// Update cache with merged state
 					pr.State = forge.PRStateMerged
-					cache.Set(cacheKey, pr)
-					if err := cache.Save(); err != nil {
+					if err := cache.Record(git.Worktree{RepoPath: res.repo.Path, Branch: res.branch}, pr); err != nil {
 						l.Printf("Warning: failed to save PR cache: %v\n", err)
 					}
 				}
 
 				// Remove worktree unless --keep
 				if !keep {
-					wt := git.Worktree{Path: cwd, RepoPath: res.repo.Path, Branch: res.branch, PRState: pr.State}
+					wt := git.Worktree{Path: cwd, RepoPath: res.repo.Path, Branch: res.branch}
 					l.Printf("Removing worktree...\n")
 					// No force: git refuses to remove a worktree with uncommitted changes
-					err := removeWorktree(ctx, wt, teardownOpts{DeleteBranch: res.effCfg.Prune.DeleteLocalBranches, PRCache: cache})
+					err := removeWorktree(ctx, wt, teardownOpts{DeleteBranch: res.effCfg.Prune.DeleteLocalBranches, PRStatus: cache, PR: *pr})
 					if err != nil {
 						l.Printf("Warning: failed to remove worktree: %v\n", err)
 					} else {
 						out.Printf("Removed worktree: %s\n", cwd)
-						if err := cache.Save(); err != nil {
-							l.Printf("Warning: failed to save cache: %v\n", err)
-						}
 						forgetWorktrees(ctx, []git.Worktree{wt})
 					}
 				}

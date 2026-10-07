@@ -21,7 +21,7 @@ type LoadWarning struct {
 
 // LoadWorktreesForRepos fetches worktrees from all repos in parallel.
 // Per repo: ListWorktreesFromRepo + GetAllBranchConfig + GetOriginURL + GetCommitMeta.
-// PR fields are NOT populated — callers do that from prcache after loading.
+// PR status is loaded separately by internal/prstatus.
 // Results maintain stable ordering (by repo index, then worktree order within repo).
 // Errors per repo are collected as warnings (non-fatal).
 func LoadWorktreesForRepos(ctx context.Context, repos []RepoRef) ([]Worktree, []LoadWarning) {

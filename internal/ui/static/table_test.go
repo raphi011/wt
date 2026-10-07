@@ -20,12 +20,9 @@ func TestWorktreeTableRow(t *testing.T) {
 		CommitHash: "abc1234def5678",
 		CommitAge:  "3 hours ago",
 		Note:       "wip",
-		PRNumber:   99,
-		PRState:    forge.PRStateOpen,
-		PRURL:      "https://github.com/org/repo/pull/99",
 	}
 
-	row := WorktreeTableRow(wt, 0, false)
+	row := WorktreeTableRow(wt, forge.PRInfo{Number: 99, State: forge.PRStateOpen, URL: "https://github.com/org/repo/pull/99"}, 0, false)
 
 	// Must have exactly 6 columns matching headers: REPO, BRANCH, COMMIT, AGE, PR, NOTE
 	if len(row) != 6 {
@@ -64,7 +61,7 @@ func TestWorktreeTableRowStale(t *testing.T) {
 		CommitDate: time.Now().Add(-30 * 24 * time.Hour),
 	}
 
-	row := WorktreeTableRow(wt, 14, false)
+	row := WorktreeTableRow(wt, forge.PRInfo{}, 14, false)
 
 	// AGE cell should contain ANSI escape codes (styled)
 	if row[3] == "30 days ago" {
@@ -86,7 +83,7 @@ func TestWorktreeTableRowNotStale(t *testing.T) {
 		CommitDate: time.Now().Add(-3 * time.Hour),
 	}
 
-	row := WorktreeTableRow(wt, 14, false)
+	row := WorktreeTableRow(wt, forge.PRInfo{}, 14, false)
 
 	if row[3] != "3 hours ago" {
 		t.Errorf("non-stale AGE cell should be plain text, got %q", row[3])
@@ -104,7 +101,7 @@ func TestWorktreeTableRowStaleDisabled(t *testing.T) {
 		CommitDate: time.Now().Add(-30 * 24 * time.Hour),
 	}
 
-	row := WorktreeTableRow(wt, 0, false)
+	row := WorktreeTableRow(wt, forge.PRInfo{}, 0, false)
 
 	if row[3] != "30 days ago" {
 		t.Errorf("disabled stale: AGE cell should be plain text, got %q", row[3])
@@ -210,9 +207,9 @@ func TestPRStateRemainsReadableInNarrowTable(t *testing.T) {
 		{forge.PRStateOpen, false, "Open"}, {forge.PRStateOpen, true, "Draft"},
 		{forge.PRStateMerged, false, "Merged"}, {forge.PRStateClosed, false, "Closed"},
 	} {
-		wt := git.Worktree{RepoName: strings.Repeat("repo", 15), Branch: strings.Repeat("branch", 20), PRNumber: 123456, PRState: tc.state, PRDraft: tc.draft, PRURL: "https://example.com/123456", Note: strings.Repeat("long note", 20)}
+		wt := git.Worktree{RepoName: strings.Repeat("repo", 15), Branch: strings.Repeat("branch", 20), Note: strings.Repeat("long note", 20)}
 		for _, links := range []bool{false, true} {
-			row := WorktreeTableRow(wt, 0, links)
+			row := WorktreeTableRow(wt, forge.PRInfo{Number: 123456, State: tc.state, IsDraft: tc.draft, URL: "https://example.com/123456"}, 0, links)
 			for _, width := range []int{40, 80, 120} {
 				rendered := RenderTableAtWidth(WorktreeTableHeaders, [][]string{row}, width)
 				if !strings.Contains(ansi.Strip(rendered), tc.text) || !strings.Contains(ansi.Strip(rendered), "#123456") {
