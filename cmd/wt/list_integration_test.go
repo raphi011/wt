@@ -107,6 +107,7 @@ func TestList_EmptyRepo(t *testing.T) {
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, repoPath)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
@@ -155,6 +156,7 @@ func TestList_WithWorktrees(t *testing.T) {
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, repoPath)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
@@ -208,6 +210,7 @@ func TestList_ByRepoName(t *testing.T) {
 
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, otherDir)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
@@ -259,6 +262,7 @@ func TestList_ByLabel(t *testing.T) {
 
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, otherDir)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
@@ -315,6 +319,7 @@ func TestList_MultipleScopes(t *testing.T) {
 
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, otherDir)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
@@ -364,6 +369,7 @@ func TestList_ScopeNotFound(t *testing.T) {
 
 	ctx, _ := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, otherDir)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
@@ -406,6 +412,7 @@ func TestList_JSON(t *testing.T) {
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, repoPath)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
@@ -457,6 +464,7 @@ func TestList_OrphanedRepoFiltered(t *testing.T) {
 
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, otherDir)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
@@ -505,6 +513,7 @@ func TestList_SortByBranch(t *testing.T) {
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, repoPath)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
@@ -568,6 +577,7 @@ func TestList_SortByRepo(t *testing.T) {
 
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, otherDir)
 	cmd := newListCmd()
 	cmd.SetContext(ctx)
@@ -621,6 +631,7 @@ func TestList_Global(t *testing.T) {
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, repo1Path) // Inside repo1
 
 	cmd := newListCmd()
@@ -674,6 +685,7 @@ func TestList_GlobalFromNonRepo(t *testing.T) {
 
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, nonRepoDir)
 
 	cmd := newListCmd()
@@ -724,6 +736,7 @@ func TestList_DefaultSortFromConfig(t *testing.T) {
 	}
 	ctx, out := testContextWithOutput(t)
 	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, repoPath)
 
 	cmd := newListCmd()

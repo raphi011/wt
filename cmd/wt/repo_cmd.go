@@ -440,7 +440,7 @@ If destination is not specified, clones into <repo-name> in the current director
 			}
 
 			// Resolve effective clone mode
-			bareMode, err := cfg.Clone.ResolveIsBare(cloneMode)
+			bareMode, err := resolveCloneBare(ctx, cloneMode)
 			if err != nil {
 				return err
 			}

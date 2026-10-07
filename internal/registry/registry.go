@@ -324,14 +324,6 @@ func (repo *Repo) PathExists() (bool, error) {
 	return false, err
 }
 
-// GetEffectiveWorktreeFormat returns the worktree format to use for this repo
-func (repo *Repo) GetEffectiveWorktreeFormat(defaultFormat string) string {
-	if repo.WorktreeFormat != "" {
-		return repo.WorktreeFormat
-	}
-	return defaultFormat
-}
-
 // String returns a display string for the repo
 func (repo *Repo) String() string {
 	if len(repo.Labels) > 0 {

@@ -84,10 +84,7 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 				return err
 			}
 
-			// Apply config default when --sort not explicitly set
-			if !cmd.Flags().Changed("sort") && cfg.DefaultSort != "" {
-				sortBy = cfg.DefaultSort
-			}
+			sortBy = config.ResolverFromContext(ctx).ResolveGlobal(config.Overrides{DefaultSort: flagOverride(cmd, "sort", sortBy)}).DefaultSort
 			if sortBy == "" {
 				sortBy = "date"
 			}

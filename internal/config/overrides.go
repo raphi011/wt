@@ -5,6 +5,10 @@ package config
 type Overrides struct {
 	AutoFetch           *bool
 	DeleteLocalBranches *bool
+	MergeStrategy       *string
+	DefaultSort         *string
+	CloneMode           *string
+	WorktreeFormat      *string
 }
 
 // apply overlays only the supplied fields on a copy of cfg. Global and cached
@@ -16,6 +20,18 @@ func (o Overrides) apply(cfg *Config) *Config {
 	}
 	if o.DeleteLocalBranches != nil {
 		resolved.Prune.DeleteLocalBranches = *o.DeleteLocalBranches
+	}
+	if o.MergeStrategy != nil {
+		resolved.Merge.Strategy = *o.MergeStrategy
+	}
+	if o.DefaultSort != nil {
+		resolved.DefaultSort = *o.DefaultSort
+	}
+	if o.CloneMode != nil {
+		resolved.Clone.Mode = *o.CloneMode
+	}
+	if o.WorktreeFormat != nil {
+		resolved.Checkout.WorktreeFormat = *o.WorktreeFormat
 	}
 	return &resolved
 }

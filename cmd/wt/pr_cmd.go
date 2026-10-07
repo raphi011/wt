@@ -62,9 +62,9 @@ func (r *repoForgeResult) prBranch(ctx context.Context) string {
 }
 
 // resolveRepoForge loads registry, resolves repo from optional arg or cwd,
-// resolves effective config, gets origin URL, detects/checks forge,
-// and resolves the current branch.
-func resolveRepoForge(ctx context.Context, repoArg string) (*repoForgeResult, error) {
+// resolves effective config with overrides applied, gets origin URL,
+// detects/checks forge, and resolves the current branch.
+func resolveRepoForge(ctx context.Context, repoArg string, overrides config.Overrides) (*repoForgeResult, error) {
 	cfg := config.FromContext(ctx)
 
 	reg, err := registry.Load(cfg.RegistryPath)
@@ -85,7 +85,7 @@ func resolveRepoForge(ctx context.Context, repoArg string) (*repoForgeResult, er
 		}
 	}
 
-	effCfg := resolveEffectiveConfig(ctx, repo.Path)
+	effCfg := resolveConfig(ctx, repo.Path, overrides)
 
 	originURL, err := git.GetOriginURL(ctx, repo.Path)
 	if err != nil {
@@ -240,7 +240,7 @@ Use --interactive to select an open PR from registered repositories.`,
 					// Resolve effective clone mode
 					// Uses global config since the repo doesn't exist yet
 					// (local .wt.toml can't be read before cloning)
-					bareMode, err := cfg.Clone.ResolveIsBare(cloneMode)
+					bareMode, err := resolveCloneBare(ctx, cloneMode)
 					if err != nil {
 						return err
 					}
@@ -407,7 +407,7 @@ func newPrCreateCmd() *cobra.Command {
 			if len(args) > 0 {
 				repoArg = args[0]
 			}
-			res, err := resolveRepoForge(ctx, repoArg)
+			res, err := resolveRepoForge(ctx, repoArg, config.Overrides{})
 			if err != nil {
 				return err
 			}
@@ -501,15 +501,11 @@ With prune.delete_local_branches, the local branch is deleted with the worktree.
 			if len(args) > 0 {
 				repoArg = args[0]
 			}
-			res, err := resolveRepoForge(ctx, repoArg)
+			res, err := resolveRepoForge(ctx, repoArg, config.Overrides{MergeStrategy: flagOverride(cmd, "strategy", strategy)})
 			if err != nil {
 				return err
 			}
-
-			// Apply merge strategy from config if not explicitly set
-			if !cmd.Flags().Changed("strategy") && res.effCfg.Merge.Strategy != "" {
-				strategy = res.effCfg.Merge.Strategy
-			}
+			strategy = res.effCfg.Merge.Strategy
 
 			l.Debug("pr merge", "branch", res.branch, "strategy", strategy)
 
@@ -610,7 +606,7 @@ func newPrViewCmd() *cobra.Command {
 			if len(args) > 0 {
 				repoArg = args[0]
 			}
-			res, err := resolveRepoForge(ctx, repoArg)
+			res, err := resolveRepoForge(ctx, repoArg, config.Overrides{})
 			if err != nil {
 				return err
 			}

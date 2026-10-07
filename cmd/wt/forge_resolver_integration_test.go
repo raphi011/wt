@@ -58,7 +58,7 @@ func TestResolveRepoForge_InjectedResolver(t *testing.T) {
 		return fake
 	})
 
-	result, err := resolveRepoForge(ctx, "resolver-repo")
+	result, err := resolveRepoForge(ctx, "resolver-repo", config.Overrides{})
 	if err != nil {
 		t.Fatalf("resolve repo forge: %v", err)
 	}

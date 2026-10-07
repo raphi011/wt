@@ -881,39 +881,6 @@ func TestValidateCloneMode(t *testing.T) {
 	}
 }
 
-func TestCloneConfigResolveIsBare(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name        string
-		configMode  string
-		cliOverride string
-		wantBare    bool
-		wantErr     bool
-	}{
-		{"config bare, no override", "bare", "", true, false},
-		{"config regular, no override", "regular", "", false, false},
-		{"config empty, no override", "", "", false, false},
-		{"cli overrides config to regular", "bare", "regular", false, false},
-		{"cli overrides config to bare", "regular", "bare", true, false},
-		{"invalid cli override", "bare", "shallow", false, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			cc := &CloneConfig{Mode: tt.configMode}
-			got, err := cc.ResolveIsBare(tt.cliOverride)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("ResolveIsBare(%q) error = %v, wantErr %v", tt.cliOverride, err, tt.wantErr)
-			}
-			if err == nil && got != tt.wantBare {
-				t.Errorf("ResolveIsBare(%q) = %v, want %v", tt.cliOverride, got, tt.wantBare)
-			}
-		})
-	}
-}
-
 func TestStaleDaysConfigParsing(t *testing.T) {
 	t.Parallel()
 
