@@ -132,7 +132,7 @@ Use positional args to filter by label(s).`,
 				if len(args) > 0 {
 					return fmt.Errorf("no repos found with label(s): %s", strings.Join(args, ", "))
 				}
-				fmt.Println("No repos registered. Use 'wt repo add <path>' to register a repo.")
+				out.Println("No repos registered. Use 'wt repo add <path>' to register a repo.")
 				return nil
 			}
 
@@ -264,7 +264,7 @@ be managed with other wt commands. Non-git directories are silently skipped.`,
 				if c.repoType == git.RepoTypeBare {
 					typeStr = "bare"
 				}
-				fmt.Printf("Registered %s repo: %s (%s)\n", typeStr, c.repo.Name, c.repo.Path)
+				l.Printf("Registered %s repo: %s (%s)\n", typeStr, c.repo.Name, c.repo.Path)
 			}
 
 			return nil
@@ -522,7 +522,7 @@ If destination is not specified, clones into <repo-name> in the current director
 				return err
 			}
 
-			fmt.Printf("Cloned repo: %s (%s)\n", repoName, absPath)
+			l.Printf("Cloned repo: %s (%s)\n", repoName, absPath)
 
 			// Create initial worktree only in bare mode
 			// Regular clones already have a working tree at root
@@ -560,7 +560,7 @@ If destination is not specified, clones into <repo-name> in the current director
 					if err := git.CreateWorktree(ctx, gitDir, wtPath, worktreeBranch); err != nil {
 						l.Printf("Warning: failed to create initial worktree: %v\n", err)
 					} else {
-						fmt.Printf("Created worktree: %s (%s)\n", wtPath, worktreeBranch)
+						l.Printf("Created worktree: %s (%s)\n", wtPath, worktreeBranch)
 						recordHistory(ctx, cfg, wtPath, repoName, worktreeBranch)
 					}
 				}
@@ -810,9 +810,9 @@ func registerAndVerify(p convertParams, warnings []string) error {
 	}
 
 	if p.alreadyRegistered {
-		p.out.Printf("  Already registered as: %s\n", p.repoName)
+		p.l.Printf("  Already registered as: %s\n", p.repoName)
 	} else {
-		p.out.Printf("  Registered as: %s\n", p.repoName)
+		p.l.Printf("  Registered as: %s\n", p.repoName)
 	}
 
 	worktrees, err := git.ListWorktreesFromRepo(p.ctx, p.absPath)
@@ -820,9 +820,9 @@ func registerAndVerify(p convertParams, warnings []string) error {
 		p.l.Printf("Warning: could not list worktrees after conversion: %v\n", err)
 		p.l.Printf("Run 'git worktree list' manually to verify the conversion\n")
 	} else if len(worktrees) > 0 {
-		p.out.Printf("\n  Worktrees:\n")
+		p.l.Printf("\n  Worktrees:\n")
 		for _, wt := range worktrees {
-			p.out.Printf("    %s (%s)\n", wt.Path, wt.Branch)
+			p.l.Printf("    %s (%s)\n", wt.Path, wt.Branch)
 		}
 	}
 
@@ -874,8 +874,8 @@ func convertToBare(p convertParams) error {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 
-	p.out.Printf("Conversion complete!\n")
-	p.out.Printf("  Main worktree: %s\n", result.MainWorktreePath)
+	p.l.Printf("Conversion complete!\n")
+	p.l.Printf("  Main worktree: %s\n", result.MainWorktreePath)
 
 	return registerAndVerify(p, result.Warnings)
 }
@@ -932,8 +932,8 @@ func convertToRegular(p convertParams) error {
 		return fmt.Errorf("conversion failed: %w", err)
 	}
 
-	p.out.Printf("Conversion complete!\n")
-	p.out.Printf("  Repo root: %s\n", p.absPath)
+	p.l.Printf("Conversion complete!\n")
+	p.l.Printf("  Repo root: %s\n", p.absPath)
 
 	return registerAndVerify(p, result.Warnings)
 }

@@ -474,15 +474,17 @@ func TestLabel_List_NoLabels(t *testing.T) {
 	}
 
 	cfg := &config.Config{RegistryPath: regFile}
-	ctx, _ := testContextWithConfigAndOutput(t, cfg, tmpDir)
+	ctx, out := testContextWithConfigAndOutput(t, cfg, tmpDir)
 
 	cmd := newLabelCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"list", "myrepo"})
 
-	// Should succeed (prints "(no labels)" to stdout via fmt.Println)
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("label list command failed: %v", err)
+	}
+	if out.String() != "(no labels)\n" {
+		t.Errorf("expected output %q, got %q", "(no labels)\n", out.String())
 	}
 }
 
@@ -524,14 +526,11 @@ func TestLabel_List_MultipleRepos(t *testing.T) {
 	}
 
 	output := out.String()
-	// When listing multiple repos, output.Println writes labels
-	// fmt.Printf writes the prefix to stdout (not captured)
-	// But the labels themselves should appear in captured output
-	if !strings.Contains(output, "backend") {
-		t.Errorf("expected output to contain 'backend', got %q", output)
+	if !strings.Contains(output, "repo1: backend\n") {
+		t.Errorf("expected output to contain 'repo1: backend', got %q", output)
 	}
-	if !strings.Contains(output, "frontend") {
-		t.Errorf("expected output to contain 'frontend', got %q", output)
+	if !strings.Contains(output, "repo2: frontend\n") {
+		t.Errorf("expected output to contain 'repo2: frontend', got %q", output)
 	}
 }
 

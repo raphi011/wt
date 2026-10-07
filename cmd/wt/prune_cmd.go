@@ -270,17 +270,20 @@ never removed without -f.`,
 				PRCache:                prCache,
 			})
 
-			// Print summary
+			// Print summary: a dry-run preview is data (stdout), the result of
+			// a real run is a diagnostic (stderr)
+			report := l.Printf
 			if dryRun {
-				out.Printf("Would remove %d worktree(s), skip %d\n", len(removed), len(toSkip)+len(failed))
+				report = out.Printf
+				report("Would remove %d worktree(s), skip %d\n", len(removed), len(toSkip)+len(failed))
 			} else {
-				out.Printf("Removed %d worktree(s), skipped %d\n", len(removed), len(toSkip)+len(failed))
+				report("Removed %d worktree(s), skipped %d\n", len(removed), len(toSkip)+len(failed))
 			}
 
 			if len(dirty) > 0 {
-				out.Println("Skipped (uncommitted changes, use -f to remove):")
+				report("Skipped (uncommitted changes, use -f to remove):\n")
 				for _, wt := range dirty {
-					out.Printf("  %s:%s (%s)\n", wt.RepoName, wt.Branch, wt.Path)
+					report("  %s:%s (%s)\n", wt.RepoName, wt.Branch, wt.Path)
 				}
 			}
 

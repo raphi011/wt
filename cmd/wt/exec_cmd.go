@@ -12,6 +12,7 @@ import (
 	"github.com/raphi011/wt/internal/config"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
+	"github.com/raphi011/wt/internal/output"
 	"github.com/raphi011/wt/internal/registry"
 )
 
@@ -43,6 +44,7 @@ worktrees. Commands that cannot start also return 1.`,
 			cfg := config.FromContext(ctx)
 			workDir := config.WorkDirFromContext(ctx)
 			l := log.FromContext(ctx)
+			out := output.FromContext(ctx)
 
 			// Cobra handles -- specially - ArgsLenAtDash returns index where -- appeared
 			dashIdx := cmd.ArgsLenAtDash()
@@ -100,7 +102,7 @@ worktrees. Commands that cannot start also return 1.`,
 				if label == "" {
 					label = wt.Path
 				}
-				fmt.Printf("=== %s ===\n", label)
+				out.Printf("=== %s ===\n", label)
 
 				execCmd := exec.CommandContext(ctx, cmdArgs[0], cmdArgs[1:]...)
 				execCmd.Dir = wt.Path
@@ -119,7 +121,7 @@ worktrees. Commands that cannot start also return 1.`,
 						exitCode = exitErr.ExitCode()
 					}
 				}
-				fmt.Println()
+				out.Println()
 			}
 
 			if len(failures) > 0 {

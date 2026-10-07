@@ -20,9 +20,7 @@ import (
 func TestConfigInit_Stdout(t *testing.T) {
 	t.Parallel()
 
-	// config init --stdout writes to fmt.Printf (os.Stdout), so we can't capture
-	// via output.Printer. We just verify no error and the command runs successfully.
-	ctx := testContext(t)
+	ctx, out := testContextWithOutput(t)
 
 	cmd := newConfigCmd()
 	cmd.SetContext(ctx)
@@ -30,6 +28,9 @@ func TestConfigInit_Stdout(t *testing.T) {
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("config init --stdout failed: %v", err)
+	}
+	if out.String() != config.DefaultConfig() {
+		t.Errorf("stdout should be the default config, got: %q", out.String())
 	}
 }
 

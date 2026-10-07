@@ -12,6 +12,7 @@ import (
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/history"
+	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
 )
@@ -1462,7 +1463,9 @@ func TestPrune_BeforeHookAborts_AutoPruneCountsSkipped(t *testing.T) {
 		},
 	}
 
-	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	var logs strings.Builder
+	ctx = log.WithLogger(ctx, log.New(&logs, false, false))
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{})
@@ -1475,8 +1478,8 @@ func TestPrune_BeforeHookAborts_AutoPruneCountsSkipped(t *testing.T) {
 		t.Error("worktree should still exist after before-hook abort")
 	}
 	// Main worktree (not merged) + the aborted one
-	if !strings.Contains(out.String(), "Removed 0 worktree(s), skipped 2") {
-		t.Errorf("summary should count the aborted worktree as skipped, got: %q", out.String())
+	if !strings.Contains(logs.String(), "Removed 0 worktree(s), skipped 2") {
+		t.Errorf("summary should count the aborted worktree as skipped, got: %q", logs.String())
 	}
 }
 
@@ -2229,7 +2232,9 @@ func TestPrune_DirtyMergedWorktree_SkippedWithoutForce(t *testing.T) {
 	cfg, repoPath, wtPath := setupMergedWorktree(t)
 	writeUntrackedFile(t, wtPath)
 
-	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	var logs strings.Builder
+	ctx = log.WithLogger(ctx, log.New(&logs, false, false))
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{})
@@ -2241,8 +2246,8 @@ func TestPrune_DirtyMergedWorktree_SkippedWithoutForce(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(wtPath, "wip.txt")); err != nil {
 		t.Errorf("dirty worktree should be kept: %v", err)
 	}
-	if !strings.Contains(out.String(), "uncommitted changes") || !strings.Contains(out.String(), "test-repo:feature") {
-		t.Errorf("output should list the skipped worktree with a reason, got: %q", out.String())
+	if !strings.Contains(logs.String(), "uncommitted changes") || !strings.Contains(logs.String(), "test-repo:feature") {
+		t.Errorf("output should list the skipped worktree with a reason, got: %q", logs.String())
 	}
 }
 
@@ -2338,7 +2343,9 @@ func TestPrune_DirtyStaleWorktree_SkippedWithoutForce(t *testing.T) {
 			StaleDays: 1,
 		},
 	}
-	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	var logs strings.Builder
+	ctx = log.WithLogger(ctx, log.New(&logs, false, false))
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"--stale"})
@@ -2350,8 +2357,8 @@ func TestPrune_DirtyStaleWorktree_SkippedWithoutForce(t *testing.T) {
 	if _, err := os.Stat(wtPath); err != nil {
 		t.Errorf("dirty stale worktree should be kept: %v", err)
 	}
-	if !strings.Contains(out.String(), "uncommitted changes") {
-		t.Errorf("output should give the skip reason, got: %q", out.String())
+	if !strings.Contains(logs.String(), "uncommitted changes") {
+		t.Errorf("output should give the skip reason, got: %q", logs.String())
 	}
 }
 
@@ -2611,5 +2618,36 @@ func TestPrune_LabelScopedTarget(t *testing.T) {
 	// repo2 (no label) should be untouched
 	if _, err := os.Stat(wt2Path); os.IsNotExist(err) {
 		t.Error("repo2 worktree should NOT be removed (label 'team-a' does not match)")
+	}
+}
+
+// TestPrune_AutoPrune_SummaryGoesToStderr tests that auto-prune reports its result as a diagnostic.
+//
+// Scenario: Worktree has a merged PR, user runs `wt prune`
+// Expected: The "Removed" summary is written to stderr, the table of removed worktrees to stdout
+func TestPrune_AutoPrune_SummaryGoesToStderr(t *testing.T) {
+	t.Parallel()
+
+	cfg, repoPath, _ := setupMergedWorktree(t)
+
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+	var logs strings.Builder
+	ctx = log.WithLogger(ctx, log.New(&logs, false, false))
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	if !strings.Contains(logs.String(), "Removed 1 worktree(s), skipped 1") {
+		t.Errorf("stderr should contain the summary, got: %q", logs.String())
+	}
+	if strings.Contains(out.String(), "Removed") {
+		t.Errorf("stdout should not contain the summary, got: %q", out.String())
+	}
+	if !strings.Contains(out.String(), "feature") {
+		t.Errorf("stdout should list the removed worktree, got: %q", out.String())
 	}
 }
