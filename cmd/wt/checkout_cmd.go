@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -28,6 +29,7 @@ func newCheckoutCmd() *cobra.Command {
 		hf          hookFlags
 		noPreserve  bool
 		interactive bool
+		global      bool
 	)
 
 	cmd := &cobra.Command{
@@ -41,10 +43,12 @@ Use -b to create a new branch, or omit for an existing branch.
 Use -i for interactive mode to be prompted for options.
 
 Target uses [scope:]branch format where scope can be a repo name or label:
-  - Without scope: uses current repo (or searches all repos for existing branch)
+  - Without scope: uses current repo; outside a repo, or with -g, searches
+    all repos for an existing branch and errors if it is in several
   - With repo scope: targets that specific repo
   - With label scope (requires -b): targets all repos with that label`,
 		Example: `  wt checkout feature-branch              # Existing branch in current repo
+  wt checkout -g feature-branch           # Existing branch in whichever repo has it
   wt checkout myrepo:feature              # Existing branch in myrepo
   wt checkout -b feature-branch           # Create new branch in current repo
   wt checkout -b myrepo:feature           # Create new branch in myrepo
@@ -110,7 +114,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 
 			// Determine repos to operate on
 			// A label target can fail in some repos and still return the rest
-			repos, err := resolveCheckoutRepos(ctx, l, reg, parsed, newBranch, fetchResolved, hf)
+			repos, err := resolveCheckoutRepos(ctx, l, reg, parsed, newBranch, fetchResolved, global, hf)
 			if err != nil && len(repos) == 0 {
 				return err
 			}
@@ -146,6 +150,8 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 	registerHookFlags(cmd, &hf)
 	cmd.Flags().BoolVar(&noPreserve, "no-preserve", false, "Skip file preservation")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode")
+	cmd.Flags().BoolVarP(&global, "global", "g", false, "Search all repos for an unscoped existing branch")
+	cmd.MarkFlagsMutuallyExclusive("global", "new-branch")
 
 	// Completions
 	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("note", cobra.NoFileCompletions))
@@ -424,7 +430,7 @@ func resolveCheckoutRepos(
 	l *log.Logger,
 	reg *registry.Registry,
 	parsed ScopedTargetResult,
-	newBranch, fetch bool,
+	newBranch, fetch, global bool,
 	hf hookFlags,
 ) ([]registry.Repo, error) {
 	if len(parsed.Repos) > 0 {
@@ -442,10 +448,12 @@ func resolveCheckoutRepos(
 		return []registry.Repo{repo}, nil
 	}
 
-	// Existing branch without scope
-	repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
-	if err == nil {
-		return resolveUnscopedInRepo(ctx, repo, parsed.Branch, fetch, hf)
+	// Existing branch without scope: current repo, or all repos with -g or outside a repo
+	if !global {
+		repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
+		if err == nil {
+			return resolveUnscopedInRepo(ctx, repo, parsed.Branch, fetch, hf)
+		}
 	}
 	return resolveUnscopedAcrossRepos(ctx, l, reg, parsed.Branch, hf)
 }
@@ -510,6 +518,8 @@ func resolveUnscopedInRepo(
 }
 
 // resolveUnscopedAcrossRepos searches all registered repos for an existing branch.
+// The branch must have a worktree or local branch in exactly one repo: its
+// worktree is opened, or the repo is returned for creation.
 func resolveUnscopedAcrossRepos(
 	ctx context.Context,
 	l *log.Logger,
@@ -517,8 +527,11 @@ func resolveUnscopedAcrossRepos(
 	branch string,
 	hf hookFlags,
 ) ([]registry.Repo, error) {
-	var repos []registry.Repo
-	var opened bool
+	type candidate struct {
+		repo   registry.Repo
+		wtPath string // empty: the branch has no worktree yet
+	}
+	var candidates []candidate
 	for _, repo := range filterOrphanedRepos(l, reg.Repos) {
 		wtPath, found, err := findWorktreeForBranch(ctx, repo.Path, branch)
 		if err != nil {
@@ -526,10 +539,7 @@ func resolveUnscopedAcrossRepos(
 			continue
 		}
 		if found {
-			if err := openExistingWorktree(ctx, repo, branch, wtPath, hf); err != nil {
-				return nil, err
-			}
-			opened = true
+			candidates = append(candidates, candidate{repo: repo, wtPath: wtPath})
 			continue
 		}
 		branches, err := git.ListLocalBranches(ctx, repo.Path)
@@ -538,24 +548,26 @@ func resolveUnscopedAcrossRepos(
 			continue
 		}
 		if slices.Contains(branches, branch) {
-			repos = append(repos, repo)
+			candidates = append(candidates, candidate{repo: repo})
 		}
 	}
 
-	if len(repos) == 0 {
-		if opened {
-			return nil, nil
-		}
+	if len(candidates) == 0 {
 		return nil, fmt.Errorf("branch %q not found in any repo", branch)
 	}
-	if len(repos) > 1 {
+	if len(candidates) > 1 {
 		var names []string
-		for _, r := range repos {
-			names = append(names, r.Name+":"+branch)
+		for _, c := range candidates {
+			names = append(names, c.repo.Name+":"+branch)
 		}
-		return nil, fmt.Errorf("branch %q exists in multiple repos: %v\nUse scope:branch to specify", branch, names)
+		return nil, fmt.Errorf("branch %q exists in multiple repos: %s (use repo:branch to pick one)", branch, strings.Join(names, ", "))
 	}
-	return repos, nil
+
+	c := candidates[0]
+	if c.wtPath != "" {
+		return nil, openExistingWorktree(ctx, c.repo, branch, c.wtPath, hf)
+	}
+	return []registry.Repo{c.repo}, nil
 }
 
 // completeHooks provides completion for hook flags

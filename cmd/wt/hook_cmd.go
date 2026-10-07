@@ -19,6 +19,7 @@ func newHookCmd() *cobra.Command {
 	var (
 		env    []string
 		dryRun bool
+		global bool
 	)
 
 	cmd := &cobra.Command{
@@ -37,12 +38,15 @@ When run manually, the hook always executes as an "after" hook
 
 With one argument, runs in the current worktree.
 With two arguments, the first is a [scope:]branch target (scope is a repo name
-or label) and the second is the hook name.
+or label) and the second is the hook name. A branch without scope means the
+current repo; outside a repo it searches all repos, and with -g the hook runs
+in every match.
 
 Run 'wt config hooks' to list hooks, 'wt config init -s' for trigger syntax
 and placeholders.`,
 		Example: `  wt hook code                        # Run 'code' hook in current worktree
-  wt hook main code                   # Run 'code' in main worktree (all repos)
+  wt hook main code                   # Run 'code' in main worktree (current repo)
+  wt hook -g main code                # Run 'code' in main worktree (all repos)
   wt hook myrepo:main code            # Run in specific repo's worktree
   wt hook backend:main code           # Run in backend label's main worktrees
   wt hook code -a prompt="do X"       # Pass custom variable
@@ -88,12 +92,13 @@ and placeholders.`,
 			}
 
 			// Run hook in specified target
-			return runHookInTargets(ctx, reg, hookName, target, hookEnv, dryRun)
+			return runHookInTargets(ctx, reg, hookName, target, hookEnv, dryRun, global)
 		},
 	}
 
 	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Print command without executing")
+	cmd.Flags().BoolVarP(&global, "global", "g", false, "Search all repos for an unscoped branch")
 	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions))
 
 	return cmd
@@ -138,8 +143,8 @@ func runHookInRepo(ctx context.Context, repo registry.Repo, hookName string, env
 }
 
 // runHookInTargets runs a hook in the specified [scope:]branch target
-func runHookInTargets(ctx context.Context, reg *registry.Registry, hookName string, target string, env map[string]string, dryRun bool) error {
-	wtTargets, err := resolveWorktreeTargets(ctx, reg, []string{target})
+func runHookInTargets(ctx context.Context, reg *registry.Registry, hookName string, target string, env map[string]string, dryRun, global bool) error {
+	wtTargets, err := resolveWorktreeTargets(ctx, reg, []string{target}, targetOpts{Global: global, Multi: true})
 	if err != nil {
 		return err
 	}

@@ -812,12 +812,12 @@ func TestPrune_UnscopedTarget_GlobalFlag(t *testing.T) {
 	}
 }
 
-// TestPrune_UnscopedTarget_NotInRepo_FallsBackToAll tests that running from a
-// non-repo directory (without -g) falls back to searching all repos.
+// TestPrune_UnscopedTarget_NotInRepo_AmbiguousNeedsGlobal tests that running
+// from a non-repo directory does not fan out to several repos without -g.
 //
-// Scenario: Two repos both have a "feature" worktree, user runs from non-repo dir
-// Expected: Both worktrees are removed (fallback to all repos)
-func TestPrune_UnscopedTarget_NotInRepo_FallsBackToAll(t *testing.T) {
+// Scenario: Two repos both have a "feature" worktree, user runs `wt prune feature -f` from non-repo dir
+// Expected: Error naming both repos, no worktree is removed
+func TestPrune_UnscopedTarget_NotInRepo_AmbiguousNeedsGlobal(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
@@ -857,16 +857,16 @@ func TestPrune_UnscopedTarget_NotInRepo_FallsBackToAll(t *testing.T) {
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"feature", "-f"})
 
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("prune command failed: %v", err)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "exists in multiple repos: repo1:feature, repo2:feature") {
+		t.Fatalf("prune should fail naming both repos, got: %v", err)
 	}
 
-	// Both worktrees should be removed (fallback to all repos)
-	if _, err := os.Stat(wt1Path); err == nil {
-		t.Error("repo1 worktree should be removed (fallback to all repos)")
+	if _, err := os.Stat(wt1Path); err != nil {
+		t.Errorf("repo1 worktree should be kept: %v", err)
 	}
-	if _, err := os.Stat(wt2Path); err == nil {
-		t.Error("repo2 worktree should be removed (fallback to all repos)")
+	if _, err := os.Stat(wt2Path); err != nil {
+		t.Errorf("repo2 worktree should be kept: %v", err)
 	}
 }
 

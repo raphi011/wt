@@ -348,30 +348,14 @@ func isStaleWorktree(wt git.Worktree, staleDays int) bool {
 }
 
 // runPruneTargets handles removal of specific worktrees by [scope:]branch args.
-// When global is false, unscoped targets are scoped to the current repo.
+// When global is false, unscoped targets are scoped to the current repo if inside one.
 // Force is only required when at least one target is not prunable (not merged).
 func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []string, global, force, dryRun bool, opts pruneOpts) error {
 	l := log.FromContext(ctx)
 	out := output.FromContext(ctx)
 
-	// When not global, scope unscoped targets to current repo
-	if !global {
-		repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
-		if err == nil {
-			// Prepend repo name to targets that have no scope prefix
-			for i, t := range targets {
-				scope, _ := parseBranchTarget(t)
-				if scope == "" {
-					targets[i] = repo.Name + ":" + t
-				}
-			}
-		} else {
-			l.Debug("could not determine current repo, searching all repos", "error", err)
-		}
-	}
-
 	// Resolve all targets
-	wtTargets, err := resolveWorktreeTargets(ctx, reg, targets)
+	wtTargets, err := resolveWorktreeTargets(ctx, reg, targets, targetOpts{Global: global, Multi: true})
 	if err != nil {
 		return err
 	}

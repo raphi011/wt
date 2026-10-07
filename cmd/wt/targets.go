@@ -141,12 +141,21 @@ type WorktreeTarget struct {
 	Path     string
 }
 
+// targetOpts controls how [scope:]branch targets resolve.
+type targetOpts struct {
+	Global bool // -g: an unscoped branch is searched in all repos, also inside a repo
+	Multi  bool // the command acts on every match; otherwise several matches are an error
+}
+
 // resolveWorktreeTargets parses [scope:]branch args and returns worktree paths.
-// scope can be a repo name or label. If no scope, searches all repos.
+// scope can be a repo name or label. An unscoped branch means the current
+// repo; outside a repo, or with opts.Global, all repos are searched.
+// A target that matches several worktrees is an error unless the command is
+// multi-target and the fan-out was asked for with a label scope or opts.Global.
 // Returns error if any target is not found, or if git fails in a repo targeted by name.
-// When searching several repos (label or no scope), git failures and repos
+// When searching several repos (label or all repos), git failures and repos
 // without a matching worktree are logged and skipped.
-func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets []string) ([]WorktreeTarget, error) {
+func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets []string, opts targetOpts) ([]WorktreeTarget, error) {
 	l := log.FromContext(ctx)
 	var results []WorktreeTarget
 
@@ -158,7 +167,7 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 
 		if len(parsed.Repos) > 0 {
 			// Scoped target - find worktree in specified repo(s)
-			found := false
+			var matches []WorktreeTarget
 			var missing []string
 			for _, repo := range parsed.Repos {
 				wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
@@ -172,7 +181,7 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 				foundInRepo := false
 				for _, wt := range wts {
 					if wt.Branch == parsed.Branch {
-						results = append(results, WorktreeTarget{
+						matches = append(matches, WorktreeTarget{
 							RepoName: repo.Name,
 							RepoPath: repo.Path,
 							Branch:   parsed.Branch,
@@ -182,43 +191,27 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 						break
 					}
 				}
-				if foundInRepo {
-					found = true
-				} else {
+				if !foundInRepo {
 					missing = append(missing, repo.Name)
 				}
 			}
-			if !found {
+			if len(matches) == 0 {
 				if parsed.IsLabel {
 					return nil, fmt.Errorf("worktree not found: %s (label matched %d repos)", target, len(parsed.Repos))
 				}
 				return nil, fmt.Errorf("worktree not found: %s", target)
 			}
+			if len(matches) > 1 && !opts.Multi {
+				return nil, ambiguousTargetError(parsed.Branch, matches, "use repo:branch to pick one")
+			}
 			if len(missing) > 0 {
 				l.Printf("Skipped (no worktree for %s): %s\n", parsed.Branch, strings.Join(missing, ", "))
 			}
+			results = append(results, matches...)
 		} else {
-			// No scope - search all repos
-			var matches []WorktreeTarget
-			for _, repo := range filterOrphanedRepos(l, reg.Repos) {
-				wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
-				if err != nil {
-					l.Printf("Warning: %s: %v\n", repo.Name, err)
-					continue
-				}
-				for _, wt := range wts {
-					if wt.Branch == parsed.Branch {
-						matches = append(matches, WorktreeTarget{
-							RepoName: repo.Name,
-							RepoPath: repo.Path,
-							Branch:   parsed.Branch,
-							Path:     wt.Path,
-						})
-					}
-				}
-			}
-			if len(matches) == 0 {
-				return nil, fmt.Errorf("worktree not found: %s", parsed.Branch)
+			matches, err := resolveUnscopedWorktrees(ctx, reg, parsed.Branch, opts)
+			if err != nil {
+				return nil, err
 			}
 			results = append(results, matches...)
 		}
@@ -237,24 +230,78 @@ func resolveWorktreeTargets(ctx context.Context, reg *registry.Registry, targets
 	return unique, nil
 }
 
+// resolveUnscopedWorktrees finds the worktrees of a branch given without a scope.
+// Inside a repo only that repo is searched, unless opts.Global is set.
+func resolveUnscopedWorktrees(ctx context.Context, reg *registry.Registry, branch string, opts targetOpts) ([]WorktreeTarget, error) {
+	l := log.FromContext(ctx)
+
+	inRepo := !opts.Global && git.GetCurrentRepoMainPathFrom(ctx, config.WorkDirFromContext(ctx)) != ""
+	if inRepo {
+		repo, err := findOrRegisterCurrentRepoFromContext(ctx, reg)
+		if err != nil {
+			return nil, err
+		}
+		wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", repo.Name, err)
+		}
+		for _, wt := range wts {
+			if wt.Branch == branch {
+				return []WorktreeTarget{{RepoName: repo.Name, RepoPath: repo.Path, Branch: branch, Path: wt.Path}}, nil
+			}
+		}
+		return nil, fmt.Errorf("worktree not found in %s: %s (use -g to search all repos, or repo:branch)", repo.Name, branch)
+	}
+
+	var matches []WorktreeTarget
+	for _, repo := range filterOrphanedRepos(l, reg.Repos) {
+		wts, err := git.ListWorktreesFromRepo(ctx, repo.Path)
+		if err != nil {
+			l.Printf("Warning: %s: %v\n", repo.Name, err)
+			continue
+		}
+		for _, wt := range wts {
+			if wt.Branch == branch {
+				matches = append(matches, WorktreeTarget{
+					RepoName: repo.Name,
+					RepoPath: repo.Path,
+					Branch:   branch,
+					Path:     wt.Path,
+				})
+			}
+		}
+	}
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("worktree not found: %s", branch)
+	}
+	if len(matches) > 1 {
+		if !opts.Multi {
+			return nil, ambiguousTargetError(branch, matches, "use repo:branch to pick one")
+		}
+		if !opts.Global {
+			return nil, ambiguousTargetError(branch, matches, "use -g to target all of them, or repo:branch to pick one")
+		}
+	}
+	return matches, nil
+}
+
+// ambiguousTargetError reports a branch that has worktrees in several repos.
+func ambiguousTargetError(branch string, matches []WorktreeTarget, hint string) error {
+	var names []string
+	for _, m := range matches {
+		names = append(names, m.RepoName+":"+branch)
+	}
+	return fmt.Errorf("branch %q exists in multiple repos: %s (%s)", branch, strings.Join(names, ", "), hint)
+}
+
 // resolveOneWorktreeTarget resolves a single [scope:]branch target and returns exactly
 // one match. Returns error if no match is found or if the target is ambiguous
-// (branch exists in multiple repos without explicit scope).
-func resolveOneWorktreeTarget(ctx context.Context, reg *registry.Registry, target string) (WorktreeTarget, error) {
-	matches, err := resolveWorktreeTargets(ctx, reg, []string{target})
+// (branch exists in several of the searched repos).
+func resolveOneWorktreeTarget(ctx context.Context, reg *registry.Registry, target string, global bool) (WorktreeTarget, error) {
+	matches, err := resolveWorktreeTargets(ctx, reg, []string{target}, targetOpts{Global: global})
 	if err != nil {
 		return WorktreeTarget{}, err
 	}
-
-	if len(matches) > 1 {
-		_, branch := parseBranchTarget(target)
-		var names []string
-		for _, m := range matches {
-			names = append(names, m.RepoName+":"+branch)
-		}
-		return WorktreeTarget{}, fmt.Errorf("branch %q exists in multiple repos: %s", branch, strings.Join(names, ", "))
-	}
-
 	return matches[0], nil
 }
 
