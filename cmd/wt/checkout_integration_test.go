@@ -4528,3 +4528,65 @@ func TestCheckout_LabelExistingBranchContinuesAfterRepoFailure(t *testing.T) {
 		t.Error("expected worktree for auth-server to be created")
 	}
 }
+
+// TestCheckout_AutoStash_LabelTargetExistingWorktree tests that --autostash is rejected
+// for a multi-repo label before any existing worktree is opened.
+//
+// Scenario: User runs `wt checkout backend:feature --autostash` where one backend repo
+// already has a worktree for the branch
+// Expected: Error saying autostash cannot be used with label targets, and no checkout hook runs
+func TestCheckout_AutoStash_LabelTargetExistingWorktree(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoA := setupTestRepo(t, tmpDir, "repo-a")
+	repoB := setupTestRepoWithBranches(t, tmpDir, "repo-b", []string{"feature"})
+	createTestWorktree(t, repoA, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo-a", Path: repoA, Labels: []string{"backend"}, WorktreeFormat: "../{repo}-{branch}"},
+			{Name: "repo-b", Path: repoB, Labels: []string{"backend"}, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	hookFile := filepath.Join(tmpDir, "hook-ran.txt")
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"mark": {
+					Command: "touch " + hookFile,
+					On:      []string{"checkout"},
+				},
+			},
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoB)
+	checkoutCmd := newCheckoutCmd()
+	checkoutCmd.SetContext(ctx)
+	checkoutCmd.SetArgs([]string{"backend:feature", "--autostash"})
+
+	err := checkoutCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when autostash used with label target")
+	}
+	if !strings.Contains(err.Error(), "--autostash cannot be used with label targets") {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if _, err := os.Stat(hookFile); err == nil {
+		t.Error("expected no checkout hook to run")
+	}
+}

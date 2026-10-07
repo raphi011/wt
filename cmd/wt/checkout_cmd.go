@@ -97,6 +97,11 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 				return err
 			}
 
+			// Reject before resolving: resolution already opens existing worktrees
+			if autoStash && len(parsed.Repos) > 1 {
+				return fmt.Errorf("--autostash cannot be used with label targets (affects multiple repos)")
+			}
+
 			// Resolve fetch for repo routing (global config); per-repo config is applied in checkoutInRepo
 			fetchResolved := fetch
 			if !fetchExplicit {
@@ -111,10 +116,6 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 			}
 
 			l.Debug("checkout", "branch", parsed.Branch, "repos", len(repos), "new", newBranch)
-
-			if autoStash && len(repos) > 1 {
-				return fmt.Errorf("--autostash cannot be used with label targets (affects multiple repos)")
-			}
 
 			coOpts := checkoutOpts{
 				NewBranch:     newBranch,
