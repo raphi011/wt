@@ -172,12 +172,12 @@ func checkoutInRepo(ctx context.Context, repo registry.Repo, branch string, opts
 
 	l.Debug("creating worktree", "path", wtPath, "branch", branch)
 
-	repoType, err := git.DetectRepoType(repo.Path)
+	repoType, err := git.DetectRepoType(ctx, repo.Path)
 	if err != nil {
 		return err
 	}
 
-	gitDir := git.GetGitDir(repo.Path, repoType)
+	gitDir := git.GetGitDir(ctx, repo.Path, repoType)
 	repoHasCommits := git.RefExists(ctx, gitDir, "HEAD")
 
 	if opts.AutoStash {

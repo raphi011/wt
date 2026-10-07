@@ -465,7 +465,7 @@ const (
 )
 
 // DetectRepoType determines if a path is a bare or regular git repository
-func DetectRepoType(path string) (RepoType, error) {
+func DetectRepoType(ctx context.Context, path string) (RepoType, error) {
 	// Check for .git directory (regular repo or bare-in-.git pattern)
 	gitDir := filepath.Join(path, ".git")
 	info, err := os.Stat(gitDir)
@@ -473,87 +473,56 @@ func DetectRepoType(path string) (RepoType, error) {
 		if info.IsDir() {
 			// .git is a directory - check if it's a bare repo inside .git
 			// (bare-in-.git pattern: bare repo contents in .git, no working tree)
-			if isBareRepo(gitDir) {
+			if isBareRepo(ctx, gitDir) {
 				return RepoTypeBare, nil
 			}
 			return RepoTypeRegular, nil
 		}
-		// .git file - could be a worktree or a pointer to a bare repo
-		// Read the gitdir to determine which
-		content, err := os.ReadFile(gitDir)
+		// .git file - could be a worktree or a pointer to a bare repo.
+		// Git follows the gitdir pointer itself.
+		bare, err := isBareGitDir(ctx, gitDir)
 		if err != nil {
-			return 0, fmt.Errorf("failed to read .git file: %w", err)
+			return 0, fmt.Errorf("invalid .git file format: %s: %w", path, err)
 		}
-		gitdirLine := strings.TrimSpace(string(content))
-		if !strings.HasPrefix(gitdirLine, "gitdir: ") {
-			return 0, fmt.Errorf("invalid .git file format: %s", path)
-		}
-		targetDir := strings.TrimPrefix(gitdirLine, "gitdir: ")
-		// Resolve relative paths
-		if !filepath.IsAbs(targetDir) {
-			targetDir = filepath.Join(path, targetDir)
-		}
-		// Check if target is a bare repo
-		if isBareRepo(targetDir) {
+		if bare {
 			return RepoTypeBare, nil
 		}
 		// Otherwise it's a worktree pointer
 		return 0, fmt.Errorf("path is a worktree, not a repository: %s", path)
 	}
 
-	// Check for bare repo markers (HEAD file at root)
-	if isBareRepo(path) {
+	// No .git entry - the path itself may be a bare repo
+	if isBareRepo(ctx, path) {
 		return RepoTypeBare, nil
 	}
 
 	return 0, fmt.Errorf("not a git repository: %s", path)
 }
 
-// isBareRepo checks if a path is a bare repository by checking core.bare config.
-// This is used to detect bare-in-.git pattern where a bare repo is placed inside .git/
-func isBareRepo(path string) bool {
-	// First check basic structure (HEAD, objects, refs)
-	headFile := filepath.Join(path, "HEAD")
-	if _, err := os.Stat(headFile); err != nil {
-		return false
-	}
-	objectsDir := filepath.Join(path, "objects")
-	if _, err := os.Stat(objectsDir); err != nil {
-		return false
-	}
-	refsDir := filepath.Join(path, "refs")
-	if _, err := os.Stat(refsDir); err != nil {
-		return false
-	}
-
-	// Check core.bare config - this distinguishes bare from regular repos
-	configPath := filepath.Join(path, "config")
-	content, err := os.ReadFile(configPath)
+// isBareGitDir asks git whether gitDir is a bare repository. gitDir is a git
+// directory or a .git file pointing to one; no repository discovery happens.
+// Returns an error if gitDir is not a git directory.
+func isBareGitDir(ctx context.Context, gitDir string) (bool, error) {
+	out, err := outputGit(ctx, "", "--git-dir="+gitDir, "rev-parse", "--is-bare-repository")
 	if err != nil {
-		return false
+		return false, err
 	}
+	return strings.TrimSpace(string(out)) == "true", nil
+}
 
-	// Look for "bare = true" in the config
-	lines := strings.SplitSeq(string(content), "\n")
-	for line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "bare") {
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 {
-				value := strings.TrimSpace(parts[1])
-				return value == "true"
-			}
-		}
-	}
-
-	return false
+// isBareRepo checks if a path is the git directory of a bare repository.
+// This is used to detect bare-in-.git pattern where a bare repo is placed inside .git/
+// Returns false if the path is not a git directory.
+func isBareRepo(ctx context.Context, path string) bool {
+	bare, err := isBareGitDir(ctx, path)
+	return err == nil && bare
 }
 
 // GetGitDir returns the git directory for a repo
-func GetGitDir(repoPath string, repoType RepoType) string {
+func GetGitDir(ctx context.Context, repoPath string, repoType RepoType) string {
 	// Check for bare-in-.git pattern first
 	gitDir := filepath.Join(repoPath, ".git")
-	if isBareRepo(gitDir) {
+	if isBareRepo(ctx, gitDir) {
 		return gitDir
 	}
 	if repoType == RepoTypeBare {

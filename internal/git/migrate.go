@@ -87,7 +87,7 @@ func ValidateMigration(ctx context.Context, repoPath string, opts MigrationOptio
 
 	// Check if it's already a bare repo
 	if info.IsDir() {
-		if isBareRepo(gitDir) {
+		if isBareRepo(ctx, gitDir) {
 			return nil, fmt.Errorf("repository is already using bare-in-.git structure: %s", absPath)
 		}
 	} else {
@@ -480,7 +480,7 @@ func ValidateMigrationToRegular(ctx context.Context, repoPath string, opts Migra
 	if !info.IsDir() {
 		return nil, fmt.Errorf("path is a worktree, not a repository: %s", absPath)
 	}
-	if !isBareRepo(gitDir) {
+	if !isBareRepo(ctx, gitDir) {
 		return nil, fmt.Errorf("repository is already using regular (non-bare) structure: %s", absPath)
 	}
 
