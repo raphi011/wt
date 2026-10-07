@@ -3,7 +3,9 @@
 package main
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -365,10 +367,10 @@ func TestExec_NotInGitRepo(t *testing.T) {
 	}
 }
 
-// TestExec_FailingCommand tests that a non-zero exit command is handled gracefully.
+// TestExec_FailingCommand tests that a non-zero exit command is returned to the caller.
 //
 // Scenario: User runs `wt exec -- false` (exit code 1)
-// Expected: exec itself succeeds (logs error but does not return an error)
+// Expected: Returns an error preserving the command exit code
 func TestExec_FailingCommand(t *testing.T) {
 	t.Parallel()
 
@@ -396,9 +398,13 @@ func TestExec_FailingCommand(t *testing.T) {
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"--", "false"})
 
-	// exec itself should succeed; it logs the error but continues
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("exec command should not fail when sub-command fails, got: %v", err)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for failing command, got nil")
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+		t.Fatalf("expected wrapped exit code 1, got: %v", err)
 	}
 }
 
@@ -531,5 +537,103 @@ func TestExec_LabelScope(t *testing.T) {
 		if _, err := os.Stat(testFile); os.IsNotExist(err) {
 			t.Errorf("expected file %q to be created in worktree %s", testFile, wtPath)
 		}
+	}
+}
+
+// TestExec_MultipleTargetsFailure tests that failures do not stop remaining targets.
+//
+// Scenario: The command fails in main and succeeds in feature
+// Expected: Both targets run, and the returned error identifies only the failing worktree
+func TestExec_MultipleTargetsFailure(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := resolvePath(t, t.TempDir())
+	repoPath := setupTestRepo(t, tmpDir, "myrepo")
+	wtPath := createTestWorktree(t, repoPath, "feature")
+	regFile := filepath.Join(tmpDir, "repos.json")
+	reg := &registry.Registry{Repos: []registry.Repo{{Name: "myrepo", Path: repoPath}}}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoPath, "fail"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newExecCmd()
+	cmd.SetContext(testContextWithConfig(t, &config.Config{RegistryPath: regFile}, repoPath))
+	cmd.SetArgs([]string{"main", "feature", "--", "sh", "-c", "touch ran; if test -f fail; then exit 7; fi"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for failing target, got nil")
+	}
+	if !strings.Contains(err.Error(), "myrepo:main") || strings.Contains(err.Error(), "myrepo:feature") {
+		t.Errorf("expected error identifying only myrepo:main, got: %v", err)
+	}
+	if code := commandExitCode(err); code != 1 {
+		t.Errorf("expected multi-target exit code 1, got %d", code)
+	}
+	for _, path := range []string{repoPath, wtPath} {
+		if _, err := os.Stat(filepath.Join(path, "ran")); err != nil {
+			t.Errorf("command did not run in %s: %v", path, err)
+		}
+	}
+}
+
+// TestExec_ExitCodes tests exit status handling for single targets and launch failures.
+//
+// Scenario: Commands succeed, exit with status 7, or cannot start
+// Expected: Single targets preserve status 7; launch failures return 1
+func TestExec_ExitCodes(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name       string
+		targets    []string
+		command    []string
+		registered bool
+		wantCode   int
+	}{
+		{name: "success", command: []string{"true"}, wantCode: 0},
+		{name: "current", command: []string{"sh", "-c", "exit 7"}, registered: true, wantCode: 7},
+		{name: "explicit", targets: []string{"myrepo:main"}, command: []string{"sh", "-c", "exit 7"}, registered: true, wantCode: 7},
+		{name: "unregistered", command: []string{"sh", "-c", "exit 7"}, wantCode: 7},
+		{name: "missing executable", command: []string{"./does-not-exist"}, wantCode: 1},
+		{name: "multiple failures", targets: []string{"main", "feature"}, command: []string{"sh", "-c", "exit 7"}, registered: true, wantCode: 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			tmpDir := resolvePath(t, t.TempDir())
+			repoPath := setupTestRepo(t, tmpDir, "myrepo")
+			reg := &registry.Registry{}
+			if tt.registered {
+				reg.Repos = []registry.Repo{{Name: "myrepo", Path: repoPath}}
+			}
+			if len(tt.targets) > 1 {
+				createTestWorktree(t, repoPath, "feature")
+			}
+			regFile := filepath.Join(tmpDir, "repos.json")
+			if err := saveRegistry(reg, regFile); err != nil {
+				t.Fatal(err)
+			}
+			cmd := newExecCmd()
+			cmd.SetContext(testContextWithConfig(t, &config.Config{RegistryPath: regFile}, repoPath))
+			args := append(append([]string{}, tt.targets...), "--")
+			cmd.SetArgs(append(args, tt.command...))
+			err := cmd.Execute()
+			if code := commandExitCode(err); code != tt.wantCode {
+				t.Fatalf("expected exit code %d, got %d (error: %v)", tt.wantCode, code, err)
+			}
+			if tt.wantCode != 0 {
+				wantTarget := repoPath
+				if len(tt.targets) > 0 {
+					wantTarget = "myrepo:main"
+				}
+				if err == nil || !strings.Contains(err.Error(), wantTarget) {
+					t.Fatalf("expected error naming %s, got: %v", wantTarget, err)
+				}
+				if len(tt.targets) > 1 && !strings.Contains(err.Error(), "myrepo:feature") {
+					t.Errorf("expected both failures in error, got: %v", err)
+				}
+			}
+		})
 	}
 }

@@ -317,6 +317,11 @@ wt exec -- git status                   # In current worktree
 wt exec myrepo:main -- code .
 ```
 
+`wt exec` attempts every selected worktree even if a command fails, then reports
+which worktrees failed. With one worktree it returns the command's exit code;
+with multiple worktrees it returns 1 if any command fails. A command that cannot
+start returns 1. Use `wt exec -- make test && deploy` to deploy only after success.
+
 ### Reviewing Changes
 
 ```bash

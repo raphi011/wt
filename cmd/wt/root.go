@@ -107,7 +107,7 @@ func Execute() {
 		fmt.Fprintln(os.Stderr, err)
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Run 'wt -h' for help")
-		os.Exit(1)
+		os.Exit(commandExitCode(err))
 	}
 }
 
