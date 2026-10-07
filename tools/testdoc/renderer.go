@@ -18,8 +18,12 @@ type CommandTests struct {
 // RenderMarkdown writes the test documentation as markdown.
 func RenderMarkdown(w io.Writer, packages []TestPackage) error {
 	// Header
-	fmt.Fprintf(w, "# Test Documentation\n\n")
-	fmt.Fprintf(w, "Generated: %s\n\n", time.Now().Format("2006-01-02"))
+	if _, err := fmt.Fprintf(w, "# Test Documentation\n\n"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Generated: %s\n\n", time.Now().Format("2006-01-02")); err != nil {
+		return err
+	}
 
 	// Collect all tests and group by command
 	commandMap := make(map[string][]TestFunc)
@@ -41,39 +45,60 @@ func RenderMarkdown(w io.Writer, packages []TestPackage) error {
 	sort.Strings(commands)
 
 	// Summary
-	fmt.Fprintf(w, "## Summary\n\n")
-	fmt.Fprintf(w, "| Command | Tests |\n")
-	fmt.Fprintf(w, "|---------|-------|\n")
+	if _, err := fmt.Fprintf(w, "## Summary\n\n"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "| Command | Tests |\n"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "|---------|-------|\n"); err != nil {
+		return err
+	}
 
 	totalTests := 0
 	for _, cmd := range commands {
 		tests := commandMap[cmd]
-		fmt.Fprintf(w, "| [%s](#%s) | %d |\n", cmd, toAnchor(cmd), len(tests))
+		if _, err := fmt.Fprintf(w, "| [%s](#%s) | %d |\n", cmd, toAnchor(cmd), len(tests)); err != nil {
+			return err
+		}
 		totalTests += len(tests)
 	}
-	fmt.Fprintf(w, "| **Total** | **%d** |\n\n", totalTests)
+	if _, err := fmt.Fprintf(w, "| **Total** | **%d** |\n\n", totalTests); err != nil {
+		return err
+	}
 
 	// Render each command section
 	for _, cmd := range commands {
 		tests := commandMap[cmd]
-		renderCommandSection(w, cmd, tests)
+		if err := renderCommandSection(w, cmd, tests); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func renderCommandSection(w io.Writer, cmd string, tests []TestFunc) {
-	fmt.Fprintf(w, "## %s\n\n", cmd)
-	fmt.Fprintf(w, "| Test | Description |\n")
-	fmt.Fprintf(w, "|------|-------------|\n")
+func renderCommandSection(w io.Writer, cmd string, tests []TestFunc) error {
+	if _, err := fmt.Fprintf(w, "## %s\n\n", cmd); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "| Test | Description |\n"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "|------|-------------|\n"); err != nil {
+		return err
+	}
 
 	for _, test := range tests {
 		desc := extractDescription(test.Doc, test.Name)
 		// Escape pipes in description for markdown table
 		desc = strings.ReplaceAll(desc, "|", "\\|")
-		fmt.Fprintf(w, "| `%s` | %s |\n", test.Name, desc)
+		if _, err := fmt.Fprintf(w, "| `%s` | %s |\n", test.Name, desc); err != nil {
+			return err
+		}
 	}
-	fmt.Fprintf(w, "\n")
+	_, err := fmt.Fprintf(w, "\n")
+	return err
 }
 
 // extractCommand extracts the command name from a test function name.

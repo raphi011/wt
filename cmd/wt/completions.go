@@ -306,7 +306,7 @@ func completeScopeArgs(cmd *cobra.Command, args []string, toComplete string) ([]
 // Register completions for checkout command
 func registerCheckoutCompletions(cmd *cobra.Command) {
 	// Branch argument completion for --base flag (supports both local and remote refs)
-	cmd.RegisterFlagCompletionFunc("base", completeBaseBranches)
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("base", completeBaseBranches))
 
 	// Positional arg completion for [scope:]branch
 	// Suggests repo/label prefixes and existing branches (even with -b, as branch name inspiration)

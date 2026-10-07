@@ -195,10 +195,20 @@ func executeCommand(ctx context.Context, cmd *cobra.Command, args ...string) (st
 func createTestWorktree(t *testing.T, repoPath, branch string) string {
 	t.Helper()
 
-	// Create the branch first
-	cmd := exec.Command("git", "branch", branch)
+	// Create the branch first, unless it exists
+	cmd := exec.Command("git", "branch", "--list", branch)
 	cmd.Dir = repoPath
-	cmd.CombinedOutput() // Ignore error if branch exists
+	existing, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("failed to list branches: %v", err)
+	}
+	if len(existing) == 0 {
+		cmd = exec.Command("git", "branch", branch)
+		cmd.Dir = repoPath
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to create branch: %v\n%s", err, out)
+		}
+	}
 
 	// Create worktree
 	wtPath := filepath.Join(filepath.Dir(repoPath), repoPath+"-"+branch)
@@ -385,13 +395,8 @@ func setupTestRepoWithSubmodule(t *testing.T, dir, name string) string {
 	// Create the main repo
 	repoPath := setupTestRepo(t, dir, name)
 
-	// Allow file:// transport for submodule (required in newer git versions)
-	cmd := exec.Command("git", "config", "--global", "protocol.file.allow", "always")
-	cmd.Dir = repoPath
-	cmd.CombinedOutput() // Ignore error - may already be set
-
-	// Add the submodule
-	cmd = exec.Command("git", "submodule", "add", submoduleRepo, "vendor/submodule")
+	// Add the submodule, allowing file:// transport (required in newer git versions)
+	cmd := exec.Command("git", "-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo, "vendor/submodule")
 	cmd.Dir = repoPath
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to add submodule: %v\n%s", err, out)
@@ -489,7 +494,9 @@ func setupBareInGitRepoWithBranches(t *testing.T, dir, name string, branches []s
 	}
 
 	// Clean up source repo
-	os.RemoveAll(tmpSource)
+	if err := os.RemoveAll(tmpSource); err != nil {
+		t.Fatalf("failed to remove source repo: %v", err)
+	}
 
 	return repoPath
 }

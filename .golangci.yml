@@ -1,0 +1,15 @@
+version: "2"
+
+run:
+  build-tags:
+    - integration
+
+linters:
+  exclusions:
+    rules:
+      # Logger, Printer and the progress bar write to the terminal and have
+      # no way to report a failed write.
+      - path: ^internal/(log|output|ui/progress)/
+        linters:
+          - errcheck
+        text: fmt\.Fprint

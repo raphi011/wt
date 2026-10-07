@@ -1,6 +1,6 @@
 # Test Documentation
 
-Generated: 2026-10-06
+Generated: 2026-10-07
 
 ## Summary
 
@@ -27,7 +27,7 @@ Generated: 2026-10-06
 | [repoconvertbare](#repoconvertbare) | 18 |
 | [repoconvertregular](#repoconvertregular) | 4 |
 | [repolist](#repolist) | 5 |
-| [reporemove](#reporemove) | 5 |
+| [reporemove](#reporemove) | 6 |
 | [resolveworktreetargets](#resolveworktreetargets) | 4 |
 | [wt cd](#wt-cd) | 9 |
 | [wt checkout](#wt-checkout) | 66 |
@@ -36,7 +36,7 @@ Generated: 2026-10-06
 | [wt list](#wt-list) | 12 |
 | [wt note](#wt-note) | 10 |
 | [wt prune](#wt-prune) | 42 |
-| **Total** | **292** |
+| **Total** | **293** |
 
 ## completebasebranches
 
@@ -269,6 +269,7 @@ Generated: 2026-10-06
 | `TestRepoRemove_NonExistent` | Tests removing a non-existent repo. |
 | `TestRepoRemove_OutputShowsCorrectName` | Tests that the output message shows the |
 | `TestRepoRemove_DeleteForce` | Tests removing a repo with --delete --force flags. |
+| `TestRepoRemove_DeleteForce_WriteError` | Tests that a failing output writer is reported. |
 | `TestRepoRemove_ByPath` | Tests removing a repo by its full path instead of name. |
 
 ## resolveworktreetargets

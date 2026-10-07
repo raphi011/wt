@@ -30,7 +30,6 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "failed to create temp dir: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(tmpDir)
 
 	ctx := context.Background()
 
@@ -79,11 +78,16 @@ func TestMain(m *testing.M) {
 	}
 
 	// Skip all tests if no forge configured
-	if len(testForges) == 0 {
-		os.Exit(0)
+	code := 0
+	if len(testForges) > 0 {
+		code = m.Run()
 	}
 
-	os.Exit(m.Run())
+	if err := os.RemoveAll(tmpDir); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to remove temp dir: %v\n", err)
+		os.Exit(1)
+	}
+	os.Exit(code)
 }
 
 // closePR closes a PR/MR using the appropriate CLI.
@@ -415,7 +419,11 @@ func TestForge_PRWorkflow(t *testing.T) {
 				if err := os.Chdir(fc.clonePath); err != nil {
 					t.Fatalf("failed to chdir to clone: %v", err)
 				}
-				defer os.Chdir(origDir)
+				defer func() {
+					if err := os.Chdir(origDir); err != nil {
+						t.Errorf("cleanup failed: %v", err)
+					}
+				}()
 
 				result, err := fc.forge.CreatePR(ctx, fc.repoURL, CreatePRParams{
 					Title: "Test PR - " + testBranch,

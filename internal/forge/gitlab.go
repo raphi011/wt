@@ -3,6 +3,7 @@ package forge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -227,14 +228,12 @@ func (g *GitLab) CloneBareRepo(ctx context.Context, repoSpec, destPath string) (
 	// Clone as bare directly into .git subdirectory
 	gitDir := filepath.Join(repoDir, ".git")
 	if err := g.runGlab(ctx, "repo", "clone", repoSpec, gitDir, "--", "--bare"); err != nil {
-		os.RemoveAll(repoDir)
-		return "", fmt.Errorf("glab repo clone failed: %v", err)
+		return "", errors.Join(fmt.Errorf("glab repo clone failed: %v", err), os.RemoveAll(repoDir))
 	}
 
 	// Configure the repo for worktree support
 	if err := configureBareRepo(ctx, gitDir); err != nil {
-		os.RemoveAll(repoDir)
-		return "", err
+		return "", errors.Join(err, os.RemoveAll(repoDir))
 	}
 
 	return repoDir, nil
@@ -266,8 +265,13 @@ func (g *GitLab) CreatePR(ctx context.Context, repoURL string, params CreatePRPa
 		return nil, fmt.Errorf("glab mr create failed: %v", err)
 	}
 
+	return parseMRCreateOutput(string(output))
+}
+
+// parseMRCreateOutput extracts the MR URL and number from glab mr create stdout.
+func parseMRCreateOutput(output string) (*CreatePRResult, error) {
 	// Parse MR URL from stdout (glab mr create outputs something like "!123 https://...")
-	outputStr := strings.TrimSpace(string(output))
+	outputStr := strings.TrimSpace(output)
 
 	// Try to extract URL - glab outputs the URL on a line
 	var mrURL string
@@ -278,19 +282,26 @@ func (g *GitLab) CreatePR(ctx context.Context, repoURL string, params CreatePRPa
 			mrURL = line
 			// Extract MR number from URL (e.g., https://gitlab.com/org/repo/-/merge_requests/123)
 			urlParts := strings.Split(mrURL, "/")
-			if len(urlParts) > 0 {
-				fmt.Sscanf(urlParts[len(urlParts)-1], "%d", &mrNumber)
+			var n int
+			if _, err := fmt.Sscanf(urlParts[len(urlParts)-1], "%d", &n); err == nil {
+				mrNumber = n
 			}
 			break
 		}
 		// Also check for !123 format
 		if strings.HasPrefix(line, "!") {
-			fmt.Sscanf(line, "!%d", &mrNumber)
+			var n int
+			if _, err := fmt.Sscanf(line, "!%d", &n); err == nil {
+				mrNumber = n
+			}
 		}
 	}
 
 	if mrURL == "" && mrNumber == 0 {
 		return nil, fmt.Errorf("glab mr create returned unexpected output: %s", outputStr)
+	}
+	if mrNumber == 0 {
+		return nil, fmt.Errorf("MR created but could not parse its number from glab output: %s", outputStr)
 	}
 
 	return &CreatePRResult{
