@@ -326,6 +326,7 @@ Use --interactive to select an open PR from registered repositories.`,
 			if err != nil {
 				return err
 			}
+			reportPRCacheLoadError(ctx, cache)
 			prInfo, err := f.GetPRForBranch(ctx, originURL, branch)
 			if err != nil {
 				l.Debug("failed to fetch PR info", "branch", branch, "error", err)
@@ -524,6 +525,7 @@ With prune.delete_local_branches, the local branch is deleted with the worktree.
 			if err != nil {
 				return err
 			}
+			reportPRCacheLoadError(ctx, cache)
 
 			cwd := config.WorkDirFromContext(ctx)
 			if err := hf.parseArgs(); err != nil {

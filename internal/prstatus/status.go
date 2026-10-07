@@ -23,10 +23,11 @@ type Options struct {
 }
 
 // Result keeps display status independent of subsequent cache mutations.
-// FailedBranches and SaveError are nonfatal diagnostics; cached status remains
-// available when a fetch or save fails.
+// FailedBranches, LoadError, and SaveError are nonfatal diagnostics. Cached
+// and refreshed status remain available when a fetch or save fails.
 type Result struct {
 	FailedBranches []string
+	LoadError      error
 	SaveError      error
 	statuses       map[string]forge.PRInfo
 	mu             sync.Mutex
@@ -84,6 +85,7 @@ func Load(ctx context.Context, worktrees []git.Worktree, cfg *config.Config, opt
 		r.refresh(ctx, worktrees, cfg, opts.Progress)
 	}
 	r.SaveError = r.cache.Save()
+	r.LoadError = r.cache.LoadError()
 	for _, wt := range worktrees {
 		if info := r.cache.Get(cacheKey(wt)); info != nil && info.Fetched {
 			r.statuses[cacheKey(wt)] = *info

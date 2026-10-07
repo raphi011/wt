@@ -5,6 +5,8 @@ package prcache
 
 import (
 	"errors"
+	"fmt"
+	"os"
 
 	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/fs"
@@ -22,6 +24,8 @@ type Cache struct {
 	path string
 	// changes made since the cache was loaded or last saved, in order
 	changes []func(*Cache)
+	loadErr error
+	reset   bool
 }
 
 // New returns an empty, initialized cache.
@@ -29,12 +33,16 @@ func New() *Cache {
 	return &Cache{PRs: make(map[string]*forge.PRInfo)}
 }
 
-// LoadFrom loads the PR cache from the given path. Returns an empty cache if
-// the file is missing or corrupted. Save writes back to the same path.
+// LoadFrom loads the PR cache from the given path. A missing file is empty.
+// Other read or decode errors produce an empty cache with a LoadError;
+// persistence is disabled until an explicit Reset succeeds.
 func LoadFrom(path string) *Cache {
 	var cache Cache
 	if err := fs.LoadJSON(path, &cache); err != nil {
 		cache = Cache{}
+		if !os.IsNotExist(err) {
+			cache.loadErr = fmt.Errorf("load PR cache %s: %w", path, err)
+		}
 	}
 
 	// Initialize nil map
@@ -46,11 +54,17 @@ func LoadFrom(path string) *Cache {
 	return &cache
 }
 
+// LoadError reports a read or decode failure encountered by LoadFrom.
+// A successful explicit reset clears the error.
+func (c *Cache) LoadError() error {
+	return c.loadErr
+}
+
 // Save applies the changes made since the cache was loaded or last saved to
 // the file it was loaded from. The changes are replayed onto the current file
 // contents under a file lock, so concurrent saves only overwrite each other
-// per key. A corrupted file is treated as empty. Does nothing if there are no
-// changes.
+// per key. Corrupt files are preserved unless Reset was explicitly requested.
+// Does nothing if there are no changes.
 func (c *Cache) Save() error {
 	if len(c.changes) == 0 {
 		return nil
@@ -58,8 +72,15 @@ func (c *Cache) Save() error {
 	if c.path == "" {
 		return errors.New("PR cache has no path: load it with LoadFrom")
 	}
+	if c.loadErr != nil && !c.reset {
+		return c.loadErr
+	}
 
-	err := fs.UpdateJSONLenient(c.path, func(saved *Cache) error {
+	update := fs.UpdateJSON[Cache]
+	if c.reset {
+		update = fs.UpdateJSONLenient[Cache]
+	}
+	err := update(c.path, func(saved *Cache) error {
 		if saved.PRs == nil {
 			saved.PRs = make(map[string]*forge.PRInfo)
 		}
@@ -73,6 +94,8 @@ func (c *Cache) Save() error {
 	}
 
 	c.changes = nil
+	c.loadErr = nil
+	c.reset = false
 	return nil
 }
 
@@ -97,7 +120,9 @@ func (c *Cache) Delete(key string) {
 	c.apply(func(c *Cache) { delete(c.PRs, key) })
 }
 
-// Reset clears all cached data
+// Reset clears all cached data and permits replacing corrupt JSON on the next
+// successful Save. Read errors still prevent persistence.
 func (c *Cache) Reset() {
+	c.reset = true
 	c.apply(func(c *Cache) { c.PRs = make(map[string]*forge.PRInfo) })
 }

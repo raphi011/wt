@@ -20,8 +20,10 @@ Generated: 2026-10-07
 | [forgetworktrees](#forgetworktrees) | 1 |
 | [hook](#hook) | 10 |
 | [init](#init) | 4 |
+| [prcache](#prcache) | 1 |
 | [prcheckout](#prcheckout) | 19 |
 | [prcheckoutwizardparams](#prcheckoutwizardparams) | 1 |
+| [prcommands](#prcommands) | 1 |
 | [prcreate](#prcreate) | 3 |
 | [preservefiles](#preservefiles) | 1 |
 | [prmerge](#prmerge) | 9 |
@@ -45,7 +47,7 @@ Generated: 2026-10-07
 | [wt list](#wt-list) | 14 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 50 |
-| **Total** | **357** |
+| **Total** | **359** |
 
 ## completebasebranches
 
@@ -173,6 +175,12 @@ Generated: 2026-10-07
 | `TestInit_Fish` | Tests that init fish succeeds and outputs a shell wrapper. |
 | `TestInit_UnsupportedShell` | Tests error for an unsupported shell. |
 
+## prcache
+
+| Test | Description |
+|------|-------------|
+| `TestPRCache_CorruptListAndReset` | Tests displaying, refreshing, and explicitly resetting corrupt PR data. |
+
 ## prcheckout
 
 | Test | Description |
@@ -202,6 +210,12 @@ Generated: 2026-10-07
 | Test | Description |
 |------|-------------|
 | `TestPrCheckoutWizardParams_InjectedResolver` | Forwards the explicit forge selection. |
+
+## prcommands
+
+| Test | Description |
+|------|-------------|
+| `TestPrCommands_CorruptPRCache` | Verifies command success without destroying corrupt PR data. |
 
 ## prcreate
 

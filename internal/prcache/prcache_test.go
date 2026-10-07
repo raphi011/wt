@@ -287,6 +287,9 @@ func TestLoadFrom(t *testing.T) {
 		if len(loaded.PRs) != 0 {
 			t.Errorf("expected 0 entries, got %d", len(loaded.PRs))
 		}
+		if loaded.LoadError() != nil {
+			t.Errorf("missing cache reported a load error: %v", loaded.LoadError())
+		}
 	})
 
 	t.Run("returns empty cache for corrupted JSON", func(t *testing.T) {
@@ -294,7 +297,7 @@ func TestLoadFrom(t *testing.T) {
 		tmpDir := t.TempDir()
 		path := filepath.Join(tmpDir, "bad.json")
 
-		if err := os.WriteFile(path, []byte("{not valid json"), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(`{"prs":{"/repo:partial":{"number":1},"/repo:bad":{"number":"invalid"}}}`), 0644); err != nil {
 			t.Fatalf("setup: write failed: %v", err)
 		}
 
@@ -307,6 +310,9 @@ func TestLoadFrom(t *testing.T) {
 		}
 		if len(loaded.PRs) != 0 {
 			t.Errorf("expected 0 entries, got %d", len(loaded.PRs))
+		}
+		if loaded.LoadError() == nil {
+			t.Error("corrupt cache must expose its load error")
 		}
 	})
 
@@ -510,23 +516,116 @@ func TestSave_ChangesSavedOnce(t *testing.T) {
 	}
 }
 
+func TestSave_CorruptionAfterLoad(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "prs.json")
+	c := LoadFrom(path)
+	corrupt := []byte("{corrupted after the cache was loaded")
+	if err := os.WriteFile(path, corrupt, 0600); err != nil {
+		t.Fatal(err)
+	}
+	c.Set("/repo:main", &forge.PRInfo{Number: 1})
+	if err := c.Save(); err == nil {
+		t.Error("Save must refuse corruption that appeared after loading")
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != string(corrupt) {
+		t.Errorf("corrupt bytes changed: %q", contents)
+	}
+}
+
+func TestReset_CorruptCacheRecoveryIsOneShot(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "prs.json")
+	corrupt := []byte("{corrupt cache")
+	if err := os.WriteFile(path, corrupt, 0600); err != nil {
+		t.Fatal(err)
+	}
+	c := LoadFrom(path)
+	c.Reset()
+	c.Set("/repo:recovered", &forge.PRInfo{Number: 42, Fetched: true})
+	if err := c.Save(); err != nil {
+		t.Fatalf("explicit reset should recover corrupt JSON: %v", err)
+	}
+	recovered := LoadFrom(path)
+	if c.LoadError() != nil || recovered.LoadError() != nil || len(recovered.PRs) != 1 || recovered.Get("/repo:recovered") == nil {
+		t.Fatalf("reset did not clear the diagnostic and persist new data: %+v", recovered)
+	}
+	if err := os.WriteFile(path, corrupt, 0600); err != nil {
+		t.Fatal(err)
+	}
+	c.Set("/repo:later", &forge.PRInfo{Number: 43})
+	if err := c.Save(); err == nil {
+		t.Error("successful reset must not authorize future corrupt-file overwrites")
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != string(corrupt) {
+		t.Errorf("later corrupt bytes changed: %q", contents)
+	}
+}
+
+func TestReset_DoesNotIgnoreReadErrors(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "prs.json")
+	if err := os.Mkdir(path, 0755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(path, "keep")
+	if err := os.WriteFile(marker, []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c := LoadFrom(path)
+	if c.LoadError() == nil {
+		t.Fatal("cache directory must report a read error")
+	}
+	c.Reset()
+	if err := c.Save(); err == nil {
+		t.Error("reset must refuse a read failure")
+	}
+	if c.LoadError() == nil {
+		t.Error("failed reset must retain the load diagnostic")
+	}
+	contents, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "original" {
+		t.Errorf("read failure destroyed original data: %q", contents)
+	}
+}
+
 func TestSave_CorruptFile(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), "prs.json")
-	if err := os.WriteFile(path, []byte("{not valid json"), 0o600); err != nil {
+	corrupt := []byte("{not valid json")
+	if err := os.WriteFile(path, corrupt, 0o600); err != nil {
 		t.Fatalf("setup: write failed: %v", err)
 	}
 
 	c := LoadFrom(path)
-	c.Set("/repo:main", &forge.PRInfo{Number: 1})
-	if err := c.Save(); err != nil {
-		t.Fatalf("Save over a corrupted file failed: %v", err)
+	if c.LoadError() == nil {
+		t.Error("corrupt cache must expose its load error")
 	}
-
-	saved := LoadFrom(path)
-	if len(saved.PRs) != 1 || saved.Get("/repo:main") == nil {
-		t.Errorf("expected only /repo:main, got %v", saved.PRs)
+	if err := c.Save(); err != nil {
+		t.Errorf("read-only Save without changes should be a no-op: %v", err)
+	}
+	c.Set("/repo:main", &forge.PRInfo{Number: 1})
+	if err := c.Save(); err == nil {
+		t.Error("Save must refuse to overwrite a corrupted file")
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read cache: %v", err)
+	}
+	if string(contents) != string(corrupt) {
+		t.Errorf("corrupted bytes changed: %q", contents)
 	}
 }
 

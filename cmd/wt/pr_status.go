@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/raphi011/wt/internal/config"
@@ -38,14 +39,21 @@ func loadWorktreePRStatus(ctx context.Context, worktrees []git.Worktree, refresh
 		return nil, err
 	}
 	l := log.FromContext(ctx)
-	if reset {
+	reportPRCacheLoadError(ctx, status)
+	if reset && status.SaveError == nil {
 		l.Println("Cache reset: PR info cleared")
 	}
 	if len(status.FailedBranches) > 0 {
 		l.Printf("Warning: failed to fetch PR status for: %v\n", status.FailedBranches)
 	}
-	if status.SaveError != nil {
+	if status.SaveError != nil && !errors.Is(status.SaveError, status.LoadError) {
 		l.Printf("Warning: failed to save PR cache: %v\n", status.SaveError)
 	}
 	return status, nil
+}
+
+func reportPRCacheLoadError(ctx context.Context, status *prstatus.Result) {
+	if status.LoadError != nil {
+		log.FromContext(ctx).Printf("Warning: failed to load PR cache: %v (use 'wt prune --reset-cache --dry-run' to reset corrupt data)\n", status.LoadError)
+	}
 }

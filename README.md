@@ -264,6 +264,9 @@ wt prune feature-login -f
 wt prune myrepo:feature-login -f
 ```
 
+If the PR cache contains corrupt JSON, commands warn and preserve the file.
+Run `wt prune --reset-cache --dry-run` to clear it while previewing removals; `wt list -R` can display fresh PR status without overwriting the corrupt cache.
+
 ### Working Across Multiple Repos
 
 Label repos for batch operations:

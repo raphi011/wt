@@ -235,3 +235,91 @@ func TestCachedLookupNamespacesReposAndSkipsUnfetched(t *testing.T) {
 		t.Fatalf("cached lookup = %+v, %+v, %+v", result.For(wt), result.For(other), result.For(unfetched))
 	}
 }
+
+func TestCorruptCachePreservesBytesAndReturnsLiveStatus(t *testing.T) {
+	t.Parallel()
+	ctx, cfg, f, wt := fixture(t)
+	path, err := cfg.GetPRCachePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	corrupt := []byte("{original corrupted cache")
+	if err := os.WriteFile(path, corrupt, 0600); err != nil {
+		t.Fatal(err)
+	}
+	f.SetPR(wt.OriginURL, wt.UpstreamBranch, forge.PRInfo{Number: 209, State: forge.PRStateOpen})
+	result, err := prstatus.Load(ctx, []git.Worktree{wt}, cfg, prstatus.Options{Refresh: true})
+	if err != nil {
+		t.Fatalf("cache corruption should be nonfatal: %v", err)
+	}
+	if result.LoadError == nil || result.SaveError == nil || len(result.FailedBranches) != 0 {
+		t.Errorf("cache diagnostics = %+v, want load and save errors with successful fetching", result)
+	}
+	if pr := result.For(wt); pr.Number != 209 || pr.State != forge.PRStateOpen || !pr.Fetched {
+		t.Errorf("live PR status = %+v, want fetched open PR 209", pr)
+	}
+	if err := result.Record(wt, &forge.PRInfo{Number: 210, State: forge.PRStateMerged, Fetched: true}); err == nil {
+		t.Error("Record must refuse to overwrite a corrupt cache")
+	}
+	if err := result.Forget(wt); err == nil {
+		t.Error("Forget must refuse to overwrite a corrupt cache")
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != string(corrupt) {
+		t.Errorf("corrupt cache bytes changed: %q", contents)
+	}
+}
+
+func TestResetCorruptCacheReportsPersistenceOutcome(t *testing.T) {
+	t.Parallel()
+	for _, failSave := range []bool{false, true} {
+		name := "successful reset"
+		if failSave {
+			name = "blocked reset"
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ctx, cfg, _, wt := fixture(t)
+			path, err := cfg.GetPRCachePath()
+			if err != nil {
+				t.Fatal(err)
+			}
+			corrupt := []byte("{corrupt cache")
+			if err := os.WriteFile(path, corrupt, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if failSave {
+				if err := os.Mkdir(path+".lock", 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			result, err := prstatus.Load(ctx, []git.Worktree{wt}, cfg, prstatus.Options{Reset: true})
+			if err != nil {
+				t.Fatalf("reset cache: %v", err)
+			}
+			if failSave {
+				if result.LoadError == nil || result.SaveError == nil {
+					t.Errorf("failed reset lost its diagnostics: %+v", result)
+				}
+				contents, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(contents) != string(corrupt) {
+					t.Errorf("failed reset changed corrupt bytes: %q", contents)
+				}
+				return
+			}
+			if result.LoadError != nil || result.SaveError != nil {
+				t.Errorf("successful reset retained cache diagnostics: %+v", result)
+			}
+			recovered := prcache.LoadFrom(path)
+			if recovered.LoadError() != nil || len(recovered.PRs) != 0 {
+				t.Errorf("reset cache should be valid and empty: %+v", recovered)
+			}
+		})
+	}
+}
