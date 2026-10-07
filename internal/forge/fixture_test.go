@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/raphi011/wt/internal/log"
 )
 
 // The fixtures in testdata/ are unmodified stdout of the gh/glab commands the
@@ -34,9 +36,23 @@ func fakeCLI(t *testing.T, stdout string, exitCode int) string {
 	t.Setenv("WT_FAKE_ARGS", argsFile)
 	t.Setenv("WT_FAKE_STDOUT", stdoutFile)
 	t.Setenv("WT_FAKE_EXIT", strconv.Itoa(exitCode))
+	fakeAPI(t, "{}\n", 0)
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	return argsFile
+}
+
+// fakeAPI sets what the fake CLI prints and exits with for "api" calls.
+// Call it after fakeCLI.
+func fakeAPI(t *testing.T, stdout string, exitCode int) {
+	t.Helper()
+
+	stdoutFile := filepath.Join(t.TempDir(), "api-stdout")
+	if err := os.WriteFile(stdoutFile, []byte(stdout), 0o644); err != nil {
+		t.Fatalf("failed to write fake CLI api stdout: %v", err)
+	}
+	t.Setenv("WT_FAKE_API_STDOUT", stdoutFile)
+	t.Setenv("WT_FAKE_API_EXIT", strconv.Itoa(exitCode))
 }
 
 // fixture returns the content of a recorded CLI output in testdata/.
@@ -70,8 +86,6 @@ type forgeFixtures struct {
 	viewFork   string
 	listOpen   string
 
-	// GitLab: HasReviews and IsApproved stay false because glab mr list
-	// output carries neither approved nor approved_by.
 	wantPR     PRInfo
 	wantBranch string
 	wantOpen   []OpenPR
@@ -348,5 +362,58 @@ func TestForge_MergePR_Args(t *testing.T) {
 				t.Errorf("MergePR error = %v, want a merge error", err)
 			}
 		})
+	}
+}
+
+func TestGitLab_GetPRForBranch_ReviewStatus(t *testing.T) {
+	tests := []struct {
+		name           string
+		approvals      string
+		wantHasReviews bool
+		wantIsApproved bool
+	}{
+		{"approved", "gitlab/mr_approvals_approved.json", true, true},
+		{"approvals outstanding", "gitlab/mr_approvals_partial.json", true, false},
+		// GitLab reports approved=true when no approval is required
+		{"nobody approved, none required", "gitlab/mr_approvals_none_required.json", false, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			argsFile := fakeCLI(t, fixture(t, "gitlab/mr_list_branch.json"), 0)
+			fakeAPI(t, fixture(t, tt.approvals), 0)
+
+			got, err := (&GitLab{}).GetPRForBranch(context.Background(), "https://gitlab.com/gitlab-org/cli", "some-branch")
+			if err != nil {
+				t.Fatalf("GetPRForBranch failed: %v", err)
+			}
+			if got.HasReviews != tt.wantHasReviews || got.IsApproved != tt.wantIsApproved {
+				t.Errorf("HasReviews, IsApproved = %v, %v, want %v, %v", got.HasReviews, got.IsApproved, tt.wantHasReviews, tt.wantIsApproved)
+			}
+
+			wantArgs := []string{"api", "projects/gitlab-org%2Fcli/merge_requests/4015/approvals"}
+			if args := recordedArgs(t, argsFile+".api"); !slices.Equal(args, wantArgs) {
+				t.Errorf("glab args = %q, want %q", args, wantArgs)
+			}
+		})
+	}
+}
+
+func TestGitLab_GetPRForBranch_ApprovalsUnavailable(t *testing.T) {
+	fakeCLI(t, fixture(t, "gitlab/mr_list_branch.json"), 0)
+	fakeAPI(t, "", 1)
+
+	var logs strings.Builder
+	ctx := log.WithLogger(context.Background(), log.New(&logs, false, false))
+
+	got, err := (&GitLab{}).GetPRForBranch(ctx, "https://gitlab.com/gitlab-org/cli", "some-branch")
+	if err != nil {
+		t.Fatalf("GetPRForBranch failed: %v", err)
+	}
+	if got.Number != 4015 || got.HasReviews || got.IsApproved {
+		t.Errorf("GetPRForBranch = %+v, want MR 4015 without review status", *got)
+	}
+	if !strings.Contains(logs.String(), "review status") {
+		t.Errorf("a warning about the review status should be logged, got: %q", logs.String())
 	}
 }

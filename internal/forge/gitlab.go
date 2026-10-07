@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/log"
 )
 
 // GitLab implements Forge for GitLab repositories using the glab CLI.
@@ -100,9 +102,7 @@ func (g *GitLab) GetPRForBranch(ctx context.Context, repoURL, branch string) (*P
 		Author struct {
 			Username string `json:"username"`
 		} `json:"author"`
-		UserNotesCount int   `json:"user_notes_count"`
-		ApprovedBy     []any `json:"approved_by"` // just need to check if non-empty
-		Approved       bool  `json:"approved"`
+		UserNotesCount int `json:"user_notes_count"`
 	}
 	if err := json.Unmarshal(output, &prs); err != nil {
 		return nil, fmt.Errorf("failed to parse glab output: %w", err)
@@ -117,6 +117,14 @@ func (g *GitLab) GetPRForBranch(ctx context.Context, repoURL, branch string) (*P
 	}
 
 	pr := prs[0]
+
+	// The MR list carries no approval data; a failed lookup only loses the
+	// review status
+	hasReviews, isApproved, err := g.reviewStatus(ctx, projectPath, pr.IID)
+	if err != nil {
+		log.FromContext(ctx).Printf("Warning: failed to fetch review status of !%d: %v\n", pr.IID, err)
+	}
+
 	return &PRInfo{
 		Number:       pr.IID,
 		State:        normalizeGitLabState(pr.State),
@@ -124,11 +132,33 @@ func (g *GitLab) GetPRForBranch(ctx context.Context, repoURL, branch string) (*P
 		URL:          pr.WebURL,
 		Author:       pr.Author.Username,
 		CommentCount: pr.UserNotesCount,
-		HasReviews:   len(pr.ApprovedBy) > 0,
-		IsApproved:   pr.Approved,
+		HasReviews:   hasReviews,
+		IsApproved:   isApproved,
 		CachedAt:     time.Now(),
 		Fetched:      true,
 	}, nil
+}
+
+// reviewStatus fetches the approval state of a MR from the approvals API.
+func (g *GitLab) reviewStatus(ctx context.Context, projectPath string, iid int) (hasReviews, isApproved bool, err error) {
+	output, err := g.outputGlab(ctx, "api",
+		fmt.Sprintf("projects/%s/merge_requests/%d/approvals", url.PathEscape(projectPath), iid))
+	if err != nil {
+		return false, false, fmt.Errorf("glab command failed: %v", err)
+	}
+
+	var approvals struct {
+		Approved   bool  `json:"approved"`
+		ApprovedBy []any `json:"approved_by"` // just need to check if non-empty
+	}
+	if err := json.Unmarshal(output, &approvals); err != nil {
+		return false, false, fmt.Errorf("failed to parse glab output: %w", err)
+	}
+
+	hasReviews = len(approvals.ApprovedBy) > 0
+	// GitLab reports approved=true when no approval is required, even if
+	// nobody approved
+	return hasReviews, approvals.Approved && hasReviews, nil
 }
 
 // GetPRBranch fetches the source branch name for a PR number using glab CLI

@@ -1,5 +1,11 @@
 #!/bin/sh
 # Fake gh/glab for fixture_test.go: records its arguments, prints canned stdout.
+# "api" calls have their own canned stdout, exit code and argument file.
+if [ "$1" = "api" ]; then
+    printf '%s\n' "$@" > "$WT_FAKE_ARGS.api"
+    cat "$WT_FAKE_API_STDOUT"
+    exit "$WT_FAKE_API_EXIT"
+fi
 printf '%s\n' "$@" > "$WT_FAKE_ARGS"
 cat "$WT_FAKE_STDOUT"
 exit "$WT_FAKE_EXIT"
