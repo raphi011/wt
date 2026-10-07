@@ -10,7 +10,7 @@
 //   - Fetching PR/MR information for a branch
 //   - Getting the source branch for a PR number
 //   - Cloning repositories
-//   - Creating, viewing, and merging PRs
+//   - Creating and merging PRs
 //
 // # Platform Detection
 //

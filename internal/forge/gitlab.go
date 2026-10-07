@@ -371,22 +371,6 @@ func (g *GitLab) MergePR(ctx context.Context, repoURL string, number int, strate
 	return nil
 }
 
-// ViewPR shows MR details or opens in browser
-func (g *GitLab) ViewPR(ctx context.Context, repoURL string, number int, web bool) error {
-	projectPath := ExtractRepoPath(repoURL)
-	args := []string{"mr", "view", fmt.Sprintf("%d", number), "-R", projectPath}
-	if web {
-		args = append(args, "--web")
-	}
-	c := exec.CommandContext(ctx, "glab", args...)
-	if g.host != "" {
-		c.Env = append(os.Environ(), "GITLAB_HOST="+g.host)
-	}
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	return c.Run()
-}
-
 // ListOpenPRs lists all open MRs for a repository
 func (g *GitLab) ListOpenPRs(ctx context.Context, repoURL string) ([]OpenPR, error) {
 	projectPath := ExtractRepoPath(repoURL)
@@ -424,22 +408,6 @@ func (g *GitLab) ListOpenPRs(ctx context.Context, repoURL string) ([]OpenPR, err
 	}
 
 	return result, nil
-}
-
-// FormatState returns a human-readable PR state
-func (g *GitLab) FormatState(state string) string {
-	switch state {
-	case PRStateMerged:
-		return "merged"
-	case PRStateOpen:
-		return "open"
-	case PRStateDraft:
-		return "draft"
-	case PRStateClosed:
-		return "closed"
-	default:
-		return ""
-	}
 }
 
 // normalizeGitLabState converts GitLab state to normalized format

@@ -88,15 +88,8 @@ type Forge interface {
 	// Returns error if repo doesn't allow the requested merge strategy
 	MergePR(ctx context.Context, repoURL string, number int, strategy string) error
 
-	// ViewPR shows PR details or opens in browser
-	// If web is true, opens in browser; otherwise shows details in terminal
-	ViewPR(ctx context.Context, repoURL string, number int, web bool) error
-
 	// ListOpenPRs lists all open PRs for a repository
 	ListOpenPRs(ctx context.Context, repoURL string) ([]OpenPR, error)
-
-	// FormatState returns a human-readable PR state
-	FormatState(state string) string
 }
 
 // configureBareRepo configures a bare repo for worktree support by setting

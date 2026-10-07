@@ -359,10 +359,10 @@ func TestForge_CloneBareRepo_InvalidSpec(t *testing.T) {
 // Write tests - combined into single test to ensure sequential execution
 // and proper cleanup (t.Cleanup runs after ALL subtests complete)
 
-// TestForge_PRWorkflow verifies the full PR lifecycle: create, view, get branch, merge.
+// TestForge_PRWorkflow verifies the full PR lifecycle: create, get branch, merge.
 // This test runs subtests sequentially to manage a single PR.
 //
-// Scenario: Create test branch, push, create PR, view PR, get PR branch, merge PR
+// Scenario: Create test branch, push, create PR, get PR branch, merge PR
 // Expected: All operations succeed, PR is created and merged
 func TestForge_PRWorkflow(t *testing.T) {
 	for _, fc := range testForges {
@@ -483,18 +483,6 @@ func TestForge_PRWorkflow(t *testing.T) {
 				}
 				if pr.State != PRStateOpen {
 					t.Errorf("GetPRForBranch() pr.State = %q, want %q", pr.State, PRStateOpen)
-				}
-			})
-
-			t.Run("ViewPR", func(t *testing.T) {
-				if prNumber == 0 {
-					t.Skip("No PR created")
-				}
-
-				// View PR without opening browser
-				err := fc.forge.ViewPR(ctx, fc.repoURL, prNumber, false)
-				if err != nil {
-					t.Errorf("ViewPR() error = %v", err)
 				}
 			})
 

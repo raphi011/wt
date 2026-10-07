@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -152,7 +151,7 @@ func (f *Forge) Merges() []MergeCall {
 	return slices.Clone(f.merges)
 }
 
-// Cloning and browser/terminal display require an external side effect.
+// Cloning requires an external side effect.
 // Tests that need these operations can embed Forge and implement them locally.
 func (f *Forge) CloneRepo(ctx context.Context, _, _ string) (string, error) {
 	if err := ctx.Err(); err != nil {
@@ -167,12 +166,3 @@ func (f *Forge) CloneBareRepo(ctx context.Context, _, _ string) (string, error) 
 	}
 	return "", fmt.Errorf("in-memory forge does not clone repositories")
 }
-
-func (f *Forge) ViewPR(ctx context.Context, _ string, _ int, _ bool) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return fmt.Errorf("in-memory forge does not display pull requests")
-}
-
-func (f *Forge) FormatState(state string) string { return strings.ToLower(state) }

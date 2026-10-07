@@ -20,11 +20,11 @@ Generated: 2026-10-07
 | [forgetworktrees](#forgetworktrees) | 1 |
 | [hook](#hook) | 10 |
 | [init](#init) | 4 |
-| [prcheckout](#prcheckout) | 18 |
+| [prcheckout](#prcheckout) | 19 |
 | [prcheckoutwizardparams](#prcheckoutwizardparams) | 1 |
 | [prcreate](#prcreate) | 3 |
 | [preservefiles](#preservefiles) | 1 |
-| [prmerge](#prmerge) | 8 |
+| [prmerge](#prmerge) | 9 |
 | [prview](#prview) | 3 |
 | [refreshprs](#refreshprs) | 1 |
 | [removeworktree](#removeworktree) | 1 |
@@ -45,7 +45,7 @@ Generated: 2026-10-07
 | [wt list](#wt-list) | 14 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 50 |
-| **Total** | **355** |
+| **Total** | **357** |
 
 ## completebasebranches
 
@@ -141,7 +141,7 @@ Generated: 2026-10-07
 | `TestForge_ListOpenPRs` | Verifies listing open PRs for a repository. |
 | `TestForge_CloneBareRepo` | Verifies cloning a repository as a bare repo. |
 | `TestForge_CloneBareRepo_InvalidSpec` | Verifies error handling for invalid repo specs |
-| `TestForge_PRWorkflow` | Verifies the full PR lifecycle: create, view, get branch, merge. |
+| `TestForge_PRWorkflow` | Verifies the full PR lifecycle: create, get branch, merge. |
 
 ## forgetworktrees
 
@@ -177,6 +177,7 @@ Generated: 2026-10-07
 
 | Test | Description |
 |------|-------------|
+| `TestPrCheckout_OpenPRCreatesWorktree` | Verifies checkout and caching of an open PR. |
 | `TestPrCheckout_InvalidPRNumber` | Tests error when first arg is not a valid PR number. |
 | `TestPrCheckout_RepoNotFound` | Tests error when specified repo doesn't exist. |
 | `TestPrCheckout_InvalidPRNumberWithRepo` | Tests error when second arg is not a valid PR number. |
@@ -221,6 +222,7 @@ Generated: 2026-10-07
 | Test | Description |
 |------|-------------|
 | `TestPrMerge_UsesUpstreamBranch` | Selects the PR source branch while preserving local identity. |
+| `TestPrMerge_OpenPRCleanup` | Verifies merging an open PR and its configured cleanup. |
 | `TestPrMerge_NotInGitRepo` | Tests error when running pr merge outside a git repo. |
 | `TestPrMerge_RepoNotFound` | Tests error when specified repo doesn't exist. |
 | `TestPrMerge_HookNoHookMutuallyExclusive` | Tests that --hook and --no-hook cannot both be used. |

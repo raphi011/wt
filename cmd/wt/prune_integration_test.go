@@ -2459,36 +2459,12 @@ func TestPrune_RemovesHistoryEntry(t *testing.T) {
 	}
 }
 
-// fakeGHMergedPR puts a fake `gh` first in PATH that reports a merged PR for
-// every branch, and "feature" as the head branch of every PR number.
-// `gh repo clone` clones the repo in $WT_TEST_CLONE_SOURCE.
-// No network or real auth is used.
-func fakeGHMergedPR(t *testing.T) {
-	t.Helper()
-
-	dir := t.TempDir()
-	script := `#!/bin/sh
-case "$*" in
- 'auth status'*) exit 0 ;;
- 'repo clone'*) git clone --quiet "$WT_TEST_CLONE_SOURCE" "$4" ;;
- 'pr view'*) printf '{"headRefName":"feature","isCrossRepository":false}\n' ;;
- 'pr list'*) printf '[{"number":1,"state":"MERGED","isDraft":false,"url":"https://github.com/test/test-repo/pull/1","author":{"login":"test"},"comments":[],"reviewDecision":""}]\n' ;;
- *) exit 1 ;;
-esac
-`
-	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(script), 0755); err != nil {
-		t.Fatalf("failed to write fake gh: %v", err)
-	}
-	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
-}
-
 // TestPrune_Target_RefreshPR tests that -R fetches PR status for targeted worktrees.
 //
 // Scenario: Branch has a merged PR that is not cached, user runs `wt prune feature -R`
 // Expected: PR status is fetched and the worktree is removed without -f
 func TestPrune_Target_RefreshPR(t *testing.T) {
-	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
-	fakeGHMergedPR(t)
+	t.Parallel()
 
 	cfg, repoPath, wtPath := setupMergedWorktree(t)
 	if err := os.Remove(filepath.Join(filepath.Dir(cfg.RegistryPath), "prs.json")); err != nil {
@@ -2505,6 +2481,7 @@ func TestPrune_Target_RefreshPR(t *testing.T) {
 	}
 
 	ctx := testContextWithConfig(t, cfg, repoPath)
+	ctx, _ = withRepoPR(t, ctx, repoPath, forge.PRStateMerged)
 	cmd := newPruneCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"feature", "-R"}) // No -f flag
