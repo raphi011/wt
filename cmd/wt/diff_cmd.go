@@ -138,7 +138,7 @@ With no arguments, diffs the current worktree.`,
 
 	// Register completions
 	cmd.ValidArgsFunction = completeDiffArg
-	cmd.RegisterFlagCompletionFunc("base", completeBaseBranches)
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("base", completeBaseBranches))
 
 	return cmd
 }

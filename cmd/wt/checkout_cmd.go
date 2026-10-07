@@ -138,7 +138,7 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode")
 
 	// Completions
-	cmd.RegisterFlagCompletionFunc("note", cobra.NoFileCompletions)
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("note", cobra.NoFileCompletions))
 	registerCheckoutCompletions(cmd)
 
 	return cmd

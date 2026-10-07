@@ -415,13 +415,13 @@ Use --interactive to select an open PR from registered repositories.`,
 	cmd.Flags().StringVar(&cloneMode, "clone-mode", "", "Clone mode: bare or regular (default: config)")
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
 	registerHookFlags(cmd, &hf)
-	cmd.RegisterFlagCompletionFunc("clone-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("clone-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"bare", "regular"}, cobra.ShellCompDirectiveNoFileComp
-	})
-	cmd.RegisterFlagCompletionFunc("forge", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	}))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("forge", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"github", "gitlab"}, cobra.ShellCompDirectiveNoFileComp
-	})
-	cmd.RegisterFlagCompletionFunc("note", cobra.NoFileCompletions)
+	}))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("note", cobra.NoFileCompletions))
 
 	return cmd
 }
@@ -511,12 +511,12 @@ func newPrCreateCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&draft, "draft", false, "Create as draft PR")
 	cmd.Flags().BoolVarP(&web, "web", "w", false, "Open in browser after creation")
 
-	cmd.MarkFlagRequired("title")
-	cmd.MarkFlagFilename("body-file") // Enable file completion for body-file flag
+	cobra.CheckErr(cmd.MarkFlagRequired("title"))
+	cobra.CheckErr(cmd.MarkFlagFilename("body-file")) // Enable file completion for body-file flag
 	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
-	cmd.RegisterFlagCompletionFunc("base", completeBranches)
-	cmd.RegisterFlagCompletionFunc("title", cobra.NoFileCompletions)
-	cmd.RegisterFlagCompletionFunc("body", cobra.NoFileCompletions)
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("base", completeBranches))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("title", cobra.NoFileCompletions))
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("body", cobra.NoFileCompletions))
 
 	return cmd
 }
@@ -584,11 +584,12 @@ Merges the PR, deletes its source branch, and removes the worktree (unless --kee
 			hp.AfterWorkDir = res.repo.Path
 
 			return withHooks(ctx, hp, func() error {
-				if pr.State == forge.PRStateMerged {
+				switch pr.State {
+				case forge.PRStateMerged:
 					out.Printf("PR #%d is already merged\n", pr.Number)
-				} else if pr.State == forge.PRStateClosed {
+				case forge.PRStateClosed:
 					return fmt.Errorf("PR #%d is closed", pr.Number)
-				} else {
+				default:
 					// Merge the PR
 					l.Printf("Merging PR #%d...\n", pr.Number)
 					if err := res.forge.MergePR(ctx, res.originURL, pr.Number, strategy); err != nil {
@@ -628,9 +629,9 @@ Merges the PR, deletes its source branch, and removes the worktree (unless --kee
 	cmd.Flags().StringVarP(&strategy, "strategy", "s", "", "Merge strategy: squash, rebase, merge")
 	cmd.Flags().BoolVarP(&keep, "keep", "k", false, "Keep worktree after merge")
 	registerHookFlags(cmd, &hf)
-	cmd.RegisterFlagCompletionFunc("strategy", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("strategy", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"squash", "rebase", "merge"}, cobra.ShellCompDirectiveNoFileComp
-	})
+	}))
 
 	return cmd
 }

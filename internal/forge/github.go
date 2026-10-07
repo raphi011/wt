@@ -3,6 +3,7 @@ package forge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -171,14 +172,12 @@ func (g *GitHub) CloneBareRepo(ctx context.Context, repoSpec, destPath string) (
 	// Clone as bare directly into .git subdirectory
 	gitDir := filepath.Join(repoDir, ".git")
 	if err := g.runWithUser(ctx, repoSpec, "repo", "clone", repoSpec, gitDir, "--", "--bare"); err != nil {
-		os.RemoveAll(repoDir)
-		return "", fmt.Errorf("gh repo clone failed: %v", err)
+		return "", errors.Join(fmt.Errorf("gh repo clone failed: %v", err), os.RemoveAll(repoDir))
 	}
 
 	// Configure the repo for worktree support
 	if err := configureBareRepo(ctx, gitDir); err != nil {
-		os.RemoveAll(repoDir)
-		return "", err
+		return "", errors.Join(err, os.RemoveAll(repoDir))
 	}
 
 	return repoDir, nil
@@ -208,8 +207,13 @@ func (g *GitHub) CreatePR(ctx context.Context, repoURL string, params CreatePRPa
 		return nil, fmt.Errorf("gh pr create failed: %v", err)
 	}
 
+	return parsePRCreateOutput(string(output))
+}
+
+// parsePRCreateOutput extracts the PR URL and number from gh pr create stdout.
+func parsePRCreateOutput(output string) (*CreatePRResult, error) {
 	// Parse PR URL from stdout (gh pr create outputs the URL)
-	prURL := strings.TrimSpace(string(output))
+	prURL := strings.TrimSpace(output)
 	if prURL == "" {
 		return nil, fmt.Errorf("gh pr create returned empty output")
 	}
@@ -217,8 +221,8 @@ func (g *GitHub) CreatePR(ctx context.Context, repoURL string, params CreatePRPa
 	// Extract PR number from URL (e.g., https://github.com/org/repo/pull/123)
 	urlParts := strings.Split(prURL, "/")
 	var prNumber int
-	if len(urlParts) > 0 {
-		fmt.Sscanf(urlParts[len(urlParts)-1], "%d", &prNumber)
+	if _, err := fmt.Sscanf(urlParts[len(urlParts)-1], "%d", &prNumber); err != nil {
+		return nil, fmt.Errorf("PR created but could not parse its number from gh output: %s", prURL)
 	}
 
 	return &CreatePRResult{

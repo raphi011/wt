@@ -29,7 +29,9 @@ func TestPrune_NoWorktrees(t *testing.T) {
 	repoPath := setupTestRepo(t, tmpDir, "test-repo")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -65,7 +67,9 @@ func TestPrune_WithWorktree(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -112,7 +116,9 @@ func TestPrune_DryRun(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -154,7 +160,9 @@ func TestPrune_ByRepoName(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -169,7 +177,9 @@ func TestPrune_ByRepoName(t *testing.T) {
 
 	// Work from a different directory
 	otherDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(otherDir, 0755)
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx := testContextWithConfig(t, cfg, otherDir)
 	cmd := newPruneCmd()
@@ -205,7 +215,9 @@ func TestPrune_WithRepoBranchFormat(t *testing.T) {
 	wt2Path := createTestWorktree(t, repo2Path, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -221,7 +233,9 @@ func TestPrune_WithRepoBranchFormat(t *testing.T) {
 
 	// Work from a different directory
 	otherDir := filepath.Join(tmpDir, "other")
-	os.MkdirAll(otherDir, 0755)
+	if err := os.MkdirAll(otherDir, 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	ctx := testContextWithConfig(t, cfg, otherDir)
 	cmd := newPruneCmd()
@@ -258,7 +272,9 @@ func TestPrune_RepoBranchFormat_RepoNotFound(t *testing.T) {
 	createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -301,7 +317,9 @@ func TestPrune_DeleteBranchesFlag(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -357,7 +375,9 @@ func TestPrune_NoDeleteBranchesDefault(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -407,7 +427,9 @@ func TestPrune_ConfigDeleteBranches(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -463,7 +485,9 @@ func TestPrune_NoDeleteBranchesOverridesConfig(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1316,7 +1340,9 @@ func TestPrune_AfterHookRuns(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1377,7 +1403,9 @@ func TestPrune_BeforeHookAborts(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1431,7 +1459,9 @@ func TestPrune_BeforeHookCWD(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1490,7 +1520,9 @@ func TestPrune_AfterHookCWD(t *testing.T) {
 	createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1549,7 +1581,9 @@ func TestPrune_AllTriggerMatchesPrune(t *testing.T) {
 	createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1602,7 +1636,9 @@ func TestPrune_Placeholders(t *testing.T) {
 	createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1661,7 +1697,9 @@ func TestPrune_NoHookFlag(t *testing.T) {
 	createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1714,7 +1752,9 @@ func TestPrune_ExplicitHookFlag(t *testing.T) {
 	createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1794,7 +1834,9 @@ func TestPrune_LocallyMergedBranch_RequiresForce(t *testing.T) {
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1858,7 +1900,9 @@ func TestPrune_UnmergedBranch_RequiresForce(t *testing.T) {
 	addCommit(t, wtPath, "feature-only.txt", "unmerged commit")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{
@@ -1935,7 +1979,9 @@ func TestPrune_MixedTargets_RequiresForce(t *testing.T) {
 	unmergedWtPath := createTestWorktree(t, repoPath, "unmerged")
 
 	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
-	os.MkdirAll(filepath.Dir(regFile), 0755)
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
 
 	reg := &registry.Registry{
 		Repos: []registry.Repo{

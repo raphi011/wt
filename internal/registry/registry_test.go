@@ -262,8 +262,12 @@ func TestRegistryLabels(t *testing.T) {
 	}
 
 	// Add multiple labels
-	reg.AddLabel("foo", "api")
-	reg.AddLabel("foo", "frontend")
+	if err := reg.AddLabel("foo", "api"); err != nil {
+		t.Fatalf("AddLabel failed: %v", err)
+	}
+	if err := reg.AddLabel("foo", "frontend"); err != nil {
+		t.Fatalf("AddLabel failed: %v", err)
+	}
 
 	// Clear labels
 	if err := reg.ClearLabels("foo"); err != nil {
@@ -317,7 +321,11 @@ func TestRegistrySaveLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			t.Errorf("cleanup failed: %v", err)
+		}
+	}()
 
 	// Use explicit registry path instead of HOME env var (parallel-safe)
 	regPath := filepath.Join(tmpDir, ".wt", "repos.json")

@@ -78,7 +78,7 @@ func (l *Logger) Debug(msg string, keyvals ...any) {
 		sb.WriteString(msg)
 		for i := 0; i < len(keyvals); i += 2 {
 			if i+1 < len(keyvals) {
-				sb.WriteString(fmt.Sprintf(" %v=%v", keyvals[i], keyvals[i+1]))
+				fmt.Fprintf(&sb, " %v=%v", keyvals[i], keyvals[i+1])
 			}
 		}
 		fmt.Fprintln(l.out, sb.String())

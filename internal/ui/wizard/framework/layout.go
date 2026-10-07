@@ -56,7 +56,7 @@ func (w *Wizard) layout() (border lipgloss.Style, width, height int, header, hel
 			header += "\n" + Fit(InfoStyle().Render(info), width, 1)
 		}
 	}
-	if !compact && !(len(w.steps) == 1 && w.skipSummary) {
+	if !compact && (len(w.steps) != 1 || !w.skipSummary) {
 		tabs := w.renderStepTabs()
 		if lipgloss.Width(tabs) > width {
 			active := w.summaryTitle

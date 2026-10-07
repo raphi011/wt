@@ -101,6 +101,7 @@ func TestPerformanceMeasurements(t *testing.T) {
 		cmd.SetContext(ctx)
 		checkout := &cobra.Command{}
 		checkout.SetContext(ctx)
+		checkout.Flags().String("base", "", "")
 		registerCheckoutCompletions(checkout)
 		for _, mode := range []string{"cd", "checkout", "refresh"} {
 			var times []time.Duration
@@ -239,6 +240,7 @@ func TestLabelCompletionBoundedAndStable(t *testing.T) {
 	cmd.SetContext(ctx)
 	checkout := &cobra.Command{}
 	checkout.SetContext(ctx)
+	checkout.Flags().String("base", "", "")
 	registerCheckoutCompletions(checkout)
 	for _, mode := range []string{"cd", "checkout"} {
 		for range 3 {

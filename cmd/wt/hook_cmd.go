@@ -94,7 +94,7 @@ and placeholders.`,
 
 	cmd.Flags().StringSliceVarP(&env, "arg", "a", nil, "Set hook variable (KEY=VALUE or KEY for boolean)")
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Print command without executing")
-	cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions)
+	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("arg", cobra.NoFileCompletions))
 
 	return cmd
 }

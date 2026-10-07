@@ -677,8 +677,7 @@ func TestWizard_PasteMsg(t *testing.T) {
 			t.Fatalf("Should be on step2, got %s", w.CurrentStepID())
 		}
 
-		m, _ := w.Update(tea.PasteMsg{Content: "for-step2"})
-		w = m.(*Wizard)
+		w.Update(tea.PasteMsg{Content: "for-step2"})
 
 		if step1.pasteReceived != "" {
 			t.Errorf("step1 received paste %q, want empty", step1.pasteReceived)
