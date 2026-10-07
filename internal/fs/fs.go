@@ -7,16 +7,16 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+
+	"github.com/raphi011/wt/internal/statepath"
 )
 
 // WtDir returns the path to ~/.wt/, creating it if needed
 func WtDir() (string, error) {
-	home, err := os.UserHomeDir()
+	dir, err := statepath.Dir("")
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(home, ".wt")
-
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

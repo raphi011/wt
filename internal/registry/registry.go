@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/raphi011/wt/internal/fs"
+	"github.com/raphi011/wt/internal/statepath"
 )
 
 // Repo represents a registered git repository
@@ -26,11 +27,14 @@ type Registry struct {
 
 // registryPath returns the path to ~/.wt/repos.json
 func registryPath() (string, error) {
-	dir, err := fs.WtDir()
+	path, err := statepath.Registry("")
 	if err != nil {
 		return "", fmt.Errorf("get wt directory: %w", err)
 	}
-	return filepath.Join(dir, "repos.json"), nil
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", fmt.Errorf("get wt directory: %w", err)
+	}
+	return path, nil
 }
 
 // Load reads the registry from the specified path, or ~/.wt/repos.json if empty.

@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/raphi011/wt/internal/statepath"
 )
 
 // Context keys for dependency injection
@@ -170,36 +171,30 @@ const DefaultWorktreeFormat = ".worktrees/{branch}"
 // GetWtDir returns the effective wt config directory path.
 // Returns filepath.Dir(RegistryPath) if set (for testing), otherwise returns default ~/.wt/.
 func (c *Config) GetWtDir() (string, error) {
-	if c.RegistryPath != "" {
-		return filepath.Dir(c.RegistryPath), nil
-	}
-	home, err := os.UserHomeDir()
+	dir, err := statepath.Dir(c.RegistryPath)
 	if err != nil {
 		return "", fmt.Errorf("cannot determine config directory: %w", err)
 	}
-	return filepath.Join(home, ".wt"), nil
+	return dir, nil
 }
 
 // GetHistoryPath returns the effective history file path.
 // Returns HistoryPath if set (for testing), otherwise returns default ~/.wt/history.json.
 func (c *Config) GetHistoryPath() (string, error) {
-	if c.HistoryPath != "" {
-		return c.HistoryPath, nil
-	}
-	home, err := os.UserHomeDir()
+	path, err := statepath.History(c.HistoryPath)
 	if err != nil {
 		return "", fmt.Errorf("cannot determine history path: %w", err)
 	}
-	return filepath.Join(home, ".wt", "history.json"), nil
+	return path, nil
 }
 
 // GetPRCachePath returns the effective PR cache file path (prs.json in the wt dir).
 func (c *Config) GetPRCachePath() (string, error) {
-	dir, err := c.GetWtDir()
+	path, err := statepath.PRCache(c.RegistryPath)
 	if err != nil {
 		return "", fmt.Errorf("cannot determine PR cache path: %w", err)
 	}
-	return filepath.Join(dir, "prs.json"), nil
+	return path, nil
 }
 
 // ShouldSetUpstream returns true if upstream tracking should be set (default: false)
@@ -228,15 +223,6 @@ func Default() Config {
 	}
 }
 
-// configPath returns the path to the config file
-func configPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".wt", "config.toml"), nil
-}
-
 // rawConfig is used for initial TOML parsing before processing hooks
 type rawConfig struct {
 	DefaultSort   string         `toml:"default_sort"`
@@ -255,14 +241,14 @@ type rawConfig struct {
 	Theme    ThemeConfig       `toml:"theme"`
 }
 
-// Load reads config from ~/.config/wt/config.toml
+// Load reads config from ~/.wt/config.toml
 // Returns Default() if file doesn't exist (no error)
 // Returns error only if file exists but is invalid
 // Environment variables override config file values:
 // - WT_THEME overrides theme.name
 // - WT_THEME_MODE overrides theme.mode (auto, light, dark)
 func Load() (Config, error) {
-	path, err := configPath()
+	path, err := statepath.Config("")
 	if err != nil {
 		return Default(), nil
 	}
