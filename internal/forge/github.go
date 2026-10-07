@@ -269,30 +269,6 @@ func (g *GitHub) MergePR(ctx context.Context, repoURL string, number int, strate
 	return nil
 }
 
-// ViewPR shows PR details or opens in browser
-func (g *GitHub) ViewPR(ctx context.Context, repoURL string, number int, web bool) error {
-	repoPath := ExtractRepoPath(repoURL)
-	args := []string{"pr", "view", fmt.Sprintf("%d", number), "-R", repoPath}
-	if web {
-		args = append(args, "--web")
-	}
-	c := exec.CommandContext(ctx, "gh", args...)
-	c.Env = g.environment()
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-
-	user := g.getUserForRepo(repoPath)
-	if user != "" {
-		token, err := g.getToken(ctx, user)
-		if err != nil {
-			return err
-		}
-		c.Env = append(g.environment(), "GH_TOKEN="+token)
-	}
-
-	return c.Run()
-}
-
 // ListOpenPRs lists all open PRs for a repository
 func (g *GitHub) ListOpenPRs(ctx context.Context, repoURL string) ([]OpenPR, error) {
 	repoPath := ExtractRepoPath(repoURL)
@@ -330,22 +306,6 @@ func (g *GitHub) ListOpenPRs(ctx context.Context, repoURL string) ([]OpenPR, err
 	}
 
 	return result, nil
-}
-
-// FormatState returns a human-readable PR state
-func (g *GitHub) FormatState(state string) string {
-	switch state {
-	case PRStateMerged:
-		return "merged"
-	case PRStateOpen:
-		return "open"
-	case PRStateDraft:
-		return "draft"
-	case PRStateClosed:
-		return "closed"
-	default:
-		return ""
-	}
 }
 
 // getUserForRepo returns the gh username for a repo path based on forge rules

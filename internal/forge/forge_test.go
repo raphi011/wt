@@ -39,62 +39,6 @@ func TestNormalizeGitLabState(t *testing.T) {
 	}
 }
 
-func TestGitHub_FormatState(t *testing.T) {
-	t.Parallel()
-
-	gh := &GitHub{}
-
-	tests := []struct {
-		state string
-		want  string
-	}{
-		{PRStateMerged, "merged"},
-		{PRStateOpen, "open"},
-		{PRStateDraft, "draft"},
-		{PRStateClosed, "closed"},
-		{"UNKNOWN", ""},
-		{"", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.state, func(t *testing.T) {
-			t.Parallel()
-			got := gh.FormatState(tt.state)
-			if got != tt.want {
-				t.Errorf("GitHub.FormatState(%q) = %q, want %q", tt.state, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestGitLab_FormatState(t *testing.T) {
-	t.Parallel()
-
-	gl := &GitLab{}
-
-	tests := []struct {
-		state string
-		want  string
-	}{
-		{PRStateMerged, "merged"},
-		{PRStateOpen, "open"},
-		{PRStateDraft, "draft"},
-		{PRStateClosed, "closed"},
-		{"UNKNOWN", ""},
-		{"", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.state, func(t *testing.T) {
-			t.Parallel()
-			got := gl.FormatState(tt.state)
-			if got != tt.want {
-				t.Errorf("GitLab.FormatState(%q) = %q, want %q", tt.state, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestGitLab_MergePR_RebaseStrategy(t *testing.T) {
 	t.Parallel()
 

@@ -11,10 +11,150 @@ import (
 	"testing"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/history"
+	"github.com/raphi011/wt/internal/prcache"
 	"github.com/raphi011/wt/internal/registry"
 )
+
+// TestPrMerge_OpenPRCleanup verifies merging an open PR and its configured cleanup.
+//
+// Scenario: User runs `wt pr merge` with deletion of local branches configured.
+// Expected: The PR is merged once and its worktree, local branch, cache entry, and history entry are removed.
+func TestPrMerge_OpenPRCleanup(t *testing.T) {
+	t.Parallel()
+	for _, host := range []string{"github.com", "gitlab.com"} {
+		t.Run(host, func(t *testing.T) {
+			t.Parallel()
+			cfg, repoPath, wtPath := setupMergedWorktree(t)
+			origin := "https://" + host + "/test/test-repo.git"
+			if output, err := runGitCommand(repoPath, "remote", "set-url", "origin", origin); err != nil {
+				t.Fatalf("set origin: %v\n%s", err, output)
+			}
+			cfg.Prune.DeleteLocalBranches = true
+			cfg.Merge.Strategy = "squash"
+			ctx, out := testContextWithConfigAndOutput(t, cfg, wtPath)
+			ctx, fake := withRepoPR(t, ctx, repoPath, forge.PRStateOpen)
+			cachePath, err := cfg.GetPRCachePath()
+			if err != nil {
+				t.Fatalf("get cache path: %v", err)
+			}
+			cacheKey := prcache.CacheKey(repoPath, "feature")
+			cache := prcache.LoadFrom(cachePath)
+			cache.Set(cacheKey, &forge.PRInfo{Number: 1, State: forge.PRStateOpen, Fetched: true})
+			if err := cache.Save(); err != nil {
+				t.Fatalf("seed open PR cache: %v", err)
+			}
+			for _, entry := range []struct{ path, branch string }{{wtPath, "feature"}, {repoPath, "main"}} {
+				if err := history.RecordAccess(entry.path, "test-repo", entry.branch, cfg.HistoryPath); err != nil {
+					t.Fatalf("record history: %v", err)
+				}
+			}
+			cmd := newPrMergeCmd()
+			cmd.SetContext(ctx)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("merge open PR: %v", err)
+			}
+			merges := fake.Merges()
+			if len(merges) != 1 || merges[0].Number != 1 || merges[0].RepoURL != origin || merges[0].Strategy != "squash" {
+				t.Errorf("merge calls = %+v, want one squash merge of PR 1", merges)
+			}
+			if !strings.Contains(out.String(), "Merged PR #1\n") || !strings.Contains(out.String(), "Removed worktree: "+wtPath+"\n") {
+				t.Errorf("merge output = %q, want merge and removal results", out.String())
+			}
+			pr, err := fake.GetPRForBranch(ctx, origin, "feature")
+			if err != nil {
+				t.Fatalf("get merged PR: %v", err)
+			}
+			if pr.State != forge.PRStateMerged {
+				t.Errorf("PR state = %q, want merged", pr.State)
+			}
+			if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+				t.Errorf("removed worktree stat error = %v, want not found", err)
+			}
+			branches, err := runGitCommand(repoPath, "branch", "--list", "feature")
+			if err != nil {
+				t.Fatalf("list local branch: %v", err)
+			}
+			if strings.TrimSpace(branches) != "" {
+				t.Errorf("local branch remains after merge: %q", branches)
+			}
+			if pr := prcache.LoadFrom(cachePath).Get(cacheKey); pr != nil {
+				t.Errorf("removed worktree cache entry remains: %+v", pr)
+			}
+			hist, err := history.Load(cfg.HistoryPath)
+			if err != nil {
+				t.Fatalf("load history: %v", err)
+			}
+			if hist.FindByPath(wtPath) != nil || hist.FindByPath(repoPath) == nil {
+				t.Error("history should retain main and remove the merged worktree")
+			}
+		})
+	}
+}
+
+// TestPrCheckout_OpenPRCreatesWorktree verifies checkout and caching of an open PR.
+//
+// Scenario: User runs `wt pr checkout 1` twice against a local origin with an open PR.
+// Expected: The PR branch is fetched, its metadata is cached, and both invocations use one worktree.
+func TestPrCheckout_OpenPRCreatesWorktree(t *testing.T) {
+	t.Parallel()
+	for _, forgeName := range []string{"github", "gitlab"} {
+		t.Run(forgeName, func(t *testing.T) {
+			t.Parallel()
+			cfg, repoPath, tmpDir := setupPrCheckoutRepo(t)
+			ctx := testContextWithConfig(t, cfg, repoPath)
+			ctx, fake := withRepoPR(t, ctx, repoPath, forge.PRStateOpen)
+			origin, err := git.GetOriginURL(ctx, repoPath)
+			if err != nil {
+				t.Fatalf("get local origin: %v", err)
+			}
+			wantPR := forge.PRInfo{Number: 1, State: forge.PRStateOpen, IsDraft: true, URL: "https://example.test/test-repo/pull/1", Author: "test", CommentCount: 3}
+			fake.SetPR(origin, "feature", wantPR)
+			wtPath := filepath.Join(tmpDir, "test-repo-feature")
+			for invocation := range 2 {
+				cmd := newPrCheckoutCmd()
+				cmd.SetContext(ctx)
+				cmd.SetArgs([]string{"1", "--forge", forgeName})
+				if err := cmd.Execute(); err != nil {
+					t.Fatalf("checkout invocation %d: %v", invocation+1, err)
+				}
+				branch, err := git.GetCurrentBranch(ctx, wtPath)
+				if err != nil {
+					t.Fatalf("get worktree branch: %v", err)
+				}
+				if branch != "feature" {
+					t.Errorf("worktree branch = %q, want feature", branch)
+				}
+				worktrees, err := git.ListWorktreesFromRepo(ctx, repoPath)
+				if err != nil {
+					t.Fatalf("list worktrees: %v", err)
+				}
+				featureCount := 0
+				for _, wt := range worktrees {
+					if wt.Branch == "feature" {
+						featureCount++
+						if resolvePath(t, wt.Path) != wtPath {
+							t.Errorf("feature path = %q, want %q", wt.Path, wtPath)
+						}
+					}
+				}
+				if featureCount != 1 || len(worktrees) != 2 {
+					t.Errorf("worktrees = %+v, want main and exactly one feature", worktrees)
+				}
+			}
+			cachePath, err := cfg.GetPRCachePath()
+			if err != nil {
+				t.Fatalf("get cache path: %v", err)
+			}
+			pr := prcache.LoadFrom(cachePath).Get(prcache.CacheKey(repoPath, "feature"))
+			if pr == nil || pr.Number != wantPR.Number || pr.State != wantPR.State || pr.URL != wantPR.URL || pr.IsDraft != wantPR.IsDraft || pr.Author != wantPR.Author || pr.CommentCount != wantPR.CommentCount || !pr.Fetched {
+				t.Errorf("cached PR = %+v, want fetched draft open PR with source metadata", pr)
+			}
+		})
+	}
+}
 
 // TestPrCheckout_InvalidPRNumber tests error when first arg is not a valid PR number.
 //
@@ -897,14 +1037,14 @@ func TestPrCheckout_CloneFlagWithExistingMatch(t *testing.T) {
 // the PR branch "feature" already has a worktree
 // Expected: The worktree is opened, no second worktree is created and no upstream is set
 func TestPrCheckout_AlreadyCheckedOut(t *testing.T) {
-	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
-	fakeGHMergedPR(t)
+	t.Parallel()
 
 	cfg, repoPath, tmpDir := setupPrCheckoutRepo(t)
 	cfg.Checkout.SetUpstream = new(true)
 	wtPath := createTestWorktree(t, repoPath, "feature")
 
 	ctx, logs := testContextWithLog(t, cfg, repoPath)
+	ctx, _ = withRepoPR(t, ctx, repoPath, forge.PRStateMerged)
 	cmd := newPrCheckoutCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"1", "--forge", "github"})
@@ -931,11 +1071,11 @@ func TestPrCheckout_AlreadyCheckedOut(t *testing.T) {
 // with and without --no-preserve
 // Expected: ".env" is linked into the new worktree unless --no-preserve is passed
 func TestPrCheckout_PreservesFiles(t *testing.T) {
-	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
-	fakeGHMergedPR(t)
+	t.Parallel()
 
 	for _, noPreserve := range []bool{false, true} {
 		t.Run(fmt.Sprintf("no-preserve=%v", noPreserve), func(t *testing.T) {
+			t.Parallel()
 			cfg, repoPath, tmpDir := setupPrCheckoutRepo(t)
 			cfg.Preserve = config.PreserveConfig{Paths: []string{".env"}}
 			if err := os.WriteFile(filepath.Join(repoPath, ".env"), []byte("SECRET=abc\n"), 0644); err != nil {
@@ -947,6 +1087,7 @@ func TestPrCheckout_PreservesFiles(t *testing.T) {
 				args = append(args, "--no-preserve")
 			}
 			ctx := testContextWithConfig(t, cfg, repoPath)
+			ctx, _ = withRepoPR(t, ctx, repoPath, forge.PRStateMerged)
 			cmd := newPrCheckoutCmd()
 			cmd.SetContext(ctx)
 			cmd.SetArgs(args)
@@ -969,15 +1110,13 @@ func TestPrCheckout_PreservesFiles(t *testing.T) {
 // Expected: The repo is cloned and registered, the PR branch is checked out
 // in the clone itself and reported as an opened worktree
 func TestPrCheckout_CloneRegular(t *testing.T) {
-	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
-	fakeGHMergedPR(t)
+	t.Parallel()
 
 	tmpDir := resolvePath(t, t.TempDir())
 	sourcePath, originPath := setupTestRepoWithOrigin(t, tmpDir, "source")
 	if out, err := runGitCommand(sourcePath, "push", "origin", "main:feature"); err != nil {
 		t.Fatalf("failed to push feature branch: %v\n%s", err, out)
 	}
-	t.Setenv("WT_TEST_CLONE_SOURCE", originPath)
 
 	workDir := filepath.Join(tmpDir, "work")
 	if err := os.MkdirAll(workDir, 0755); err != nil {
@@ -993,6 +1132,8 @@ func TestPrCheckout_CloneRegular(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx, logs := testContextWithLog(t, cfg, workDir)
+	ctx, fake := withRepoPR(t, ctx, sourcePath, forge.PRStateMerged)
+	ctx = injectTestForge(ctx, &localCloneForge{Forge: fake, source: originPath})
 	cmd := newPrCheckoutCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"--clone", "--clone-mode", "regular", "test/test-repo", "1", "--forge", "github"})
@@ -1028,12 +1169,10 @@ func TestPrCheckout_CloneRegular(t *testing.T) {
 // while another repo is registered as test-repo
 // Expected: Command fails, the clone is removed and the registry is unchanged
 func TestPrCheckout_CloneNameConflict(t *testing.T) {
-	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
-	fakeGHMergedPR(t)
+	t.Parallel()
 
 	tmpDir := resolvePath(t, t.TempDir())
 	sourcePath, originPath := setupTestRepoWithOrigin(t, tmpDir, "source")
-	t.Setenv("WT_TEST_CLONE_SOURCE", originPath)
 
 	workDir := filepath.Join(tmpDir, "work")
 	if err := os.MkdirAll(workDir, 0755); err != nil {
@@ -1054,6 +1193,8 @@ func TestPrCheckout_CloneNameConflict(t *testing.T) {
 
 	cfg := &config.Config{RegistryPath: regFile}
 	ctx := testContextWithConfig(t, cfg, workDir)
+	ctx, fake := withRepoPR(t, ctx, sourcePath, forge.PRStateMerged)
+	ctx = injectTestForge(ctx, &localCloneForge{Forge: fake, source: originPath})
 	cmd := newPrCheckoutCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"--clone", "--clone-mode", "regular", "test/test-repo", "1", "--forge", "github"})
@@ -1116,8 +1257,7 @@ func setupPrCheckoutRepo(t *testing.T) (cfg *config.Config, repoPath, tmpDir str
 // Scenario: User runs `wt pr checkout 1 --forge github -a val=hello`, PR head branch exists on origin
 // Expected: Worktree is created for the PR branch and the checkout hook runs with the variable substituted
 func TestPrCheckout_HookWithArg(t *testing.T) {
-	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
-	fakeGHMergedPR(t)
+	t.Parallel()
 
 	cfg, repoPath, tmpDir := setupPrCheckoutRepo(t)
 	outputPath := filepath.Join(tmpDir, "hook-output.txt")
@@ -1128,6 +1268,7 @@ func TestPrCheckout_HookWithArg(t *testing.T) {
 	}
 
 	ctx := testContextWithConfig(t, cfg, repoPath)
+	ctx, _ = withRepoPR(t, ctx, repoPath, forge.PRStateMerged)
 	cmd := newPrCheckoutCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"1", "--forge", "github", "-a", "val=hello"})
@@ -1155,12 +1296,12 @@ func TestPrCheckout_HookWithArg(t *testing.T) {
 // Scenario: User runs `wt pr checkout 1 --forge github -a =value`
 // Expected: Returns error about the empty key
 func TestPrCheckout_InvalidArg(t *testing.T) {
-	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
-	fakeGHMergedPR(t)
+	t.Parallel()
 
 	cfg, repoPath, _ := setupPrCheckoutRepo(t)
 
 	ctx := testContextWithConfig(t, cfg, repoPath)
+	ctx, _ = withRepoPR(t, ctx, repoPath, forge.PRStateMerged)
 	cmd := newPrCheckoutCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"1", "--forge", "github", "-a", "=value"})
@@ -1179,10 +1320,9 @@ func TestPrCheckout_InvalidArg(t *testing.T) {
 // Scenario: User runs `wt pr merge --keep -a val=hello` in a worktree whose PR is already merged
 // Expected: The merge hook runs with the variable substituted
 func TestPrMerge_HookWithArg(t *testing.T) {
-	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
-	fakeGHMergedPR(t)
+	t.Parallel()
 
-	cfg, _, wtPath := setupMergedWorktree(t)
+	cfg, repoPath, wtPath := setupMergedWorktree(t)
 	outputPath := filepath.Join(filepath.Dir(cfg.RegistryPath), "hook-output.txt")
 	cfg.Hooks = config.HooksConfig{
 		Hooks: map[string]config.Hook{
@@ -1191,6 +1331,7 @@ func TestPrMerge_HookWithArg(t *testing.T) {
 	}
 
 	ctx := testContextWithConfig(t, cfg, wtPath)
+	ctx, _ = withRepoPR(t, ctx, repoPath, forge.PRStateMerged)
 	cmd := newPrMergeCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"--keep", "-a", "val=hello"})
@@ -1213,12 +1354,12 @@ func TestPrMerge_HookWithArg(t *testing.T) {
 // Scenario: User runs `wt pr merge --keep -a =value` in a worktree whose PR is already merged
 // Expected: Returns error about the empty key and keeps the worktree
 func TestPrMerge_InvalidArg(t *testing.T) {
-	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
-	fakeGHMergedPR(t)
+	t.Parallel()
 
-	cfg, _, wtPath := setupMergedWorktree(t)
+	cfg, repoPath, wtPath := setupMergedWorktree(t)
 
 	ctx := testContextWithConfig(t, cfg, wtPath)
+	ctx, _ = withRepoPR(t, ctx, repoPath, forge.PRStateMerged)
 	cmd := newPrMergeCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"--keep", "-a", "=value"})
@@ -1240,8 +1381,7 @@ func TestPrMerge_InvalidArg(t *testing.T) {
 // Scenario: User runs `wt pr merge` in a worktree whose PR is already merged
 // Expected: The worktree is removed and its history entry is dropped
 func TestPrMerge_RemovesHistoryEntry(t *testing.T) {
-	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
-	fakeGHMergedPR(t)
+	t.Parallel()
 
 	cfg, repoPath, wtPath := setupMergedWorktree(t)
 	cfg.HistoryPath = filepath.Join(t.TempDir(), "history.json")
@@ -1254,6 +1394,7 @@ func TestPrMerge_RemovesHistoryEntry(t *testing.T) {
 	}
 
 	ctx := testContextWithConfig(t, cfg, wtPath)
+	ctx, _ = withRepoPR(t, ctx, repoPath, forge.PRStateMerged)
 	cmd := newPrMergeCmd()
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{})
@@ -1283,15 +1424,16 @@ func TestPrMerge_RemovesHistoryEntry(t *testing.T) {
 // with delete_local_branches on and off
 // Expected: The local branch is deleted only when delete_local_branches is on
 func TestPrMerge_DeleteLocalBranch(t *testing.T) {
-	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
-	fakeGHMergedPR(t)
+	t.Parallel()
 
 	for _, deleteBranches := range []bool{true, false} {
 		t.Run(fmt.Sprintf("delete_local_branches=%v", deleteBranches), func(t *testing.T) {
+			t.Parallel()
 			cfg, repoPath, wtPath := setupMergedWorktree(t)
 			cfg.Prune.DeleteLocalBranches = deleteBranches
 
 			ctx := testContextWithConfig(t, cfg, wtPath)
+			ctx, _ = withRepoPR(t, ctx, repoPath, forge.PRStateMerged)
 			cmd := newPrMergeCmd()
 			cmd.SetContext(ctx)
 			cmd.SetArgs([]string{})
