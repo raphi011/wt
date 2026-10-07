@@ -33,115 +33,39 @@ func TestParseBranchTarget(t *testing.T) {
 	}
 }
 
-func TestIsStaleWorktree(t *testing.T) {
+func TestRemovalReasonFor(t *testing.T) {
 	t.Parallel()
 
-	now := time.Now()
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	old := now.Add(-30 * 24 * time.Hour)
 
 	tests := []struct {
 		name      string
 		wt        git.Worktree
 		staleDays int
-		want      bool
+		want      removalReason
 	}{
-		{
-			name:      "stale worktree",
-			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour)},
-			staleDays: 14,
-			want:      true,
-		},
-		{
-			name:      "fresh worktree",
-			wt:        git.Worktree{CommitDate: now.Add(-1 * 24 * time.Hour)},
-			staleDays: 14,
-			want:      false,
-		},
-		{
-			name:      "disabled staleDays=0",
-			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour)},
-			staleDays: 0,
-			want:      false,
-		},
-		{
-			name:      "zero commit date",
-			wt:        git.Worktree{},
-			staleDays: 14,
-			want:      false,
-		},
-		{
-			name:      "exactly at boundary",
-			wt:        git.Worktree{CommitDate: now.Add(-14*24*time.Hour - time.Second)},
-			staleDays: 14,
-			want:      true,
-		},
-		{
-			name:      "just before boundary",
-			wt:        git.Worktree{CommitDate: now.Add(-14*24*time.Hour + time.Hour)},
-			staleDays: 14,
-			want:      false,
-		},
-		{
-			name:      "negative staleDays",
-			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour)},
-			staleDays: -1,
-			want:      false,
-		},
-		{
-			name:      "open PR protects from stale",
-			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour), PRState: forge.PRStateOpen},
-			staleDays: 14,
-			want:      false,
-		},
-		{
-			name:      "merged PR does not protect from stale check",
-			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour), PRState: forge.PRStateMerged},
-			staleDays: 14,
-			want:      true,
-		},
-		{
-			name:      "no PR is stale by time",
-			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour)},
-			staleDays: 14,
-			want:      true,
-		},
-		{
-			name:      "closed PR does not protect from stale check",
-			wt:        git.Worktree{CommitDate: now.Add(-30 * 24 * time.Hour), PRState: forge.PRStateClosed},
-			staleDays: 14,
-			want:      true,
-		},
+		{name: "merged PR", wt: git.Worktree{PRState: forge.PRStateMerged}, want: removalMerged},
+		{name: "open PR", wt: git.Worktree{PRState: forge.PRStateOpen}, want: removalNone},
+		{name: "closed PR", wt: git.Worktree{PRState: forge.PRStateClosed}, want: removalNone},
+		{name: "no PR", wt: git.Worktree{}, want: removalNone},
+		{name: "stale", wt: git.Worktree{CommitDate: old}, staleDays: 14, want: removalStale},
+		{name: "fresh", wt: git.Worktree{CommitDate: now.Add(-24 * time.Hour)}, staleDays: 14, want: removalNone},
+		{name: "stale rule disabled", wt: git.Worktree{CommitDate: old}, staleDays: 0, want: removalNone},
+		{name: "negative staleDays", wt: git.Worktree{CommitDate: old}, staleDays: -1, want: removalNone},
+		{name: "zero commit date", wt: git.Worktree{}, staleDays: 14, want: removalNone},
+		{name: "just past the boundary", wt: git.Worktree{CommitDate: now.Add(-14*24*time.Hour - time.Second)}, staleDays: 14, want: removalStale},
+		{name: "just before the boundary", wt: git.Worktree{CommitDate: now.Add(-14*24*time.Hour + time.Hour)}, staleDays: 14, want: removalNone},
+		{name: "open PR protects from stale", wt: git.Worktree{CommitDate: old, PRState: forge.PRStateOpen}, staleDays: 14, want: removalNone},
+		{name: "closed PR does not protect from stale", wt: git.Worktree{CommitDate: old, PRState: forge.PRStateClosed}, staleDays: 14, want: removalStale},
+		{name: "merged wins over stale", wt: git.Worktree{CommitDate: old, PRState: forge.PRStateMerged}, staleDays: 14, want: removalMerged},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isStaleWorktree(tt.wt, tt.staleDays)
-			if got != tt.want {
-				t.Errorf("isStaleWorktree() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestIsWorktreePrunable(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name  string
-		state string
-		want  bool
-	}{
-		{"merged PR is prunable", forge.PRStateMerged, true},
-		{"open PR is not prunable", forge.PRStateOpen, false},
-		{"closed PR is not prunable", forge.PRStateClosed, false},
-		{"no PR is not prunable", "", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			wt := git.Worktree{PRState: tt.state}
-			got := isWorktreePrunable(wt)
-			if got != tt.want {
-				t.Errorf("isWorktreePrunable(%q) = %v, want %v", tt.state, got, tt.want)
+			t.Parallel()
+			if got := removalReasonFor(tt.wt, tt.staleDays, now); got != tt.want {
+				t.Errorf("removalReasonFor() = %v, want %v", got, tt.want)
 			}
 		})
 	}

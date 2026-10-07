@@ -166,10 +166,16 @@ never removed without -f.`,
 				l.Println("Warning: --stale has no effect because stale_days is 0 (disabled)")
 			}
 
-			for _, wt := range allWorktrees {
-				if wt.PRState == forge.PRStateMerged {
-					toRemove = append(toRemove, wt)
-				} else if stale && isStaleWorktree(wt, cfg.Prune.StaleDays) {
+			// The stale rule only applies with --stale
+			staleDays := 0
+			if stale {
+				staleDays = cfg.Prune.StaleDays
+			}
+			now := time.Now()
+			reasons := make([]removalReason, len(allWorktrees))
+			for i, wt := range allWorktrees {
+				reasons[i] = removalReasonFor(wt, staleDays, now)
+				if reasons[i] != removalNone {
 					toRemove = append(toRemove, wt)
 				} else {
 					toSkip = append(toSkip, wt)
@@ -180,12 +186,8 @@ never removed without -f.`,
 			if interactive {
 				wizardInfos := make([]flows.PruneWorktreeInfo, 0, len(allWorktrees))
 				for i, wt := range allWorktrees {
-					isPrunable := wt.PRState == forge.PRStateMerged
-					isStaleWt := false
 					reason := styles.FormatPRState(wt.PRState, wt.PRDraft)
-					if !isPrunable && stale && isStaleWorktree(wt, cfg.Prune.StaleDays) {
-						isPrunable = true
-						isStaleWt = true
+					if reasons[i] == removalStale {
 						reason = styles.FormatStaleReason(wt.CommitAge)
 					}
 					wizardInfos = append(wizardInfos, flows.PruneWorktreeInfo{
@@ -193,8 +195,8 @@ never removed without -f.`,
 						RepoName:   wt.RepoName,
 						Branch:     wt.Branch,
 						Reason:     reason,
-						IsPrunable: isPrunable,
-						IsStale:    isStaleWt,
+						IsPrunable: reasons[i] != removalNone,
+						IsStale:    reasons[i] == removalStale,
 						IsDirty:    isWorktreeDirty(ctx, wt),
 						Worktree:   wt,
 					})
@@ -325,16 +327,29 @@ type pruneOpts struct {
 	ResetCache             bool // targeted prune: clear the PR cache first
 }
 
-// isStaleWorktree returns true if the worktree's last commit is older than staleDays.
-// Worktrees with an open PR are never considered stale — active work is always protected.
-func isStaleWorktree(wt git.Worktree, staleDays int) bool {
-	if staleDays <= 0 || wt.CommitDate.IsZero() {
-		return false
+// removalReason says why a worktree may be removed without --force.
+type removalReason int
+
+const (
+	removalNone   removalReason = iota // PR not merged, not stale
+	removalMerged                      // PR merged, confirmed by the forge
+	removalStale                       // last commit older than staleDays
+)
+
+// removalReasonFor decides whether wt may be removed without --force.
+// The stale rule is off with staleDays <= 0. Worktrees with an open PR are
+// never stale: active work is always protected.
+func removalReasonFor(wt git.Worktree, staleDays int, now time.Time) removalReason {
+	if wt.PRState == forge.PRStateMerged {
+		return removalMerged
 	}
-	if wt.PRState == forge.PRStateOpen {
-		return false
+	if staleDays <= 0 || wt.CommitDate.IsZero() || wt.PRState == forge.PRStateOpen {
+		return removalNone
 	}
-	return time.Since(wt.CommitDate) > time.Duration(staleDays)*24*time.Hour
+	if now.Sub(wt.CommitDate) > time.Duration(staleDays)*24*time.Hour {
+		return removalStale
+	}
+	return removalNone
 }
 
 // runPruneTargets handles removal of specific worktrees by [scope:]branch args.
@@ -402,9 +417,10 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 
 	// Require force only when at least one target is not prunable
 	if !force {
+		now := time.Now()
 		var unprunable []string
 		for _, wt := range toRemove {
-			if !isWorktreePrunable(wt) {
+			if removalReasonFor(wt, 0, now) == removalNone {
 				unprunable = append(unprunable, wt.RepoName+":"+wt.Branch)
 			}
 		}
@@ -456,12 +472,6 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 	}
 
 	return nil
-}
-
-// isWorktreePrunable returns true if the worktree is safe to prune without force
-// (merged via forge-confirmed PR).
-func isWorktreePrunable(wt git.Worktree) bool {
-	return wt.PRState == forge.PRStateMerged
 }
 
 // isWorktreeDirty reports whether a worktree has uncommitted changes.
