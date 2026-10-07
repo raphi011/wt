@@ -2373,7 +2373,8 @@ func TestPrune_RemovesHistoryEntry(t *testing.T) {
 }
 
 // fakeGHMergedPR puts a fake `gh` first in PATH that reports a merged PR for
-// every branch. No network or real auth is used.
+// every branch, and "feature" as the head branch of every PR number.
+// No network or real auth is used.
 func fakeGHMergedPR(t *testing.T) {
 	t.Helper()
 
@@ -2381,6 +2382,7 @@ func fakeGHMergedPR(t *testing.T) {
 	script := `#!/bin/sh
 case "$*" in
  'auth status'*) exit 0 ;;
+ 'pr view'*) printf '{"headRefName":"feature","isCrossRepository":false}\n' ;;
  'pr list'*) printf '[{"number":1,"state":"MERGED","isDraft":false,"url":"https://github.com/test/test-repo/pull/1","author":{"login":"test"},"comments":[],"reviewDecision":""}]\n' ;;
  *) exit 1 ;;
 esac

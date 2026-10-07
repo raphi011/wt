@@ -976,3 +976,104 @@ func TestPrCheckout_AlreadyCheckedOut(t *testing.T) {
 		t.Fatalf("worktree should still exist at %s", wtPath)
 	}
 }
+
+// TestPrCheckout_HookWithArg tests that --arg values reach hooks run by pr checkout.
+//
+// Scenario: User runs `wt pr checkout 1 --forge github -a val=hello`, PR head branch exists on origin
+// Expected: Worktree is created for the PR branch and the checkout hook runs with the variable substituted
+func TestPrCheckout_HookWithArg(t *testing.T) {
+	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
+	fakeGHMergedPR(t)
+
+	tmpDir := resolvePath(t, t.TempDir())
+
+	// Local origin, so fetching the PR branch needs no network
+	repoPath, _ := setupTestRepoWithOrigin(t, tmpDir, "test-repo")
+	if out, err := runGitCommand(repoPath, "push", "origin", "main:feature"); err != nil {
+		t.Fatalf("failed to push feature branch: %v\n%s", err, out)
+	}
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	outputPath := filepath.Join(tmpDir, "hook-output.txt")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"show": {Command: "echo {val} > " + outputPath, On: []string{"checkout"}},
+			},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPrCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"1", "--forge", "github", "-a", "val=hello"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("pr checkout command failed: %v", err)
+	}
+
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); os.IsNotExist(err) {
+		t.Fatalf("worktree should exist at %s", wtPath)
+	}
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read hook output: %v", err)
+	}
+	if strings.TrimSpace(string(content)) != "hello" {
+		t.Errorf("expected hook output 'hello', got %q", string(content))
+	}
+}
+
+// TestPrMerge_HookWithArg tests that --arg values reach hooks run by pr merge.
+//
+// Scenario: User runs `wt pr merge --keep -a val=hello` in a worktree whose PR is already merged
+// Expected: The merge hook runs with the variable substituted
+func TestPrMerge_HookWithArg(t *testing.T) {
+	// Not parallel: fakeGHMergedPR changes PATH via t.Setenv
+	fakeGHMergedPR(t)
+
+	cfg, _, wtPath := setupMergedWorktree(t)
+	outputPath := filepath.Join(filepath.Dir(cfg.RegistryPath), "hook-output.txt")
+	cfg.Hooks = config.HooksConfig{
+		Hooks: map[string]config.Hook{
+			"show": {Command: "echo {val} > " + outputPath, On: []string{"merge"}},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, wtPath)
+	cmd := newPrMergeCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--keep", "-a", "val=hello"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("pr merge command failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read hook output: %v", err)
+	}
+	if strings.TrimSpace(string(content)) != "hello" {
+		t.Errorf("expected hook output 'hello', got %q", string(content))
+	}
+}

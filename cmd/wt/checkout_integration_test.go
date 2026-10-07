@@ -1687,6 +1687,58 @@ func TestCheckout_HookWithStdinArg_Label(t *testing.T) {
 	}
 }
 
+// TestCheckout_InvalidArg tests that a malformed --arg fails before any worktree is created.
+//
+// Scenario: User runs `wt checkout -b feature -a =value`
+// Expected: Command fails and no worktree is created
+func TestCheckout_InvalidArg(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepo(t, tmpDir, "test-repo")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: repoPath, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+			BaseRef:        "local",
+		},
+	}
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newCheckoutCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"-b", "feature", "-a", "=value"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for malformed --arg")
+	}
+	if !strings.Contains(err.Error(), "key cannot be empty") {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	wtPath := filepath.Join(tmpDir, "test-repo-feature")
+	if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
+		t.Errorf("worktree should NOT exist at %s", wtPath)
+	}
+}
+
 // TestCheckout_DefaultHookRuns tests that default hooks run automatically.
 //
 // Scenario: User runs `wt checkout -b feature` with a hook that has on=["checkout"]

@@ -17,10 +17,10 @@ Generated: 2026-10-07
 | [forge](#forge) | 9 |
 | [hook](#hook) | 9 |
 | [init](#init) | 4 |
-| [prcheckout](#prcheckout) | 13 |
+| [prcheckout](#prcheckout) | 14 |
 | [prcreate](#prcreate) | 3 |
 | [preservefiles](#preservefiles) | 1 |
-| [prmerge](#prmerge) | 3 |
+| [prmerge](#prmerge) | 4 |
 | [prview](#prview) | 2 |
 | [repoadd](#repoadd) | 8 |
 | [repoclone](#repoclone) | 13 |
@@ -30,13 +30,13 @@ Generated: 2026-10-07
 | [reporemove](#reporemove) | 6 |
 | [resolveworktreetargets](#resolveworktreetargets) | 4 |
 | [wt cd](#wt-cd) | 9 |
-| [wt checkout](#wt-checkout) | 67 |
+| [wt checkout](#wt-checkout) | 68 |
 | [wt exec](#wt-exec) | 11 |
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 12 |
 | [wt note](#wt-note) | 10 |
 | [wt prune](#wt-prune) | 46 |
-| **Total** | **298** |
+| **Total** | **301** |
 
 ## completebasebranches
 
@@ -158,6 +158,7 @@ Generated: 2026-10-07
 | `TestPrCheckout_OrgRepoMatchesByUpstreamRemote` | Tests that org/repo format |
 | `TestPrCheckout_CloneFlagWithExistingMatch` | Tests that --clone does not trigger |
 | `TestPrCheckout_AlreadyCheckedOut` | Tests that the pr checkout code path correctly |
+| `TestPrCheckout_HookWithArg` | Tests that --arg values reach hooks run by pr checkout. |
 
 ## prcreate
 
@@ -180,6 +181,7 @@ Generated: 2026-10-07
 | `TestPrMerge_NotInGitRepo` | Tests error when running pr merge outside a git repo. |
 | `TestPrMerge_RepoNotFound` | Tests error when specified repo doesn't exist. |
 | `TestPrMerge_HookNoHookMutuallyExclusive` | Tests that --hook and --no-hook cannot both be used. |
+| `TestPrMerge_HookWithArg` | Tests that --arg values reach hooks run by pr merge. |
 
 ## prview
 
@@ -326,6 +328,7 @@ Generated: 2026-10-07
 | `TestCheckout_NoHook` | Tests that --no-hook skips default hooks. |
 | `TestCheckout_HookWithArg` | Tests that --arg passes variables to hooks. |
 | `TestCheckout_HookWithStdinArg_Label` | Tests that a stdin hook variable reaches every repo of a label. |
+| `TestCheckout_InvalidArg` | Tests that a malformed --arg fails before any worktree is created. |
 | `TestCheckout_DefaultHookRuns` | Tests that default hooks run automatically. |
 | `TestCheckout_RecordsHistory` | Tests that checkout records to history. |
 | `TestCheckout_NewBranchEmptyRepo` | Tests creating a new branch on an empty (no commits) repo. |
