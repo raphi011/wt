@@ -84,7 +84,7 @@ func resolveRepoForge(ctx context.Context, repoArg string) (*repoForgeResult, er
 		return nil, fmt.Errorf("failed to get origin URL: %w", err)
 	}
 
-	f := forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
+	f := forge.ResolverFromContext(ctx)(originURL, "", effCfg.Hosts, &effCfg.Forge)
 	if err := f.Check(ctx); err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ Use --interactive to select an open PR from registered repositories.`,
 					if forgeName == "" {
 						forgeName = cfg.Forge.GetForgeTypeForRepo(orgRepo)
 					}
-					f = forge.ByNameWithConfig(forgeName, &cfg.Forge)
+					f = forge.ResolverFromContext(ctx)(orgRepo, forgeName, cfg.Hosts, &cfg.Forge)
 					if err := f.Check(ctx); err != nil {
 						return err
 					}
@@ -288,11 +288,7 @@ Use --interactive to select an open PR from registered repositories.`,
 			}
 
 			if f == nil {
-				if forgeName != "" {
-					f = forge.ByNameWithConfig(forgeName, &effCfg.Forge)
-				} else {
-					f = forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
-				}
+				f = forge.ResolverFromContext(ctx)(originURL, forgeName, effCfg.Hosts, &effCfg.Forge)
 				if err := f.Check(ctx); err != nil {
 					return err
 				}
@@ -723,10 +719,7 @@ func prCheckoutWizardParams(ctx context.Context, reg *registry.Registry, repoArg
 		if err != nil {
 			return nil, fmt.Errorf("get origin URL: %w", err)
 		}
-		f := forge.Detect(originURL, effCfg.Hosts, &effCfg.Forge)
-		if forgeName != "" {
-			f = forge.ByNameWithConfig(forgeName, &effCfg.Forge)
-		}
+		f := forge.ResolverFromContext(ctx)(originURL, forgeName, effCfg.Hosts, &effCfg.Forge)
 		if err := f.Check(ctx); err != nil {
 			return nil, err
 		}

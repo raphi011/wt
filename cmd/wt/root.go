@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/raphi011/wt/internal/config"
+	"github.com/raphi011/wt/internal/forge"
 	"github.com/raphi011/wt/internal/git"
 	"github.com/raphi011/wt/internal/log"
 	"github.com/raphi011/wt/internal/output"
@@ -101,6 +102,7 @@ func Execute() int {
 	ctx = config.WithConfig(ctx, cfg)
 	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
 	ctx = config.WithWorkDir(ctx, workDir)
+	ctx = forge.WithResolver(ctx, forge.ResolverFromContext(ctx))
 
 	// Store context for commands to use
 	rootCmd.SetContext(ctx)

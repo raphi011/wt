@@ -21,10 +21,12 @@ Generated: 2026-10-07
 | [hook](#hook) | 10 |
 | [init](#init) | 4 |
 | [prcheckout](#prcheckout) | 18 |
+| [prcheckoutwizardparams](#prcheckoutwizardparams) | 1 |
 | [prcreate](#prcreate) | 3 |
 | [preservefiles](#preservefiles) | 1 |
 | [prmerge](#prmerge) | 7 |
 | [prview](#prview) | 2 |
+| [refreshprs](#refreshprs) | 1 |
 | [removeworktree](#removeworktree) | 1 |
 | [repoadd](#repoadd) | 8 |
 | [repoclone](#repoclone) | 15 |
@@ -33,6 +35,7 @@ Generated: 2026-10-07
 | [repolist](#repolist) | 5 |
 | [reporemove](#reporemove) | 6 |
 | [resolvecheckoutrepos](#resolvecheckoutrepos) | 1 |
+| [resolverepoforge](#resolverepoforge) | 1 |
 | [resolveworktreetargets](#resolveworktreetargets) | 5 |
 | [unscopedrepos](#unscopedrepos) | 1 |
 | [wt cd](#wt-cd) | 13 |
@@ -42,7 +45,7 @@ Generated: 2026-10-07
 | [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 50 |
-| **Total** | **349** |
+| **Total** | **352** |
 
 ## completebasebranches
 
@@ -193,6 +196,12 @@ Generated: 2026-10-07
 | `TestPrCheckout_HookWithArg` | Tests that --arg values reach hooks run by pr checkout. |
 | `TestPrCheckout_InvalidArg` | Tests that pr checkout reports a malformed --arg. |
 
+## prcheckoutwizardparams
+
+| Test | Description |
+|------|-------------|
+| `TestPrCheckoutWizardParams_InjectedResolver` | Forwards the explicit forge selection. |
+
 ## prcreate
 
 | Test | Description |
@@ -225,6 +234,12 @@ Generated: 2026-10-07
 |------|-------------|
 | `TestPrView_NotInGitRepo` | Tests error when running pr view outside a git repo. |
 | `TestPrView_RepoNotFound` | Tests error when specified repo doesn't exist. |
+
+## refreshprs
+
+| Test | Description |
+|------|-------------|
+| `TestRefreshPRs_InjectedResolver` | Uses the injected adapter through a forge session. |
 
 ## removeworktree
 
@@ -323,6 +338,12 @@ Generated: 2026-10-07
 | Test | Description |
 |------|-------------|
 | `TestResolveCheckoutRepos_ExistingWorktreeHasNoSideEffects` | Tests that |
+
+## resolverepoforge
+
+| Test | Description |
+|------|-------------|
+| `TestResolveRepoForge_InjectedResolver` | Preserves effective repository settings. |
 
 ## resolveworktreetargets
 
