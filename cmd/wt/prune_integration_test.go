@@ -1718,6 +1718,67 @@ func TestPrune_Placeholders(t *testing.T) {
 	}
 }
 
+// TestPrune_RepoPlaceholderUsesRegistryName tests that {repo} in a prune hook is the registered repo name.
+//
+// Scenario: Repo in directory "test-repo" is registered as "custom-name", after-prune hook writes {repo} to a file
+// Expected: File contains "custom-name"
+func TestPrune_RepoPlaceholderUsesRegistryName(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	repoPath := setupTestRepoWithBranches(t, tmpDir, "test-repo", []string{"feature"})
+	createTestWorktree(t, repoPath, "feature")
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create directory: %v", err)
+	}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "custom-name", Path: repoPath},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	outputPath := filepath.Join(tmpDir, "repo-placeholder.txt")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"repo-placeholder-test": {
+					Command: "echo {repo} > " + outputPath,
+					On:      []string{"prune"},
+				},
+			},
+		},
+	}
+
+	ctx := testContextWithConfig(t, cfg, repoPath)
+	cmd := newPruneCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"feature", "-f"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("prune command failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read placeholder output: %v", err)
+	}
+
+	got := strings.TrimSpace(string(content))
+	if got != "custom-name" {
+		t.Errorf("expected {repo} to be 'custom-name', got %q", got)
+	}
+}
+
 // TestPrune_NoHookFlag tests that --no-hook suppresses prune hooks.
 //
 // Scenario: User runs `wt prune feature -f --no-hook` with a default prune hook
