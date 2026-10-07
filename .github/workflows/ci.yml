@@ -23,7 +23,7 @@ jobs:
         with:
           version: v2.14.0
 
-  build:
+  test:
     strategy:
       fail-fast: false
       matrix:
@@ -76,3 +76,14 @@ jobs:
         with:
           files: coverage.out,coverage-integration.out
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # The branch ruleset requires a check named "build". It passes only when
+  # lint and every test job passed.
+  build:
+    if: always()
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          [ "${{ needs.lint.result }}" = "success" ] && [ "${{ needs.test.result }}" = "success" ]
