@@ -3097,6 +3097,69 @@ func TestCheckout_AutoStash_NotInTargetRepo(t *testing.T) {
 	}
 }
 
+// TestCheckout_AutoStash_NotInTargetRepo_SkipsBeforeHooks tests that a rejected
+// --autostash checkout runs no hooks.
+//
+// Scenario: User is in repo A, runs `wt checkout repoB:feature --autostash` with a before:checkout hook
+// Expected: Error about autostash, the before-hook does not run
+func TestCheckout_AutoStash_NotInTargetRepo_SkipsBeforeHooks(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	// Create two repos
+	repoA := setupTestRepoWithBranches(t, tmpDir, "repo-a", []string{"feature"})
+	repoB := setupTestRepoWithBranches(t, tmpDir, "repo-b", []string{"feature"})
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry dir: %v", err)
+	}
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "repo-a", Path: repoA, WorktreeFormat: "../{repo}-{branch}"},
+			{Name: "repo-b", Path: repoB, WorktreeFormat: "../{repo}-{branch}"},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	markerPath := filepath.Join(tmpDir, "hook-ran")
+
+	cfg := &config.Config{
+		RegistryPath: regFile,
+		Checkout: config.CheckoutConfig{
+			WorktreeFormat: "../{repo}-{branch}",
+		},
+		Hooks: config.HooksConfig{
+			Hooks: map[string]config.Hook{
+				"guard": {
+					Command: "touch " + markerPath,
+					On:      []string{"before:checkout"},
+				},
+			},
+		},
+	}
+	// workDir is repo A, but targeting repo B
+	ctx := testContextWithConfig(t, cfg, repoA)
+	checkoutCmd := newCheckoutCmd()
+	checkoutCmd.SetContext(ctx)
+	checkoutCmd.SetArgs([]string{"repo-b:feature", "--autostash"})
+
+	err := checkoutCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when autostash targets a different repo")
+	}
+	if !strings.Contains(err.Error(), "--autostash requires running from a worktree of repo-b") {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if _, err := os.Stat(markerPath); !os.IsNotExist(err) {
+		t.Error("before-hook should not run for a rejected checkout")
+	}
+}
+
 // TestCheckout_AutoStash_SecondaryWorktree tests that --autostash works when the user
 // is in a secondary worktree (not the main worktree) of a bare-in-.git repo.
 //

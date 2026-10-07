@@ -36,13 +36,13 @@ Generated: 2026-10-07
 | [resolveworktreetargets](#resolveworktreetargets) | 5 |
 | [unscopedrepos](#unscopedrepos) | 1 |
 | [wt cd](#wt-cd) | 13 |
-| [wt checkout](#wt-checkout) | 78 |
+| [wt checkout](#wt-checkout) | 79 |
 | [wt exec](#wt-exec) | 15 |
 | [wt label](#wt-label) | 15 |
 | [wt list](#wt-list) | 13 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 50 |
-| **Total** | **348** |
+| **Total** | **349** |
 
 ## completebasebranches
 
@@ -410,6 +410,7 @@ Generated: 2026-10-07
 | `TestCheckout_AutoStash_BareInGitRepo` | Tests that --autostash works with bare-in-.git repos. |
 | `TestCheckout_AutoStash_BareInGitRepo_NoChanges` | Tests that --autostash with a clean |
 | `TestCheckout_AutoStash_NotInTargetRepo` | Tests that --autostash errors when the user |
+| `TestCheckout_AutoStash_NotInTargetRepo_SkipsBeforeHooks` | Tests that a rejected |
 | `TestCheckout_AutoStash_SecondaryWorktree` | Tests that --autostash works when the user |
 | `TestCheckout_AutoStash_Subdirectory` | Tests that --autostash works when the user |
 | `TestCheckout_AutoStash_LabelTarget` | Tests that --autostash errors when used |

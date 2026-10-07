@@ -238,6 +238,13 @@ func ensureWorktree(ctx context.Context, repo registry.Repo, branch string, opts
 	if res.Created {
 		// The worktree does not exist yet when before-hooks run
 		hp.BeforeWorkDir = repo.Path
+
+		// Checked ahead of the hooks, so no hook runs for a rejected checkout
+		if opts.AutoStash {
+			if err := checkAutoStash(ctx, repo); err != nil {
+				return worktreeResult{}, err
+			}
+		}
 	}
 
 	err = hp.Run(ctx, func() error {
@@ -276,12 +283,6 @@ func createWorktree(ctx context.Context, repo registry.Repo, gitDir, wtPath stri
 	l.Debug("creating worktree", "path", wtPath, "branch", branch)
 
 	repoHasCommits := git.RefExists(ctx, gitDir, "HEAD")
-
-	if opts.AutoStash {
-		if err := checkAutoStash(ctx, repo); err != nil {
-			return err
-		}
-	}
 
 	fetchForCheckout(ctx, gitDir, cfg, branch, opts, fetch, repoHasCommits)
 
