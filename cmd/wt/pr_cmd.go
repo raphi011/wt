@@ -539,7 +539,8 @@ func newPrMergeCmd() *cobra.Command {
 		ValidArgsFunction: completeRepoNames,
 		Long: `Merge the PR for the current branch.
 
-Merges the PR, deletes its source branch, and removes the worktree (unless --keep).`,
+Merges the PR, deletes its source branch, and removes the worktree (unless --keep).
+With prune.delete_local_branches, the local branch is deleted with the worktree.`,
 		Example: `  wt pr merge                  # Merge current branch's PR
   wt pr merge myrepo           # Merge for specific repo
   wt pr merge --keep           # Keep worktree after merge
@@ -613,17 +614,18 @@ Merges the PR, deletes its source branch, and removes the worktree (unless --kee
 
 				// Remove worktree unless --keep
 				if !keep {
-					wt := git.Worktree{Path: cwd, RepoPath: res.repo.Path}
+					wt := git.Worktree{Path: cwd, RepoPath: res.repo.Path, Branch: res.branch, PRState: pr.State}
 					l.Printf("Removing worktree...\n")
-					if err := git.RemoveWorktree(ctx, wt, false); err != nil {
+					// No force: git refuses to remove a worktree with uncommitted changes
+					err := removeWorktree(ctx, wt, teardownOpts{DeleteBranch: res.effCfg.Prune.DeleteLocalBranches, PRCache: cache})
+					if err != nil {
 						l.Printf("Warning: failed to remove worktree: %v\n", err)
 					} else {
 						out.Printf("Removed worktree: %s\n", cwd)
-						// Remove from cache since worktree no longer exists
-						cache.Delete(cacheKey)
 						if err := cache.Save(); err != nil {
 							l.Printf("Warning: failed to save cache: %v\n", err)
 						}
+						forgetWorktrees(ctx, []git.Worktree{wt})
 					}
 				}
 
