@@ -2,7 +2,6 @@ package git
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -176,43 +175,9 @@ func ValidateMigration(ctx context.Context, repoPath string, opts MigrationOptio
 func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResult, error) {
 	repoPath := plan.RepoPath
 
-	// Phase 1: Create temp directory for bare repo
-	tempGitDir := filepath.Join(repoPath, ".git.migrating")
-	if err := os.MkdirAll(tempGitDir, 0755); err != nil {
-		return nil, fmt.Errorf("create temp git dir: %w", err)
-	}
-
-	// Cleanup on error
-	cleanup := func() error {
-		return os.RemoveAll(tempGitDir)
-	}
-
-	// Phase 2: Move .git contents to temp directory
 	oldGitDir := filepath.Join(repoPath, ".git")
-	entries, err := os.ReadDir(oldGitDir)
-	if err != nil {
-		return nil, errors.Join(fmt.Errorf("read .git directory: %w", err), cleanup())
-	}
 
-	for _, entry := range entries {
-		oldPath := filepath.Join(oldGitDir, entry.Name())
-		newPath := filepath.Join(tempGitDir, entry.Name())
-		if err := os.Rename(oldPath, newPath); err != nil {
-			return nil, errors.Join(fmt.Errorf("move %s: %w", entry.Name(), err), cleanup())
-		}
-	}
-
-	// Remove empty old .git directory
-	if err := os.Remove(oldGitDir); err != nil {
-		return nil, errors.Join(fmt.Errorf("remove old .git directory: %w", err), cleanup())
-	}
-
-	// Rename temp to .git
-	if err := os.Rename(tempGitDir, oldGitDir); err != nil {
-		return nil, errors.Join(fmt.Errorf("rename temp git dir: %w", err), cleanup())
-	}
-
-	// Phase 3: Configure as bare
+	// Phase 1: Configure as bare
 	if err := runGit(ctx, oldGitDir, "config", "core.bare", "true"); err != nil {
 		return nil, fmt.Errorf("set core.bare: %w", err)
 	}
@@ -227,13 +192,13 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 
 	var warnings []string
 
-	// Phase 4: Create main worktree directory (using computed path from plan)
+	// Phase 2: Create main worktree directory (using computed path from plan)
 	mainWorktreePath := plan.MainWorktreePath
 	if err := os.MkdirAll(mainWorktreePath, 0755); err != nil {
 		return nil, fmt.Errorf("create main worktree dir: %w", err)
 	}
 
-	// Phase 5: Move all working tree files (except .git) to main worktree
+	// Phase 3: Move all working tree files (except .git) to main worktree
 	if filepath.Dir(mainWorktreePath) == repoPath {
 		// Main worktree is nested (e.g., repo/main)
 		mainWorktreeName := filepath.Base(mainWorktreePath)
@@ -300,7 +265,7 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 		}
 	}
 
-	// Phase 6: Create worktree metadata for main worktree
+	// Phase 4: Create worktree metadata for main worktree
 	// Worktree metadata name is the sanitized branch name
 	worktreeName := strings.ReplaceAll(plan.CurrentBranch, "/", "-")
 	worktreeMetaDir := filepath.Join(oldGitDir, "worktrees", worktreeName)
@@ -340,7 +305,7 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 		return nil, fmt.Errorf("create logs dir: %w", err)
 	}
 
-	// Phase 7: Create .git file in main worktree pointing to its metadata directory
+	// Phase 5: Create .git file in main worktree pointing to its metadata directory
 	// Compute relative path from worktree to .git/worktrees/<name>
 	relPath, err := filepath.Rel(mainWorktreePath, worktreeMetaDir)
 	if err != nil {
@@ -352,19 +317,19 @@ func MigrateToBare(ctx context.Context, plan *MigrationPlan) (*MigrateToBareResu
 		return nil, fmt.Errorf("write .git file: %w", err)
 	}
 
-	// Phase 8: Update existing worktrees
+	// Phase 6: Update existing worktrees
 	for _, wt := range plan.WorktreesToFix {
 		if err := updateWorktreeLinks(ctx, repoPath, wt); err != nil {
 			return nil, fmt.Errorf("update worktree %s: %w", wt.OldName, err)
 		}
 	}
 
-	// Phase 9: Repair worktrees — critical after structural changes
+	// Phase 7: Repair worktrees — critical after structural changes
 	if err := runGit(ctx, oldGitDir, "worktree", "repair"); err != nil {
 		return nil, fmt.Errorf("worktree repair failed after conversion (run 'git worktree repair' manually from %s): %w", oldGitDir, err)
 	}
 
-	// Phase 10: Restore upstream tracking (best-effort, non-fatal)
+	// Phase 8: Restore upstream tracking (best-effort, non-fatal)
 	if plan.MainBranchUpstream != "" && HasRemote(ctx, oldGitDir, "origin") {
 		if RemoteBranchExists(ctx, mainWorktreePath, plan.MainBranchUpstream) {
 			if err := SetUpstreamBranch(ctx, mainWorktreePath, plan.CurrentBranch, plan.MainBranchUpstream); err != nil {

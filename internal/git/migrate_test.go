@@ -1314,21 +1314,46 @@ func TestMigrationOptions_Validate(t *testing.T) {
 	})
 }
 
-func TestMigrateToBare_UnreadableGitDirCleansUp(t *testing.T) {
+func TestMigrateToBare_LeftoverTempDirKeepsGitData(t *testing.T) {
 	t.Parallel()
 
-	repoPath := t.TempDir()
-	// A .git file instead of a directory makes reading .git fail
-	if err := os.WriteFile(filepath.Join(repoPath, ".git"), []byte("gitdir: elsewhere\n"), 0644); err != nil {
-		t.Fatalf("failed to write .git file: %v", err)
+	repoPath := setupTestRepo(t)
+	ctx := context.Background()
+	gitDir := filepath.Join(repoPath, ".git")
+
+	want, err := outputGit(ctx, repoPath, "--git-dir", gitDir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("failed to read HEAD: %v", err)
 	}
 
-	_, err := MigrateToBare(context.Background(), &MigrationPlan{RepoPath: repoPath})
-	if err == nil || !strings.Contains(err.Error(), "read .git directory") {
-		t.Fatalf("MigrateToBare error = %v, want read .git directory failure", err)
+	plan, err := ValidateMigration(ctx, repoPath, MigrationOptions{
+		WorktreeFormat: "{branch}",
+		RepoName:       "test-repo",
+	})
+	if err != nil {
+		t.Fatalf("ValidateMigration failed: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(repoPath, ".git.migrating")); !os.IsNotExist(err) {
-		t.Errorf("temp git dir was not cleaned up: %v", err)
+	// Migration used to move .git through .git.migrating and deleted that
+	// directory on failure. A non-empty objects dir there made the move fail
+	// after HEAD, config and others had already been moved, losing them.
+	staleObjects := filepath.Join(repoPath, ".git.migrating", "objects")
+	if err := os.MkdirAll(staleObjects, 0755); err != nil {
+		t.Fatalf("failed to create stale temp dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(staleObjects, "stale"), []byte("x"), 0644); err != nil {
+		t.Fatalf("failed to write stale file: %v", err)
+	}
+
+	if _, err := MigrateToBare(ctx, plan); err != nil {
+		t.Fatalf("MigrateToBare failed: %v", err)
+	}
+
+	got, err := outputGit(ctx, repoPath, "--git-dir", gitDir, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatalf("git data lost: %v", err)
+	}
+	if string(got) != string(want) {
+		t.Errorf("HEAD = %q, want %q", got, want)
 	}
 }
