@@ -1,0 +1,5 @@
+#!/bin/sh
+# Fake gh/glab for fixture_test.go: records its arguments, prints canned stdout.
+printf '%s\n' "$@" > "$WT_FAKE_ARGS"
+cat "$WT_FAKE_STDOUT"
+exit "$WT_FAKE_EXIT"
