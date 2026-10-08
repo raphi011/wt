@@ -14,6 +14,7 @@ type ConfigResolver struct {
 	mu     sync.Mutex
 	global *Config
 	cache  map[string]*Config // repoPath -> merged config
+	warn   func(string)       // receives local config warnings
 }
 
 // NewResolver creates a new ConfigResolver backed by the given global config.
@@ -22,6 +23,14 @@ func NewResolver(global *Config) *ConfigResolver {
 		global: global,
 		cache:  make(map[string]*Config),
 	}
+}
+
+// OnWarning sets the function that receives local config warnings. A repo's
+// warnings are reported once, when its config is first loaded.
+func (r *ConfigResolver) OnWarning(warn func(string)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.warn = warn
 }
 
 // ConfigForRepo returns the effective config for a repo, merging any .wt.toml
@@ -36,6 +45,11 @@ func (r *ConfigResolver) ConfigForRepo(repoPath string) (*Config, error) {
 	local, err := LoadLocal(repoPath)
 	if err != nil {
 		return nil, err
+	}
+	if local != nil && r.warn != nil {
+		for _, w := range local.Warnings {
+			r.warn(w)
+		}
 	}
 
 	merged := MergeLocal(r.global, local)

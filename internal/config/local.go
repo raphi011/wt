@@ -19,6 +19,7 @@ type LocalConfig struct {
 	Prune    LocalPrune     `toml:"prune"`
 	Preserve PreserveConfig `toml:"preserve"` // appended to global
 	Forge    LocalForge     `toml:"forge"`
+	Warnings []string       `toml:"-"` // unknown keys found in the file
 }
 
 // LocalCheckout holds local checkout overrides
@@ -75,7 +76,8 @@ func LoadLocal(repoPath string) (*LocalConfig, error) {
 	}
 
 	var raw rawLocalConfig
-	if err := toml.Unmarshal(data, &raw); err != nil {
+	md, err := toml.Decode(string(data), &raw)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse local config %s: %w", configFile, err)
 	}
 
@@ -87,6 +89,7 @@ func LoadLocal(repoPath string) (*LocalConfig, error) {
 		Prune:    raw.Prune,
 		Preserve: raw.Preserve,
 		Forge:    raw.Forge,
+		Warnings: unknownKeyWarnings(md, raw.Hooks, configFile),
 	}
 
 	if err := validateEnum(local.Clone.Mode, "clone.mode", ValidCloneModes); err != nil {

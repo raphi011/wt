@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -194,5 +195,33 @@ func TestResolverFromContext_Nil(t *testing.T) {
 	got := ResolverFromContext(ctx)
 	if got != nil {
 		t.Error("expected nil when no resolver in context")
+	}
+}
+
+func TestConfigResolver_OnWarning(t *testing.T) {
+	t.Parallel()
+
+	global := &Config{Hooks: HooksConfig{Hooks: map[string]Hook{}}}
+
+	dir := t.TempDir()
+	content := `[checkout]
+worktre_format = "{branch}"
+`
+	if err := os.WriteFile(filepath.Join(dir, LocalConfigFileName), []byte(content), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	r := NewResolver(global)
+	var got []string
+	r.OnWarning(func(msg string) { got = append(got, msg) })
+
+	for range 2 {
+		if _, err := r.ConfigForRepo(dir); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+
+	if len(got) != 1 || !strings.Contains(got[0], "checkout.worktre_format") {
+		t.Errorf("warnings = %q, want one for checkout.worktre_format", got)
 	}
 }
