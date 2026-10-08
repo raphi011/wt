@@ -81,8 +81,13 @@ func LoadLocal(repoPath string) (*LocalConfig, error) {
 		return nil, fmt.Errorf("failed to parse local config %s: %w", configFile, err)
 	}
 
+	hooks, err := parseHooksConfig(raw.Hooks)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", configFile, err)
+	}
+
 	local := &LocalConfig{
-		Hooks:    parseHooksConfig(raw.Hooks),
+		Hooks:    hooks,
 		Clone:    raw.Clone,
 		Checkout: raw.Checkout,
 		Merge:    raw.Merge,

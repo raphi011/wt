@@ -267,11 +267,16 @@ func Load() (Config, error) {
 		return Default(), fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	hooks, err := parseHooksConfig(raw.Hooks)
+	if err != nil {
+		return Default(), err
+	}
+
 	cfg := Config{
 		Warnings:      unknownKeyWarnings(md, raw.Hooks, path),
 		DefaultSort:   raw.DefaultSort,
 		DefaultLabels: raw.DefaultLabels,
-		Hooks:         parseHooksConfig(raw.Hooks),
+		Hooks:         hooks,
 		Clone:         raw.Clone,
 		Checkout:      raw.Checkout,
 		Forge:         raw.Forge,
@@ -359,41 +364,59 @@ func applyEnvOverrides(cfg *Config) error {
 }
 
 // parseHooksConfig extracts HooksConfig from raw TOML map
-// Handles [hooks.NAME] sections
-func parseHooksConfig(raw map[string]any) HooksConfig {
+// Handles [hooks.NAME] sections. A hook key with the wrong type is an error.
+func parseHooksConfig(raw map[string]any) (HooksConfig, error) {
 	hc := HooksConfig{
 		Hooks: make(map[string]Hook),
 	}
 
 	if raw == nil {
-		return hc
+		return hc, nil
 	}
 
 	for key, value := range raw {
 		// Hook definitions are tables
 		if hookMap, ok := value.(map[string]any); ok {
 			hook := Hook{}
-			if cmd, ok := hookMap["command"].(string); ok {
+			if v, set := hookMap["command"]; set {
+				cmd, ok := v.(string)
+				if !ok {
+					return hc, fmt.Errorf("hooks.%s.command must be a string", key)
+				}
 				hook.Command = cmd
 			}
-			if desc, ok := hookMap["description"].(string); ok {
+			if v, set := hookMap["description"]; set {
+				desc, ok := v.(string)
+				if !ok {
+					return hc, fmt.Errorf("hooks.%s.description must be a string", key)
+				}
 				hook.Description = desc
 			}
-			if on, ok := hookMap["on"].([]any); ok {
+			if v, set := hookMap["on"]; set {
+				on, ok := v.([]any)
+				if !ok {
+					return hc, fmt.Errorf("hooks.%s.on must be an array of strings", key)
+				}
 				for _, v := range on {
-					if s, ok := v.(string); ok {
-						hook.On = append(hook.On, s)
+					s, ok := v.(string)
+					if !ok {
+						return hc, fmt.Errorf("hooks.%s.on must be an array of strings", key)
 					}
+					hook.On = append(hook.On, s)
 				}
 			}
-			if enabled, ok := hookMap["enabled"].(bool); ok {
+			if v, set := hookMap["enabled"]; set {
+				enabled, ok := v.(bool)
+				if !ok {
+					return hc, fmt.Errorf("hooks.%s.enabled must be a boolean", key)
+				}
 				hook.Enabled = &enabled
 			}
 			hc.Hooks[key] = hook
 		}
 	}
 
-	return hc
+	return hc, nil
 }
 
 // hookKeys are the keys allowed in a [hooks.NAME] table

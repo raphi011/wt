@@ -91,7 +91,10 @@ func TestParseHooksConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := parseHooksConfig(tt.raw)
+			result, err := parseHooksConfig(tt.raw)
+			if err != nil {
+				t.Fatalf("parseHooksConfig: %v", err)
+			}
 
 			if len(result.Hooks) != len(tt.expected.Hooks) {
 				t.Errorf("len(Hooks) = %d, want %d", len(result.Hooks), len(tt.expected.Hooks))
@@ -745,7 +748,10 @@ func TestParseHooksConfig_WithEnabled(t *testing.T) {
 		},
 	}
 
-	result := parseHooksConfig(raw)
+	result, err := parseHooksConfig(raw)
+	if err != nil {
+		t.Fatalf("parseHooksConfig: %v", err)
+	}
 
 	if len(result.Hooks) != 3 {
 		t.Fatalf("len(Hooks) = %d, want 3", len(result.Hooks))
@@ -989,11 +995,16 @@ on = ["checkout"]
 		t.Fatalf("failed to parse TOML: %v", err)
 	}
 
+	hooks, err := parseHooksConfig(raw.Hooks)
+	if err != nil {
+		t.Fatalf("parseHooksConfig: %v", err)
+	}
+
 	// Build config the same way Load() does
 	cfg := Config{
 		DefaultSort:   raw.DefaultSort,
 		DefaultLabels: raw.DefaultLabels,
-		Hooks:         parseHooksConfig(raw.Hooks),
+		Hooks:         hooks,
 		Clone:         raw.Clone,
 		Checkout:      raw.Checkout,
 		Forge:         raw.Forge,
@@ -1264,6 +1275,36 @@ key = 1
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("warnings = %q, want %q", got, want)
+	}
+}
+
+func TestParseHooksConfig_WrongType(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		hook map[string]any
+		want string
+	}{
+		{name: "command", hook: map[string]any{"command": []any{"code"}}, want: "hooks.code.command must be a string"},
+		{name: "description", hook: map[string]any{"description": int64(1)}, want: "hooks.code.description must be a string"},
+		{name: "on as string", hook: map[string]any{"on": "checkout"}, want: "hooks.code.on must be an array of strings"},
+		{name: "on with non-string element", hook: map[string]any{"on": []any{"checkout", int64(1)}}, want: "hooks.code.on must be an array of strings"},
+		{name: "enabled", hook: map[string]any{"enabled": "false"}, want: "hooks.code.enabled must be a boolean"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := parseHooksConfig(map[string]any{"code": tt.hook})
+			if err == nil {
+				t.Fatal("expected error for wrong-typed hook key")
+			}
+			if err.Error() != tt.want {
+				t.Errorf("error = %q, want %q", err, tt.want)
+			}
+		})
 	}
 }
 
