@@ -66,6 +66,12 @@ and streamline your development workflow.`,
 		ctx = log.WithLogger(ctx, l)
 		cmd.SetContext(ctx)
 
+		warn := func(msg string) { l.Printf("Warning: %s\n", msg) }
+		for _, w := range config.FromContext(ctx).Warnings {
+			warn(w)
+		}
+		config.ResolverFromContext(ctx).OnWarning(warn)
+
 		return nil
 	},
 	// Run is not set - shows help when no subcommand provided

@@ -184,6 +184,11 @@ func resolveConfigWithSources(ctx context.Context, repoName string) (*config.Con
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("local config at %s: %w", localConfigPath, err)
 	}
+	if local != nil {
+		for _, w := range local.Warnings {
+			log.FromContext(ctx).Printf("Warning: %s\n", w)
+		}
+	}
 	return config.MergeLocal(cfg, local), local, localConfigPath, nil
 }
 
