@@ -2040,7 +2040,7 @@ func TestRepoConvertRegular_DryRun(t *testing.T) {
 // TestRepoList_JSONNoLabelMatch tests JSON output when no repo has the label.
 //
 // Scenario: User runs `wt repo list nosuchlabel --json`
-// Expected: Output is an empty JSON array
+// Expected: Returns the same error as table mode and prints nothing
 func TestRepoList_JSONNoLabelMatch(t *testing.T) {
 	t.Parallel()
 
@@ -2070,11 +2070,15 @@ func TestRepoList_JSONNoLabelMatch(t *testing.T) {
 	cmd.SetContext(ctx)
 	cmd.SetArgs([]string{"nosuchlabel", "--json"})
 
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("repo list command failed: %v", err)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for nonexistent label, got nil")
+	}
+	if !strings.Contains(err.Error(), "no repos found with label") {
+		t.Errorf("expected error about no repos found with label, got %q", err.Error())
 	}
 
-	if got := strings.TrimSpace(out.String()); got != "[]" {
-		t.Errorf("expected [], got %q", got)
+	if got := out.String(); got != "" {
+		t.Errorf("expected no output, got %q", got)
 	}
 }
