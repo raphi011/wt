@@ -114,6 +114,7 @@ Resolution order: repo name → label.
 
 Worktrees are sorted by commit date (most recent first) by default.
 Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.
+Use --reset-cache to clear the cached PR status of all repos.
 ```
 
 Examples:
@@ -125,6 +126,7 @@ Examples:
   wt list backend              # Filter by label (if no repo named 'backend')
   wt list myrepo backend       # Filter by multiple scopes
   wt list -R                   # Refresh PR status before listing
+  wt list --reset-cache -R     # Clear cached PR status and fetch it again
   wt list --json               # Output as JSON
 ```
 
@@ -135,6 +137,7 @@ Flags:
   -h, --help          help for list
       --json          Output as JSON
   -R, --refresh-pr    Refresh PR status before listing
+      --reset-cache   Clear cached PR status before listing
   -s, --sort string   Sort by: date, repo, branch
 ```
 
@@ -195,7 +198,6 @@ Flags:
       --no-delete-branches   Keep local branches (overrides config)
       --no-hook              Skip hooks
   -R, --refresh-pr           Refresh PR status first
-      --reset-cache          Clear all cached data
       --stale                Also prune stale worktrees (older than stale_days)
 ```
 

@@ -266,9 +266,6 @@ wt prune -d
 # Dry-run that also prints the git and forge commands being run
 wt prune -d -v
 
-# Clear cached PR data and re-fetch
-wt prune --reset-cache
-
 # Also delete local branches after removal
 wt prune --delete-branches
 
@@ -285,7 +282,7 @@ wt prune myrepo:feature-login -f
 A worktree with uncommitted changes (modified, staged or untracked files) is never removed without `-f`. A named worktree whose PR is not merged also needs `-f`.
 
 If the PR cache contains corrupt JSON, commands warn and preserve the file.
-Run `wt prune --reset-cache --dry-run` to clear it while previewing removals; `wt list -R` can display fresh PR status without overwriting the corrupt cache.
+Run `wt list --reset-cache` to clear it; `wt list -R` can display fresh PR status without overwriting the corrupt cache.
 
 ### Working Across Multiple Repos
 
@@ -468,7 +465,7 @@ wt completion zsh > ~/.zfunc/_wt
 - **`wt cd` prints a path instead of changing directory**: the shell wrapper is not loaded, see [Shell Wrapper](#shell-wrapper).
 - **The `PR` column is empty or `wt prune` removes nothing**: PR status is read from a local cache. Refresh it with `wt list -R` or `wt prune -R`. This needs an authenticated `gh` or `glab` (`gh auth status`, `glab auth status`).
 - **The wrong forge is used** (self-hosted instance, GitLab repo treated as GitHub): map the host or org in the config, see [Self-Hosted Instances](docs/configuration.md#self-hosted-instances) and [Forge Settings](docs/configuration.md#forge-settings).
-- **PR status looks wrong**: `wt prune --reset-cache` clears the cache and fetches again.
+- **PR status looks wrong**: `wt list --reset-cache -R` clears the cache and fetches again.
 - **A repo is not found by name**: `wt repo list` shows the registered names; register a repo with `wt repo add <path>`.
 - **Something else fails**: add `-v` to any command to see the `git`, `gh` and `glab` commands it runs.
 

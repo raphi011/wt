@@ -2493,38 +2493,6 @@ func TestPrune_Target_RefreshPR(t *testing.T) {
 	}
 }
 
-// TestPrune_Target_ResetCache tests that --reset-cache clears the PR cache
-// before targeted worktrees are checked.
-//
-// Scenario: PR cache marks the branch as merged, user runs `wt prune feature --reset-cache`
-// Expected: Cache is cleared, so the worktree is no longer prunable without -f
-func TestPrune_Target_ResetCache(t *testing.T) {
-	t.Parallel()
-
-	cfg, repoPath, wtPath := setupMergedWorktree(t)
-
-	ctx := testContextWithConfig(t, cfg, repoPath)
-	cmd := newPruneCmd()
-	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"feature", "--reset-cache"}) // No -f flag
-
-	err := cmd.Execute()
-	if err == nil {
-		t.Fatal("prune should require -f after the cache was reset")
-	}
-	if !strings.Contains(err.Error(), "test-repo:feature") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if _, err := os.Stat(wtPath); err != nil {
-		t.Errorf("worktree should be kept: %v", err)
-	}
-
-	cachePath := filepath.Join(filepath.Dir(cfg.RegistryPath), "prs.json")
-	if pr := prcache.LoadFrom(cachePath).Get(prcache.CacheKey(repoPath, "feature")); pr != nil {
-		t.Error("cache entry should be cleared from the PR cache file")
-	}
-}
-
 // TestPrune_Target_RejectsStaleAndInteractive tests that flags which only apply
 // to auto-prune are rejected together with targets.
 //

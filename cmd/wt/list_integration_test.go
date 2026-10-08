@@ -796,3 +796,45 @@ func TestList_JSONEmpty(t *testing.T) {
 		t.Errorf("expected [], got %q", got)
 	}
 }
+
+// TestList_ResetCache tests that --reset-cache clears the PR cache.
+//
+// Scenario: PR cache marks the branch as merged, user runs `wt list --reset-cache --json`
+// Expected: The worktree is listed without PR fields and the cache file has no entry
+func TestList_ResetCache(t *testing.T) {
+	t.Parallel()
+
+	cfg, repoPath, _ := setupMergedWorktree(t)
+
+	ctx, out := testContextWithConfigAndOutput(t, cfg, repoPath)
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--reset-cache", "--json"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
+	}
+
+	var rows []map[string]any
+	if err := json.Unmarshal([]byte(out.String()), &rows); err != nil {
+		t.Fatalf("decode list output: %v", err)
+	}
+	found := false
+	for _, row := range rows {
+		if row["branch"] != "feature" {
+			continue
+		}
+		found = true
+		if _, ok := row["pr_number"]; ok {
+			t.Errorf("reset cache still produced a PR number: %v", row)
+		}
+	}
+	if !found {
+		t.Fatal("list output omitted feature worktree")
+	}
+
+	cachePath := filepath.Join(filepath.Dir(cfg.RegistryPath), "prs.json")
+	if pr := prcache.LoadFrom(cachePath).Get(prcache.CacheKey(repoPath, "feature")); pr != nil {
+		t.Error("cache entry should be cleared from the PR cache file")
+	}
+}
