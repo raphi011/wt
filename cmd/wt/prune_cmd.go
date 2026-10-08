@@ -40,7 +40,6 @@ func newPruneCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "prune [[scope:]branch...]",
 		Short:   "Prune merged worktrees",
-		Aliases: []string{"p"},
 		GroupID: GroupCore,
 		Long: `Remove worktrees with merged PRs.
 
@@ -271,7 +270,7 @@ never removed without -f.`,
 	registerHookFlags(cmd, &hf)
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode")
 	cmd.Flags().BoolVar(&stale, "stale", false, "Also prune stale worktrees (older than stale_days)")
-	cmd.Flags().BoolVarP(&deleteBranches, "delete-branches", "b", false, "Delete local branches after removal")
+	cmd.Flags().BoolVar(&deleteBranches, "delete-branches", false, "Delete local branches after removal")
 	cmd.Flags().BoolVar(&noDeleteBranches, "no-delete-branches", false, "Keep local branches (overrides config)")
 
 	cmd.MarkFlagsMutuallyExclusive("delete-branches", "no-delete-branches")

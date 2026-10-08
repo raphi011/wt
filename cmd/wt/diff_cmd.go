@@ -134,7 +134,7 @@ With no arguments, diffs the current worktree.`,
 	cmd.Flags().BoolVar(&nameOnly, "name-only", false, "Show only names of changed files")
 	cmd.Flags().StringVar(&base, "base", "", "Override comparison base ref (default: origin/<default-branch>)")
 	cmd.Flags().BoolVar(&working, "working", false, "Show uncommitted changes (diff against HEAD)")
-	cmd.Flags().StringVarP(&tool, "tool", "t", "", "Override pager for this diff (e.g. delta, bat)")
+	cmd.Flags().StringVar(&tool, "tool", "", "Override pager for this diff (e.g. delta, bat)")
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "Search all repos for an unscoped branch")
 
 	cmd.MarkFlagsMutuallyExclusive("base", "working")

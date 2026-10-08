@@ -6,9 +6,9 @@ Local config: `.wt.toml` (in repo root)
 ```bash
 wt config init               # Create default global config
 wt config init --local       # Create per-repo .wt.toml
-wt config init -s            # Print config to stdout
+wt config init --stdout      # Print config to stdout
 wt config show               # Show effective config (merged if in a repo)
-wt config show --repo myrepo # Show effective config for specific repo
+wt config show myrepo        # Show effective config for specific repo
 wt config hooks              # List hooks with source annotations
 ```
 

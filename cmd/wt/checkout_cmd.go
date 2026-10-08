@@ -140,8 +140,8 @@ Target uses [scope:]branch format where scope can be a repo name or label:
 
 	cmd.Flags().BoolVarP(&newBranch, "new-branch", "b", false, "Create a new branch")
 	cmd.Flags().StringVar(&base, "base", "", "Base branch to create from")
-	cmd.Flags().BoolVarP(&fetch, "fetch", "f", false, "Fetch from origin before checkout")
-	cmd.Flags().BoolVarP(&autoStash, "autostash", "s", false, "Stash changes and apply to new worktree")
+	cmd.Flags().BoolVar(&fetch, "fetch", false, "Fetch from origin before checkout")
+	cmd.Flags().BoolVar(&autoStash, "autostash", false, "Stash changes and apply to new worktree")
 	cmd.Flags().StringVar(&note, "note", "", "Set a note on the branch")
 	registerHookFlags(cmd, &hf)
 	cmd.Flags().BoolVar(&noPreserve, "no-preserve", false, "Skip file preservation")

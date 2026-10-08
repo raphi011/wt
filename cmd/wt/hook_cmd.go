@@ -42,7 +42,7 @@ or label) and the second is the hook name. A branch without scope means the
 current repo; outside a repo it searches all repos, and with -g the hook runs
 in every match.
 
-Run 'wt config hooks' to list hooks, 'wt config init -s' for trigger syntax
+Run 'wt config hooks' to list hooks, 'wt config init --stdout' for trigger syntax
 and placeholders.`,
 		Example: `  wt hook code                        # Run 'code' hook in current worktree
   wt hook main code                   # Run 'code' in main worktree (current repo)

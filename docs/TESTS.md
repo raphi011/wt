@@ -97,7 +97,7 @@ Generated: 2026-10-08
 | `TestConfigShow_Basic` | Tests basic config display. |
 | `TestConfigShow_JSON` | Tests JSON output of config show. |
 | `TestConfigShow_WithLocalConfig` | Tests config show --json when a local .wt.toml overrides values. |
-| `TestConfigShow_RepoFlag` | Tests `config show --json --repo <name>` with a registered repo. |
+| `TestConfigShow_RepoArg` | Tests `config show --json <name>` with a registered repo. |
 
 ## currentrepo
 

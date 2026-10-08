@@ -60,7 +60,7 @@ With --local, creates per-repo config at .wt.toml in the current repo root.`,
 		Example: `  wt config init           # Create global config
   wt config init --local   # Create local repo config
   wt config init -f        # Overwrite existing config
-  wt config init -s        # Print config to stdout`,
+  wt config init --stdout  # Print config to stdout`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if local {
 				return initLocalConfig(cmd, force, stdout)
@@ -70,7 +70,7 @@ With --local, creates per-repo config at .wt.toml in the current repo root.`,
 	}
 
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Overwrite existing config")
-	cmd.Flags().BoolVarP(&stdout, "stdout", "s", false, "Print config to stdout")
+	cmd.Flags().BoolVar(&stdout, "stdout", false, "Print config to stdout")
 	cmd.Flags().BoolVar(&local, "local", false, "Create per-repo .wt.toml instead of global config")
 
 	return cmd
@@ -155,7 +155,7 @@ func initLocalConfig(cmd *cobra.Command, force, stdout bool) error {
 // config and its path (for source annotations). If repoName is set, looks up the
 // repo in the registry. Otherwise tries the current working directory.
 // Returns global config if no repo context is found (not inside a git repo and
-// --repo not specified). Returns an error if the local config exists but cannot
+// no repo argument given). Returns an error if the local config exists but cannot
 // be loaded (bad TOML or permissions).
 func resolveConfigWithSources(ctx context.Context, repoName string) (*config.Config, *config.LocalConfig, string, error) {
 	cfg := config.FromContext(ctx)
@@ -193,26 +193,28 @@ func resolveConfigWithSources(ctx context.Context, repoName string) (*config.Con
 }
 
 func newConfigShowCmd() *cobra.Command {
-	var (
-		jsonOutput bool
-		repoName   string
-	)
+	var jsonOutput bool
 
 	cmd := &cobra.Command{
-		Use:   "show",
-		Short: "Show effective configuration",
-		Args:  cobra.NoArgs,
+		Use:               "show [repo]",
+		Short:             "Show effective configuration",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeRepoNames,
 		Long: `Show effective configuration.
 
-When inside a repo (or with --repo), shows the merged config with source
-annotations (global vs local). Otherwise shows global config only.`,
+When inside a repo (or with a repo argument), shows the merged config with
+source annotations (global vs local). Otherwise shows global config only.`,
 		Example: `  wt config show              # Show config (merged if in a repo)
-  wt config show --repo myrepo  # Show merged config for specific repo
-  wt config show --json        # Output as JSON`,
+  wt config show myrepo       # Show merged config for specific repo
+  wt config show --json       # Output as JSON`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			out := output.FromContext(ctx)
 
+			var repoName string
+			if len(args) > 0 {
+				repoName = args[0]
+			}
 			effCfg, local, localPath, err := resolveConfigWithSources(ctx, repoName)
 			if err != nil {
 				return err
@@ -233,8 +235,6 @@ annotations (global vs local). Otherwise shows global config only.`,
 	}
 
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
-	cmd.Flags().StringVar(&repoName, "repo", "", "Show config for specific repo")
-	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("repo", completeRepoNames))
 
 	return cmd
 }
@@ -460,26 +460,28 @@ func renderConfigText(w io.Writer, cfg *config.Config, local *config.LocalConfig
 }
 
 func newConfigHooksCmd() *cobra.Command {
-	var (
-		jsonOutput bool
-		repoName   string
-	)
+	var jsonOutput bool
 
 	cmd := &cobra.Command{
-		Use:   "hooks",
-		Short: "List available hooks",
-		Args:  cobra.NoArgs,
+		Use:               "hooks [repo]",
+		Short:             "List available hooks",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeRepoNames,
 		Long: `List available hooks.
 
-When inside a repo (or with --repo), shows merged hooks with source annotations.`,
+When inside a repo (or with a repo argument), shows merged hooks with source annotations.`,
 		Example: `  wt config hooks               # List hooks (merged if in a repo)
-  wt config hooks --repo myrepo # List hooks for specific repo
+  wt config hooks myrepo        # List hooks for specific repo
   wt config hooks --json        # Output as JSON`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
 			out := output.FromContext(ctx)
 
+			var repoName string
+			if len(args) > 0 {
+				repoName = args[0]
+			}
 			effCfg, local, _, err := resolveConfigWithSources(ctx, repoName)
 			if err != nil {
 				return err
@@ -527,8 +529,6 @@ When inside a repo (or with --repo), shows merged hooks with source annotations.
 	}
 
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
-	cmd.Flags().StringVar(&repoName, "repo", "", "Show hooks for specific repo")
-	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("repo", completeRepoNames))
 
 	return cmd
 }

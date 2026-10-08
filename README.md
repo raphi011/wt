@@ -30,7 +30,7 @@ This project may include breaking command & configuration changes until v1.0 is 
 
 If something breaks:
 - Delete `~/.wt/prs.json` (PR cache)
-- Compare your config with `wt config init -s` and update to match newer config format
+- Compare your config with `wt config init --stdout` and update to match newer config format
 
 ## Install
 
@@ -56,7 +56,7 @@ Set up shell completions and the shell wrapper so that `wt cd` can change your d
 
 ```bash
 wt config init            # Create ~/.wt/config.toml
-wt config init -s         # Print default config to stdout (for review)
+wt config init --stdout   # Print default config to stdout (for review)
 ```
 
 The most important setting is `checkout.worktree_format` — it controls where worktrees are placed. The format supports `{repo}` and `{branch}` placeholders, and the path prefix determines placement:
@@ -166,13 +166,13 @@ wt checkout -b feature-login
 wt checkout -b feature-login --base develop
 
 # Fetch base branch before creating (ensures up-to-date base)
-wt checkout -b feature-login -f
+wt checkout -b feature-login --fetch
 
 # Fetch target branch from origin before checkout
-wt checkout feature-login -f
+wt checkout feature-login --fetch
 
 # Stash local changes and apply them to the new worktree
-wt checkout -b feature-login -s
+wt checkout -b feature-login --autostash
 
 # Add a note to remember what you're working on
 wt checkout -b feature-login --note "Implementing OAuth flow"
@@ -181,7 +181,7 @@ wt checkout -b feature-login --note "Implementing OAuth flow"
 wt checkout -b myrepo:feature-login
 
 # Combine with other flags
-wt checkout -b myrepo:feature-login --base develop -f
+wt checkout -b myrepo:feature-login --base develop --fetch
 ```
 
 ### Reviewing a Pull Request
@@ -219,7 +219,7 @@ After review, merge and clean up in one command:
 
 ```bash
 wt pr merge              # Uses squash by default; removes worktree and source branch
-wt pr merge -s rebase    # Or specify strategy
+wt pr merge --strategy rebase    # Or specify strategy
 wt pr merge --keep       # Merge but keep worktree
 ```
 
@@ -270,7 +270,7 @@ wt prune -d -v
 wt prune --reset-cache
 
 # Also delete local branches after removal
-wt prune -b
+wt prune --delete-branches
 
 # Keep local branches even if config says delete
 wt prune --no-delete-branches
@@ -399,7 +399,7 @@ wt note get
 wt note clear
 
 # Set note on specific worktree (repo:branch format)
-wt note set "Ready for review" myrepo:feature
+wt note set myrepo:feature "Ready for review"
 ```
 
 ## Configuration

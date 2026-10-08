@@ -184,7 +184,7 @@ be managed with other wt commands. Non-git directories are silently skipped.`,
   wt repo add ~/work/*                             # Register all repos in directory
   wt repo add ~/work/my-project -n myproj          # Custom display name (single repo only)
   wt repo add ~/work/my-project -l work -l api     # Add labels
-  wt repo add ~/work/my-project -w "./{branch}"    # Custom worktree format`,
+  wt repo add ~/work/my-project --worktree-format "./{branch}"  # Custom worktree format`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg := config.FromContext(ctx)
@@ -272,7 +272,7 @@ be managed with other wt commands. Non-git directories are silently skipped.`,
 	}
 
 	cmd.Flags().StringVarP(&name, "name", "n", "", "Display name (default: directory name)")
-	cmd.Flags().StringVarP(&worktreeFormat, "worktree-format", "w", "", "Worktree format override")
+	cmd.Flags().StringVar(&worktreeFormat, "worktree-format", "", "Worktree format override")
 	cmd.Flags().StringSliceVarP(&labels, "label", "l", nil, "Labels for grouping (repeatable)")
 
 	// Completions
@@ -388,7 +388,7 @@ By default, clones as a regular repo with a working tree at root:
 Use --clone-mode bare (or clone.mode in config) for a bare clone (git data in .git, no working tree at root).
 
 When cloning bare, creates a worktree for the default branch (main/master).
-Use -b to specify a different branch instead.
+Use --branch to specify a different branch instead.
 
 Supports both full URLs and short-form org/repo format:
   - Full URLs use git clone directly
@@ -401,7 +401,7 @@ If destination is not specified, clones into <repo-name> in the current director
   wt repo clone org/repo                              # Clone via gh/glab (uses forge config)
   wt repo clone myrepo                                # Clone with default_org
   wt repo clone org/repo --clone-mode bare            # Bare clone with default branch worktree
-  wt repo clone org/repo --clone-mode bare -b develop # Bare clone with worktree for develop
+  wt repo clone org/repo --clone-mode bare --branch develop # Bare clone with worktree for develop
   wt repo clone org/repo -l work                      # Clone with label`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -556,8 +556,8 @@ If destination is not specified, clones into <repo-name> in the current director
 	}
 	cmd.Flags().StringVarP(&name, "name", "n", "", "Display name (default: directory name)")
 	cmd.Flags().StringSliceVarP(&labels, "label", "l", nil, "Labels for grouping (repeatable)")
-	cmd.Flags().StringVarP(&worktreeFormat, "worktree-format", "w", "", "Worktree format override")
-	cmd.Flags().StringVarP(&branch, "branch", "b", "", "Create initial worktree for branch (bare mode only)")
+	cmd.Flags().StringVar(&worktreeFormat, "worktree-format", "", "Worktree format override")
+	cmd.Flags().StringVar(&branch, "branch", "", "Create initial worktree for branch (bare mode only)")
 	cmd.Flags().StringVar(&cloneMode, "clone-mode", "", "Clone mode: bare or regular (default: config)")
 
 	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("clone-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -728,7 +728,7 @@ The conversion:
 	cobra.CheckErr(cmd.MarkFlagRequired("clone-mode"))
 	cmd.Flags().StringVarP(&name, "name", "n", "", "Display name (default: directory name)")
 	cmd.Flags().StringSliceVarP(&labels, "label", "l", nil, "Labels for grouping (repeatable)")
-	cmd.Flags().StringVarP(&worktreeFormat, "worktree-format", "w", "", "Worktree format override")
+	cmd.Flags().StringVar(&worktreeFormat, "worktree-format", "", "Worktree format override")
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "Preview conversion without making changes")
 
 	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("clone-mode", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
