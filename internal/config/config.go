@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/BurntSushi/toml"
 
@@ -156,6 +157,7 @@ type Config struct {
 	Preserve      PreserveConfig    `toml:"preserve" json:"preserve"`     // file preservation for new worktrees
 	Hosts         map[string]string `toml:"hosts" json:"hosts,omitempty"` // domain -> forge type mapping
 	Theme         ThemeConfig       `toml:"theme" json:"theme"`           // UI theme/colors for interactive mode
+	Warnings      []string          `toml:"-" json:"-"`                   // unknown keys found in the global config file
 }
 
 // DefaultWorktreeFormat is the default format for worktree folder names
@@ -260,11 +262,13 @@ func Load() (Config, error) {
 	}
 
 	var raw rawConfig
-	if err := toml.Unmarshal(data, &raw); err != nil {
+	md, err := toml.Decode(string(data), &raw)
+	if err != nil {
 		return Default(), fmt.Errorf("failed to parse config file: %w", err)
 	}
 
 	cfg := Config{
+		Warnings:      unknownKeyWarnings(md, raw.Hooks, path),
 		DefaultSort:   raw.DefaultSort,
 		DefaultLabels: raw.DefaultLabels,
 		Hooks:         parseHooksConfig(raw.Hooks),
@@ -390,6 +394,46 @@ func parseHooksConfig(raw map[string]any) HooksConfig {
 	}
 
 	return hc
+}
+
+// hookKeys are the keys allowed in a [hooks.NAME] table
+var hookKeys = []string{"command", "description", "on", "enabled"}
+
+// unknownKeyWarnings returns one warning per key in a config file that wt does
+// not know. An unknown table is reported once, without its keys. Hooks decode
+// into a generic map, which md cannot check, so their keys are checked here.
+func unknownKeyWarnings(md toml.MetaData, hooks map[string]any, path string) []string {
+	var unknown []toml.Key
+	for _, key := range md.Undecoded() {
+		if key[0] == "hooks" {
+			continue
+		}
+		inUnknownTable := slices.ContainsFunc(unknown, func(table toml.Key) bool {
+			return len(table) < len(key) && slices.Equal(table, key[:len(table)])
+		})
+		if !inUnknownTable {
+			unknown = append(unknown, key)
+		}
+	}
+	for name, value := range hooks {
+		hookMap, ok := value.(map[string]any)
+		if !ok {
+			unknown = append(unknown, toml.Key{"hooks", name})
+			continue
+		}
+		for key := range hookMap {
+			if !slices.Contains(hookKeys, key) {
+				unknown = append(unknown, toml.Key{"hooks", name, key})
+			}
+		}
+	}
+
+	var warnings []string
+	for _, key := range unknown {
+		warnings = append(warnings, fmt.Sprintf("unknown key %q in %s (ignored)", key.String(), path))
+	}
+	slices.Sort(warnings)
+	return warnings
 }
 
 // GetForgeTypeForRepo returns the forge type for a given repo spec (e.g., "org/repo")
