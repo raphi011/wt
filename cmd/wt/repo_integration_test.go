@@ -869,7 +869,7 @@ func TestRepoConvertBare_WithLabels(t *testing.T) {
 
 // TestRepoConvertBare_WithWorktreeFormat tests migration with worktree format.
 //
-// Scenario: User runs `wt repo convert --clone-mode bare -w "./{branch}" ./repo`
+// Scenario: User runs `wt repo convert --clone-mode bare --worktree-format "./{branch}" ./repo`
 // Expected: Repo is migrated and registered with worktree format
 func TestRepoConvertBare_WithWorktreeFormat(t *testing.T) {
 	t.Parallel()
@@ -888,7 +888,7 @@ func TestRepoConvertBare_WithWorktreeFormat(t *testing.T) {
 	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare", "-w", "./{branch}"})
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare", "--worktree-format", "./{branch}"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("convert command failed: %v", err)
@@ -906,7 +906,7 @@ func TestRepoConvertBare_WithWorktreeFormat(t *testing.T) {
 
 // TestRepoConvertBare_WithSiblingFormat tests migration with sibling worktree format.
 //
-// Scenario: User runs `wt repo convert --clone-mode bare -w "../{repo}-{branch}" ./repo`
+// Scenario: User runs `wt repo convert --clone-mode bare --worktree-format "../{repo}-{branch}" ./repo`
 // Expected: Main worktree is created as sibling to repo directory
 func TestRepoConvertBare_WithSiblingFormat(t *testing.T) {
 	t.Parallel()
@@ -925,7 +925,7 @@ func TestRepoConvertBare_WithSiblingFormat(t *testing.T) {
 	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd := newRepoConvertCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare", "-w", "../{repo}-{branch}"})
+	cmd.SetArgs([]string{repoPath, "--clone-mode", "bare", "--worktree-format", "../{repo}-{branch}"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("convert command failed: %v", err)
@@ -947,7 +947,7 @@ func TestRepoConvertBare_WithSiblingFormat(t *testing.T) {
 
 // TestRepoConvertBare_SiblingFormatWithExistingWorktrees tests migration with sibling format and existing worktrees.
 //
-// Scenario: User runs `wt repo convert --clone-mode bare -w "../{repo}-{branch}"` on repo with existing worktrees
+// Scenario: User runs `wt repo convert --clone-mode bare --worktree-format "../{repo}-{branch}"` on repo with existing worktrees
 // Expected: Existing worktrees are moved to format-based sibling locations
 func TestRepoConvertBare_SiblingFormatWithExistingWorktrees(t *testing.T) {
 	t.Parallel()
@@ -974,7 +974,7 @@ func TestRepoConvertBare_SiblingFormatWithExistingWorktrees(t *testing.T) {
 	ctx := testContextWithConfig(t, cfg, tmpDir)
 	cmd2 := newRepoConvertCmd()
 	cmd2.SetContext(ctx)
-	cmd2.SetArgs([]string{repoPath, "--clone-mode", "bare", "-w", "../{repo}-{branch}"})
+	cmd2.SetArgs([]string{repoPath, "--clone-mode", "bare", "--worktree-format", "../{repo}-{branch}"})
 
 	if err := cmd2.Execute(); err != nil {
 		t.Fatalf("convert command failed: %v", err)

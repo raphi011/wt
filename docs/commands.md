@@ -82,9 +82,9 @@ Flags:
 
 ```text
   -a, --arg strings    Set hook variable (KEY=VALUE or KEY for boolean)
-  -s, --autostash      Stash changes and apply to new worktree
+      --autostash      Stash changes and apply to new worktree
       --base string    Base branch to create from
-  -f, --fetch          Fetch from origin before checkout
+      --fetch          Fetch from origin before checkout
   -g, --global         Search all repos for an unscoped existing branch
   -h, --help           help for checkout
       --hook strings   Run named hook(s)
@@ -146,8 +146,6 @@ Prune merged worktrees
 wt prune [[scope:]branch...] [flags]
 ```
 
-Aliases: `p`
-
 ```text
 Remove worktrees with merged PRs.
 
@@ -187,7 +185,7 @@ Flags:
 
 ```text
   -a, --arg strings          Set hook variable (KEY=VALUE or KEY for boolean)
-  -b, --delete-branches      Delete local branches after removal
+      --delete-branches      Delete local branches after removal
   -d, --dry-run              Preview without removing
   -f, --force                Force remove unmerged worktrees and worktrees with uncommitted changes
   -g, --global               Prune all repos
@@ -292,7 +290,7 @@ Examples:
   wt repo add ~/work/*                             # Register all repos in directory
   wt repo add ~/work/my-project -n myproj          # Custom display name (single repo only)
   wt repo add ~/work/my-project -l work -l api     # Add labels
-  wt repo add ~/work/my-project -w "./{branch}"    # Custom worktree format
+  wt repo add ~/work/my-project --worktree-format "./{branch}"  # Custom worktree format
 ```
 
 Flags:
@@ -301,7 +299,7 @@ Flags:
   -h, --help                     help for add
   -l, --label strings            Labels for grouping (repeatable)
   -n, --name string              Display name (default: directory name)
-  -w, --worktree-format string   Worktree format override
+      --worktree-format string   Worktree format override
 ```
 
 ### wt repo clone
@@ -325,7 +323,7 @@ By default, clones as a regular repo with a working tree at root:
 Use --clone-mode bare (or clone.mode in config) for a bare clone (git data in .git, no working tree at root).
 
 When cloning bare, creates a worktree for the default branch (main/master).
-Use -b to specify a different branch instead.
+Use --branch to specify a different branch instead.
 
 Supports both full URLs and short-form org/repo format:
   - Full URLs use git clone directly
@@ -343,19 +341,19 @@ Examples:
   wt repo clone org/repo                              # Clone via gh/glab (uses forge config)
   wt repo clone myrepo                                # Clone with default_org
   wt repo clone org/repo --clone-mode bare            # Bare clone with default branch worktree
-  wt repo clone org/repo --clone-mode bare -b develop # Bare clone with worktree for develop
+  wt repo clone org/repo --clone-mode bare --branch develop # Bare clone with worktree for develop
   wt repo clone org/repo -l work                      # Clone with label
 ```
 
 Flags:
 
 ```text
-  -b, --branch string            Create initial worktree for branch (bare mode only)
+      --branch string            Create initial worktree for branch (bare mode only)
       --clone-mode string        Clone mode: bare or regular (default: config)
   -h, --help                     help for clone
   -l, --label strings            Labels for grouping (repeatable)
   -n, --name string              Display name (default: directory name)
-  -w, --worktree-format string   Worktree format override
+      --worktree-format string   Worktree format override
 ```
 
 ### wt repo remove
@@ -445,7 +443,7 @@ Flags:
   -h, --help                     help for convert
   -l, --label strings            Labels for grouping (repeatable)
   -n, --name string              Display name (default: directory name)
-  -w, --worktree-format string   Worktree format override
+      --worktree-format string   Worktree format override
 ```
 
 ## wt pr
@@ -552,7 +550,7 @@ Flags:
 
 ```text
       --base string        Base branch
-  -b, --body string        PR body
+      --body string        PR body
       --body-file string   Read body from file
       --draft              Create as draft PR
   -h, --help               help for create
@@ -583,7 +581,7 @@ Examples:
   wt pr merge                  # Merge current branch's PR
   wt pr merge myrepo           # Merge for specific repo
   wt pr merge --keep           # Keep worktree after merge
-  wt pr merge -s rebase        # Use rebase strategy
+  wt pr merge --strategy rebase  # Use rebase strategy
 ```
 
 Flags:
@@ -594,7 +592,7 @@ Flags:
       --hook strings      Run named hook(s)
   -k, --keep              Keep worktree after merge
       --no-hook           Skip hooks
-  -s, --strategy string   Merge strategy: squash, rebase, merge
+      --strategy string   Merge strategy: squash, rebase, merge
 ```
 
 ### wt pr view
@@ -671,7 +669,7 @@ Flags:
   -h, --help          help for diff
       --name-only     Show only names of changed files
       --stat          Show diffstat summary only
-  -t, --tool string   Override pager for this diff (e.g. delta, bat)
+      --tool string   Override pager for this diff (e.g. delta, bat)
       --working       Show uncommitted changes (diff against HEAD)
 ```
 
@@ -788,10 +786,10 @@ Examples:
 
 ```text
   wt note set "WIP"                    # Set note on current branch
-  wt note set "WIP" main               # Set note on main (current repo)
-  wt note set "WIP" main -g            # Set note on main (all repos with main)
-  wt note set "WIP" myrepo:main        # Set note on main in myrepo
-  wt note set "WIP" backend:feat       # Set note in all backend repos
+  wt note set main "WIP"               # Set note on main (current repo)
+  wt note set -g main "WIP"            # Set note on main (all repos with main)
+  wt note set myrepo:main "WIP"        # Set note on main in myrepo
+  wt note set backend:feat "WIP"       # Set note in all backend repos
   wt note get                          # Get note for current branch
   wt note get myrepo:feature           # Get note for specific worktree
   wt note clear                        # Clear note from current branch
@@ -808,7 +806,7 @@ Flags:
 Set a note on a branch
 
 ```text
-wt note set <text> [[scope:]branch] [flags]
+wt note set [[scope:]branch] <text> [flags]
 ```
 
 Flags:
@@ -1022,7 +1020,7 @@ or label) and the second is the hook name. A branch without scope means the
 current repo; outside a repo it searches all repos, and with -g the hook runs
 in every match.
 
-Run 'wt config hooks' to list hooks, 'wt config init -s' for trigger syntax
+Run 'wt config hooks' to list hooks, 'wt config init --stdout' for trigger syntax
 and placeholders.
 ```
 
@@ -1100,7 +1098,7 @@ Examples:
   wt config init           # Create global config
   wt config init --local   # Create local repo config
   wt config init -f        # Overwrite existing config
-  wt config init -s        # Print config to stdout
+  wt config init --stdout  # Print config to stdout
 ```
 
 Flags:
@@ -1109,7 +1107,7 @@ Flags:
   -f, --force    Overwrite existing config
   -h, --help     help for init
       --local    Create per-repo .wt.toml instead of global config
-  -s, --stdout   Print config to stdout
+      --stdout   Print config to stdout
 ```
 
 ### wt config show
@@ -1117,30 +1115,29 @@ Flags:
 Show effective configuration
 
 ```text
-wt config show [flags]
+wt config show [repo] [flags]
 ```
 
 ```text
 Show effective configuration.
 
-When inside a repo (or with --repo), shows the merged config with source
-annotations (global vs local). Otherwise shows global config only.
+When inside a repo (or with a repo argument), shows the merged config with
+source annotations (global vs local). Otherwise shows global config only.
 ```
 
 Examples:
 
 ```text
   wt config show              # Show config (merged if in a repo)
-  wt config show --repo myrepo  # Show merged config for specific repo
-  wt config show --json        # Output as JSON
+  wt config show myrepo       # Show merged config for specific repo
+  wt config show --json       # Output as JSON
 ```
 
 Flags:
 
 ```text
-  -h, --help          help for show
-      --json          Output as JSON
-      --repo string   Show config for specific repo
+  -h, --help   help for show
+      --json   Output as JSON
 ```
 
 ### wt config hooks
@@ -1148,29 +1145,28 @@ Flags:
 List available hooks
 
 ```text
-wt config hooks [flags]
+wt config hooks [repo] [flags]
 ```
 
 ```text
 List available hooks.
 
-When inside a repo (or with --repo), shows merged hooks with source annotations.
+When inside a repo (or with a repo argument), shows merged hooks with source annotations.
 ```
 
 Examples:
 
 ```text
   wt config hooks               # List hooks (merged if in a repo)
-  wt config hooks --repo myrepo # List hooks for specific repo
+  wt config hooks myrepo        # List hooks for specific repo
   wt config hooks --json        # Output as JSON
 ```
 
 Flags:
 
 ```text
-  -h, --help          help for hooks
-      --json          Output as JSON
-      --repo string   Show hooks for specific repo
+  -h, --help   help for hooks
+      --json   Output as JSON
 ```
 
 ## wt completion

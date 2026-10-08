@@ -108,6 +108,7 @@ internal/ui/             - Terminal UI components
   - `repo:branch` - targets specific repo
   - `label:branch` - targets all repos with that label (resolved after checking repo names)
   - `wt hook [[scope:]branch] <hookname>` - optional target before hook name (1 hook per invocation)
+  - `wt note set [[scope:]branch] <text>` - optional target before the text
 
 - **Repo targeting**: `wt pr create/merge/view`, `wt list`, `wt label`, `wt repo list`
   - `wt list [scope...]` - positional args for repo name or label filtering
@@ -115,6 +116,7 @@ internal/ui/             - Terminal UI components
   - `wt repo list [label...]` - positional args for label filtering
   - `wt pr checkout [repo] <number>` - optional repo as first positional arg
   - `wt pr create/merge/view [repo]` - optional repo positional arg
+  - `wt config show/hooks [repo]` - optional repo positional arg
 
 **Resolution order for `scope:branch`:**
 1. Try to match scope as repo name
@@ -130,7 +132,7 @@ internal/ui/             - Terminal UI components
 
 **Regenerate the command reference** - `docs/commands.md` is generated from the cobra command definitions. After changing a command's `Use`, `Short`, `Long`, `Example`, aliases or flags, run `just docs`; `TestCommandDocs` fails otherwise. User docs live in `README.md`, `docs/configuration.md` and `docs/hooks.md`; internal notes in `docs/dev/`.
 
-**Reuse flags consistently** - When adding flags that serve the same purpose across commands, use identical names/shortcuts. Standard flags:
+**Reuse flags consistently** - When adding flags that serve the same purpose across commands, use identical names/shortcuts. A short letter has one meaning across all commands (`TestShortFlagsHaveOneMeaning` enforces this); if the letter is taken, the new flag is long-only. Standard flags:
 - `-i, --interactive` - interactive mode (wt checkout, wt cd, wt prune)
 - `-d, --dry-run` - preview without making changes
 - `-f, --force` - force operation (override safety checks)

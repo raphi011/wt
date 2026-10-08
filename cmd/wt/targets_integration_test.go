@@ -512,7 +512,7 @@ func TestHook_UnscopedInRepo_UsesCurrentRepo(t *testing.T) {
 // TestNote_UnscopedInRepo_UsesCurrentRepo tests that note set applies an
 // unscoped target to the current repo only.
 //
-// Scenario: repo1 and repo2 both have a "feature" worktree, user runs `wt note set WIP feature` inside repo1
+// Scenario: repo1 and repo2 both have a "feature" worktree, user runs `wt note set feature WIP` inside repo1
 // Expected: The note is set in repo1 only
 func TestNote_UnscopedInRepo_UsesCurrentRepo(t *testing.T) {
 	t.Parallel()
@@ -522,7 +522,7 @@ func TestNote_UnscopedInRepo_UsesCurrentRepo(t *testing.T) {
 	ctx := testContextWithConfig(t, cfg, repo1Path)
 	cmd := newNoteCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"set", "WIP", "feature"})
+	cmd.SetArgs([]string{"set", "feature", "WIP"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("note set command failed: %v", err)

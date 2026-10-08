@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 var updateDocs = flag.Bool("update-docs", false, "rewrite docs/commands.md from the command tree")
@@ -94,4 +95,27 @@ func documentedCommands(cmd *cobra.Command) []*cobra.Command {
 
 func writeCodeBlock(b *strings.Builder, text string) {
 	fmt.Fprintf(b, "```text\n%s\n```\n\n", strings.TrimRight(text, "\n"))
+}
+
+// TestShortFlagsHaveOneMeaning ensures a shorthand letter maps to the same
+// long flag on every command.
+func TestShortFlagsHaveOneMeaning(t *testing.T) {
+	names := map[string]string{} // shorthand -> long flag name
+
+	var walk func(cmd *cobra.Command)
+	walk = func(cmd *cobra.Command) {
+		cmd.Flags().VisitAll(func(f *pflag.Flag) {
+			if f.Shorthand == "" {
+				return
+			}
+			if name, ok := names[f.Shorthand]; ok && name != f.Name {
+				t.Errorf("-%s is --%s on %q but --%s elsewhere", f.Shorthand, f.Name, cmd.CommandPath(), name)
+			}
+			names[f.Shorthand] = f.Name
+		})
+		for _, sub := range cmd.Commands() {
+			walk(sub)
+		}
+	}
+	walk(rootCmd)
 }

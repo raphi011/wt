@@ -276,11 +276,11 @@ default = "gitlab"
 	}
 }
 
-// TestConfigShow_RepoFlag tests `config show --json --repo <name>` with a registered repo.
+// TestConfigShow_RepoArg tests `config show --json <name>` with a registered repo.
 //
-// Scenario: A repo is registered with a local .wt.toml. User runs `wt config show --json --repo myrepo`.
+// Scenario: A repo is registered with a local .wt.toml. User runs `wt config show --json myrepo`.
 // Expected: Valid JSON output contains the merged config (including local overrides).
-func TestConfigShow_RepoFlag(t *testing.T) {
+func TestConfigShow_RepoArg(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := resolvePath(t, t.TempDir())
@@ -320,10 +320,10 @@ worktree_format = "custom/{branch}"
 
 	cmd := newConfigCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"show", "--json", "--repo", "myrepo"})
+	cmd.SetArgs([]string{"show", "--json", "myrepo"})
 
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("config show --json --repo myrepo failed: %v", err)
+		t.Fatalf("config show --json myrepo failed: %v", err)
 	}
 
 	output := out.String()
