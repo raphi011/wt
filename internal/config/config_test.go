@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1174,5 +1175,50 @@ func TestValidateHookTriggers(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestConfigJSON(t *testing.T) {
+	t.Parallel()
+
+	cfg := Config{
+		RegistryPath: "/tmp/repos.json",
+		DefaultSort:  "repo",
+		Hooks: HooksConfig{Hooks: map[string]Hook{
+			"code": {Command: "code {worktree-dir}", On: []string{"checkout"}},
+		}},
+		Checkout: CheckoutConfig{WorktreeFormat: "{branch}", AutoFetch: true},
+	}
+
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	got := string(data)
+
+	for _, want := range []string{
+		`"default_sort":"repo"`,
+		`"hooks":{"code":{"command":"code {worktree-dir}","on":["checkout"]}}`,
+		`"checkout":{"worktree_format":"{branch}","auto_fetch":true}`,
+		`"prune":{"delete_local_branches":false,"stale_days":0}`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("JSON missing %s\ngot: %s", want, got)
+		}
+	}
+	if strings.Contains(got, "repos.json") {
+		t.Errorf("JSON leaks RegistryPath: %s", got)
+	}
+}
+
+func TestHooksConfigJSON_Empty(t *testing.T) {
+	t.Parallel()
+
+	data, err := json.Marshal(HooksConfig{})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if string(data) != "{}" {
+		t.Errorf("got %s, want {}", data)
 	}
 }

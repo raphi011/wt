@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -49,10 +50,10 @@ const LocalConfigFileName = ".wt.toml"
 
 // Hook defines a hook: a shell command run before or after a wt operation
 type Hook struct {
-	Command     string   `toml:"command"`
-	Description string   `toml:"description"`
-	On          []string `toml:"on"`      // commands this hook runs on (empty = only via --hook)
-	Enabled     *bool    `toml:"enabled"` // nil = true (default); false disables a global hook locally
+	Command     string   `toml:"command" json:"command,omitempty"`
+	Description string   `toml:"description" json:"description,omitempty"`
+	On          []string `toml:"on" json:"on,omitempty"`           // commands this hook runs on (empty = only via --hook)
+	Enabled     *bool    `toml:"enabled" json:"enabled,omitempty"` // nil = true (default); false disables a global hook locally
 }
 
 // IsEnabled returns whether the hook is enabled (defaults to true when Enabled is nil)
@@ -68,40 +69,48 @@ type HooksConfig struct {
 	Hooks map[string]Hook `toml:"-"` // parsed from [hooks.NAME] sections
 }
 
+// MarshalJSON encodes the hooks as an object keyed by hook name
+func (h HooksConfig) MarshalJSON() ([]byte, error) {
+	if h.Hooks == nil {
+		return []byte("{}"), nil
+	}
+	return json.Marshal(h.Hooks)
+}
+
 // ForgeRule maps a pattern to forge settings
 type ForgeRule struct {
-	Pattern string `toml:"pattern"` // glob pattern like "n26/*" or "company/*"
-	Type    string `toml:"type"`    // "github" or "gitlab"
-	User    string `toml:"user"`    // optional: gh/glab username for auth
+	Pattern string `toml:"pattern" json:"pattern,omitempty"` // glob pattern like "n26/*" or "company/*"
+	Type    string `toml:"type" json:"type,omitempty"`       // "github" or "gitlab"
+	User    string `toml:"user" json:"user,omitempty"`       // optional: gh/glab username for auth
 }
 
 // ForgeConfig holds forge-related configuration
 type ForgeConfig struct {
-	Default    string      `toml:"default"`     // default forge type
-	DefaultOrg string      `toml:"default_org"` // default org for clone
-	Rules      []ForgeRule `toml:"rules"`
+	Default    string      `toml:"default" json:"default,omitempty"`         // default forge type
+	DefaultOrg string      `toml:"default_org" json:"default_org,omitempty"` // default org for clone
+	Rules      []ForgeRule `toml:"rules" json:"rules,omitempty"`
 }
 
 // MergeConfig holds merge-related configuration
 type MergeConfig struct {
-	Strategy string `toml:"strategy"` // "squash", "rebase", or "merge"
+	Strategy string `toml:"strategy" json:"strategy,omitempty"` // "squash", "rebase", or "merge"
 }
 
 // PruneConfig holds prune-related configuration
 type PruneConfig struct {
-	DeleteLocalBranches bool `toml:"delete_local_branches"`
-	StaleDays           int  `toml:"stale_days"` // days after which worktrees are highlighted as stale and eligible for --stale pruning (0 = disabled)
+	DeleteLocalBranches bool `toml:"delete_local_branches" json:"delete_local_branches"`
+	StaleDays           int  `toml:"stale_days" json:"stale_days"` // days after which worktrees are highlighted as stale and eligible for --stale pruning (0 = disabled)
 }
 
 // PreserveConfig holds file preservation settings for worktree creation.
 // Listed paths are symlinked from the repo root into new worktrees.
 type PreserveConfig struct {
-	Paths []string `toml:"paths"` // Relative paths from repo root to symlink (e.g., ".env", "config/.env")
+	Paths []string `toml:"paths" json:"paths,omitempty"` // Relative paths from repo root to symlink (e.g., ".env", "config/.env")
 }
 
 // CloneConfig holds clone-related configuration
 type CloneConfig struct {
-	Mode string `toml:"mode"` // "bare" or "regular" (default: "regular")
+	Mode string `toml:"mode" json:"mode,omitempty"` // "bare" or "regular" (default: "regular")
 }
 
 // IsBare returns true if the clone mode is bare.
@@ -111,42 +120,42 @@ func (c *CloneConfig) IsBare() bool {
 
 // CheckoutConfig holds checkout-related configuration
 type CheckoutConfig struct {
-	WorktreeFormat string `toml:"worktree_format"` // Template for worktree folder names
-	BaseRef        string `toml:"base_ref"`        // "local" or "remote" (default: "remote")
-	AutoFetch      bool   `toml:"auto_fetch"`      // Fetch from origin before checkout
-	SetUpstream    *bool  `toml:"set_upstream"`    // Auto-set upstream tracking (default: false)
+	WorktreeFormat string `toml:"worktree_format" json:"worktree_format,omitempty"` // Template for worktree folder names
+	BaseRef        string `toml:"base_ref" json:"base_ref,omitempty"`               // "local" or "remote" (default: "remote")
+	AutoFetch      bool   `toml:"auto_fetch" json:"auto_fetch"`                     // Fetch from origin before checkout
+	SetUpstream    *bool  `toml:"set_upstream" json:"set_upstream,omitempty"`       // Auto-set upstream tracking (default: false)
 }
 
 // ThemeConfig holds theme/color configuration for interactive UI
 type ThemeConfig struct {
-	Name     string `toml:"name"`     // preset name: "none", "default", "dracula", "nord", "gruvbox", "catppuccin"
-	Mode     string `toml:"mode"`     // theme mode: "auto", "light", "dark" (default: "auto")
-	Primary  string `toml:"primary"`  // main accent color (borders, titles)
-	Accent   string `toml:"accent"`   // highlight color (selected items)
-	Success  string `toml:"success"`  // success indicators (checkmarks)
-	Error    string `toml:"error"`    // error messages
-	Muted    string `toml:"muted"`    // disabled/inactive text
-	Normal   string `toml:"normal"`   // standard text
-	Info     string `toml:"info"`     // informational text
-	Warning  string `toml:"warning"`  // warning indicators (stale items)
-	Nerdfont bool   `toml:"nerdfont"` // use nerd font symbols (default: false)
+	Name     string `toml:"name" json:"name,omitempty"`       // preset name: "none", "default", "dracula", "nord", "gruvbox", "catppuccin"
+	Mode     string `toml:"mode" json:"mode,omitempty"`       // theme mode: "auto", "light", "dark" (default: "auto")
+	Primary  string `toml:"primary" json:"primary,omitempty"` // main accent color (borders, titles)
+	Accent   string `toml:"accent" json:"accent,omitempty"`   // highlight color (selected items)
+	Success  string `toml:"success" json:"success,omitempty"` // success indicators (checkmarks)
+	Error    string `toml:"error" json:"error,omitempty"`     // error messages
+	Muted    string `toml:"muted" json:"muted,omitempty"`     // disabled/inactive text
+	Normal   string `toml:"normal" json:"normal,omitempty"`   // standard text
+	Info     string `toml:"info" json:"info,omitempty"`       // informational text
+	Warning  string `toml:"warning" json:"warning,omitempty"` // warning indicators (stale items)
+	Nerdfont bool   `toml:"nerdfont" json:"nerdfont"`         // use nerd font symbols (default: false)
 }
 
 // Config holds the wt configuration
 type Config struct {
-	RegistryPath  string            `toml:"-"`              // Override ~/.wt/repos.json path (for testing)
-	HistoryPath   string            `toml:"-"`              // Override ~/.wt/history.json path (for testing)
-	DefaultSort   string            `toml:"default_sort"`   // "date", "repo", "branch" (default: "date")
-	DefaultLabels []string          `toml:"default_labels"` // labels for newly registered repos
-	Hooks         HooksConfig       `toml:"-"`              // custom parsing needed
-	Clone         CloneConfig       `toml:"clone"`          // clone settings
-	Checkout      CheckoutConfig    `toml:"checkout"`       // checkout settings
-	Forge         ForgeConfig       `toml:"forge"`
-	Merge         MergeConfig       `toml:"merge"`
-	Prune         PruneConfig       `toml:"prune"`
-	Preserve      PreserveConfig    `toml:"preserve"` // file preservation for new worktrees
-	Hosts         map[string]string `toml:"hosts"`    // domain -> forge type mapping
-	Theme         ThemeConfig       `toml:"theme"`    // UI theme/colors for interactive mode
+	RegistryPath  string            `toml:"-" json:"-"`                                     // Override ~/.wt/repos.json path (for testing)
+	HistoryPath   string            `toml:"-" json:"-"`                                     // Override ~/.wt/history.json path (for testing)
+	DefaultSort   string            `toml:"default_sort" json:"default_sort,omitempty"`     // "date", "repo", "branch" (default: "date")
+	DefaultLabels []string          `toml:"default_labels" json:"default_labels,omitempty"` // labels for newly registered repos
+	Hooks         HooksConfig       `toml:"-" json:"hooks"`                                 // custom parsing needed
+	Clone         CloneConfig       `toml:"clone" json:"clone"`                             // clone settings
+	Checkout      CheckoutConfig    `toml:"checkout" json:"checkout"`                       // checkout settings
+	Forge         ForgeConfig       `toml:"forge" json:"forge"`
+	Merge         MergeConfig       `toml:"merge" json:"merge"`
+	Prune         PruneConfig       `toml:"prune" json:"prune"`
+	Preserve      PreserveConfig    `toml:"preserve" json:"preserve"`     // file preservation for new worktrees
+	Hosts         map[string]string `toml:"hosts" json:"hosts,omitempty"` // domain -> forge type mapping
+	Theme         ThemeConfig       `toml:"theme" json:"theme"`           // UI theme/colors for interactive mode
 }
 
 // DefaultWorktreeFormat is the default format for worktree folder names

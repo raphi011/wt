@@ -2036,3 +2036,45 @@ func TestRepoConvertRegular_DryRun(t *testing.T) {
 		t.Error("main worktree should still exist after dry run")
 	}
 }
+
+// TestRepoList_JSONNoLabelMatch tests JSON output when no repo has the label.
+//
+// Scenario: User runs `wt repo list nosuchlabel --json`
+// Expected: Output is an empty JSON array
+func TestRepoList_JSONNoLabelMatch(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+
+	reg := &registry.Registry{
+		Repos: []registry.Repo{
+			{Name: "test-repo", Path: "/tmp/test-repo"},
+		},
+	}
+	if err := saveRegistry(reg, regFile); err != nil {
+		t.Fatalf("failed to save registry: %v", err)
+	}
+
+	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithWorkDir(ctx, tmpDir)
+	cmd := newRepoListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"nosuchlabel", "--json"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("repo list command failed: %v", err)
+	}
+
+	if got := strings.TrimSpace(out.String()); got != "[]" {
+		t.Errorf("expected [], got %q", got)
+	}
+}

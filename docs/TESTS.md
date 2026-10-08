@@ -1,6 +1,6 @@
 # Test Documentation
 
-Generated: 2026-10-07
+Generated: 2026-10-08
 
 ## Summary
 
@@ -34,7 +34,7 @@ Generated: 2026-10-07
 | [repoclone](#repoclone) | 16 |
 | [repoconvertbare](#repoconvertbare) | 18 |
 | [repoconvertregular](#repoconvertregular) | 4 |
-| [repolist](#repolist) | 5 |
+| [repolist](#repolist) | 6 |
 | [reporemove](#reporemove) | 6 |
 | [resolvecheckoutrepos](#resolvecheckoutrepos) | 1 |
 | [resolverepoforge](#resolverepoforge) | 1 |
@@ -44,10 +44,10 @@ Generated: 2026-10-07
 | [wt checkout](#wt-checkout) | 81 |
 | [wt exec](#wt-exec) | 15 |
 | [wt label](#wt-label) | 15 |
-| [wt list](#wt-list) | 15 |
+| [wt list](#wt-list) | 16 |
 | [wt note](#wt-note) | 13 |
 | [wt prune](#wt-prune) | 51 |
-| **Total** | **365** |
+| **Total** | **367** |
 
 ## completebasebranches
 
@@ -341,6 +341,7 @@ Generated: 2026-10-07
 | `TestRepoList_FilterByLabel` | Tests filtering repos by label. |
 | `TestRepoList_LabelNotFound` | Tests error when filtering by nonexistent label. |
 | `TestRepoList_JSON` | Tests JSON output. |
+| `TestRepoList_JSONNoLabelMatch` | Tests JSON output when no repo has the label. |
 
 ## reporemove
 
@@ -543,6 +544,7 @@ Generated: 2026-10-07
 | `TestList_Global` | Tests the --global flag shows all repos. |
 | `TestList_GlobalFromNonRepo` | Tests --global from outside any git repo. |
 | `TestList_DefaultSortFromConfig` | Tests that default_sort in config is used when --sort is not set. |
+| `TestList_JSONEmpty` | Tests JSON output when there are no worktrees. |
 | `TestList_SortOverrides` | Tests sort precedence. |
 
 ## wt note
