@@ -197,7 +197,7 @@ func TestNoteClear_CurrentBranch(t *testing.T) {
 
 // TestNoteSet_ExplicitRepoBranch tests setting a note via repo:branch target.
 //
-// Scenario: User runs `wt note set "TODO" myrepo:feature`
+// Scenario: User runs `wt note set myrepo:feature "TODO"`
 // Expected: Note is set on the correct branch in the correct repo
 func TestNoteSet_ExplicitRepoBranch(t *testing.T) {
 	t.Parallel()
@@ -225,7 +225,7 @@ func TestNoteSet_ExplicitRepoBranch(t *testing.T) {
 
 	cmd := newNoteCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"set", "TODO", "myrepo:feature"})
+	cmd.SetArgs([]string{"set", "myrepo:feature", "TODO"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("note set command failed: %v", err)
@@ -360,7 +360,7 @@ func TestNote_NotInGitRepo(t *testing.T) {
 
 // TestNoteSet_LabelScope tests setting a note on all repos matching a label.
 //
-// Scenario: Two repos have label "backend", user runs `wt note set "WIP" backend:feature`
+// Scenario: Two repos have label "backend", user runs `wt note set backend:feature "WIP"`
 // Expected: Note is set on both repos' feature branches
 func TestNoteSet_LabelScope(t *testing.T) {
 	t.Parallel()
@@ -391,7 +391,7 @@ func TestNoteSet_LabelScope(t *testing.T) {
 
 	cmd := newNoteCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"set", "WIP", "backend:feature"})
+	cmd.SetArgs([]string{"set", "backend:feature", "WIP"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("note set command failed: %v", err)
@@ -448,7 +448,7 @@ func TestNote_UnscopedGitErrorWarns(t *testing.T) {
 
 // TestNoteSet_LabelContinuesAfterRepoFailure tests that a label note set continues past a failing repo.
 //
-// Scenario: User runs `wt note set "WIP" backend:feature` where git fails in the first backend repo
+// Scenario: User runs `wt note set backend:feature "WIP"` where git fails in the first backend repo
 // Expected: Note is set in the other repo and the error names the failed repo
 func TestNoteSet_LabelContinuesAfterRepoFailure(t *testing.T) {
 	t.Parallel()
@@ -478,7 +478,7 @@ func TestNoteSet_LabelContinuesAfterRepoFailure(t *testing.T) {
 
 	cmd := newNoteCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"set", "WIP", "backend:feature"})
+	cmd.SetArgs([]string{"set", "backend:feature", "WIP"})
 
 	err := cmd.Execute()
 	if err == nil {

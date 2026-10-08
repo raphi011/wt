@@ -189,8 +189,8 @@ func TestPrMerge_StrategyOverrides(t *testing.T) {
 		{name: "global", global: "squash", want: "squash"},
 		{name: "local overrides global", global: "squash", local: "[merge]\nstrategy = \"rebase\"\n", want: "rebase"},
 		{name: "flag overrides local", global: "squash", local: "[merge]\nstrategy = \"rebase\"\n", args: []string{"--strategy", "merge"}, want: "merge"},
-		{name: "flag overrides global", global: "squash", args: []string{"-s", "rebase"}, want: "rebase"},
-		{name: "invalid local flag override", global: "squash", local: "invalid [[[", args: []string{"-s", "rebase"}, want: "rebase"},
+		{name: "flag overrides global", global: "squash", args: []string{"--strategy", "rebase"}, want: "rebase"},
+		{name: "invalid local flag override", global: "squash", local: "invalid [[[", args: []string{"--strategy", "rebase"}, want: "rebase"},
 		{name: "invalid local global fallback", global: "squash", local: "invalid [[[", want: "squash"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

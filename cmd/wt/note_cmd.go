@@ -27,10 +27,10 @@ Notes are stored in git config and displayed in list output.
 Target a worktree using [scope:]branch where scope can be a repo name or label.
 If no target is specified, uses the current worktree's branch.`,
 		Example: `  wt note set "WIP"                    # Set note on current branch
-  wt note set "WIP" main               # Set note on main (current repo)
-  wt note set "WIP" main -g            # Set note on main (all repos with main)
-  wt note set "WIP" myrepo:main        # Set note on main in myrepo
-  wt note set "WIP" backend:feat       # Set note in all backend repos
+  wt note set main "WIP"               # Set note on main (current repo)
+  wt note set -g main "WIP"            # Set note on main (all repos with main)
+  wt note set myrepo:main "WIP"        # Set note on main in myrepo
+  wt note set backend:feat "WIP"       # Set note in all backend repos
   wt note get                          # Get note for current branch
   wt note get myrepo:feature           # Get note for specific worktree
   wt note clear                        # Clear note from current branch`,
@@ -47,7 +47,7 @@ func newNoteSetCmd() *cobra.Command {
 	var global bool
 
 	cmd := &cobra.Command{
-		Use:               "set <text> [[scope:]branch]",
+		Use:               "set [[scope:]branch] <text>",
 		Short:             "Set a note on a branch",
 		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: completeNoteArg,
@@ -56,7 +56,7 @@ func newNoteSetCmd() *cobra.Command {
 			cfg := config.FromContext(ctx)
 			workDir := config.WorkDirFromContext(ctx)
 			l := log.FromContext(ctx)
-			text := args[0]
+			text := args[len(args)-1]
 
 			// Load registry
 			reg, err := registry.Load(cfg.RegistryPath)
@@ -65,7 +65,7 @@ func newNoteSetCmd() *cobra.Command {
 			}
 
 			// Resolve target(s)
-			targets, err := resolveNoteTargets(ctx, workDir, reg, args[1:], global)
+			targets, err := resolveNoteTargets(ctx, workDir, reg, args[:len(args)-1], global)
 			if err != nil {
 				return err
 			}
@@ -263,15 +263,8 @@ func getCurrentRepoBranch(ctx context.Context, workDir string, reg *registry.Reg
 
 // completeNoteArg provides completion for note command targets
 func completeNoteArg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	// For set command, first arg is text, second is target
-	// For get/clear, first arg is target
-	cmdName := cmd.Name()
-	targetArgIndex := 0
-	if cmdName == "set" {
-		targetArgIndex = 1
-	}
-
-	if len(args) != targetArgIndex {
+	// The target is the first arg; set takes the text after it
+	if len(args) != 0 {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 

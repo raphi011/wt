@@ -651,7 +651,7 @@ func TestRepoClone_ShortFormAutoExtractRepoName(t *testing.T) {
 
 // TestRepoClone_ExplicitBranchSkipsAutoDetect tests that -b flag overrides auto-detection.
 //
-// Scenario: User runs `wt repo clone file:///repo -b feature`
+// Scenario: User runs `wt repo clone file:///repo --branch feature`
 // Expected: Only the explicitly specified branch worktree is created
 func TestRepoClone_ExplicitBranchSkipsAutoDetect(t *testing.T) {
 	t.Parallel()
@@ -676,7 +676,7 @@ func TestRepoClone_ExplicitBranchSkipsAutoDetect(t *testing.T) {
 
 	cmd := newRepoCloneCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"file://" + sourceRepo, "cloned-repo", "-b", "feature", "--clone-mode", "bare"})
+	cmd.SetArgs([]string{"file://" + sourceRepo, "cloned-repo", "--branch", "feature", "--clone-mode", "bare"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("clone command failed: %v", err)

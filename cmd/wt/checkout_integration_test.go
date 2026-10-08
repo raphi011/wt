@@ -1999,7 +1999,7 @@ func TestCheckout_NewBranchEmptyRepo(t *testing.T) {
 
 // TestCheckout_NewBranchEmptyRepoWithFetch tests that --fetch is safely skipped on empty repos.
 //
-// Scenario: User runs `wt checkout -b -f repo:branch` on an empty repo
+// Scenario: User runs `wt checkout -b --fetch repo:branch` on an empty repo
 // Expected: Worktree is created, fetch is skipped without errors
 func TestCheckout_NewBranchEmptyRepoWithFetch(t *testing.T) {
 	t.Parallel()
@@ -2043,7 +2043,7 @@ func TestCheckout_NewBranchEmptyRepoWithFetch(t *testing.T) {
 	ctx := testContextWithConfig(t, cfg, workDir)
 	cmd := newCheckoutCmd()
 	cmd.SetContext(ctx)
-	cmd.SetArgs([]string{"-b", "-f", "empty-repo-fetch:feature"})
+	cmd.SetArgs([]string{"-b", "--fetch", "empty-repo-fetch:feature"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("checkout with --fetch on empty repo should succeed, got: %v", err)

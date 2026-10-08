@@ -455,7 +455,7 @@ func newPrCreateCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&title, "title", "t", "", "PR title")
-	cmd.Flags().StringVarP(&body, "body", "b", "", "PR body")
+	cmd.Flags().StringVar(&body, "body", "", "PR body")
 	cmd.Flags().StringVar(&bodyFile, "body-file", "", "Read body from file")
 	cmd.Flags().StringVar(&base, "base", "", "Base branch")
 	cmd.Flags().BoolVar(&draft, "draft", false, "Create as draft PR")
@@ -491,7 +491,7 @@ With prune.delete_local_branches, the local branch is deleted with the worktree.
 		Example: `  wt pr merge                  # Merge current branch's PR
   wt pr merge myrepo           # Merge for specific repo
   wt pr merge --keep           # Keep worktree after merge
-  wt pr merge -s rebase        # Use rebase strategy`,
+  wt pr merge --strategy rebase  # Use rebase strategy`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			l := log.FromContext(ctx)
@@ -574,7 +574,7 @@ With prune.delete_local_branches, the local branch is deleted with the worktree.
 		},
 	}
 
-	cmd.Flags().StringVarP(&strategy, "strategy", "s", "", "Merge strategy: squash, rebase, merge")
+	cmd.Flags().StringVar(&strategy, "strategy", "", "Merge strategy: squash, rebase, merge")
 	cmd.Flags().BoolVarP(&keep, "keep", "k", false, "Keep worktree after merge")
 	registerHookFlags(cmd, &hf)
 	cobra.CheckErr(cmd.RegisterFlagCompletionFunc("strategy", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
