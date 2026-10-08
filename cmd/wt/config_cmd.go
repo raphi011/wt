@@ -490,7 +490,7 @@ When inside a repo (or with a repo argument), shows merged hooks with source ann
 			if jsonOutput {
 				enc := json.NewEncoder(out.Writer())
 				enc.SetIndent("", "  ")
-				return enc.Encode(effCfg.Hooks.Hooks)
+				return enc.Encode(effCfg.Hooks)
 			}
 
 			if len(effCfg.Hooks.Hooks) == 0 {

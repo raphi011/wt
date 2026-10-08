@@ -81,7 +81,7 @@ Use positional args to filter by label(s).`,
 			}
 
 			// Filter by labels if specified
-			var repos []registry.Repo
+			repos := []registry.Repo{}
 			if len(args) > 0 {
 				// Collect repos matching any of the labels
 				seen := make(map[string]bool)

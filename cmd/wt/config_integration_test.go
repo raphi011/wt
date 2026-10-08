@@ -197,7 +197,7 @@ func TestConfigHooks_JSON(t *testing.T) {
 // TestConfigHooks_JSON_Empty tests JSON output when no hooks configured.
 //
 // Scenario: User runs `wt config hooks --json` with no hooks
-// Expected: Valid JSON (null or empty object)
+// Expected: An empty JSON object
 func TestConfigHooks_JSON_Empty(t *testing.T) {
 	t.Parallel()
 
@@ -214,9 +214,8 @@ func TestConfigHooks_JSON_Empty(t *testing.T) {
 	}
 
 	output := strings.TrimSpace(out.String())
-	// Accept null or empty object
-	if output != "null" && output != "{}" {
-		t.Errorf("expected null or {} for empty hooks, got %q", output)
+	if output != "{}" {
+		t.Errorf("expected {} for empty hooks, got %q", output)
 	}
 }
 
@@ -266,13 +265,13 @@ default = "gitlab"
 		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, output)
 	}
 
-	// Verify the local override took effect: Forge.Default should be "gitlab"
-	forge, ok := result["Forge"].(map[string]any)
+	// Verify the local override took effect: forge.default should be "gitlab"
+	forge, ok := result["forge"].(map[string]any)
 	if !ok {
-		t.Fatalf("expected 'Forge' key in JSON output, got: %v", result)
+		t.Fatalf("expected 'forge' key in JSON output, got: %v", result)
 	}
-	if forge["Default"] != "gitlab" {
-		t.Errorf("expected Forge.Default = 'gitlab' (from local override), got %q", forge["Default"])
+	if forge["default"] != "gitlab" {
+		t.Errorf("expected forge.default = 'gitlab' (from local override), got %q", forge["default"])
 	}
 }
 
@@ -336,12 +335,12 @@ worktree_format = "custom/{branch}"
 		t.Fatalf("output is not valid JSON: %v\noutput: %s", err, output)
 	}
 
-	// Verify the local override was applied: Checkout.WorktreeFormat should be from local config
-	checkout, ok := result["Checkout"].(map[string]any)
+	// Verify the local override was applied: checkout.worktree_format should be from local config
+	checkout, ok := result["checkout"].(map[string]any)
 	if !ok {
-		t.Fatalf("expected 'Checkout' key in JSON output, got: %v", result)
+		t.Fatalf("expected 'checkout' key in JSON output, got: %v", result)
 	}
-	if checkout["WorktreeFormat"] != "custom/{branch}" {
-		t.Errorf("expected Checkout.WorktreeFormat = 'custom/{branch}' (from local override), got %q", checkout["WorktreeFormat"])
+	if checkout["worktree_format"] != "custom/{branch}" {
+		t.Errorf("expected checkout.worktree_format = 'custom/{branch}' (from local override), got %q", checkout["worktree_format"])
 	}
 }

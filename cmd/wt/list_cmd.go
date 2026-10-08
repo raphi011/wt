@@ -112,10 +112,7 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 			if jsonOutput {
 				enc := json.NewEncoder(out.Writer())
 				enc.SetIndent("", "  ")
-				var rows []worktreeJSON
-				if allWorktrees != nil {
-					rows = make([]worktreeJSON, 0, len(allWorktrees))
-				}
+				rows := make([]worktreeJSON, 0, len(allWorktrees))
 				for _, wt := range allWorktrees {
 					pr := status.For(wt)
 					rows = append(rows, worktreeJSON{Worktree: wt, PRNumber: pr.Number, PRState: pr.State, PRURL: pr.URL, PRDraft: pr.IsDraft})

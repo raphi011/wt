@@ -764,3 +764,35 @@ func TestList_DefaultSortFromConfig(t *testing.T) {
 			alphaIdx, betaIdx, gammaIdx)
 	}
 }
+
+// TestList_JSONEmpty tests JSON output when there are no worktrees.
+//
+// Scenario: User runs `wt list --global --json` with no registered repos
+// Expected: Output is an empty JSON array
+func TestList_JSONEmpty(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	tmpDir = resolvePath(t, tmpDir)
+
+	regFile := filepath.Join(tmpDir, ".wt", "repos.json")
+	if err := os.MkdirAll(filepath.Dir(regFile), 0755); err != nil {
+		t.Fatalf("failed to create registry directory: %v", err)
+	}
+
+	cfg := &config.Config{RegistryPath: regFile}
+	ctx, out := testContextWithOutput(t)
+	ctx = config.WithConfig(ctx, cfg)
+	ctx = config.WithResolver(ctx, config.NewResolver(cfg))
+	ctx = config.WithWorkDir(ctx, tmpDir)
+	cmd := newListCmd()
+	cmd.SetContext(ctx)
+	cmd.SetArgs([]string{"--global", "--json"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("list command failed: %v", err)
+	}
+
+	if got := strings.TrimSpace(out.String()); got != "[]" {
+		t.Errorf("expected [], got %q", got)
+	}
+}
