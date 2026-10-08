@@ -12,6 +12,8 @@ wt config show myrepo        # Show effective config for specific repo
 wt config hooks              # List hooks with source annotations
 ```
 
+Unknown keys in either file are ignored with a warning on stderr.
+
 ## Basic Settings
 
 ```toml

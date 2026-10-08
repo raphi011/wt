@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -238,5 +240,39 @@ func TestLoadLocal_InvalidTOML(t *testing.T) {
 	_, err := LoadLocal(dir)
 	if err == nil {
 		t.Fatal("expected error for invalid TOML")
+	}
+}
+
+func TestLoadLocal_UnknownKeys(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	content := `[checkout]
+worktree_format = "{branch}"
+auto_fecth = true
+
+[hooks.code]
+command = "code"
+when = ["checkout"]
+`
+	configFile := filepath.Join(dir, LocalConfigFileName)
+	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	local, err := LoadLocal(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if local.Checkout.WorktreeFormat != "{branch}" {
+		t.Errorf("worktree_format = %q, want {branch}", local.Checkout.WorktreeFormat)
+	}
+
+	want := []string{
+		fmt.Sprintf("unknown key %q in %s (ignored)", "checkout.auto_fecth", configFile),
+		fmt.Sprintf("unknown key %q in %s (ignored)", "hooks.code.when", configFile),
+	}
+	if !slices.Equal(local.Warnings, want) {
+		t.Errorf("warnings = %q, want %q", local.Warnings, want)
 	}
 }

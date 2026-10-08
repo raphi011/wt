@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -1174,5 +1175,61 @@ func TestValidateHookTriggers(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestUnknownKeyWarnings(t *testing.T) {
+	t.Parallel()
+
+	content := `default_sort = "date"
+defualt_labels = ["work"]
+
+[checkout]
+worktree_format = "{branch}"
+worktre_format = "{branch}"
+
+[hosts]
+"git.example.com" = "gitlab"
+
+[hooks]
+stray = "value"
+
+[hooks.code]
+command = "code {worktree-dir}"
+comand = "code"
+on = ["checkout"]
+
+[unknown_section]
+key = 1
+`
+	var raw rawConfig
+	md, err := toml.Decode(content, &raw)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	got := unknownKeyWarnings(md, raw.Hooks, "config.toml")
+	want := []string{
+		`unknown key "checkout.worktre_format" in config.toml (ignored)`,
+		`unknown key "defualt_labels" in config.toml (ignored)`,
+		`unknown key "hooks.code.comand" in config.toml (ignored)`,
+		`unknown key "hooks.stray" in config.toml (ignored)`,
+		`unknown key "unknown_section" in config.toml (ignored)`,
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("warnings = %q, want %q", got, want)
+	}
+}
+
+func TestUnknownKeyWarnings_DefaultConfig(t *testing.T) {
+	t.Parallel()
+
+	var raw rawConfig
+	md, err := toml.Decode(DefaultConfig(), &raw)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got := unknownKeyWarnings(md, raw.Hooks, "config.toml"); len(got) != 0 {
+		t.Errorf("default config has unknown keys: %q", got)
 	}
 }
