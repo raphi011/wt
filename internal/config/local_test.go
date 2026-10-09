@@ -243,6 +243,29 @@ func TestLoadLocal_InvalidTOML(t *testing.T) {
 	}
 }
 
+func TestLoadLocal_HookKeyWrongType(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	content := `[hooks.code]
+command = "code {worktree-dir}"
+on = "checkout"
+`
+	configFile := filepath.Join(dir, LocalConfigFileName)
+	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	_, err := LoadLocal(dir)
+	if err == nil {
+		t.Fatal("expected error for on as a string")
+	}
+	want := configFile + ": hooks.code.on must be an array of strings"
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err, want)
+	}
+}
+
 func TestLoadLocal_UnknownKeys(t *testing.T) {
 	t.Parallel()
 
