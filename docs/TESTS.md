@@ -44,9 +44,9 @@ Generated: 2026-10-08
 | [wt checkout](#wt-checkout) | 81 |
 | [wt exec](#wt-exec) | 15 |
 | [wt label](#wt-label) | 15 |
-| [wt list](#wt-list) | 16 |
+| [wt list](#wt-list) | 17 |
 | [wt note](#wt-note) | 13 |
-| [wt prune](#wt-prune) | 51 |
+| [wt prune](#wt-prune) | 50 |
 | **Total** | **367** |
 
 ## completebasebranches
@@ -545,6 +545,7 @@ Generated: 2026-10-08
 | `TestList_GlobalFromNonRepo` | Tests --global from outside any git repo. |
 | `TestList_DefaultSortFromConfig` | Tests that default_sort in config is used when --sort is not set. |
 | `TestList_JSONEmpty` | Tests JSON output when there are no worktrees. |
+| `TestList_ResetCache` | Tests that --reset-cache clears the PR cache. |
 | `TestList_SortOverrides` | Tests sort precedence. |
 
 ## wt note
@@ -615,7 +616,6 @@ Generated: 2026-10-08
 | `TestPrune_Target_DirtyMergedWorktree_RequiresForce` | Tests that targeted prune |
 | `TestPrune_RemovesHistoryEntry` | Tests that pruning a worktree removes it from |
 | `TestPrune_Target_RefreshPR` | Tests that -R fetches PR status for targeted worktrees. |
-| `TestPrune_Target_ResetCache` | Tests that --reset-cache clears the PR cache |
 | `TestPrune_Target_RejectsStaleAndInteractive` | Tests that flags which only apply |
 | `TestPrune_LabelScopedTarget` | Tests pruning worktrees via label:branch format. |
 | `TestPrune_AutoPrune_SummaryGoesToStderr` | Tests that auto-prune reports its result as a diagnostic. |

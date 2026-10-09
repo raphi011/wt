@@ -21,6 +21,7 @@ func newListCmd() *cobra.Command {
 		global     bool
 		sortBy     string
 		refresh    bool
+		resetCache bool
 	)
 
 	cmd := &cobra.Command{
@@ -36,13 +37,15 @@ Use positional args to filter by repo name(s) or label(s).
 Resolution order: repo name → label.
 
 Worktrees are sorted by commit date (most recent first) by default.
-Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
+Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.
+Use --reset-cache to clear the cached PR status of all repos.`,
 		Example: `  wt list                      # List worktrees for current repo
   wt list --global             # List all worktrees (all repos)
   wt list myrepo               # Filter by repository name
   wt list backend              # Filter by label (if no repo named 'backend')
   wt list myrepo backend       # Filter by multiple scopes
   wt list -R                   # Refresh PR status before listing
+  wt list --reset-cache -R     # Clear cached PR status and fetch it again
   wt list --json               # Output as JSON`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -79,7 +82,7 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 				l.Printf("Warning: %s: %v\n", w.RepoName, w.Err)
 			}
 
-			status, err := loadWorktreePRStatus(ctx, allWorktrees, refresh, false)
+			status, err := loadWorktreePRStatus(ctx, allWorktrees, refresh, resetCache)
 			if err != nil {
 				return err
 			}
@@ -143,6 +146,7 @@ Use --refresh-pr/-R to fetch PR status from GitHub/GitLab.`,
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "Show all worktrees (not just current repo)")
 	cmd.Flags().StringVarP(&sortBy, "sort", "s", "", "Sort by: date, repo, branch")
 	cmd.Flags().BoolVarP(&refresh, "refresh-pr", "R", false, "Refresh PR status before listing")
+	cmd.Flags().BoolVar(&resetCache, "reset-cache", false, "Clear cached PR status before listing")
 
 	// Completions
 	cmd.ValidArgsFunction = completeScopeArgs

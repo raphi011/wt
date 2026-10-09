@@ -18,7 +18,7 @@ import (
 
 // TestPRCache_CorruptListAndReset tests displaying, refreshing, and explicitly resetting corrupt PR data.
 //
-// Scenario: User lists a repo with a corrupt PR cache, or explicitly resets it with `wt prune --reset-cache --dry-run`.
+// Scenario: User lists a repo with a corrupt PR cache, or explicitly resets it with `wt list --reset-cache`.
 // Expected: Normal listing preserves the bytes and warns, live status remains available, and only a successful explicit reset replaces the file.
 func TestPRCache_CorruptListAndReset(t *testing.T) {
 	t.Parallel()
@@ -70,8 +70,7 @@ func TestPRCache_CorruptListAndReset(t *testing.T) {
 				args = append(args, "-R")
 			}
 			if tc.reset {
-				cmd = newPruneCmd()
-				args = []string{"--reset-cache", "--dry-run"}
+				args = append(args, "--reset-cache")
 			}
 			cmd.SetContext(ctx)
 			cmd.SetArgs(args)
@@ -94,15 +93,12 @@ func TestPRCache_CorruptListAndReset(t *testing.T) {
 				if string(contents) != string(corrupt) {
 					t.Errorf("original cache bytes changed: %q", contents)
 				}
-				if !strings.Contains(logs.String(), "failed to load PR cache") || !strings.Contains(logs.String(), "wt prune --reset-cache --dry-run") {
+				if !strings.Contains(logs.String(), "failed to load PR cache") || !strings.Contains(logs.String(), "wt list --reset-cache") {
 					t.Errorf("missing recovery warning: %q", logs.String())
 				}
 				if strings.Contains(logs.String(), "Cache reset: PR info cleared") {
 					t.Errorf("unsuccessful reset reported success: %q", logs.String())
 				}
-			}
-			if tc.reset {
-				return
 			}
 			var rows []map[string]any
 			if err := json.Unmarshal([]byte(out.String()), &rows); err != nil {
@@ -194,7 +190,7 @@ func TestPrCommands_CorruptPRCache(t *testing.T) {
 			if string(contents) != string(corrupt) {
 				t.Errorf("command changed corrupt cache bytes: %q", contents)
 			}
-			if !strings.Contains(logs.String(), "failed to load PR cache") || !strings.Contains(logs.String(), "wt prune --reset-cache --dry-run") {
+			if !strings.Contains(logs.String(), "failed to load PR cache") || !strings.Contains(logs.String(), "wt list --reset-cache") {
 				t.Errorf("command omitted cache recovery warning: %q", logs.String())
 			}
 		})

@@ -29,7 +29,6 @@ func newPruneCmd() *cobra.Command {
 		force            bool
 		global           bool
 		refresh          bool
-		resetCache       bool
 		hf               hookFlags
 		interactive      bool
 		deleteBranches   bool
@@ -99,7 +98,6 @@ never removed without -f.`,
 					DeleteBranches: deleteBranchesOverride,
 					Hooks:          hf,
 					RefreshPR:      refresh,
-					ResetCache:     resetCache,
 				})
 			}
 
@@ -127,7 +125,7 @@ never removed without -f.`,
 				return nil
 			}
 
-			status, err := loadWorktreePRStatus(ctx, allWorktrees, refresh, resetCache)
+			status, err := loadWorktreePRStatus(ctx, allWorktrees, refresh, false)
 			if err != nil {
 				return err
 			}
@@ -266,7 +264,6 @@ never removed without -f.`,
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force remove unmerged worktrees and worktrees with uncommitted changes")
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "Prune all repos")
 	cmd.Flags().BoolVarP(&refresh, "refresh-pr", "R", false, "Refresh PR status first")
-	cmd.Flags().BoolVar(&resetCache, "reset-cache", false, "Clear all cached data")
 	registerHookFlags(cmd, &hf)
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Interactive mode")
 	cmd.Flags().BoolVar(&stale, "stale", false, "Also prune stale worktrees (older than stale_days)")
@@ -285,7 +282,6 @@ type pruneOpts struct {
 	Hooks          hookFlags
 	PRStatus       *prstatus.Result
 	RefreshPR      bool // targeted prune: fetch PR status before checking prunability
-	ResetCache     bool // targeted prune: clear the PR cache first
 }
 
 // removalReason says why a worktree may be removed without --force.
@@ -348,7 +344,7 @@ func runPruneTargets(ctx context.Context, reg *registry.Registry, targets []stri
 		}
 	}
 
-	status, err := loadWorktreePRStatus(ctx, toRemove, opts.RefreshPR, opts.ResetCache)
+	status, err := loadWorktreePRStatus(ctx, toRemove, opts.RefreshPR, false)
 	if err != nil {
 		return err
 	}

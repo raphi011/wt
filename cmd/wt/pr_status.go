@@ -54,6 +54,6 @@ func loadWorktreePRStatus(ctx context.Context, worktrees []git.Worktree, refresh
 
 func reportPRCacheLoadError(ctx context.Context, status *prstatus.Result) {
 	if status.LoadError != nil {
-		log.FromContext(ctx).Printf("Warning: failed to load PR cache: %v (use 'wt prune --reset-cache --dry-run' to reset corrupt data)\n", status.LoadError)
+		log.FromContext(ctx).Printf("Warning: failed to load PR cache: %v (use 'wt list --reset-cache' to reset corrupt data)\n", status.LoadError)
 	}
 }
