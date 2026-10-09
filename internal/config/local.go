@@ -140,7 +140,7 @@ const defaultLocalConfig = `# wt local config (per-repo overrides)
 # [merge]
 # strategy = "squash"
 
-# Prune settings
+# Prune settings (stale_days is global-only, set it in ~/.wt/config.toml)
 # [prune]
 # delete_local_branches = false
 

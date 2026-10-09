@@ -211,7 +211,7 @@ if err != nil {
     effCfg = resolver.Global()
 }
 ```
-Use `effCfg` for repo-specific settings (hooks, checkout, merge, prune, preserve, forge.default). Use `config.FromContext(ctx)` for global-only settings (RegistryPath, DefaultSort, DefaultLabels, forge.rules, hosts, theme).
+Use `effCfg` for repo-specific settings (hooks, checkout, merge, prune.delete_local_branches, preserve, forge.default). Use `config.FromContext(ctx)` for global-only settings (RegistryPath, DefaultSort, DefaultLabels, prune.stale_days, forge.rules, hosts, theme).
 
 **Convention**: Always name the logger variable `l`:
 ```go
