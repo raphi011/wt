@@ -93,6 +93,9 @@ Use positional args to filter by label(s).`,
 						}
 					}
 				}
+				if len(repos) == 0 {
+					return fmt.Errorf("no repos found with label(s): %s", strings.Join(args, ", "))
+				}
 			} else {
 				repos = reg.Repos
 			}
@@ -129,9 +132,6 @@ Use positional args to filter by label(s).`,
 
 			// Table output
 			if len(repos) == 0 {
-				if len(args) > 0 {
-					return fmt.Errorf("no repos found with label(s): %s", strings.Join(args, ", "))
-				}
 				out.Println("No repos registered. Use 'wt repo add <path>' to register a repo.")
 				return nil
 			}
